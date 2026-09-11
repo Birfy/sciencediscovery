@@ -8,6 +8,7 @@ import { SessionStore } from "../store.js";
 import { installedPlugins } from "./catalog.js";
 import { handlePluginRequest } from "./http.js";
 import { createServer } from "node:http";
+import { VersionStore } from "@sciencediscovery/cas";
 
 async function fixture(t:TestContext) {
   await mkdir(resolve(".tmp"),{recursive:true});
@@ -102,6 +103,22 @@ test("candidate only replaces allowed names and refuses incomplete or cross-expe
   await assert.rejects(control.command(project.id,candidate.id,"compare",{baselineRunId:"missing",candidateRunId:"missing"}),/completed/);
   assert.equal(store.getProjectSettings(project.id).effective.plugins?.plan,undefined);
   assert.equal(control.describe({projectId:project.id}).status.length,installedPlugins.length);
+});
+test("candidate CAS records preserve pinned assets and asset drift refuses preparation",async t=>{
+  const {project,control,root}=await fixture(t);
+  let revision="asset-v1";
+  control.bindAssets(async settings=>({settings,assets:{revision}}));
+  const before=control.snapshot({projectId:project.id});
+  const candidate=await control.create(project.id,before.revision,{plugins:{plan:{enabled:false}}});
+  const versions=new VersionStore(root);
+  const baseline=await versions.readRecord<{assets:{revision:string}}>(candidate.baselineRef,"PluginComposition");
+  const proposed=await versions.readRecord<{assets:{revision:string}}>(candidate.proposedRef,"PluginCandidateComposition");
+  assert.equal(baseline.value.assets.revision,"asset-v1");
+  assert.equal(proposed.value.assets.revision,"asset-v1");
+  revision="asset-v2";
+  await assert.rejects(control.command(project.id,candidate.id,"prepare",{}),/assets changed/);
+  assert.deepEqual(control.snapshot({projectId:project.id}),before);
+  assert.equal(control.list(project.id)[0]?.status,"candidate");
 });
 test("HTTP Bridge preserves errors and subscriptions release when transport closes",async t=>{
   const {project,control}=await fixture(t);
