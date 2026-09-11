@@ -74,6 +74,12 @@ test("项目组合、会话覆盖与审批后的候选应用", {tag:"@mocked"},a
       expect((await waitForRunTerminal(page,fixture.session.id,run.id)).status).toBe("completed");
       expect(stub.calls.filter(call=>call.turn===1).some(call=>call.offeredTools?.includes("update_plan"))).toBe(true);
       await page.reload();
+      const workspace=page.locator("aside.workspace-panel");
+      if (!await workspace.count()) await page.getByRole("button",{name:/Show workspace|显示工作区/}).click();
+      const folder=workspace.locator('[data-folder="tasks"]');
+      if (await folder.getAttribute("open")===null) await folder.locator(":scope > summary").click();
+      const plans=workspace.locator("details.workspace-plan-section");
+      if (await plans.getAttribute("open")===null) await plans.locator(":scope > summary").click();
       await expect(page.locator("article.plan-card").first()).toBeVisible();
     });
     let candidate:any,baselineRunId="",candidateRunId="";
