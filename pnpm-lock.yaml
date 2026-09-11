@@ -20,6 +20,12 @@ importers:
 
   apps/web:
     dependencies:
+      '@sciencediscovery/plugin-artifact-json':
+        specifier: workspace:*
+        version: link:../../plugins/artifact-json
+      '@sciencediscovery/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/plugin-sdk
       '@sciencediscovery/schema':
         specifier: workspace:*
         version: link:../../packages/schema
@@ -364,6 +370,22 @@ importers:
         specifier: 26.1.1
         version: 26.1.1
 
+  packages/plugin-sdk:
+    dependencies:
+      '@sciencediscovery/context':
+        specifier: workspace:*
+        version: link:../context
+      '@sciencediscovery/runtime-core':
+        specifier: workspace:*
+        version: link:../runtime-core
+      '@sciencediscovery/tools':
+        specifier: workspace:*
+        version: link:../tools
+    devDependencies:
+      '@types/node':
+        specifier: 26.1.1
+        version: 26.1.1
+
   packages/provenance:
     dependencies:
       '@sciencediscovery/artifact-manager':
@@ -477,6 +499,111 @@ importers:
         specifier: 26.1.1
         version: 26.1.1
 
+  plugins/artifact-json:
+    dependencies:
+      '@sciencediscovery/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/plugin-sdk
+    devDependencies:
+      '@types/react':
+        specifier: 19.2.17
+        version: 19.2.17
+      react:
+        specifier: 19.2.7
+        version: 19.2.7
+
+  plugins/mcp:
+    dependencies:
+      '@sciencediscovery/context':
+        specifier: workspace:*
+        version: link:../../packages/context
+      '@sciencediscovery/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/plugin-sdk
+      '@sciencediscovery/runtime-core':
+        specifier: workspace:*
+        version: link:../../packages/runtime-core
+      '@sciencediscovery/workspace':
+        specifier: workspace:*
+        version: link:../../packages/workspace
+    devDependencies:
+      '@types/node':
+        specifier: 26.1.1
+        version: 26.1.1
+
+  plugins/plan:
+    dependencies:
+      '@sciencediscovery/context':
+        specifier: workspace:*
+        version: link:../../packages/context
+      '@sciencediscovery/plan':
+        specifier: workspace:*
+        version: link:../../packages/plan
+      '@sciencediscovery/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/plugin-sdk
+      '@sciencediscovery/runtime-core':
+        specifier: workspace:*
+        version: link:../../packages/runtime-core
+      '@sciencediscovery/tools':
+        specifier: workspace:*
+        version: link:../../packages/tools
+    devDependencies:
+      '@types/node':
+        specifier: 26.1.1
+        version: 26.1.1
+
+  plugins/scheduler:
+    dependencies:
+      '@sciencediscovery/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/plugin-sdk
+      '@sciencediscovery/runtime-core':
+        specifier: workspace:*
+        version: link:../../packages/runtime-core
+      '@sciencediscovery/workspace':
+        specifier: workspace:*
+        version: link:../../packages/workspace
+    devDependencies:
+      '@types/node':
+        specifier: 26.1.1
+        version: 26.1.1
+
+  plugins/skill:
+    dependencies:
+      '@sciencediscovery/context':
+        specifier: workspace:*
+        version: link:../../packages/context
+      '@sciencediscovery/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/plugin-sdk
+      '@sciencediscovery/runtime-core':
+        specifier: workspace:*
+        version: link:../../packages/runtime-core
+      '@sciencediscovery/workspace':
+        specifier: workspace:*
+        version: link:../../packages/workspace
+    devDependencies:
+      '@types/node':
+        specifier: 26.1.1
+        version: 26.1.1
+
+  plugins/uniprot:
+    dependencies:
+      '@sciencediscovery/mcp-sources':
+        specifier: workspace:*
+        version: link:../../packages/mcp-sources
+      '@sciencediscovery/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/plugin-sdk
+      '@sciencediscovery/schema':
+        specifier: workspace:*
+        version: link:../../packages/schema
+    devDependencies:
+      '@types/node':
+        specifier: 26.1.1
+        version: 26.1.1
+
   services/api:
     dependencies:
       '@modelcontextprotocol/sdk':
@@ -524,6 +651,24 @@ importers:
       '@sciencediscovery/plan':
         specifier: workspace:*
         version: link:../../packages/plan
+      '@sciencediscovery/plugin-mcp':
+        specifier: workspace:*
+        version: link:../../plugins/mcp
+      '@sciencediscovery/plugin-plan':
+        specifier: workspace:*
+        version: link:../../plugins/plan
+      '@sciencediscovery/plugin-scheduler':
+        specifier: workspace:*
+        version: link:../../plugins/scheduler
+      '@sciencediscovery/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/plugin-sdk
+      '@sciencediscovery/plugin-skill':
+        specifier: workspace:*
+        version: link:../../plugins/skill
+      '@sciencediscovery/plugin-uniprot':
+        specifier: workspace:*
+        version: link:../../plugins/uniprot
       '@sciencediscovery/provenance':
         specifier: workspace:*
         version: link:../../packages/provenance

@@ -17,6 +17,7 @@ packages:
   - apps/*
   - services/*
   - packages/*
+  - plugins/*
 allowBuilds:
   '@scarf/scarf': true
   # ssh2 works without its optional native helpers, and building them would put

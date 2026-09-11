@@ -30,6 +30,7 @@ import {
 } from "../native-agent/index.js";
 
 export interface AgentRunBindings {
+  disabledPlugins?: readonly string[];
   abortSignal?: AbortSignal;
   createAgent?: (options: NativeAgentOptions) => NativeAgentHandle;
   contextContributorFactories?: readonly ContextContributorFactory<AgentHistoryMessage>[];
@@ -54,6 +55,7 @@ export function createAgentRun(
   const gatewayHistory = structuredClone(input.history);
   const agent = (bindings.createAgent ?? createNativeAgent)({
     ...bindings.workspace,
+    ...(bindings.disabledPlugins ? { disabledPlugins: bindings.disabledPlugins } : {}),
     versioning: {
       agentId: `${profile.kind}:${profile.gatewayThreadId}`,
       trajectoryId: input.agentRunId,

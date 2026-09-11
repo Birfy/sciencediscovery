@@ -79,7 +79,7 @@ fi
 # dependency needs none of that tree.
 includes=()
 if [[ "$dependencies" == full ]]; then includes+=(node_modules); fi
-for project in config apps/* packages/* services/*; do
+for project in config apps/* packages/* services/* plugins/*; do
   if [[ -d "$project/node_modules" ]]; then includes+=("$project/node_modules"); fi
   if [[ -d "$project/dist" ]]; then includes+=("$project/dist"); fi
 done

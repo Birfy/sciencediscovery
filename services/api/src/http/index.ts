@@ -3384,6 +3384,7 @@ export function createApiServer(config = loadServerConfig(), dependencies: ApiSe
   const closed = new Promise<void>((resolveClose) => { resolveClosed = resolveClose; });
   const cleanup = () => cleanupPromise ??= (async () => {
     ideaResearch.close();
+    await (await platform.connectorPlugins).dispose();
     remoteCompute.close();
     mcpBroker.close();
     webBroker.close();

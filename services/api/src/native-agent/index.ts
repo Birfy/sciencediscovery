@@ -28,16 +28,17 @@
  * `packages/tools`; history compaction comes from `packages/context`.
  */
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import {
   ContextContributorRegistry,
+  captureStateView,
+  canonicalState,
   ContextSectionContributor,
   createDurableDomainContributors,
   createContextTraceWriter,
   DefaultContextAssembler,
   DurableContextStore,
-  DurableSkillStateContributor,
   DynamicContextAssembler,
   HistoryCompactor,
   resolveContextBudget,
@@ -46,6 +47,8 @@ import {
   type AgentScope,
   type ContextAssemblyMode,
   type ContextContributorFactory,
+  type StateView,
+  type StateProvider,
 } from "@sciencediscovery/context";
 import {
   resolveModelClientPolicy,
@@ -57,13 +60,8 @@ import {
   type ModelUsage,
 } from "@sciencediscovery/model";
 import type { Agent, AgentEvent, AgentHistoryMessage } from "@sciencediscovery/orchestration";
-import {
-  createPlanBatchPolicy,
-  createPlanContextFactory,
-  createPlanTool,
-  type PlanStore,
-} from "@sciencediscovery/plan";
-import { createEvolveTools, type EvolveToolRuntime } from "@sciencediscovery/evolve";
+import type { PlanStore } from "@sciencediscovery/plan";
+import type { EvolveToolRuntime } from "@sciencediscovery/evolve";
 import {
   DEFAULT_MAX_PARALLEL_TOOL_CALLS,
   ExternalWaitController,
@@ -81,7 +79,6 @@ import {
   type AgentTool,
 } from "@sciencediscovery/tools";
 import {
-  buildSkillSystemSection,
   buildWorkspacePromptParts,
   buildWorkspaceSystemPrompt,
   createWorkspaceTools,
@@ -93,7 +90,8 @@ import {
 
 import { composeRuntime } from "../bootstrap/runtime.js";
 import { runLog } from "../logging.js";
-import { AgentVersionRecorder, type AgentVersioningOptions } from "./versioning.js";
+import { AgentVersionRecorder, jsonValue, type AgentVersioningOptions } from "./versioning.js";
+import { createRuntimePluginScope } from "../plugins/runtime.js";
 
 export const DEFAULT_AGENT_IDLE_TIMEOUT_MS = 240_000;
 export const DEFAULT_AGENT_TURN_TIMEOUT_MS = 0;
@@ -132,6 +130,8 @@ export interface NativeAgentOptions extends WorkspaceAgentOptions {
   contextScope?: AgentScope;
   /** Capability-package extension seam; factories are instantiated and frozen per AgentRun. */
   contextContributorFactories?: readonly ContextContributorFactory<WireMessage>[];
+  stateProviders?: readonly StateProvider[];
+  disabledPlugins?: readonly string[];
   /** Run-scoped Plan snapshot projection; when present, registers update_plan and context injection. */
   /** The `/evolve` capability for this turn, or absent when the deployment has
    *  none. One object instead of two forwarded callbacks and a deps bundle
@@ -205,15 +205,15 @@ function formatRunContract(contract: string): string {
 
 class NativeAgent implements NativeAgentHandle {
   private readonly listeners = new Set<Listener>();
-  private readonly toolRegistry: ToolRegistry<WireMessage>;
-  private readonly systemPrompt: string;
-  private readonly promptParts: WorkspacePromptPart[];
-  private readonly promptSkills: RuntimeSkill[];
-  private readonly endpoint: ModelEndpoint;
-  private readonly policy: ModelClientPolicy;
+  private toolRegistry!: ToolRegistry<WireMessage>;
+  private systemPrompt!: string;
+  private promptParts!: WorkspacePromptPart[];
+  private promptSkills!: RuntimeSkill[];
+  private endpoint!: ModelEndpoint;
+  private policy!: ModelClientPolicy;
   private readonly waitController = new ExternalWaitController();
   private readonly durableContext: DurableContextStore;
-  private history: WireMessage[];
+  private history: WireMessage[] = [];
   private controller: AbortController | undefined;
   private externalWaitCount = 0;
   private pauseRunDeadline: (() => void) | undefined;
@@ -223,6 +223,9 @@ class NativeAgent implements NativeAgentHandle {
   private readonly contextId: string;
   private requestText: string | undefined;
   private versionRecorder?: AgentVersionRecorder<WireMessage, ModelInput<WireMessage>, ModelUsage>;
+  private inputState?: StateView;
+  private inputStateTurn?: number;
+  private plugins?: Awaited<ReturnType<typeof createRuntimePluginScope<WireMessage>>>;
 
   constructor(private readonly options: NativeAgentOptions) {
     this.contextId = `${options.sessionId}:${randomUUID()}`;
@@ -230,20 +233,26 @@ class NativeAgent implements NativeAgentHandle {
       history: options.gatewayHistory,
       ...(options.runContract ? { runContract: options.runContract } : {}),
     });
-    const executionTools = buildTools({ ...options, ...(options.runSubagent ? {
+  }
+
+  private async initialize(signal: AbortSignal): Promise<void> {
+    const options = this.options;
+    const pluginWorkspace = { ...options, ...(options.runSubagent ? {
       runSubagent: async (...args: Parameters<NonNullable<WorkspaceAgentOptions["runSubagent"]>>) => {
         const result = await options.runSubagent!(...args);
         this.versionRecorder?.childCompleted(`subagent:${result.id}`);
         return result;
       },
-    } : {}) });
-    const planTools = options.planStore
-      ? [createPlanTool({ store: options.planStore })]
-      : [];
-    // Same shape as the plan capability: the composition root either built a
-    // runtime for this turn or it did not, and that single fact decides
-    // whether the tools exist. Nothing downstream forwards anything.
-    const evolveTools = createEvolveTools(options.evolve);
+    } : {}) };
+    this.plugins = await createRuntimePluginScope<WireMessage>({
+      scope: options.contextScope ?? (options.subagent?.name === "Reviewer Specialist" ? "reviewer" : options.subagent ? "subagent" : "main"),
+      planStore: options.planStore,
+      evolve: options.evolve,
+      workspace: pluginWorkspace,
+      durable: this.durableContext,
+    }, options.disabledPlugins);
+    await this.plugins.start(signal);
+    const executionTools = buildTools(options);
     // Retained per Session, not per AgentRun: a bounded result stays in the
     // replayed history of later runs, so its ref has to keep resolving for as
     // long as that history does. Session deletion removes this directory.
@@ -252,27 +261,21 @@ class NativeAgent implements NativeAgentHandle {
     });
     const toolOutputSettings = resolveToolOutputSettings();
     this.toolRegistry = new ToolRegistry([
-      ...executionTools, ...planTools, ...evolveTools,
+      ...executionTools, ...this.plugins.contributions.flatMap((item) => item.tools),
       ...createToolOutputTools(toolOutputStore, {
         tracker: new ToolOutputReadTracker(toolOutputSettings.readPolicy),
       }),
     ], {
-      ...(options.planStore ? { batchPolicies: [createPlanBatchPolicy()] } : {}),
+      batchPolicies: this.plugins.contributions.flatMap((item) => item.batchPolicies),
       createResultMessage: (call, content, output) => ({
         role: "tool", tool_call_id: call.id, name: call.name, content,
         ...(output ? { additional_kwargs: { tool_output: output } } : {}),
       }),
-      onResult: ({ call, content, isError, sequence }) => {
+      commitResult: async ({ call, content, isError, sequence }) => {
         this.durableContext.observe(call, { content, isError }, sequence);
-        if (call.name !== "read_skill" || isError || typeof call.args.skillId !== "string") return;
-        const skill = options.skills?.find((item) => item.id === call.args.skillId);
-        if (skill) this.durableContext.registerSkill({
-          description: skill.description,
-          hash: skill.hash,
-          id: skill.id,
-          revision: skill.revision,
-          version: skill.version,
-        });
+        for (const contribution of this.plugins!.contributions) {
+          await contribution.commitResult?.({ call, content, isError, sequence });
+        }
       },
       recordResult: options.versioning ? async (input) => { await this.versionRecorder?.recordObservation(input); } : undefined,
       outputGuard: new ToolOutputGuard({
@@ -286,16 +289,6 @@ class NativeAgent implements NativeAgentHandle {
     this.promptSkills = toolNames.has("read_skill")
       ? (options.skills ?? [])
       : [];
-    const hydratedSkillIds = new Set(this.durableContext.snapshot().skills.map((skill) => skill.id));
-    for (const skill of this.promptSkills.filter((item) => hydratedSkillIds.has(item.id))) {
-      this.durableContext.registerSkill({
-        description: skill.description,
-        hash: skill.hash,
-        id: skill.id,
-        revision: skill.revision,
-        version: skill.version,
-      });
-    }
     const governance = {
       localRunnerAllowed: options.localRunnerAllowed,
       ...(options.approvalMode ? { approvalMode: options.approvalMode } : {}),
@@ -307,7 +300,7 @@ class NativeAgent implements NativeAgentHandle {
         ? { builtinSpecialists: options.specialists!.filter((specialist) => specialist.builtIn).map((specialist) => ({ description: specialist.description, name: specialist.name })) }
         : {}),
       ...(options.subagent ? { subagent: options.subagent } : {}),
-      ...(options.runSubagent && !options.subagent ? { subagentOrchestration: true } : {}),
+      ...(toolNames.has("task") && !options.subagent ? { subagentOrchestration: true } : {}),
     };
     const baseSystemPrompt = buildWorkspaceSystemPrompt(
       this.promptSkills,
@@ -378,6 +371,13 @@ class NativeAgent implements NativeAgentHandle {
     this.executed = true;
     this.controller = new AbortController();
     if (this.abortRequested) this.controller.abort();
+    try {
+      await this.initialize(this.controller.signal);
+    } catch (error) {
+      await this.plugins?.dispose();
+      if (this.controller.signal.aborted) throw new Error("Agent run cancelled");
+      throw error;
+    }
     this.requestText = text;
     this.history.push({ role: "user", content: text });
     this.toolRegistry.promoteForRequest(text);
@@ -443,17 +443,9 @@ class NativeAgent implements NativeAgentHandle {
     try {
       if (this.options.versioning) {
         this.versionRecorder = new AgentVersionRecorder(this.options.config.dataDir, this.options.workspaceRoot,
-          this.options.versioning, () => ({
-            toolState: this.toolRegistry.snapshot(),
-            runContract: this.options.runContract ?? null,
-            contextProjection: this.durableContext.snapshot(),
-            contextInputs: { systemPrompt: this.systemPrompt, promptParts: this.promptParts,
-              scope: this.options.contextScope ?? (this.options.subagent ? "subagent" : "main") },
-            environments: this.options.environments ?? [],
-            approvalMode: this.options.approvalMode ?? null,
-            contextMode: this.options.contextAssemblyMode ?? resolveContextAssemblyMode(),
-          }));
+          this.options.versioning, () => this.runtimeState());
         await this.versionRecorder.initialize({
+          plugins: this.plugins?.manifests ?? [],
           model: { model: this.endpoint.model, apiProtocol: this.endpoint.apiProtocol,
             apiVariant: this.endpoint.apiVariant, policy: this.policy,
             thinkingMode: this.endpoint.thinkingMode, thinkingEffort: this.endpoint.thinkingEffort,
@@ -514,9 +506,13 @@ class NativeAgent implements NativeAgentHandle {
             selectedPath: "legacy",
           }),
           systemPrompt: this.systemPrompt,
-          tools: () => this.toolRegistry.visibleSpecs(),
+          tools: () => this.inputState!.read<{ specs: ReturnType<ToolRegistry<WireMessage>["visibleSpecs"]> }>("tools").specs,
         })
         : new DynamicContextAssembler<WireMessage>({
+          stateView: () => {
+            if (!this.inputState) throw new Error("Agent input state is not captured");
+            return this.inputState;
+          },
           budget: contextBudget,
           compactor,
           contextId: this.contextId,
@@ -568,14 +564,44 @@ class NativeAgent implements NativeAgentHandle {
           registry: this.createContextRegistry(contextScope),
           scope: contextScope,
           systemPrompt: this.systemPrompt,
-          tools: () => this.toolRegistry.visibleSpecs(),
+          tools: () => this.inputState!.read<{ specs: ReturnType<ToolRegistry<WireMessage>["visibleSpecs"]> }>("tools").specs,
         });
       const modelClient = new ProviderModelClient<WireMessage>(this.endpoint, this.policy, modelTurnStreamer);
       let reportedModelUsage = false;
       const loop = composeRuntime<WireMessage, ModelInput<WireMessage>, ModelUsage>({
         maxModelTurns: MAX_MODEL_TURNS,
         maxParallelToolCalls: configuredMaxParallelToolCalls(),
-        contextAssembler,
+        contextAssembler: {
+          assemble: async (input) => {
+            // Overflow retries change the history window, not the underlying facts.
+            if (!input.recovery || this.inputStateTurn !== input.turn || !this.inputState) {
+              const provider = (id: string, read: () => unknown | Promise<unknown>, fidelity: "captured" | "reference-only" = "captured"): StateProvider => ({
+                id,
+                capture: async () => {
+                  const value = jsonValue(await read());
+                  return { id, schemaVersion: 1, revision: createHash("sha256").update(canonicalState(value)).digest("hex"), value, fidelity };
+                },
+              });
+              this.inputState = await captureStateView({
+                id: `${this.contextId}:${input.turn}`,
+                scope: this.options.sessionId,
+                signal: input.signal,
+                providers: [
+                  provider("context.durable", () => this.durableContext.snapshot()),
+                  provider("tools", () => ({ snapshot: this.toolRegistry.snapshot(), promptSections: this.toolRegistry.promptSections(), specs: this.toolRegistry.visibleSpecs() })),
+                  provider("runtime", () => this.runtimeState()),
+                  provider("authorities", async () => await this.options.versioning?.readAuthorities?.() ?? null, "reference-only"),
+                  ...(this.versionRecorder ? [this.versionRecorder.workspaceStateProvider()] : []),
+                  ...(this.plugins?.contributions.flatMap((item) => item.stateProviders) ?? []),
+                  ...(this.options.stateProviders ?? []),
+                ],
+              });
+              this.inputStateTurn = input.turn;
+            }
+            await this.versionRecorder?.captureInputState(this.inputState, input.turn, [...input.history]);
+            return contextAssembler.assemble(input);
+          },
+        },
         modelClient,
         toolDispatcher: this.toolRegistry,
         eventSink: (event) => {
@@ -600,7 +626,22 @@ class NativeAgent implements NativeAgentHandle {
       this.pauseRunDeadline = undefined;
       this.resumeRunDeadline = undefined;
       this.externalWaitCount = 0;
+      await this.plugins?.dispose();
     }
+  }
+
+  private runtimeState() {
+    return {
+            toolState: this.toolRegistry.snapshot(),
+            runContract: this.options.runContract ?? null,
+            contextProjection: this.durableContext.snapshot(),
+            contextInputs: { systemPrompt: this.systemPrompt, promptParts: this.promptParts,
+              scope: this.options.contextScope ?? (this.options.subagent ? "subagent" : "main") },
+            environments: this.options.environments ?? [],
+            approvalMode: this.options.approvalMode ?? null,
+            contextMode: this.options.contextAssemblyMode ?? resolveContextAssemblyMode(),
+
+    };
   }
 
   private createContextRegistry(scope: AgentScope): ContextContributorRegistry<WireMessage> {
@@ -637,28 +678,12 @@ class NativeAgent implements NativeAgentHandle {
         },
       }));
     }
-    if (this.promptSkills.length) {
-      registry.register(new ContextSectionContributor<WireMessage>({
-        id: "skills.catalog",
-        scopes: [scope],
-        contribute: async () => {
-          return { systemSections: [{
-            // Keep the capability catalog stable for provider prefix caching.
-            // Per-turn activation lives in the lower-authority durable data channel.
-            content: buildSkillSystemSection(this.promptSkills),
-            id: "skills.catalog",
-            order: 50,
-            slot: "capabilities",
-          }] };
-        },
-      }));
-      registry.register(new DurableSkillStateContributor<WireMessage>(this.durableContext, [scope]));
-    }
     registry.register(new ContextSectionContributor<WireMessage>({
       id: "tools.capabilities",
+      stateReads: ["tools"],
       scopes: [scope],
-      contribute: async () => {
-        const content = this.toolRegistry.promptSections().filter(Boolean).join("\n\n");
+      contribute: async ({ stateView }) => {
+        const content = (stateView ? stateView.read<{ promptSections: string[] }>("tools").promptSections : this.toolRegistry.promptSections()).filter(Boolean).join("\n\n");
         return content ? { systemSections: [{ content, id: "tools.capabilities", order: 100, slot: "capabilities" }] } : {};
       },
     }));
@@ -668,9 +693,7 @@ class NativeAgent implements NativeAgentHandle {
     registerContextContributorFactories(
       registry,
       [
-        ...(this.options.planStore
-          ? [createPlanContextFactory<WireMessage>(this.options.planStore, [scope])]
-          : []),
+        ...(this.plugins?.contributions.flatMap((item) => item.contextFactories) ?? []),
         ...(this.options.contextContributorFactories ?? []),
       ],
       { contextId: this.contextId, scope },
@@ -741,12 +764,10 @@ class NativeAgent implements NativeAgentHandle {
  *  model's list with nothing failing anywhere. */
 function buildTools(options: NativeAgentOptions): AgentTool[] {
   return createWorkspaceTools(options.workspaceRoot, {
-    ...(options.createSkill ? { createSkill: options.createSkill } : {}),
     enabledConnectorIds: options.enabledConnectorIds,
     ...(options.extraTools?.length ? { extraTools: options.extraTools } : {}),
     ...(options.environments ? { environments: options.environments } : {}),
     ...(options.environmentManagement ? { environmentManagement: options.environmentManagement } : {}),
-    ...(options.runSubagent ? { runSubagent: options.runSubagent } : {}),
     executePython: options.executePython,
     executeShell: options.executeShell,
     ...(options.executeScientific ? { executeScientific: options.executeScientific } : {}),
@@ -756,7 +777,6 @@ function buildTools(options: NativeAgentOptions): AgentTool[] {
     ...(options.getFileProvenance ? { getFileProvenance: options.getFileProvenance } : {}),
     ...(options.listArtifacts ? { listArtifacts: options.listArtifacts } : {}),
     ...(options.readArtifact ? { readArtifact: options.readArtifact } : {}),
-    ...(options.mcpTools ? { mcpTools: options.mcpTools } : {}),
     ...(options.paperExtractPdf ? { paperExtractPdf: options.paperExtractPdf } : {}),
     ...(options.readOnlyWorkspaceRoot ? { readOnlyWorkspaceRoot: options.readOnlyWorkspaceRoot } : {}),
     ...(options.skillPackagesRoot ? { skillPackagesRoot: options.skillPackagesRoot } : {}),
@@ -766,14 +786,11 @@ function buildTools(options: NativeAgentOptions): AgentTool[] {
     ...(options.declareEvidence ? { declareEvidence: options.declareEvidence } : {}),
     ...(options.declareClaim ? { declareClaim: options.declareClaim } : {}),
     ...(options.reviewCheckpoint ? { reviewCheckpoint: options.reviewCheckpoint } : {}),
-    ...(options.proposeSkillLibraryUpdate ? { proposeSkillLibraryUpdate: options.proposeSkillLibraryUpdate } : {}),
-    ...(options.publishSkillLibraryUpdate ? { publishSkillLibraryUpdate: options.publishSkillLibraryUpdate } : {}),
     localRunnerAllowed: options.localRunnerAllowed,
     ...(options.remoteRunners ? { remoteRunners: options.remoteRunners } : {}),
     ...(options.workspaceTransfers ? { workspaceTransfers: options.workspaceTransfers } : {}),
     ...(options.shellExecutions ? { shellExecutions: options.shellExecutions } : {}),
     ...(options.timers ? { timers: options.timers } : {}),
-    skills: options.skills ?? [],
     specialists: options.specialists ?? [],
     toolPolicy: options.toolPolicy,
   });

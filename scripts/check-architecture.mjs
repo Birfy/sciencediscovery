@@ -20,11 +20,13 @@ async function sourceFiles(path) {
 
 const failures = [];
 const packageFiles = await sourceFiles("packages");
+const pluginFiles = await sourceFiles("plugins");
 const allSourceFiles = new Set([
   ...packageFiles,
+  ...pluginFiles,
   ...await sourceFiles("services"),
 ]);
-for (const file of packageFiles) {
+for (const file of [...packageFiles, ...pluginFiles]) {
   const source = await readFile(new URL(file, root), "utf8");
   if (/from\s+["'][^"']*(?:services|apps)\//u.test(source)) {
     failures.push(`${file}: packages must not import services/ or apps/`);
@@ -32,6 +34,12 @@ for (const file of packageFiles) {
   if (source.includes("@sciencediscovery/agent-runtime")) {
     failures.push(`${file}: capability packages must not depend on the compatibility facade`);
   }
+}
+
+for (const file of [...pluginFiles, ...await sourceFiles("packages/plugin-sdk/src")]) {
+  if (file.endsWith(".test.ts") || (!file.includes("/web.") && !file.endsWith("/views.ts") && !file.includes("/plugin-sdk/"))) continue;
+  const source = await readFile(new URL(file, root), "utf8");
+  if (/from\s+["']node:/u.test(source)) failures.push(`${file}: browser-facing plugin modules must not import Node builtins`);
 }
 
 for (const file of await sourceFiles("services")) {
