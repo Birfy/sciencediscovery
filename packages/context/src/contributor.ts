@@ -188,8 +188,8 @@ export class ContextContributorRegistry<TMessage extends RuntimeMessage = Runtim
       try {
         const contribution = await contributor.contribute({
           ...request,
-          ...(request.stateView && contributor.stateReads
-            ? { stateView: request.stateView.restrict(contributor.stateReads) } : {}),
+          ...(request.stateView
+            ? { stateView: request.stateView.restrict(contributor.stateReads ?? []) } : {}),
         });
         return {
           contribution,

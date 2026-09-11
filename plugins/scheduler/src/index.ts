@@ -5,7 +5,8 @@ import type { PluginDefinition } from "@sciencediscovery/plugin-sdk";
 import { emptyRuntimeContribution, type RuntimeContribution } from "@sciencediscovery/plugin-sdk/runtime";
 import type { RuntimeMessage } from "@sciencediscovery/runtime-core";
 
-export const manifest = Object.freeze({ id: "scheduler", version: "0.1.0", apiVersion: 1 as const });
+import { manifest } from "./manifest.js";
+export { manifest } from "./manifest.js";
 export type SubagentExecutionPort = NonNullable<WorkspaceToolOptions["runSubagent"]>;
 export interface SchedulingPolicy { dispatch: SubagentExecutionPort }
 /** Policies choose dispatch; execution, permission checks and child budgets remain with the port. */

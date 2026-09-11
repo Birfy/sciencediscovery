@@ -155,7 +155,8 @@ export function createPlanContextFactory<TMessage extends RuntimeMessage>(
         scopes,
         contribute: async ({ history, signal, turn, stateView }) => {
           // A captured null is authoritative; never fall back to live latest.
-          const snapshot = stateView ? stateView.read<PlanSnapshot | null>("plan") : await store.latest(signal);
+          if (!stateView) throw new Error("Plan context requires a fixed StateView");
+          const snapshot = stateView.read<PlanSnapshot | null>("plan");
           if (!snapshot?.items.length) return {};
           const observation = observePlanProgress(snapshot, history, turn);
           return {

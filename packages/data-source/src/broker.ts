@@ -425,7 +425,9 @@ export class McpGovernanceBroker {
     const source = this.registry.get(request.sourceId);
     const tool = this.registry.getTool(request.sourceId, request.toolId);
     const settings = this.store.resolveRuntimeSettings(request.sessionId).effective;
-    const enabledSourceIds = request.allowedSourceIds ?? settings.enabledConnectorIds;
+    // Explicit IDs belong to a frozen Run. Direct requests resolve the current composition.
+    const enabledSourceIds = request.allowedSourceIds ?? (settings.plugins?.mcp?.enabled === false ? [] :
+      settings.enabledConnectorIds.filter((id) => id !== "uniprot" || settings.plugins?.["connector.uniprot"]?.enabled !== false));
     if (!enabledSourceIds.includes(request.sourceId)) {
       throw new Error(`MCP source ${request.sourceId} is not enabled for this session`);
     }

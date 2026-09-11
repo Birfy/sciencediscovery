@@ -23,9 +23,24 @@ importers:
       '@sciencediscovery/plugin-artifact-json':
         specifier: workspace:*
         version: link:../../plugins/artifact-json
+      '@sciencediscovery/plugin-mcp':
+        specifier: workspace:*
+        version: link:../../plugins/mcp
+      '@sciencediscovery/plugin-plan':
+        specifier: workspace:*
+        version: link:../../plugins/plan
+      '@sciencediscovery/plugin-scheduler':
+        specifier: workspace:*
+        version: link:../../plugins/scheduler
       '@sciencediscovery/plugin-sdk':
         specifier: workspace:*
         version: link:../../packages/plugin-sdk
+      '@sciencediscovery/plugin-skill':
+        specifier: workspace:*
+        version: link:../../plugins/skill
+      '@sciencediscovery/plugin-uniprot':
+        specifier: workspace:*
+        version: link:../../plugins/uniprot
       '@sciencediscovery/schema':
         specifier: workspace:*
         version: link:../../packages/schema
@@ -523,6 +538,9 @@ importers:
       '@sciencediscovery/runtime-core':
         specifier: workspace:*
         version: link:../../packages/runtime-core
+      '@sciencediscovery/schema':
+        specifier: workspace:*
+        version: link:../../packages/schema
       '@sciencediscovery/workspace':
         specifier: workspace:*
         version: link:../../packages/workspace
@@ -530,6 +548,12 @@ importers:
       '@types/node':
         specifier: 26.1.1
         version: 26.1.1
+      '@types/react':
+        specifier: 19.2.17
+        version: 19.2.17
+      react:
+        specifier: 19.2.7
+        version: 19.2.7
 
   plugins/plan:
     dependencies:
@@ -545,6 +569,9 @@ importers:
       '@sciencediscovery/runtime-core':
         specifier: workspace:*
         version: link:../../packages/runtime-core
+      '@sciencediscovery/schema':
+        specifier: workspace:*
+        version: link:../../packages/schema
       '@sciencediscovery/tools':
         specifier: workspace:*
         version: link:../../packages/tools
@@ -552,6 +579,12 @@ importers:
       '@types/node':
         specifier: 26.1.1
         version: 26.1.1
+      '@types/react':
+        specifier: 19.2.17
+        version: 19.2.17
+      react:
+        specifier: 19.2.7
+        version: 19.2.7
 
   plugins/scheduler:
     dependencies:
@@ -580,6 +613,9 @@ importers:
       '@sciencediscovery/runtime-core':
         specifier: workspace:*
         version: link:../../packages/runtime-core
+      '@sciencediscovery/schema':
+        specifier: workspace:*
+        version: link:../../packages/schema
       '@sciencediscovery/workspace':
         specifier: workspace:*
         version: link:../../packages/workspace
@@ -587,6 +623,12 @@ importers:
       '@types/node':
         specifier: 26.1.1
         version: 26.1.1
+      '@types/react':
+        specifier: 19.2.17
+        version: 19.2.17
+      react:
+        specifier: 19.2.7
+        version: 19.2.7
 
   plugins/uniprot:
     dependencies:
@@ -651,6 +693,9 @@ importers:
       '@sciencediscovery/plan':
         specifier: workspace:*
         version: link:../../packages/plan
+      '@sciencediscovery/plugin-artifact-json':
+        specifier: workspace:*
+        version: link:../../plugins/artifact-json
       '@sciencediscovery/plugin-mcp':
         specifier: workspace:*
         version: link:../../plugins/mcp

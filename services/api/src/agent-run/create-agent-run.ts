@@ -30,6 +30,7 @@ import {
 } from "../native-agent/index.js";
 
 export interface AgentRunBindings {
+  pluginSettings?: import("@sciencediscovery/plugin-sdk").PluginSettingsMap;
   disabledPlugins?: readonly string[];
   abortSignal?: AbortSignal;
   createAgent?: (options: NativeAgentOptions) => NativeAgentHandle;
@@ -55,6 +56,7 @@ export function createAgentRun(
   const gatewayHistory = structuredClone(input.history);
   const agent = (bindings.createAgent ?? createNativeAgent)({
     ...bindings.workspace,
+    ...(bindings.pluginSettings ? { pluginSettings: structuredClone(bindings.pluginSettings) } : {}),
     ...(bindings.disabledPlugins ? { disabledPlugins: bindings.disabledPlugins } : {}),
     versioning: {
       agentId: `${profile.kind}:${profile.gatewayThreadId}`,

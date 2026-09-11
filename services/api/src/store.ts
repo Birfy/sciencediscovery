@@ -17,6 +17,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { appendFile, mkdir, open, readFile, readdir, realpath, rename, rm, stat, truncate, writeFile } from "node:fs/promises";
 import { createReadStream } from "node:fs";
 import { createInterface } from "node:readline";
+import { mergePluginSettings } from "@sciencediscovery/plugin-sdk";
+import { PluginControl } from "./plugins/control.js";
 import { VersionStore, RefStore, workspaceHeadName, withWorkspaceMutation, withWorkspaceAdmission, withWorkspaceRetirement } from "@sciencediscovery/cas";
 import { dirname, relative, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -424,6 +426,11 @@ export class SessionStore {
   private readonly workspaceFileMutationQueues = new Map<string, Promise<void>>();
   private catalog: Catalog = emptyCatalog();
   private database?: DatabaseSync;
+  private pluginControl?: PluginControl;
+  get plugins(): PluginControl {
+    if (!this.pluginControl) throw new Error("Plugin control is not initialized");
+    return this.pluginControl;
+  }
   private notificationStore?: AgentNotifications;
   private shellExecutionStore?: ShellExecutions;
   private transferStore?: WorkspaceTransfers;
@@ -571,6 +578,7 @@ export class SessionStore {
       CREATE INDEX IF NOT EXISTS permission_authorizations_execution
         ON permission_authorizations(execution_id, created_at DESC);
     `);
+    this.pluginControl = new PluginControl(this.database, this, (value) => this.normalizeSettings(value));
     this.notificationStore = new AgentNotifications(this.database, (sessionId) => {
       const session = this.getSession(sessionId);
       return !session || Boolean(session.archivedAt);
@@ -1137,10 +1145,9 @@ export class SessionStore {
   }
 
   private async saveCatalog(): Promise<void> {
-    const content = JSON.stringify(this.catalog);
     this.saveQueue = this.saveQueue.then(() => {
       if (!this.database) throw new Error("Catalog database is not initialized");
-      this.database.prepare("INSERT INTO catalog_state (id, json) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET json = excluded.json").run(content);
+      this.database.prepare("INSERT INTO catalog_state (id, json) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET json = excluded.json").run(JSON.stringify(this.catalog));
     });
     await this.saveQueue;
   }
@@ -1184,7 +1191,6 @@ export class SessionStore {
   }
 
   private async saveCatalogWithAuthorizations(authorizations: PermissionAuthorization[]): Promise<void> {
-    const content = JSON.stringify(this.catalog);
     const records = structuredClone(authorizations);
     this.saveQueue = this.saveQueue.then(() => {
       if (!this.database) throw new Error("Catalog database is not initialized");
@@ -1192,7 +1198,7 @@ export class SessionStore {
       try {
         this.database.prepare(
           "INSERT INTO catalog_state (id, json) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET json = excluded.json",
-        ).run(content);
+        ).run(JSON.stringify(this.catalog));
         const insert = this.database.prepare(`
           INSERT INTO permission_authorizations
             (id, session_id, project_id, execution_id, created_at, record_json)
@@ -1601,7 +1607,8 @@ export class SessionStore {
         if (!hasOwn(overrides, field)) continue;
         const value = overrides[field];
         if (value === undefined) continue;
-        if (field === "enabledConnectorIds") effective.enabledConnectorIds = [...value as ConnectorId[]];
+        if (field === "plugins") effective.plugins = mergePluginSettings(effective.plugins, value as RuntimeSettingsOverrides["plugins"]);
+        else if (field === "enabledConnectorIds") effective.enabledConnectorIds = [...value as ConnectorId[]];
         else if (field === "enabledSkillLibraries") effective.enabledSkillLibraries = structuredClone(value) as EffectiveRuntimeSettings["enabledSkillLibraries"];
         else if (field === "enabledSkillIds") effective.enabledSkillIds = [...value as string[]];
         else if (field === "semanticReviewEnabled") effective.semanticReviewEnabled = value as boolean;
@@ -2118,6 +2125,8 @@ export class SessionStore {
     if (!project) throw new Error("Project not found");
     return {
       overrides: structuredClone(project.settingsOverrides),
+      ...((project.settingsOverrides.plugins || this.catalog.globalSettings.plugins) ?
+        { inheritedPlugins: structuredClone(this.catalog.globalSettings.plugins ?? {}) } : {}),
       ...this.resolveSettingsLayers(this.projectSettingsLayers(project)),
     };
   }
@@ -2129,6 +2138,8 @@ export class SessionStore {
     if (!project) throw new Error("Project not found");
     return {
       overrides: structuredClone(session.settingsOverrides),
+      ...((session.settingsOverrides.plugins || project.settingsOverrides.plugins || this.catalog.globalSettings.plugins) ?
+        { inheritedPlugins: mergePluginSettings(this.catalog.globalSettings.plugins, project.settingsOverrides.plugins) } : {}),
       ...this.resolveRuntimeSettings(sessionId),
     };
   }
@@ -2149,6 +2160,7 @@ export class SessionStore {
     this.catalog.globalSettings = normalized;
     this.syncSessionCompatibilityForProject();
     await this.saveCatalog();
+    this.pluginControl?.changed();
     return this.getGlobalSettings();
   }
 
@@ -2159,7 +2171,32 @@ export class SessionStore {
     project.settingsOverrides = normalized;
     this.syncSessionCompatibilityForProject(projectId);
     await this.saveCatalog();
+    this.pluginControl?.changed(projectId);
     return this.getProjectSettings(projectId);
+  }
+
+  /** ApplyPort: compare, mutate and persist the candidate receipt in one SQLite transaction. */
+  async commitPluginSettings(projectId: string, value: unknown, assertCurrent: () => void, receipt: () => void): Promise<void> {
+    const normalized = this.normalizeSettings(value);
+    await this.saveQueue;
+    assertCurrent();
+    const project = this.getProject(projectId);
+    if (!project || !this.database) throw new Error("Project or catalog unavailable");
+    const previous = structuredClone(this.catalog);
+    this.database.exec("BEGIN IMMEDIATE");
+    try {
+      project.settingsOverrides = normalized;
+      this.syncSessionCompatibilityForProject(projectId);
+      this.database.prepare("INSERT INTO catalog_state(id,json) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET json=excluded.json")
+        .run(JSON.stringify(this.catalog));
+      receipt();
+      this.database.exec("COMMIT");
+    } catch (error) {
+      this.database.exec("ROLLBACK");
+      this.catalog = previous;
+      throw error;
+    }
+    this.pluginControl?.changed(projectId);
   }
 
   async replaceSessionSettings(sessionId: string, value: unknown): Promise<RuntimeSettingsDetails> {
@@ -2169,6 +2206,7 @@ export class SessionStore {
     session.updatedAt = new Date().toISOString();
     this.syncSessionCompatibility(session);
     await this.saveCatalog();
+    this.pluginControl?.changed(session.projectId, sessionId);
     return this.getSessionSettings(sessionId);
   }
 

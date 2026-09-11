@@ -132,6 +132,7 @@ export interface NativeAgentOptions extends WorkspaceAgentOptions {
   contextContributorFactories?: readonly ContextContributorFactory<WireMessage>[];
   stateProviders?: readonly StateProvider[];
   disabledPlugins?: readonly string[];
+  pluginSettings?: import("@sciencediscovery/plugin-sdk").PluginSettingsMap;
   /** Run-scoped Plan snapshot projection; when present, registers update_plan and context injection. */
   /** The `/evolve` capability for this turn, or absent when the deployment has
    *  none. One object instead of two forwarded callbacks and a deps bundle
@@ -250,7 +251,7 @@ class NativeAgent implements NativeAgentHandle {
       evolve: options.evolve,
       workspace: pluginWorkspace,
       durable: this.durableContext,
-    }, options.disabledPlugins);
+    }, options.disabledPlugins, options.pluginSettings);
     await this.plugins.start(signal);
     const executionTools = buildTools(options);
     // Retained per Session, not per AgentRun: a bounded result stays in the
@@ -446,6 +447,8 @@ class NativeAgent implements NativeAgentHandle {
           this.options.versioning, () => this.runtimeState());
         await this.versionRecorder.initialize({
           plugins: this.plugins?.manifests ?? [],
+          pluginSettings: this.options.pluginSettings ?? {},
+          pluginStatuses: this.plugins?.status ?? [],
           model: { model: this.endpoint.model, apiProtocol: this.endpoint.apiProtocol,
             apiVariant: this.endpoint.apiVariant, policy: this.policy,
             thinkingMode: this.endpoint.thinkingMode, thinkingEffort: this.endpoint.thinkingEffort,

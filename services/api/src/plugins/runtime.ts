@@ -1,6 +1,7 @@
 // Copyright (C) 2026-2026 Huawei Technologies Co., Ltd
 // Licensed under the Apache License, Version 2.0 (the "License");
-import { createPluginScope, type PluginDefinition } from "@sciencediscovery/plugin-sdk";
+import { createPluginScope, disabledPluginIds, validatePluginSettings, negotiatePlugins, ServiceRegistry, type PluginSettingsMap, type PluginDefinition } from "@sciencediscovery/plugin-sdk";
+import { installedPlugins } from "./catalog.js";
 import { planPlugin } from "@sciencediscovery/plugin-plan";
 import { skillPlugin } from "@sciencediscovery/plugin-skill";
 import { mcpPlugin } from "@sciencediscovery/plugin-mcp";
@@ -35,6 +36,35 @@ export function runtimePluginDefinitions<M extends RuntimeMessage>(options: {
   ];
 }
 
-export function createRuntimePluginScope<M extends RuntimeMessage>(options: Parameters<typeof runtimePluginDefinitions<M>>[0], disabled: readonly string[] = []) {
-  return createPluginScope(runtimePluginDefinitions<M>(options), disabled);
+export async function createRuntimePluginScope<M extends RuntimeMessage>(options: Parameters<typeof runtimePluginDefinitions<M>>[0], disabled: readonly string[] = [], settings: PluginSettingsMap = {}) {
+  const normalized = validatePluginSettings(settings, installedPlugins);
+  const services = new ServiceRegistry();
+  services.provide({ id: "skill.catalog", version: 1 }, options.workspace.skills ?? []);
+  if (options.workspace.mcpTools) services.provide({ id: "mcp.tools", version: 1 }, options.workspace.mcpTools);
+  if (options.workspace.runSubagent) services.provide({ id: "subagent.dispatch", version: 1 }, options.workspace.runSubagent);
+  if (options.planStore) services.provide({ id: "plan.store", version: 1 }, options.planStore);
+  const definitions = runtimePluginDefinitions<M>({ ...options, workspace: { ...options.workspace,
+    skills: services.require({ id: "skill.catalog", version: 1 }),
+    mcpTools: services.require({ id: "mcp.tools", version: 1, optional: true }),
+    runSubagent: services.require({ id: "subagent.dispatch", version: 1, optional: true }),
+  }, planStore: services.require({ id: "plan.store", version: 1, optional: true }) });
+  const known = new Set([...installedPlugins.map((item) => item.id), "evolve"]);
+  for (const id of disabled) if (!known.has(id)) throw new Error(`Unknown plugin: ${id}`);
+  // Installed but currently unavailable plugins may still be configured/disabled.
+  const statuses = negotiatePlugins([...installedPlugins.filter((item) => item.entries?.runtime),
+    ...definitions.filter((item) => item.manifest.id === "evolve").map((item) => item.manifest)], { settings: normalized,
+    services: services.describe(), permissions: ["runtime.contribute"] });
+  const excluded = [...new Set([...disabled, ...disabledPluginIds(normalized),
+    ...statuses.filter((item) => !item.available || !item.authorized).map((item) => item.id)])]
+    .filter((id) => definitions.some((item) => item.manifest.id === id));
+  const scope = await createPluginScope(definitions, excluded);
+  let active = false;
+  return {
+    get manifests() { return scope.manifests; },
+    get status() { return statuses.map((item) => ({...structuredClone(item),
+      active:active && scope.manifests.some((manifest) => manifest.id===item.id)})); },
+    contributions:scope.contributions,
+    async start(signal:AbortSignal) { await scope.start(signal); active=true; },
+    async dispose() { active=false; await scope.dispose(); },
+  };
 }

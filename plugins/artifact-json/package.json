@@ -7,6 +7,10 @@
     "./web": {
       "types": "./src/web.tsx",
       "default": "./dist/web.js"
+    },
+    "./manifest": {
+      "types": "./src/manifest.ts",
+      "default": "./dist/manifest.js"
     }
   },
   "scripts": {

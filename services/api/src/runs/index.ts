@@ -13,6 +13,7 @@
 // limitations under the License.
 
 import { randomUUID } from "node:crypto";
+import { pluginEnabled } from "@sciencediscovery/plugin-sdk";
 import { versioningAuthorities } from "../agent-run/versioning-authorities.js";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -1169,6 +1170,7 @@ async function executeAgentRun(
   });
   const agentOptions: WorkspaceAgentOptions = {
     workflowInstructions: ideaTreeLeadInstructions(settingsSnapshot.ideaTreeSettings),
+    pluginSettings: settingsSnapshot.plugins,
     config: agentConfig,
     createSkill: async (input) => {
       return await skillCatalog.createReviewDraft(input, {
@@ -1384,7 +1386,7 @@ async function executeAgentRun(
           ? createReviewAgentOptions({
               modelIdentity: `${selectedModel.id}:${selectedModel.model}`,
               runIdleTimeoutMs: timeoutSettings.gatewayIdleTimeoutMs,
-              skills: skillCatalog.resolve(["citation-reviewer", "computation-reviewer", "literature-searcher"]),
+              skills: pluginEnabled(settingsSnapshot.plugins, "skill") ? skillCatalog.resolve(["citation-reviewer", "computation-reviewer", "literature-searcher"]) : [],
               workspace: { ...agentOptions, mcpTools: reviewerMcpTools.mcpTools },
             })
           : undefined;
@@ -1603,12 +1605,13 @@ async function executeAgentRun(
           });
           await emit({ subagent, type: "subagent.updated" });
           const roleSkillId = skillIdForSubagentType(skillCatalog, subagent.input.subagentType);
-          const subagentSkillIds = [...new Set([
+          const subagentSkillIds = !pluginEnabled(settingsSnapshot.plugins, "skill") ? [] : [...new Set([
             ...settingsSnapshot.enabledSkillIds,
             ...(specialist?.enabledSkillIds ?? []),
             ...(roleSkillId ? [roleSkillId] : []),
           ])];
-          const subagentConnectorIds = [...new Set([...settingsSnapshot.enabledConnectorIds, ...(specialist?.connectorIds ?? [])])];
+          const subagentConnectorIds = !pluginEnabled(settingsSnapshot.plugins, "mcp") ? [] : [...new Set([...settingsSnapshot.enabledConnectorIds, ...(specialist?.connectorIds ?? [])])]
+            .filter((id) => id !== "uniprot" || pluginEnabled(settingsSnapshot.plugins, "connector.uniprot"));
           const subagentWorkspaceRoot = store.agentWorkspacePath(sessionId, subagent.id);
           const subagentSnapshots = scopeRuntimeSkills(skillCatalog.resolve(subagentSkillIds), "subagent");
           const subagentSkillPackagesRoot = subagentSnapshots.length
@@ -1652,6 +1655,7 @@ async function executeAgentRun(
           });
           let subagentRunHandle: ReturnType<typeof runSubagentTask> | undefined;
           const subagentWorkspace: WorkspaceAgentOptions = {
+            pluginSettings: settingsSnapshot.plugins,
             config: agentConfig,
             enabledConnectorIds: subagentConnectorIds,
             ...(scientificEnvironments ? { environments: scientificEnvironments } : {}),
@@ -1881,6 +1885,7 @@ async function executeAgentRun(
           ? closedModelContext((await versions.readRecord<{ history: AgentHistoryMessage[] }>(continuation.contextRef, "SubagentContext")).value.history) : [];
         subagentRunHandle = runSubagentTask({
           bindings: {
+            pluginSettings: settingsSnapshot.plugins,
             abortSignal: childExecution.abortSignal,
             observer: observeSubagentEvent,
             planStore: createRunPlanStore(`subagent:${subagent.id}`, () => subagent.turnCount),
@@ -2094,6 +2099,7 @@ async function executeAgentRun(
 
   mainExecution = runMainRequestExecution({
     bindings: {
+      pluginSettings: settingsSnapshot.plugins,
       abortSignal: requestExecution.abortSignal,
       observer: observeMainEvent,
       planStore: createRunPlanStore("main"),
@@ -2668,6 +2674,9 @@ export function computeSettingsSnapshot(store: SessionStore, sessionId: string):
     enabledConnectorIds: [...new Set([...resolved.enabledConnectorIds, ...(sessionSpecialist?.connectorIds ?? [])])],
     enabledSkillIds: [...new Set([...resolved.enabledSkillIds, ...(sessionSpecialist?.enabledSkillIds ?? [])])],
   };
+  if (!pluginEnabled(snapshot.plugins, "skill")) { snapshot.enabledSkillIds = []; snapshot.enabledSkillLibraries = []; }
+  if (!pluginEnabled(snapshot.plugins, "mcp")) snapshot.enabledConnectorIds = [];
+  else if (!pluginEnabled(snapshot.plugins, "connector.uniprot")) snapshot.enabledConnectorIds = snapshot.enabledConnectorIds.filter((id) => id !== "uniprot");
   const model = store.getModel(snapshot.modelId);
   if (!model) return snapshot;
   const protocol = model.apiProtocol ?? (model.baseUrl.includes("/api/plan")
@@ -2766,6 +2775,9 @@ export async function createQueuedRun(
     throw error;
   }
   let skillLibraryRefs: SessionRun["skillLibraryRefs"];
+  if (!pluginEnabled(settingsSnapshot.plugins, "skill") && (body.skillLibraryRefs?.length || references.some((reference) => reference.kind === "skill") || skillAuthoringCommandPrompt(prompt))) {
+    throw new ApiStatusError(400, "Skill plugin is disabled for this Session");
+  }
   try {
     const configuredRefs = await skillLibraryCatalog.resolveEnabledRefs(settingsSnapshot.enabledSkillLibraries);
     const declaredRefs = await skillLibraryCatalog.validateRefs(body.skillLibraryRefs);

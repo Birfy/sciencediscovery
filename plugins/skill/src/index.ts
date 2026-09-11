@@ -6,7 +6,8 @@ import { createSkillTools, buildSkillSystemSection, type RuntimeSkill, type Work
 import type { PluginDefinition } from "@sciencediscovery/plugin-sdk";
 import { emptyRuntimeContribution, type RuntimeContribution } from "@sciencediscovery/plugin-sdk/runtime";
 import type { RuntimeMessage } from "@sciencediscovery/runtime-core";
-export const manifest = Object.freeze({ id: "skill", version: "0.1.0", apiVersion: 1 as const, capabilities: ["skills.catalog", "skills.activation"] });
+import { manifest } from "./manifest.js";
+export { manifest } from "./manifest.js";
 
 export function skillPlugin<M extends RuntimeMessage>(ports: {
   skills: RuntimeSkill[];

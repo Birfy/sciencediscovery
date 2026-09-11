@@ -1,12 +1,27 @@
 // Copyright (C) 2026-2026 Huawei Technologies Co., Ltd
 // Licensed under the Apache License, Version 2.0 (the "License");
 
+import type { ConfigField, Json, ServiceContract } from "./configuration.js";
+export * from "./configuration.js";
+export * from "./services.js";
+export * from "./bridge.js";
+
 export interface PluginManifest {
   readonly id: string;
   readonly version: string;
   readonly apiVersion: 1;
   readonly requires?: readonly string[];
   readonly capabilities?: readonly string[];
+  readonly entries?: { readonly runtime?: string; readonly web?: string; readonly platform?: string };
+  readonly services?: { readonly provides?: readonly ServiceContract[]; readonly requires?: readonly ServiceContract[] };
+  readonly permissions?: readonly string[];
+  readonly configuration?: {
+    readonly schemaVersion: number; readonly scopes: readonly ("global" | "project" | "session")[];
+    readonly applies: "nextRun" | "restart"; readonly fields: Readonly<Record<string, ConfigField>>;
+    readonly defaults?: Readonly<Record<string, Json>>;
+  };
+  readonly contributes?: readonly string[];
+  readonly settingsFields?: readonly string[];
 }
 export interface PluginInstance<C> {
   readonly contribution: C;
