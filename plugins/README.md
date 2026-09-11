@@ -1,5 +1,7 @@
 # 内置插件开发
 
+完整机制和维护入口见 [插件化机制](../docs/zh/explanation/plugins.md)，本页保留包开发速查。
+
 插件是可信、随 workspace 构建和发布的包，不是任意代码热加载或安全沙箱。
 AgentLoop、工具权限、审批、CAS 和 SessionStore 仍由基座管理。
 
@@ -50,6 +52,10 @@ contributor 必须声明 `stateReads`，只从该次调用的 StateView 投影�
 - compare 接收 `{baselineRunId,candidateRunId}`，要求双方完成、任务与固定配置一致；保存实际结果和 CAS 比较记录。
 - approve 是独立的显式管理操作，不由模型自动判断；apply 以基线 revision 校验后，在同一事务保存活动设置和应用回执。重试已应用请求幂等。
 - reject、配置/资产漂移或持久化失败不应用候选。实验记录保留；候选只影响新运行。
+
+prepare 创建的两个普通实验 Session 在 apply/reject 后不自动清理，避免丢失用户仍需审阅的结果。用户确认后可通过现有 Session 删除入口显式清理；候选保留的 Session/Run 引用在删除后不保证可回看。当前没有候选专属归档策略。
+
+经典全局/项目/会话设置、Composer 更新、Bridge 和 ApplyPort 都经 SessionStore 的同一设置互斥。Bridge 的 revision 必须在锁内复查；经典 PUT 保持原有后写覆盖语义，不把历史应用回执解释为永久活动版本。
 
 比较属于 `observed-runs`：它不是自动判优、确定性环境重放或外部副作用回滚。
 自动评价、候选搜索、灰度平台、模型训练不在当前范围。
