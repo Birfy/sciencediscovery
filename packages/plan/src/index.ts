@@ -151,9 +151,11 @@ export function createPlanContextFactory<TMessage extends RuntimeMessage>(
     create() {
       return new ContextSectionContributor<TMessage>({
         id: "plan.state",
+        stateReads: ["plan"],
         scopes,
-        contribute: async ({ history, signal, turn }) => {
-          const snapshot = await store.latest(signal);
+        contribute: async ({ history, signal, turn, stateView }) => {
+          // A captured null is authoritative; never fall back to live latest.
+          const snapshot = stateView ? stateView.read<PlanSnapshot | null>("plan") : await store.latest(signal);
           if (!snapshot?.items.length) return {};
           const observation = observePlanProgress(snapshot, history, turn);
           return {
