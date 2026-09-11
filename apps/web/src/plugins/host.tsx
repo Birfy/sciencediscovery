@@ -26,7 +26,8 @@ export function PluginWebHost({client,projectId,sessionId,children}: {
     };
     void refresh();
     void client.subscribePlugins(scope, () => { void refresh(); }, abort.signal).catch(() => undefined);
-    return () => abort.abort();
+    const poll = window.setInterval(() => { void refresh(); }, 30_000);
+    return () => { abort.abort(); window.clearInterval(poll); };
   }, [client,projectId,sessionId,key]);
   // Generic source previews remain available while extension availability is unresolved.
   const disabled = !projectId ? [] : view?.key === key ? view.disabled : ["artifact-json"];

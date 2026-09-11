@@ -73,6 +73,9 @@ test("项目组合、会话覆盖与审批后的候选应用", {tag:"@mocked"},a
       const run=await sendUserMessage(page,fixture.session.id,"Track verification with a Plan.");
       expect((await waitForRunTerminal(page,fixture.session.id,run.id)).status).toBe("completed");
       expect(stub.calls.filter(call=>call.turn===1).some(call=>call.offeredTools?.includes("update_plan"))).toBe(true);
+      const state=await api(page,root+"/bridge?sessionId="+fixture.session.id,{apiVersion:1,pluginId:"plan",
+        scope:{projectId:fixture.project.id,sessionId:fixture.session.id},kind:"query",method:"state",input:{runId:run.id}});
+      expect(state.result.length).toBeGreaterThan(0);
       await page.reload();
       const workspace=page.locator("aside.workspace-panel");
       if (!await workspace.count()) await page.getByRole("button",{name:/Show workspace|显示工作区/}).click();

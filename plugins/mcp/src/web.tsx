@@ -44,3 +44,4 @@ return <>      <fieldset className="settings-array" disabled={disabled || saving
 
 </>;
 }
+export { ConnectorPicker, connectorName } from "./connector-picker.js";

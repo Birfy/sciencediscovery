@@ -87,7 +87,8 @@ export class PluginControl {
     this.assertScope(scope);
     const bridge = new PluginBridge(scope, (id) => id === "host.settings" || installedPlugins.some((item) => item.id === id));
     bridge.register({ id: "host.settings", queries: { snapshot: () => this.describe(scope) }, commands: {
-      replace: (input) => this.serial("settings:" + scope.projectId, async () => {
+      replace: (input, signal) => this.serial("settings:" + scope.projectId, async () => {
+        signal.throwIfAborted();
         const command = record(input);
         if (command.expectedRevision !== this.snapshot(scope).revision) throw new BridgeError("conflict", "Settings changed; reload before saving");
         const settings = this.normalize(command.overrides);
@@ -117,7 +118,8 @@ export class PluginControl {
         } : {}),
       },
       commands: {
-        configure: (input) => this.serial("settings:" + scope.projectId, async () => {
+        configure: (input, signal) => this.serial("settings:" + scope.projectId, async () => {
+          signal.throwIfAborted();
           const command = record(input), before = this.snapshot(scope);
           if (command.expectedRevision !== before.revision) throw new BridgeError("conflict", "Settings changed; reload before saving");
           const patch = command.fields === undefined ? {} : record(command.fields);
@@ -141,6 +143,7 @@ export class PluginControl {
     return (this.db.prepare("SELECT json FROM plugin_candidates WHERE project_id = ? ORDER BY rowid DESC").all(projectId) as { json: string }[]).map((row) => JSON.parse(row.json));
   }
   private save(candidate: Candidate): Candidate {
+    this.assertScope({projectId:candidate.projectId});
     this.db.prepare("INSERT INTO plugin_candidates(id, project_id, json) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET json = excluded.json")
       .run(candidate.id, candidate.projectId, JSON.stringify(candidate));
     return structuredClone(candidate);
