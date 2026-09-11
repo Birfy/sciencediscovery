@@ -93,7 +93,7 @@ test("项目组合、会话覆盖与审批后的候选应用", {tag:"@mocked"},a
         input:{expectedRevision:composition.revision,overrides:{...composition.settings.overrides,modelId:fixture.model!.id}}});
       const baseline=await api(page,root);
       candidate=await api(page,root+"/candidates",{expectedRevision:baseline.revision,patch:{plugins:{plan:{enabled:true}}}});
-      expect(candidate.baselineRef.hash).toBeTruthy();expect(candidate.proposedRef.hash).toBeTruthy();
+      expect(candidate.baselineRef.digest).toMatch(/^sha256:/);expect(candidate.proposedRef.digest).toMatch(/^sha256:/);
       candidate=await api(page,root+"/candidates/"+candidate.id+"/prepare",{});
       for(const [name,sessionId] of [["baseline",candidate.experiments.baselineSessionId],["candidate",candidate.experiments.candidateSessionId]]) {
         const session=await api(page,"/api/sessions/"+sessionId);
@@ -109,7 +109,7 @@ test("项目组合、会话覆盖与审批后的候选应用", {tag:"@mocked"},a
     });
     await journey.step("比较、审批并应用；拒绝另一个候选","独立审批后项目采用候选 Plan 设置，其他关闭项保持不变；拒绝不改变活动版本。",async()=>{
       const compared=await api(page,root+"/candidates/"+candidate.id+"/compare",{baselineRunId,candidateRunId});
-      expect(compared.comparisonRef.hash).toBeTruthy();
+      expect(compared.comparisonRef.digest).toMatch(/^sha256:/);
       const denied=await page.request.post(apiBaseUrl()+root+"/candidates/"+candidate.id+"/apply",{headers:authorizationHeader(),data:{}});
       expect(denied.status()).toBe(409);
       await api(page,root+"/candidates/"+candidate.id+"/approve",{});
