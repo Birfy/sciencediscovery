@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import { ProjectRecordSlot } from "./plugins/project-views.js";
 import { useEffect, useState, type FormEvent } from "react";
 
 import type {
@@ -37,81 +38,14 @@ type Translate = (key: MessageKey, variables?: Record<string, number | string>) 
 
 function visibleReviewerLevel(level: ReviewerSpecialistLevel): VisibleReviewerLevel { return level; }
 
-function planSummary(plan: RunPlanSnapshot, t: Translate, terminal = false): string {
-  const completed = plan.items.filter((item) => item.status === "completed").length;
-  const active = plan.items.filter((item) => item.status === "in_progress").length;
-  const summary = t("plan.summary", { completed, total: plan.items.length });
-  return active && !terminal ? `${summary} · ${t("plan.summaryActive", { active })}` : summary;
+export function PlanCard(props: { expanded: boolean; onToggle:(expanded:boolean)=>void; plan:RunPlanSnapshot; terminal?:boolean }) {
+ const {t}=useLocale();
+ return <ProjectRecordSlot kind="plan.card" {...props} t={t} icons={{check:<CheckIcon size={13}/>,spinner:<SpinnerIcon size={14}/>,chevron:<ChevronRightIcon size={15}/>}} />;
 }
-
-function PlanItemStatus({ status }: { status: RunPlanSnapshot["items"][number]["status"] }) {
-  const { t } = useLocale();
-  const label = status === "completed" ? t("plan.status.completed") : status === "in_progress" ? t("plan.status.inProgress") : t("plan.status.pending");
-  return <span aria-label={label} className={`plan-item-status ${status}`} role="img">
-    {status === "completed" ? <CheckIcon size={13} /> : status === "in_progress" ? <SpinnerIcon size={14} /> : null}
-  </span>;
-}
-
-export function PlanCard({
-  expanded,
-  onToggle,
-  plan,
-  terminal = false,
-}: {
-  expanded: boolean;
-  onToggle: (expanded: boolean) => void;
-  plan: RunPlanSnapshot;
-  terminal?: boolean;
-}) {
-  const { t } = useLocale();
-  const completed = plan.items.length > 0 && plan.items.every((item) => item.status === "completed");
-  const status = !plan.items.length ? t("plan.badge.cleared")
-    : completed ? t("plan.status.completed")
-    : terminal ? t("record.finished")
-    : plan.items.some((item) => item.status === "in_progress") ? t("plan.status.inProgress")
-    : t("plan.status.pending");
-  const title = t("plan.title", { agent: plan.agentId });
-  return (
-    <article className="plan-card recorded">
-      <button aria-expanded={expanded} className="plan-card-heading" onClick={() => onToggle(!expanded)} type="button">
-        <span className="card-chevron"><ChevronRightIcon size={15} /></span>
-        <span className="plan-card-label"><strong title={title}>{title}</strong><small>{planSummary(plan, t, terminal)}</small></span>
-        <i>{status}</i>
-      </button>
-      {expanded ? <div className="plan-card-body">
-        {plan.explanation ? <p>{plan.explanation}</p> : null}
-        <ol className="plan-item-list">{plan.items.map((item, index) => <li key={`${index}:${item.step}`} data-status={item.status}>
-          <PlanItemStatus status={item.status} />
-          <span>{item.step}</span>
-        </li>)}</ol>
-      </div> : null}
-    </article>
-  );
-}
-
-export function OrchestrationPanel({
-  expandedCards,
-  onToggleCard,
-  plans,
-  terminalRunIds = new Set<string>(),
-}: ActivityCardDisclosure & {
-  plans: RunPlanSnapshot[];
-  terminalRunIds?: ReadonlySet<string>;
-}) {
-  const { t } = useLocale();
-  if (!plans.length) return null;
-  return <section className="orchestration-panel" aria-label={t("plan.sectionAria")}>
-    {plans.map((plan) => {
-      const cardId = activityCardId("plan", `${plan.runId}:${plan.agentId}`);
-      return <PlanCard
-        expanded={Boolean(expandedCards[cardId])}
-        key={`${plan.runId}:${plan.agentId}`}
-        onToggle={(expanded) => onToggleCard(cardId, expanded)}
-        plan={plan}
-        terminal={terminalRunIds.has(plan.runId)}
-      />;
-    })}
-  </section>;
+export function OrchestrationPanel(props: ActivityCardDisclosure & { plans:RunPlanSnapshot[]; terminalRunIds?:ReadonlySet<string> }) {
+ const {t}=useLocale();
+ return <ProjectRecordSlot kind="plan.panel" {...props} t={t} cardIdFor={(runId,agentId)=>activityCardId("plan", `${runId}:${agentId}`)}
+   icons={{check:<CheckIcon size={13}/>,spinner:<SpinnerIcon size={14}/>,chevron:<ChevronRightIcon size={15}/>}} />;
 }
 
 function subagentSummary(subagent: Subagent, t: Translate): string {

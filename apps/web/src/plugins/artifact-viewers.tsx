@@ -4,18 +4,19 @@
 import { Component, type ReactNode } from "react";
 import { createViewRegistry } from "@sciencediscovery/plugin-sdk/views";
 import { jsonViewer, type JsonPreviewInput } from "@sciencediscovery/plugin-artifact-json/web";
+import { useDisabledPlugins } from "./host.js";
 
 /** Trusted bundled entries only; no user paths, eval or remote module loading. */
 export function createArtifactViewers(disabled: readonly string[] = []) {
   return createViewRegistry<JsonPreviewInput, ReactNode>([jsonViewer], disabled);
 }
-const viewers = createArtifactViewers();
 class ViewBoundary extends Component<{ children: ReactNode; fallback: ReactNode }, { failed: boolean }> {
   state = { failed: false };
   static getDerivedStateFromError() { return { failed: true }; }
   render() { return this.state.failed ? this.props.fallback : this.props.children; }
 }
 function Contribution({ input }: { input: JsonPreviewInput }) {
+  const viewers = createArtifactViewers(useDisabledPlugins());
   const view = viewers.resolve(input);
   return view ? view.render(input) : <pre className="artifact-source-preview">{input.source}</pre>;
 }
