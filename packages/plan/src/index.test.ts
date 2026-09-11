@@ -130,7 +130,7 @@ test("plan context traces an unobservable history anchor without guessing stalen
     },
     async update() { throw new Error("not used"); },
   };
-  const contributor = createPlanContextFactory(store, ["subagent"]).create({
+  const contributor = createPlanContextFactory(["subagent"]).create({
     contextId: "run-1",
     scope: "subagent",
   }) as ContextContributor;
@@ -154,9 +154,6 @@ test("plan context traces an unobservable history anchor without guessing stalen
 });
 
 test("Plan projection refuses a live-store fallback without a checkpoint", async () => {
-  let reads=0;
-  const store:PlanStore={latest:async()=>{reads++;return undefined;},update:async()=>{throw new Error("unused");}};
-  const contributor=createPlanContextFactory(store,["main"]).create({contextId:"r",scope:"main"}) as ContextContributor;
+  const contributor=createPlanContextFactory(["main"]).create({contextId:"r",scope:"main"}) as ContextContributor;
   await assert.rejects(contributor.contribute({contextId:"r",scope:"main",history:[],latestUserInput:"",turn:1,signal:new AbortController().signal}),/fixed StateView/);
-  assert.equal(reads,0);
 });

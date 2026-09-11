@@ -436,6 +436,7 @@ export class SessionStore {
   private transferStore?: WorkspaceTransfers;
   private loaded = false;
   private saveQueue = Promise.resolve();
+  private settingsMutationQueue: Promise<void> = Promise.resolve();
   private secretKey?: Buffer;
   private skillIds = new Set<string>(BUNDLED_SKILL_IDS);
   private connectorIds = knownConnectorIdSet();
@@ -2155,59 +2156,77 @@ export class SessionStore {
     ]);
   }
 
-  async replaceGlobalSettings(value: unknown): Promise<RuntimeSettingsDetails> {
-    const normalized = withoutSkillSelection(this.normalizeSettings(value));
-    this.catalog.globalSettings = normalized;
-    this.syncSessionCompatibilityForProject();
-    await this.saveCatalog();
-    this.pluginControl?.changed();
-    return this.getGlobalSettings();
+  /** Serialize inherited settings before reading or mutating the shared catalog. */
+  private withSettingsMutation<T>(mutate: () => Promise<T>): Promise<T> {
+    const result = this.settingsMutationQueue.then(mutate);
+    // A rejected CAS or validation must not prevent subsequent settings writes.
+    this.settingsMutationQueue = result.then(() => undefined, () => undefined);
+    return result;
   }
 
-  async replaceProjectSettings(projectId: string, value: unknown): Promise<RuntimeSettingsDetails> {
-    const project = this.getProject(projectId);
-    if (!project) throw new Error("Project not found");
-    const normalized = this.normalizeSettings(value);
-    project.settingsOverrides = normalized;
-    this.syncSessionCompatibilityForProject(projectId);
-    await this.saveCatalog();
-    this.pluginControl?.changed(projectId);
-    return this.getProjectSettings(projectId);
+  async replaceGlobalSettings(value: unknown): Promise<RuntimeSettingsDetails> {
+    return this.withSettingsMutation(async () => {
+      const normalized = withoutSkillSelection(this.normalizeSettings(value));
+      this.catalog.globalSettings = normalized;
+      this.syncSessionCompatibilityForProject();
+      await this.saveCatalog();
+      this.pluginControl?.changed();
+      return this.getGlobalSettings();
+    });
+  }
+
+  async replaceProjectSettings(projectId: string, value: unknown, assertCurrent?: () => void): Promise<RuntimeSettingsDetails> {
+    return this.withSettingsMutation(async () => {
+      assertCurrent?.();
+      const project = this.getProject(projectId);
+      if (!project) throw new Error("Project not found");
+      const normalized = this.normalizeSettings(value);
+      project.settingsOverrides = normalized;
+      this.syncSessionCompatibilityForProject(projectId);
+      await this.saveCatalog();
+      this.pluginControl?.changed(projectId);
+      return this.getProjectSettings(projectId);
+    });
   }
 
   /** ApplyPort: compare, mutate and persist the candidate receipt in one SQLite transaction. */
   async commitPluginSettings(projectId: string, value: unknown, assertCurrent: () => void, receipt: () => void): Promise<void> {
-    const normalized = this.normalizeSettings(value);
-    await this.saveQueue;
-    assertCurrent();
-    const project = this.getProject(projectId);
-    if (!project || !this.database) throw new Error("Project or catalog unavailable");
-    const previous = structuredClone(this.catalog);
-    this.database.exec("BEGIN IMMEDIATE");
-    try {
-      project.settingsOverrides = normalized;
-      this.syncSessionCompatibilityForProject(projectId);
-      this.database.prepare("INSERT INTO catalog_state(id,json) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET json=excluded.json")
-        .run(JSON.stringify(this.catalog));
-      receipt();
-      this.database.exec("COMMIT");
-    } catch (error) {
-      this.database.exec("ROLLBACK");
-      this.catalog = previous;
-      throw error;
-    }
-    this.pluginControl?.changed(projectId);
+    return this.withSettingsMutation(async () => {
+      const normalized = this.normalizeSettings(value);
+      await this.saveQueue;
+      assertCurrent();
+      const project = this.getProject(projectId);
+      if (!project || !this.database) throw new Error("Project or catalog unavailable");
+      const previous = structuredClone(this.catalog);
+      this.database.exec("BEGIN IMMEDIATE");
+      try {
+        project.settingsOverrides = normalized;
+        this.syncSessionCompatibilityForProject(projectId);
+        this.database.prepare("INSERT INTO catalog_state(id,json) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET json=excluded.json")
+          .run(JSON.stringify(this.catalog));
+        receipt();
+        this.database.exec("COMMIT");
+      } catch (error) {
+        this.database.exec("ROLLBACK");
+        this.catalog = previous;
+        throw error;
+      }
+      this.pluginControl?.changed(projectId);
+    });
   }
 
-  async replaceSessionSettings(sessionId: string, value: unknown): Promise<RuntimeSettingsDetails> {
-    const session = this.assertSessionWritable(sessionId);
-    const normalized = this.normalizeSettings(value);
-    session.settingsOverrides = normalized;
-    session.updatedAt = new Date().toISOString();
-    this.syncSessionCompatibility(session);
-    await this.saveCatalog();
-    this.pluginControl?.changed(session.projectId, sessionId);
-    return this.getSessionSettings(sessionId);
+  async replaceSessionSettings(sessionId: string, value: unknown, assertCurrent?: () => void): Promise<RuntimeSettingsDetails> {
+    return this.withSettingsMutation(async () => {
+      assertCurrent?.();
+      const session = this.assertSessionWritable(sessionId);
+      const normalized = this.normalizeSettings(value);
+      session.settingsOverrides = normalized;
+      session.updatedAt = new Date().toISOString();
+      this.syncSessionCompatibility(session);
+      await this.saveCatalog();
+      this.pluginControl?.changed(session.projectId, sessionId);
+      return this.getSessionSettings(sessionId);
+    });
   }
 
   listProjects(): Project[] {
@@ -4195,51 +4214,55 @@ export class SessionStore {
     sessionId: string,
     changes: UpdateSessionRequest,
   ): Promise<Session> {
-    const session = this.assertSessionWritable(sessionId);
-    const { approvalMode, remoteRunnerHostIds, runnerIds, reviewCriteria, reviewMode, specialistId, title, ...settingsChanges } = changes;
-    const nextTitle = hasOwn(changes, "title") ? requiredLabel(title, "Session title") : session.title;
-    const nextSettings = this.normalizeSettings({ ...session.settingsOverrides, ...settingsChanges });
-    const nextModel = this.getModel(nextSettings.modelId);
-    if (nextModel && (nextSettings.thinkingMode !== undefined || nextSettings.thinkingEffort !== undefined)) {
-      const constrained = constrainCatalogThinking(
-        nextModel.model,
-        nextSettings.thinkingMode,
-        nextSettings.thinkingEffort,
-        nextModel.facts,
-      );
-      if (nextSettings.thinkingMode !== undefined) nextSettings.thinkingMode = constrained.mode;
-      if (nextSettings.thinkingEffort !== undefined) nextSettings.thinkingEffort = constrained.effort;
-    }
-    if (approvalMode !== undefined) throw new Error("Use setApprovalMode to change approval policy");
-    if (reviewMode !== undefined && reviewMode !== "auto" && reviewMode !== "manual") throw new Error("Invalid review mode");
-    if (specialistId && !this.getSpecialist(specialistId)) throw new Error("Specialist not found");
-    const nextRunnerIds = runnerIds == null ? undefined : this.validateRunnerIds(runnerIds);
-    const nextRemoteRunnerHostIds = remoteRunnerHostIds === undefined || remoteRunnerHostIds === null
-      ? undefined
-      : this.validateSessionRemoteRunnerHosts(session.projectId, remoteRunnerHostIds);
-    session.settingsOverrides = nextSettings;
-    session.title = nextTitle;
-    if (reviewMode) session.reviewMode = reviewMode;
-    if (reviewCriteria !== undefined) session.reviewCriteria = this.normalizeReviewCriteria(reviewCriteria);
-    if (specialistId === null) delete session.specialistId;
-    else if (specialistId !== undefined) session.specialistId = specialistId;
-    // `null` drops the override so the Session follows the Project again; an
-    // empty runnerIds array disables all Runner execution for this Session.
-    if (runnerIds === null) {
-      delete session.runnerIds;
-      delete session.remoteRunnerHostIds;
-    } else if (nextRunnerIds !== undefined) {
-      session.runnerIds = nextRunnerIds;
-      session.remoteRunnerHostIds = nextRunnerIds.filter((id) => id !== "local");
-    } else if (remoteRunnerHostIds !== undefined) {
-      delete session.runnerIds;
-      if (remoteRunnerHostIds === null) delete session.remoteRunnerHostIds;
-      else session.remoteRunnerHostIds = nextRemoteRunnerHostIds;
-    }
-    session.updatedAt = new Date().toISOString();
-    this.syncSessionCompatibility(session);
-    await this.saveCatalog();
-    return session;
+    return this.withSettingsMutation(async () => {
+      const session = this.assertSessionWritable(sessionId);
+      const { approvalMode, remoteRunnerHostIds, runnerIds, reviewCriteria, reviewMode, specialistId, title, ...settingsChanges } = changes;
+      const nextTitle = hasOwn(changes, "title") ? requiredLabel(title, "Session title") : session.title;
+      const nextSettings = this.normalizeSettings({ ...session.settingsOverrides, ...settingsChanges });
+      const nextModel = this.getModel(nextSettings.modelId);
+      if (nextModel && (nextSettings.thinkingMode !== undefined || nextSettings.thinkingEffort !== undefined)) {
+        const constrained = constrainCatalogThinking(
+          nextModel.model,
+          nextSettings.thinkingMode,
+          nextSettings.thinkingEffort,
+          nextModel.facts,
+        );
+        if (nextSettings.thinkingMode !== undefined) nextSettings.thinkingMode = constrained.mode;
+        if (nextSettings.thinkingEffort !== undefined) nextSettings.thinkingEffort = constrained.effort;
+      }
+      if (approvalMode !== undefined) throw new Error("Use setApprovalMode to change approval policy");
+      if (reviewMode !== undefined && reviewMode !== "auto" && reviewMode !== "manual") throw new Error("Invalid review mode");
+      if (specialistId && !this.getSpecialist(specialistId)) throw new Error("Specialist not found");
+      const nextRunnerIds = runnerIds == null ? undefined : this.validateRunnerIds(runnerIds);
+      const nextRemoteRunnerHostIds = remoteRunnerHostIds === undefined || remoteRunnerHostIds === null
+        ? undefined
+        : this.validateSessionRemoteRunnerHosts(session.projectId, remoteRunnerHostIds);
+      session.settingsOverrides = nextSettings;
+      session.title = nextTitle;
+      if (reviewMode) session.reviewMode = reviewMode;
+      if (reviewCriteria !== undefined) session.reviewCriteria = this.normalizeReviewCriteria(reviewCriteria);
+      if (specialistId === null) delete session.specialistId;
+      else if (specialistId !== undefined) session.specialistId = specialistId;
+      // `null` drops the override so the Session follows the Project again; an
+      // empty runnerIds array disables all Runner execution for this Session.
+      if (runnerIds === null) {
+        delete session.runnerIds;
+        delete session.remoteRunnerHostIds;
+      } else if (nextRunnerIds !== undefined) {
+        session.runnerIds = nextRunnerIds;
+        session.remoteRunnerHostIds = nextRunnerIds.filter((id) => id !== "local");
+      } else if (remoteRunnerHostIds !== undefined) {
+        delete session.runnerIds;
+        if (remoteRunnerHostIds === null) delete session.remoteRunnerHostIds;
+        else session.remoteRunnerHostIds = nextRemoteRunnerHostIds;
+      }
+      session.updatedAt = new Date().toISOString();
+      this.syncSessionCompatibility(session);
+      await this.saveCatalog();
+      if (Object.keys(settingsChanges).length > 0) this.pluginControl?.changed(session.projectId, sessionId);
+      return session;
+  
+    });
   }
 
   async compareAndSetSessionTitle(

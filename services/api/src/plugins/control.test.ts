@@ -19,6 +19,73 @@ async function fixture(t:TestContext) {
   return {store,project,root,control:store.plugins};
 }
 const signal=()=>new AbortController().signal;
+
+test("ApplyPort and every classic settings writer share the catalog mutation boundary", async t => {
+  for (const writer of ["project", "session", "global", "composer"] as const) {
+    await t.test(writer, async t => {
+      const { store, project, control } = await fixture(t);
+      const session = await store.createSession(project.id, "Settings", {}, {}, { allowUnconfiguredModel: true });
+      const before = control.snapshot({ projectId: project.id });
+      // Hold the persistence boundary, not a timer: ApplyPort has entered first,
+      // but has not yet compared or mutated its baseline.
+      const persistence = Promise.withResolvers<void>();
+      const internal = store as unknown as { saveQueue: Promise<void> };
+      internal.saveQueue = persistence.promise;
+      let receiptRevision: string | undefined;
+      const applied = store.commitPluginSettings(project.id, { plugins: { plan: { enabled: false } } }, () => {
+        assert.equal(control.snapshot({ projectId: project.id }).revision, before.revision);
+      }, () => { receiptRevision = control.snapshot({ projectId: project.id }).revision; });
+      const patch = { plugins: { skill: { enabled: false } } };
+      const saved = writer === "project" ? store.replaceProjectSettings(project.id, patch)
+        : writer === "session" ? store.replaceSessionSettings(session.id, patch)
+        : writer === "global" ? store.replaceGlobalSettings(patch)
+        : store.updateSession(session.id, { enabledSkillIds: [] });
+      // Attach rejection handlers before releasing the barrier, even on regression.
+      const settled = Promise.allSettled([applied, saved]);
+      try {
+        await Promise.resolve();
+        assert.equal(control.snapshot({ projectId: project.id }).revision, before.revision);
+        assert.equal(store.getSessionSettings(session.id).overrides.plugins, undefined);
+      } finally {
+        persistence.resolve();
+      }
+      assert.deepEqual((await settled).map(result => result.status), ["fulfilled", "fulfilled"]);
+      assert.ok(receiptRevision && receiptRevision !== before.revision);
+      const expected = store.getSessionSettings(session.id);
+      if (writer === "composer") assert.deepEqual(expected.overrides.enabledSkillIds, []);
+      else assert.equal(expected.effective.plugins?.skill?.enabled, false);
+      // An intentional later classic PUT is still last-writer-wins.
+      assert.equal(store.getProjectSettings(project.id).overrides.plugins?.plan?.enabled, writer === "project" ? undefined : false);
+      store.close(); await store.load();
+      assert.deepEqual(store.getSessionSettings(session.id), expected);
+    });
+  }
+});
+
+test("Bridge rechecks inherited revision after queued classic writes, and a rejected CAS releases the queue", async t => {
+  for (const pluginId of ["host.settings", "skill"]) {
+    await t.test(pluginId, async t => {
+      const { store, project, control } = await fixture(t);
+      const session = await store.createSession(project.id, "Child", {}, {}, { allowUnconfiguredModel: true });
+      const scope = { projectId: project.id, sessionId: session.id };
+      const before = control.snapshot(scope);
+      const bridge = control.bridge(scope);
+      // The global writer queues first. Bridge reads the old inherited view
+      // synchronously, then must reject it at the shared write boundary.
+      const parentWrite = store.replaceGlobalSettings({ plugins: { mcp: { enabled: false } } });
+      const childWrite = bridge.invoke({ apiVersion: 1, pluginId, scope, kind: "command",
+        method: pluginId === "host.settings" ? "replace" : "configure",
+        input: { expectedRevision: before.revision, overrides: {}, settings: { enabled: false } },
+      }, signal());
+      await assert.rejects(childWrite, /changed/);
+      await parentWrite;
+      assert.deepEqual(store.getSessionSettings(session.id).overrides, {});
+      await store.replaceSessionSettings(session.id, { plugins: { plan: { enabled: false } } });
+      assert.equal(store.getSessionSettings(session.id).effective.plugins?.plan?.enabled, false);
+    });
+  }
+});
+
 test("project and session overrides persist, retain inheritance and reject undeclared configuration",async t=>{
   const {store,project}=await fixture(t);
   await store.replaceGlobalSettings({plugins:{skill:{enabled:false},scheduler:{config:{policy:"default"}}}});

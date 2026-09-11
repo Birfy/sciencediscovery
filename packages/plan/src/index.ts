@@ -143,7 +143,6 @@ export function createPlanBatchPolicy(): ToolBatchPolicy {
 }
 
 export function createPlanContextFactory<TMessage extends RuntimeMessage>(
-  store: PlanStore,
   scopes: readonly AgentScope[],
 ): ContextContributorFactory<TMessage> {
   return {

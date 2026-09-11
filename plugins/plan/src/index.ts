@@ -21,7 +21,7 @@ export function planPlugin<M extends RuntimeMessage>(store: PlanStore, scopes: r
       contribution: {
         tools: [createPlanTool({ store: coordinatedStore })],
         batchPolicies: [createPlanBatchPolicy()],
-        contextFactories: [createPlanContextFactory<M>(store, scopes)],
+        contextFactories: [createPlanContextFactory<M>(scopes)],
         stateProviders: [{
           id: "plan",
           async capture(signal) {

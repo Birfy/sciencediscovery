@@ -87,15 +87,18 @@ export class PluginControl {
     this.assertScope(scope);
     const bridge = new PluginBridge(scope, (id) => id === "host.settings" || installedPlugins.some((item) => item.id === id));
     bridge.register({ id: "host.settings", queries: { snapshot: () => this.describe(scope) }, commands: {
-      replace: (input, signal) => this.serial("settings:" + scope.projectId, async () => {
+      replace: async (input, signal) => {
         signal.throwIfAborted();
         const command = record(input);
-        if (command.expectedRevision !== this.snapshot(scope).revision) throw new BridgeError("conflict", "Settings changed; reload before saving");
+        const assertCurrent = () => {
+          signal.throwIfAborted();
+          if (command.expectedRevision !== this.snapshot(scope).revision) throw new BridgeError("conflict", "Settings changed; reload before saving");
+        };
         const settings = this.normalize(command.overrides);
-        if (scope.sessionId) await this.ports.replaceSessionSettings(scope.sessionId, settings);
-        else await this.ports.replaceProjectSettings(scope.projectId, settings);
+        if (scope.sessionId) await this.ports.replaceSessionSettings(scope.sessionId, settings, assertCurrent);
+        else await this.ports.replaceProjectSettings(scope.projectId, settings, assertCurrent);
         return this.describe(scope);
-      }),
+      },
     } });
     for (const manifest of installedPlugins) bridge.register({
       id: manifest.id,
@@ -118,7 +121,7 @@ export class PluginControl {
         } : {}),
       },
       commands: {
-        configure: (input, signal) => this.serial("settings:" + scope.projectId, async () => {
+        configure: async (input, signal) => {
           signal.throwIfAborted();
           const command = record(input), before = this.snapshot(scope);
           if (command.expectedRevision !== before.revision) throw new BridgeError("conflict", "Settings changed; reload before saving");
@@ -130,10 +133,14 @@ export class PluginControl {
           else plugins[manifest.id] = record(command.settings ?? {}) as never;
           next.plugins = plugins;
           const normalized = this.normalize(next);
-          if (scope.sessionId) await this.ports.replaceSessionSettings(scope.sessionId, normalized);
-          else await this.ports.replaceProjectSettings(scope.projectId, normalized);
+          const assertCurrent = () => {
+            signal.throwIfAborted();
+            if (command.expectedRevision !== this.snapshot(scope).revision) throw new BridgeError("conflict", "Settings changed; reload before saving");
+          };
+          if (scope.sessionId) await this.ports.replaceSessionSettings(scope.sessionId, normalized, assertCurrent);
+          else await this.ports.replaceProjectSettings(scope.projectId, normalized, assertCurrent);
           return this.snapshot(scope);
-        }),
+        },
       },
     });
     return bridge;
@@ -219,17 +226,15 @@ export class PluginControl {
       if (action === "apply" && candidate.status === "applied") return candidate;
       if (action === "apply" && candidate.status === "approved") {
         if (digest((await this.pin(candidate.pinnedProposed)).assets)!==digest(candidate.proposedAssets)) throw new BridgeError("conflict","Candidate assets changed");
-        return this.serial("settings:" + projectId, async () => {
-          const overrides = candidate.baseline.settings.overrides;
-          await this.ports.commitPluginSettings(projectId, this.normalize({ ...overrides, ...candidate.patch,
-            plugins: mergePluginSettings(overrides.plugins, candidate.patch.plugins) }), () => {
-            if (this.snapshot({ projectId }).revision !== candidate.baseline.revision) throw new BridgeError("conflict", "Active composition changed; candidate was not applied");
-          }, () => {
-            candidate.status = "applied"; candidate.appliedRevision = this.snapshot({ projectId }).revision;
-            this.save(candidate);
-          });
-          return structuredClone(candidate);
+        const overrides = candidate.baseline.settings.overrides;
+        await this.ports.commitPluginSettings(projectId, this.normalize({ ...overrides, ...candidate.patch,
+          plugins: mergePluginSettings(overrides.plugins, candidate.patch.plugins) }), () => {
+          if (this.snapshot({ projectId }).revision !== candidate.baseline.revision) throw new BridgeError("conflict", "Active composition changed; candidate was not applied");
+        }, () => {
+          candidate.status = "applied"; candidate.appliedRevision = this.snapshot({ projectId }).revision;
+          this.save(candidate);
         });
+        return structuredClone(candidate);
       }
       throw new BridgeError("conflict", "Invalid candidate lifecycle transition");
     });
