@@ -2894,7 +2894,9 @@ export function App() {
         t("app.sandboxNetworkSaved"),
         saved.mode === "domain-allowlist"
           ? t("app.sandboxNetworkAllowlistDetail", { count: saved.allowedDomains.length })
-          : t("app.sandboxNetworkNoneDetail"),
+          : saved.mode === "open"
+            ? t("app.sandboxNetworkOpenDetail")
+            : t("app.sandboxNetworkNoneDetail"),
       );
     }, t("error.saveSandboxNetwork"));
   }
