@@ -21,7 +21,7 @@ async function fixture(t:TestContext) {
 const signal=()=>new AbortController().signal;
 
 test("ApplyPort and every classic settings writer share the catalog mutation boundary", async t => {
-  for (const writer of ["project", "session", "global", "composer"] as const) {
+  for (const writer of ["project", "session", "global", "composer", "runner"] as const) {
     await t.test(writer, async t => {
       const { store, project, control } = await fixture(t);
       const session = await store.createSession(project.id, "Settings", {}, {}, { allowUnconfiguredModel: true });
@@ -39,13 +39,15 @@ test("ApplyPort and every classic settings writer share the catalog mutation bou
       const saved = writer === "project" ? store.replaceProjectSettings(project.id, patch)
         : writer === "session" ? store.replaceSessionSettings(session.id, patch)
         : writer === "global" ? store.replaceGlobalSettings(patch)
-        : store.updateSession(session.id, { enabledSkillIds: [] });
+        : writer === "composer" ? store.updateSession(session.id, { enabledSkillIds: [] })
+        : store.updateSession(session.id, { runnerIds: [] });
       // Attach rejection handlers before releasing the barrier, even on regression.
       const settled = Promise.allSettled([applied, saved]);
       try {
         await Promise.resolve();
         assert.equal(control.snapshot({ projectId: project.id }).revision, before.revision);
         assert.equal(store.getSessionSettings(session.id).overrides.plugins, undefined);
+        assert.equal(store.getSession(session.id)?.runnerIds, undefined);
       } finally {
         persistence.resolve();
       }
@@ -53,11 +55,21 @@ test("ApplyPort and every classic settings writer share the catalog mutation bou
       assert.ok(receiptRevision && receiptRevision !== before.revision);
       const expected = store.getSessionSettings(session.id);
       if (writer === "composer") assert.deepEqual(expected.overrides.enabledSkillIds, []);
+      else if (writer === "runner") assert.deepEqual(store.getSession(session.id)?.runnerIds, []);
       else assert.equal(expected.effective.plugins?.skill?.enabled, false);
       // An intentional later classic PUT is still last-writer-wins.
       assert.equal(store.getProjectSettings(project.id).overrides.plugins?.plan?.enabled, writer === "project" ? undefined : false);
       store.close(); await store.load();
       assert.deepEqual(store.getSessionSettings(session.id), expected);
+      if (writer === "runner") {
+        assert.deepEqual(store.getSession(session.id)?.runnerIds, []);
+        await store.updateSession(session.id, { runnerIds: ["local"] });
+        assert.deepEqual(store.getSession(session.id)?.runnerIds, ["local"]);
+        await store.updateSession(session.id, { runnerIds: null });
+        assert.equal(store.getSession(session.id)?.runnerIds, undefined);
+        assert.equal(store.getSession(session.id)?.remoteRunnerHostIds, undefined);
+        assert.equal(store.getSessionSettings(session.id).effective.plugins?.plan?.enabled, false);
+      }
     });
   }
 });

@@ -4261,7 +4261,6 @@ export class SessionStore {
       await this.saveCatalog();
       if (Object.keys(settingsChanges).length > 0) this.pluginControl?.changed(session.projectId, sessionId);
       return session;
-  
     });
   }
 
