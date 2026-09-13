@@ -12,7 +12,12 @@ import { manifest as json } from "@sciencediscovery/plugin-artifact-json/manifes
 import { mergePluginSettings, pluginEnabled } from "@sciencediscovery/plugin-sdk";
 import { useLocale } from "../i18n/index.js";
 
-const installed = [skill, mcp, plan, scheduler, uniprot, json];
+// UI policy only: the backend still supports scoped settings for every plugin.
+const internal = [skill, mcp, plan, scheduler];
+const optional = [
+  { manifest: uniprot, name: "UniProt", zh: "UniProt 数据源", description: "Disable UniProt tools for this scope.", descriptionZh: "关闭后不提供 UniProt 数据源工具。" },
+  { manifest: json, name: "JSON preview", zh: "JSON 预览", description: "Raw file content remains available when disabled.", descriptionZh: "关闭专用预览后仍可查看文件原始内容。" },
+];
 type Props = Omit<ComponentProps<typeof SkillSettingsSection>, "t"> & Omit<ComponentProps<typeof McpSettingsSection>, "t"> & {
   t: ReturnType<typeof useLocale>["t"];
 };
@@ -24,12 +29,17 @@ const sections = [
 export function PluginSettingsSections(props: Props) {
   const zh = useLocale().locale.startsWith("zh");
   const effective = mergePluginSettings(props.details.inheritedPlugins, props.draft.plugins);
+  const disabledInternal = internal.filter((manifest) => !pluginEnabled(effective, manifest.id));
   return <>
     <details className="plugin-settings">
-      <summary>{zh ? "插件与扩展" : "Plugins and extensions"}</summary>
+      <summary>{zh ? "可选扩展" : "Optional extensions"}</summary>
+      <p className="settings-hint">{zh ? "Skill、MCP、Plan 和多 Agent 调度属于内置能力，此处不提供整体开关。请在对应设置中选择具体 Skill、MCP 服务和连接器。" : "Skill, MCP, Plan and multi-agent scheduling are built-in capabilities without master switches here. Select individual Skills, MCP services and connectors in their settings."}</p>
       <p className="settings-hint">{zh ? "运行配置在下一次运行生效；正在运行的任务保持原组合。历史记录不会删除。" : "Changes apply to the next run. Active runs keep their composition; history is retained."}</p>
-      {installed.map((manifest) => <label className="settings-field" key={manifest.id}>
-        <span>{manifest.id} <small>{manifest.version}</small></span>
+      {disabledInternal.length > 0 && <p className="settings-hint" role="status">{zh
+        ? `已有配置关闭了内置能力：${disabledInternal.map((item) => item.id).join("、")}。本页保存不会自动恢复，请通过配置 API 管理。`
+        : `Existing configuration disables built-in capabilities: ${disabledInternal.map((item) => item.id).join(", ")}. Saving here will not re-enable them; manage them through the configuration API.`}</p>}
+      {optional.map(({ manifest, name, zh: nameZh, description, descriptionZh }) => <label className="settings-field" key={manifest.id}>
+        <span>{zh ? nameZh : name}</span>
         <select aria-label={manifest.id + " plugin"} disabled={props.disabled} value={props.draft.plugins?.[manifest.id]?.enabled === undefined ? "inherit" : props.draft.plugins[manifest.id]!.enabled ? "enabled" : "disabled"}
           onChange={(event) => props.setDraft((draft) => {
             const plugins = { ...draft.plugins }, setting = { ...plugins[manifest.id] };
@@ -42,6 +52,7 @@ export function PluginSettingsSections(props: Props) {
           <option value="enabled">{zh ? "启用" : "Enabled"}</option>
           <option value="disabled">{zh ? "关闭" : "Disabled"}</option>
         </select>
+        <small className="settings-hint">{zh ? descriptionZh : description}</small>
       </label>)}
     </details>
     {sections.filter((section) => pluginEnabled(effective, section.id)).map((section) => <div key={section.id} data-plugin={section.id}>{section.render(props)}</div>)}

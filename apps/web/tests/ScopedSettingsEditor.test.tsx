@@ -116,6 +116,29 @@ function render(settings: RuntimeSettingsDetails): string {
   }));
 }
 
+test("settings expose only optional extension switches while retaining individual capability settings", () => {
+  const html = render(details());
+  assert.match(html, /Optional extensions/);
+  for (const id of ["skill", "mcp", "plan", "scheduler"]) {
+    assert.ok(!html.includes(`aria-label="${id} plugin"`));
+  }
+  for (const id of ["connector.uniprot", "artifact-json"]) {
+    assert.ok(html.includes(`aria-label="${id} plugin"`));
+  }
+  assert.match(html, /data-plugin="skill"/);
+  assert.match(html, /data-plugin="mcp"/);
+  assert.doesNotMatch(html, /Existing configuration disables/);
+});
+
+test("hidden internal switches still honor explicit and inherited backend configuration", () => {
+  const configured = details({ plugins: { skill: { enabled: false }, plan: { enabled: false } } });
+  configured.inheritedPlugins = { mcp: { enabled: false }, scheduler: { enabled: false } };
+  const html = render(configured);
+  assert.match(html, /Existing configuration disables built-in capabilities: skill, mcp, plan, scheduler/);
+  assert.doesNotMatch(html, /data-plugin="skill"|data-plugin="mcp"/);
+  assert.match(html, /Saving here will not re-enable them/);
+});
+
 test("scope save stays after all additional settings sections", () => {
   const html = renderToStaticMarkup(createElement(ScopedSettingsEditor, {
     connectors: [], details: details(), models: [], skills: [], scopeLabel: "Session", onSave: () => undefined,

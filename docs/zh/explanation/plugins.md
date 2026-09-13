@@ -58,6 +58,8 @@ plugins/plan/
 
 配置按 **global → project → session** 逐层覆盖，插件配置按 ID/字段合并。省略表示继承；`enabled:false` 是显式关闭。`configuration.applies` 支持 `nextRun` 或 `restart` 声明，**当前六个插件均为 nextRun**，不能据此宣称已支持通用热重载。
 
+**界面与装配能力分开：** 普通设置只在“可选扩展”中提供 UniProt 与 JSON 预览开关。Skill、MCP、Plan、默认多 Agent 调度不提供整体开关；用户仍在相应入口选择具体 Skill、MCP 服务和连接器。后端配置 API 继续支持所有插件的项目/会话级启停、继承和 nextRun 冻结，未因界面收敛而限制。已有配置关闭内置能力时，页面显示说明且保存时原样保留，不自动启用、不迁移数据。
+
 运行开始固定配置、Skill 资产等组合，主 Agent、子 Agent、reviewer 使用同一组合选择，在各自作用域装配贡献。运行中编辑不会改写已冻结的工具集合。前端设置/查看器会刷新当前显示选择；历史 Plan 和 Artifact 仍可读取，关闭执行贡献不等于删除历史，也不妨碍以后重新配置。
 
 ## 3. StateView、模型上下文与版本

@@ -14,8 +14,8 @@ async function api(page:Page,path:string,data?:unknown) {
  * E2E-META
  * Purpose: Project plugin configuration affects the next Run, Session overrides restore a capability, and an approved experiment is applied without altering unrelated settings.
  * Steps:
- *   1. Disable runtime plugins from Project settings and complete a Run without those tools.
- *   2. Enable Plan in the Session and see a real Plan card; reload preserves it.
+ *   1. Configure internal plugins through the API; Project settings only expose optional extensions and preserve hidden configuration on desktop and narrow screens.
+ *   2. Complete a Run without disabled tools; restore Plan through the Session API and see a real Plan card after reload.
  *   3. Prepare a fixed candidate and complete the same task in baseline and candidate Sessions.
  *   4. Compare, approve and apply the candidate; rejected candidates do not change active settings.
  *   5. Open a JSON artifact and enable its viewer without reload through the scoped subscription.
@@ -31,7 +31,7 @@ async function api(page:Page,path:string,data?:unknown) {
  */
 test("项目组合、会话覆盖与审批后的候选应用", {tag:"@mocked"},async({page,journey})=>{
   test.setTimeout(180_000);
-  journey.scenario({goal:"研究员按项目关闭不需要的能力，在会话中单独恢复 Plan，并经过实验和审批应用新的组合。",
+  journey.scenario({goal:"研究员只在界面管理可选扩展；后端仍支持项目独立插件组合、会话覆盖和审批应用，保存界面不会重置隐藏配置。",
     preconditions:["真实隔离 API/Runner 已启动","本地模型 stub，不调用外部服务；实验只执行模型回复及 Plan 更新"]});
   const stub=await scriptedModel([
     [{text:"Reduced composition completed."}],
@@ -42,20 +42,42 @@ test("项目组合、会话覆盖与审批后的候选应用", {tag:"@mocked"},a
   const fixture=await createProjectAndSession(page,{model:{apiToken:stub.apiToken,baseUrl:stub.baseUrl,model:stub.model,name:"Plugin model "+Date.now()},
     projectName:"Plugin project "+Date.now(),sessionTitle:"Plugin configuration"});
   const root="/api/projects/"+fixture.project.id+"/plugins";
+  let otherProjectId:string|undefined;
   const openSettings=async(kind:"project"|"session")=>{
     await page.goto(`/projects/${fixture.project.id}${kind==="session"?"/sessions/"+fixture.session.id:""}/settings`);
     const dialog=page.getByRole("dialog",{name:kind==="project"?/Project settings|项目设置/:/Session settings|会话设置/});
     await expect(dialog).toBeVisible();await dialog.locator("details.plugin-settings > summary").click();return dialog;
   };
   try {
-    await journey.step("关闭项目扩展并执行任务","设置在刷新后保留；下一次实际模型调用没有 Plan、Skill、MCP 或调度工具。",async()=>{
+    await journey.step("管理可选扩展而不改动内部插件组合","界面仅有 UniProt、JSON 开关；保存后保留 API 配置的内部关闭项，其他项目不受影响。",async()=>{
+      const baseline=await api(page,root);
+      await api(page,root+"/bridge",{apiVersion:1,pluginId:"host.settings",scope:{projectId:fixture.project.id},kind:"command",method:"replace",
+        input:{expectedRevision:baseline.revision,overrides:{...baseline.settings.overrides,plugins:Object.fromEntries(["plan","skill","mcp","scheduler"].map(id=>[id,{enabled:false}]))}}});
+      const other=await api(page,"/api/projects",{name:"Independent plugins "+Date.now()});
+      otherProjectId=other.project.id;
       const dialog=await openSettings("project");
-      for(const id of ["plan","skill","mcp","scheduler","connector.uniprot","artifact-json"]) await dialog.getByLabel(id+" plugin",{exact:true}).selectOption("disabled");
+      for(const id of ["plan","skill","mcp","scheduler"]) await expect(dialog.getByLabel(id+" plugin",{exact:true})).toHaveCount(0);
+      for(const id of ["connector.uniprot","artifact-json"]) await dialog.getByLabel(id+" plugin",{exact:true}).selectOption("disabled");
       await dialog.getByRole("button",{name:/Save .*settings|保存.*设置/}).click();
       await expect.poll(async()=> (await api(page,root)).settings.effective.plugins.plan.enabled).toBe(false);
       await page.reload();
       await page.locator("details.plugin-settings > summary").click();
-      await expect(page.getByLabel("plan plugin",{exact:true})).toHaveValue("disabled");
+      await expect(page.getByLabel("connector.uniprot plugin",{exact:true})).toHaveValue("disabled");
+      await expect(page.getByText(/Existing configuration disables|已有配置关闭了内置能力/)).toBeVisible();
+      const current=await api(page,root),independent=await api(page,"/api/projects/"+otherProjectId+"/plugins");
+      for(const id of ["plan","skill","mcp","scheduler"]){
+        expect(current.settings.effective.plugins[id].enabled).toBe(false);
+        expect(independent.settings.effective.plugins?.[id]?.enabled).not.toBe(false);
+      }
+    });
+    await journey.step("窄屏查看项目可选扩展","两个可选开关及内部配置提示可读，没有水平溢出。",async()=>{
+      await page.setViewportSize({width:390,height:844});
+      await page.getByLabel("artifact-json plugin",{exact:true}).scrollIntoViewIfNeeded();
+      await expect(page.getByLabel("connector.uniprot plugin",{exact:true})).toBeVisible();
+      expect(await page.locator(".plugin-settings").evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);
+    });
+    await journey.step("执行后端按项目裁剪的组合","下一次实际模型调用没有 Plan、Skill、MCP 或调度工具。",async()=>{
+      await page.setViewportSize({width:1440,height:1000});
       await openProjectSession(page,fixture);
       const run=await sendUserMessage(page,fixture.session.id,"Complete this task without optional capabilities.");
       expect((await waitForRunTerminal(page,fixture.session.id,run.id)).status).toBe("completed");
@@ -65,9 +87,10 @@ test("项目组合、会话覆盖与审批后的候选应用", {tag:"@mocked"},a
       await expect(page.getByText("Reduced composition completed.",{exact:true}).first()).toBeVisible();
     });
     await journey.step("只在当前会话恢复 Plan","会话的覆盖重新提供 Plan 工具；真实 Plan 卡片在刷新后仍可查看。",async()=>{
-      const dialog=await openSettings("session");
-      await dialog.getByLabel("plan plugin",{exact:true}).selectOption("enabled");
-      await dialog.getByRole("button",{name:/Save .*settings|保存.*设置/}).click();
+      const scope={projectId:fixture.project.id,sessionId:fixture.session.id};
+      const current=await api(page,root+"?sessionId="+fixture.session.id);
+      await api(page,root+"/bridge?sessionId="+fixture.session.id,{apiVersion:1,pluginId:"plan",scope,kind:"command",method:"configure",
+        input:{expectedRevision:current.revision,settings:{enabled:true}}});
       await expect.poll(async()=> (await api(page,root+"?sessionId="+fixture.session.id)).settings.effective.plugins.plan.enabled).toBe(true);
       await openProjectSession(page,fixture);
       const run=await sendUserMessage(page,fixture.session.id,"Track verification with a Plan.");
@@ -121,8 +144,11 @@ test("项目组合、会话覆盖与审批后的候选应用", {tag:"@mocked"},a
       await api(page,root+"/candidates/"+rejected.id+"/reject",{});
       expect((await api(page,root)).revision).toBe(active.revision);
       const dialog=await openSettings("project");
-      await expect(dialog.getByLabel("plan plugin",{exact:true})).toHaveValue("enabled");
-      await expect(dialog.getByLabel("skill plugin",{exact:true})).toHaveValue("disabled");
+      await expect(dialog.getByLabel("plan plugin",{exact:true})).toHaveCount(0);
+      await expect(dialog.getByLabel("skill plugin",{exact:true})).toHaveCount(0);
+      const notice=dialog.getByText(/Existing configuration disables|已有配置关闭了内置能力/);
+      await expect(notice).toContainText("skill");
+      await expect(notice).not.toContainText("plan");
     });
     await journey.step("独立启停 JSON 查看器","关闭时保留原始内容；启用后经作用域订阅切换到插件预览，不重新运行任务也不丢失产物。",async()=>{
       await api(page,"/api/sessions/"+fixture.session.id+"/files",{path:"plugin-preview.json",content:JSON.stringify({message:"Plugin preview remains readable"})});
@@ -138,5 +164,8 @@ test("项目组合、会话覆盖与审批后的候选应用", {tag:"@mocked"},a
       await expect(modal.locator(".json-source-preview")).toBeVisible();
       await expect(modal.locator("pre.artifact-source-preview")).toContainText("Plugin preview remains readable");
     });
-  } finally {await cleanupJourney(page,fixture).catch(()=>undefined);await stub.stop();}
+  } finally {
+    if(otherProjectId) await page.request.delete(apiBaseUrl()+"/api/projects/"+otherProjectId,{headers:authorizationHeader()});
+    await cleanupJourney(page,fixture).catch(()=>undefined);await stub.stop();
+  }
 });
