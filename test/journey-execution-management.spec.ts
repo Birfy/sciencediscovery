@@ -1,8 +1,26 @@
 // Copyright (C) 2026-2026 Huawei Technologies Co., Ltd
 // Licensed under the Apache License, Version 2.0 (the "License");
-import { expect } from "@playwright/test";
+import { expect, type Locator } from "@playwright/test";
 import { test } from "./helpers/e2e.ts";
 import { cleanupJourney, createProjectAndSession, openProjectSession } from "./helpers/journeys.ts";
+
+/**
+ * Open everything the activity panel keeps folded.
+ *
+ * Executions, transfers and reminders are three sibling folds, each closed
+ * until its own summary is clicked, and inside them every task is a fold of
+ * its own that is expanded only while that task is running. Reading any detail
+ * of a task that is not running therefore takes two clicks, not none.
+ */
+async function expandRecords(panel: Locator): Promise<void> {
+  for (const selector of ["details.workspace-fold", "details.workspace-fold details.process-record"]) {
+    const folds = panel.locator(selector);
+    for (let index = 0; index < await folds.count(); index += 1) {
+      const fold = folds.nth(index);
+      if (await fold.getAttribute("open") === null) await fold.locator(":scope > summary").click();
+    }
+  }
+}
 
 /**
  * E2E-META
@@ -41,30 +59,38 @@ test("执行日志、取消与一次性提醒可管理", { tag: "@mocked" }, asy
       await page.setViewportSize({ width: 1440, height: 1000 });
       await openProjectSession(page, fixture);
       const panel = page.getByLabel("Executions and reminders");
-      await panel.locator("summary").first().click();
+      await expandRecords(panel);
       await expect(panel.getByText("local · main", { exact: true })).toBeVisible();
       await expect(panel.getByText("1/2 files committed", { exact: true })).toBeVisible();
       await expect(panel.getByRole("alert")).toContainText("committed files were retained");
     });
-    await journey.step("查日志后显式取消", "读日志不停止任务；取消执行与取消提醒分别改变对应状态。", async () => {
+    await journey.step("查日志后显式取消",
+      "读日志不停止任务；取消执行与取消提醒分别改变对应状态，记录随即收起，标题行写明已取消。", async () => {
       const panel = page.getByLabel("Executions and reminders");
       await panel.getByRole("button", { name: "View logs" }).click();
       await expect(panel.getByLabel("Execution logs")).toContainText("epoch 4/10");
       expect(logsRead).toBe(true); expect(activity.executions[0]!.state).toBe("running");
+      // A record is expanded for as long as its task runs and folds itself
+      // away once the task reaches a terminal state, so what a user reads
+      // after cancelling is the summary line, not the button inside it.
+      const summary = (contains: string) => panel.locator("details.process-record > summary")
+        .filter({ hasText: contains });
       await panel.getByRole("button", { name: "Cancel execution" }).click();
-      await expect(panel.getByRole("button", { name: "Cancel execution" })).toBeDisabled();
+      await expect(summary("local · main")).toContainText("cancelled");
       await panel.getByRole("button", { name: "Cancel reminder" }).click();
-      await expect(panel.getByRole("button", { name: "Cancel reminder" })).toBeDisabled();
+      await expect(summary("Inspect training output")).toContainText("cancelled");
     });
-    await journey.step("窄视口和空状态", "标识与操作可读，无水平溢出；无任务时提供空状态。", async () => {
+    await journey.step("窄视口和空状态", "标识与操作可读，无水平溢出；任务清空后三个折叠区一起消失，面板不再占位。", async () => {
       await page.setViewportSize({ width: 1000, height: 900 });
       const panel = page.getByLabel("Executions and reminders");
       await panel.scrollIntoViewIfNeeded();
+      await expandRecords(panel);
       await expect(panel.getByRole("button", { name: "View logs" })).toBeVisible();
       expect(await panel.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
       activity.executions.length = 0; activity.transfers.length = 0; activity.timers.length = 0;
-      await expect(panel.getByText("No executions yet.")).toBeVisible();
-      await expect(panel.getByText("No reminders yet.")).toBeVisible();
+      // Each fold renders only while its list is non-empty, so an idle Session
+      // shows no fold at all rather than a fold reading zero.
+      await expect(panel.locator("details.workspace-fold")).toHaveCount(0);
     });
   } finally { await cleanupJourney(page, fixture); }
 });

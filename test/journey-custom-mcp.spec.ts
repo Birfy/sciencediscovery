@@ -87,7 +87,7 @@ test("Custom MCP and Inspector user journey", { tag: "@mocked" }, async ({ page,
       await expect(row).toContainText("已连接");
       await expect(row).toContainText("2 个工具");
       await row.getByRole("button", { name: `测试连接 ${name}`, exact: true }).click();
-      await expect(settings.getByRole("status")).toContainText("连接成功");
+      await expect(settings.getByRole("status")).toContainText(`${name}：测试通过`);
     });
     await journey.step("折叠服务器与摘要排版", "状态、工具数量和 Inspector 同行，折叠后隐藏详情", async () => {
       const summary = row.locator(".mcp-server-summary");
@@ -153,7 +153,7 @@ test("Custom MCP and Inspector user journey", { tag: "@mocked" }, async ({ page,
       await expect(row.getByRole("switch")).not.toBeChecked();
       await expect(row).toContainText("已停用");
       await row.getByRole("button", { name: `测试连接 ${name}`, exact: true }).click();
-      await expect(settings.getByRole("status")).toContainText("连接成功");
+      await expect(settings.getByRole("status")).toContainText(`${name}：测试通过`);
       await row.getByRole("button", { name: "MCP Inspector", exact: true }).click();
       await expect(settings.getByRole("button", { name: "执行工具", exact: true })).toBeDisabled();
       await settings.getByRole("button", { name: "返回服务器列表", exact: true }).click();

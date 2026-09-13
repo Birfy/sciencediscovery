@@ -567,16 +567,34 @@ export async function openEnvironmentDisclosure(manager: Locator, content: strin
   return disclosure;
 }
 
-/** Expand and return the Project-level artifact catalog in the workspace rail. */
-export async function openArtifactPanel(page: Page): Promise<Locator> {
+/** Reveal the workspace rail and open its files folder, both of which can start closed. */
+async function openWorkspaceFiles(page: Page): Promise<void> {
   const showWorkspace = page.getByRole("button", { name: /^(Show workspace|显示工作区)$/ });
   if (await showWorkspace.isVisible().catch(() => false)) await showWorkspace.click();
   const files = page.locator('aside.workspace-panel [data-folder="files"]');
   if (await files.getAttribute("open") === null) await files.locator(":scope > summary").click();
+}
+
+/** Expand and return the Project-level artifact catalog in the workspace rail. */
+export async function openArtifactPanel(page: Page): Promise<Locator> {
+  await openWorkspaceFiles(page);
   const catalog = page.locator("aside.workspace-panel details.artifact-catalog-section");
   await expect(catalog).toBeVisible();
   if (await catalog.getAttribute("open") === null) await catalog.locator(":scope > summary").click();
   return catalog;
+}
+
+/**
+ * Assert the workspace rail carries no artifact catalog at all.
+ *
+ * The catalog section is rendered only once the Session has at least one
+ * declared Artifact, so "nothing delivered yet" is the section being absent
+ * rather than a section reading zero. `openArtifactPanel` waits for it to be
+ * visible and so cannot express this state.
+ */
+export async function expectNoArtifactCatalog(page: Page): Promise<void> {
+  await openWorkspaceFiles(page);
+  await expect(page.locator("aside.workspace-panel details.artifact-catalog-section")).toHaveCount(0);
 }
 
 /**

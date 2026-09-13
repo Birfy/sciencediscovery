@@ -20,6 +20,7 @@ import {
   cleanupJourney,
   createProjectAndSession,
   expandToolStep,
+  expectNoArtifactCatalog,
   openProjectSession,
   scriptedModel,
   sendUserMessage,
@@ -109,12 +110,10 @@ test("J2 交付的报告可预览下载并保留版本", { tag: "@mocked" }, asy
   try {
     await journey.step(
       "进入会话，确认还没有任何产物",
-      "右栏产物区是空的，计数为 0，说明后面出现的东西确实是这次分析产生的。",
+      "右栏还没有产物区——产物区要等真的产出东西才出现，所以后面看到的东西确实是这次分析产生的。",
       async () => {
         await openProjectSession(page, fixture);
-        tree = await artifactTree(page);
-        await expect(tree.artifactCount).toHaveText("0");
-        await expect(tree.artifacts).toHaveCount(0);
+        await expectNoArtifactCatalog(page);
       },
     );
 

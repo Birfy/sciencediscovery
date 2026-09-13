@@ -508,13 +508,28 @@ async function npuChain(selection: number[] | undefined) {
   return { bindings, cleanup: async () => { await rm(dataDir, { recursive: true, force: true }); }, payloads };
 }
 
+/**
+ * All four execution kinds, in the order a Runner would see them.
+ *
+ * The managed shell is the only one that does not finish inside its own call:
+ * `start` returns as soon as the Runner accepts, and the provenance write that
+ * lands under `<dataDir>/versioning` runs afterwards on the background promise
+ * the store keeps in `active`. Waiting for that promise is what stops
+ * `cleanup()` from deleting the directory while the write is still in flight,
+ * which rm(2) reports as ENOTEMPTY.
+ */
+async function everyExecutionKind(bindings: Awaited<ReturnType<typeof npuChain>>["bindings"]) {
+  await bindings.executePython!("print('python')");
+  await bindings.executeShell!("echo shell", "ephemeral");
+  await bindings.executeScientific!("python", "print('scientific')", undefined, "ephemeral");
+  const managed = await bindings.shellExecutions!.start("echo managed", {});
+  await bindings.shellExecutions!.wait(managed.id, 5_000);
+}
+
 test("cards ticked for a Runner reach the Runner request of every execution kind", async () => {
   const { bindings, cleanup, payloads } = await npuChain([4]);
   try {
-    await bindings.executePython!("print('python')");
-    await bindings.executeShell!("echo shell", "ephemeral");
-    await bindings.executeScientific!("python", "print('scientific')", undefined, "ephemeral");
-    await bindings.shellExecutions!.start("echo managed", {});
+    await everyExecutionKind(bindings);
   } finally {
     await cleanup();
   }
@@ -527,10 +542,7 @@ test("cards ticked for a Runner reach the Runner request of every execution kind
 test("an unticked Runner sends no NPU field at all, leaving the sandbox unchanged", async () => {
   const { bindings, cleanup, payloads } = await npuChain(undefined);
   try {
-    await bindings.executePython!("print('python')");
-    await bindings.executeShell!("echo shell", "ephemeral");
-    await bindings.executeScientific!("python", "print('scientific')", undefined, "ephemeral");
-    await bindings.shellExecutions!.start("echo managed", {});
+    await everyExecutionKind(bindings);
   } finally {
     await cleanup();
   }

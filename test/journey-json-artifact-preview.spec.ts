@@ -19,6 +19,7 @@ import {
   artifactTree,
   cleanupJourney,
   createProjectAndSession,
+  expectNoArtifactCatalog,
   openProjectSession,
   scriptedModel,
   sendUserMessage,
@@ -157,12 +158,10 @@ test("J8 打开超长字段 JSON 产物时预览完整可读且契约不变", { 
   try {
     await journey.step(
       "进入会话，确认还没有任何产物",
-      "右栏产物区是空的，计数为 0，后面的产物确实来自这次分析。",
+      "右栏还没有产物区——产物区要等真的产出东西才出现，后面的产物确实来自这次分析。",
       async () => {
         await openProjectSession(page, fixture);
-        const tree = await artifactTree(page);
-        await expect(tree.artifactCount).toHaveText("0");
-        await expect(tree.artifacts).toHaveCount(0);
+        await expectNoArtifactCatalog(page);
       },
     );
 

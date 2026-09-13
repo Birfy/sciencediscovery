@@ -56,7 +56,7 @@ for (const field of ["env", "headers"] as const) {
     const edit = async () => row.getByRole("button", { name: `编辑服务器 ${name}`, exact: true }).click();
     const connectionWorks = async () => {
       await row.getByRole("button", { name: `测试连接 ${name}`, exact: true }).click();
-      await expect(settings.getByRole("status")).toContainText("连接成功");
+      await expect(settings.getByRole("status")).toContainText(`${name}：测试通过`);
       await expect(row).toContainText("2 个工具");
     };
     try {

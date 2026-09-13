@@ -113,7 +113,7 @@ test("Authorize MCP, inspect tools and recover from denied consent", { tag: "@mo
       await settings.getByRole("button", { name: "返回服务器列表", exact: true }).click();
       oauth.expire();
       await row.getByRole("button", { name: `测试连接 ${name}`, exact: true }).click();
-      await expect(settings.locator(".mcp-feedback.success")).toContainText("连接成功");
+      await expect(settings.locator(".mcp-feedback.success")).toContainText(`${name}：测试通过`);
       expect(oauth.counts.refreshes).toBe(1);
     });
     await journey.step("拒绝重新授权", "拒绝会结束等待并显示错误，不沿用旧的已连接状态", async () => {
