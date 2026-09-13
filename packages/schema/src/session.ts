@@ -96,14 +96,15 @@ export interface Session {
  * Reference kind for composer/Markdown-chip links. `artifact` / `session` /
  * `skill` are the user-message composer references (an `@artifact` read into
  * context, an `@session` cross-session reference, an `@skill` activation).
- * `evidence` / `artifact` / `sourcefile` are the memory-graph chip kinds that
- * let a final report's prose cite graph nodes — `declare_claim`'s chip_map
- * produces these (a Paper is never cited directly: the report cites an Evidence
- * node that was extracted from it; an uploaded non-PDF data file is cited as a
- * SourceFile). The alias → node-id map is persisted on the report Artifact
- * version's `references` so the chips survive reloads.
+ * `evidence` / `artifact` / `sourcefile` / `dbrecord` are the memory-graph chip
+ * kinds that let a final report's prose cite graph nodes — `declare_claim`'s
+ * chip_map produces these (a Paper is never cited directly: the report cites an
+ * Evidence node that was extracted from it; an uploaded non-PDF data file is
+ * cited as a SourceFile; a database record this session retrieved via db_search
+ * is cited as a DbRecord). The alias → node-id map is persisted on the report
+ * Artifact version's `references` so the chips survive reloads.
  */
-export type ComposerReferenceKind = "artifact" | "session" | "skill" | "evidence" | "sourcefile";
+export type ComposerReferenceKind = "artifact" | "session" | "skill" | "evidence" | "sourcefile" | "dbrecord";
 
 export interface ComposerReference {
   createdInSessionTitle?: string;

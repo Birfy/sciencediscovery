@@ -2164,7 +2164,9 @@ export function App() {
   // figure/data itself); sourcefile chips do the same — user-uploaded files
   // show up in the artifacts list with origin=user_upload, so a [sourcefile1]
   // chip resolves to that ArtifactModal just like clicking data.csv from the
-  // right rail. The final fallthrough opens the full-screen graph explorer
+  // right rail. dbrecord chips skip all of the above (no dedicated modal) and
+  // fall through to the graph explorer like ``session``/``skill`` would if they
+  // had a label. The final fallthrough opens the full-screen graph explorer
   // for any future kind that has a graph label but no dedicated modal.
   async function handleChipClick(reference: ComposerReference): Promise<void> {
     // Evidence chips open a dedicated detail modal (evidence content + the
@@ -4676,7 +4678,13 @@ export function App() {
             {activeSessionId ? <AgentActivityPanel key={activeSessionId} client={client} sessionId={activeSessionId} /> : null}
             </WorkspaceFolder>
             {session && memoryGraphSettings?.enabled !== false && isMemoryGraphVisible(memorySubgraph, memoryHealth) ? <WorkspaceFolder key={`memory:${activeSessionId}`} name="memory" label={t("record.memory")}>
-              <details className="workspace-fold"><summary>{t("settings.memoryGraph.title")}</summary><MemoryGraphView subgraph={memorySubgraph} health={memoryHealth} onOpenExplorer={() => setMemoryExplorerOpen(true)} /></details>
+              <details className="workspace-fold"><summary>{t("settings.memoryGraph.title")}</summary><MemoryGraphView subgraph={memorySubgraph} health={memoryHealth} onOpenExplorer={() => {
+                // The card is the "browse the whole graph" entry: drop any
+                // focus left over from an earlier chip jump, or the explorer
+                // would open fogged on that stale node instead of the spine.
+                setPendingMemoryNode(undefined);
+                setMemoryExplorerOpen(true);
+              }} /></details>
             </WorkspaceFolder> : null}
 
 
@@ -4766,12 +4774,13 @@ export function App() {
           <Suspense fallback={null}>
             <MemoryGraphExplorer
               client={client}
-              // Opened from the right-rail card, not a product modal: no initial
-              // node and no autoChain (autoChain would jump straight into a
-              // chain view; the default here is the full graph backbone, and
-              // removing autoChain entirely is a later commit). When a chip
-              // jump sets pendingMemoryNode, the explorer reads it as the
-              // entry focus.
+              // Opened from the right-rail card, not a product modal: no entry
+              // node, so the explorer lands on the full graph backbone. A chip
+              // jump (a report [dbrecord1]/[evidence1]/[sourcefile1] click, or
+              // the dbrecord fallthrough) sets pendingMemoryNode and the
+              // explorer focuses that node — the entry node is a non-spine
+              // node, so it must name it here for projectToCanvas to keep it
+              // visible (otherwise the detail card has no node to render).
               {...(pendingMemoryNode ? { initialNodeId: pendingMemoryNode.id } : {})}
               onClose={() => setMemoryExplorerOpen(false)}
               onError={reportError}

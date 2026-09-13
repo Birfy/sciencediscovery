@@ -35,7 +35,7 @@
 |------------|------|---------------|
 | `ResearchGoal` | 本会话的研究目标 | `goal_id`（Node 侧确定性生成，重发幂等） |
 | `Task` | subagent 的 scope（每个 subagent 运行一个节点，`task_type='subagent'`） | `task_id` |
-| `ToolCall` | 一步具体任务——一次代码执行或一次文献检索 | `task_id` |
+| `ToolCall` | 一步具体任务——一次代码执行或一次检索/抓取调用 | `task_id` |
 | `Code` | 一段执行的代码 | `code_id` |
 | `Artifact` | 产出文件版本（图、CSV、报告本身……） | `artifact_id` |
 | `Paper` | 文献记录 | 复合 `(session_id, link)`，`link` 经 `_normalize_link` 归一化 |
@@ -66,7 +66,7 @@
 1. **上传文件** → `MemoryGraphSink.observeUploadFile` → sidecar `POST /observe/upload-file` → `upsert_source_file`：MERGE `SourceFile`（`file_id` 确定性）+ 建 `SourceFile -[:feeds]-> ResearchGoal`。上传完成即镜像，fire-and-forget（图谱不可达 = no-op，上传本身不受影响）。`ResearchGoal` 可能尚未存在（上传可能早于首条消息），此时**不建占位 goal 节点**——文件先悬空（有节点、无 `feeds` 边），等首条消息时由 `upsert_session_first_message` MERGE 真实 goal 后统一补挂本会话所有悬空 SourceFile。重传同名文件 MERGE 命中同一 `file_id`，不造重复节点。
 2. **首条用户消息** → `MemoryGraphSink.observeSessionFirstMessage` → sidecar `POST /observe/session-first-message` → 写 `Session` + `ResearchGoal` + `has_goal`。
 3. **每次代码执行完成** → `observeExecution` → `POST /observe/execution` → `upsert_execution`：
-   - MERGE 一个 `ToolCall`（`task_type='code_execution'`）+ `Code`，建 `ToolCall -[:produces]-> Code`；
+   - MERGE 一个 `ToolCall`（`tool_type='execution'`）+ `Code`，建 `ToolCall -[:produces]-> Code`；
    - 执行 diff 只记录 Derivation 与 CAS，不把尚未声明的文件作为 `produced_artifacts` 写图；
    - 调 `_link_subtasks_by_finish_time` 重建本会话 `next` 时序链（先删本会话旧 `temporal_chain` 边再重连，`ResearchGoal → head → … → last`）。
 4. **每次文献检索（MCP）完成** → `observeMcpInvocation` → `POST /observe/mcp-search` → `upsert_mcp_search`：MERGE `ToolCall`（`task_id="subtask:mcp:<invocation_id>"`）+ 批量 MERGE `Paper`（按 `(session_id, normalized_link)` 去重，命中则 `retrieval_count+1`），建 `ToolCall -[:produces]-> Paper`。
@@ -128,7 +128,7 @@ declare_claim(content, cites_artifact_aliases={"artifact1": artifact_id}, …)
 | `Paper` | `viewExtractedEvidence` / `viewCitingClaim` / `viewCitingArtifact` | 正向引用链：`extracts→Evidence`，再 `+supports→Claim`，再 `+stated_in→报告 Artifact` |
 | `Paper` | `viewSearchingTask` | 产出该 Paper 的 `ToolCall` |
 | `Evidence` | `viewSourcePaper` / `viewCitingClaimForEvidence` / `viewCitingArtifactForEvidence` | 上游 `extracts←Paper`；下游 `supports→Claim`、`+stated_in→Artifact` |
-| `Claim` | `viewCitingEvidenceForClaim` / `viewContainingArtifact` | 支撑该 Claim 的 Evidence/Artifact（`supports` in）；它 `stated_in` 的报告 Artifact |
+| `Claim` | `viewCitingEvidenceForClaim` / `viewCitingDbRecordForClaim` / `viewCitingSourceFileForClaim` / `viewContainingArtifact` | 支撑该 Claim 的 Evidence（`supports` in，按 `Evidence` 标签过滤）；支撑它的 DbRecord（`supports` in，按 `DbRecord` 标签过滤）；支撑它的 SourceFile（`supports` in，按 `SourceFile` 标签过滤）——`supports` in 还会命中 Artifact，它在 Claim 上没有按钮；它 `stated_in` 的报告 Artifact |
 | `Artifact` | `viewContainedClaims` / `viewCitingClaimForArtifact` / `viewProducingCode` / `viewCitingEvidenceForArtifact` / `viewCitedPaper` / `viewRelatedTask` | `stated_in` 该报告的 claims；该 Artifact `supports` 的 claims；产出它的 `Code`；多跳引用溯源 `stated_in→Claim→supports→Evidence`；再 `+extracts→Paper`；以及完整任务尾巴 `produces→Code→ToolCall→next→ResearchGoal` |
 
 定向逐跳行走让每条链短且只走一条有向路径（每跳到达的节点作为下一跳的种子，所以是"追踪"而非"扇出"）。某跳找不到边就把整条链清空（全或无），这正是前端先调 `chain_exists` 把会空的按钮置灰的原因。`ResearchGoal` 与 `ToolCall` 不暴露链路按钮（它们是上述走法的端点）。

@@ -399,6 +399,31 @@ export class ArtifactsApiClient extends RunsApiClient {
     return await response.blob();
   }
 
+  /**
+   * Fetch the raw body of a WebPage node from the CAS data pool. The broker
+   * stored only the SHA-256 on the WebPage node and landed the body in CAS;
+   * this
+   * reverse-proxy call is what makes the WebPageDetail card show its "Full
+   * Text" section. The endpoint is session-scoped on the server side, so a
+   * foreign session's WebPage id is rejected before the CAS lookup. The
+   * response is text/plain (HTML or text — the card's stripHtml helper does
+   * the cleanup); we read it as a string so the MarkdownSection can render
+   * it directly. 404 is a normal outcome for WebPages that were never fetched
+   * (snippet-only); the card distinguishes that from a real failure.
+   */
+  async readWebPageContent(sessionId: string, webPageId: string, signal?: AbortSignal): Promise<string> {
+    const response = await fetch(
+      `/api/sessions/${encodeURIComponent(sessionId)}/web-pages/${encodeURIComponent(webPageId)}/content`,
+      { headers: { authorization: `Bearer ${this.token}` }, signal },
+    );
+    if (!response.ok) {
+      this.reportAuthStatus(response.status);
+      const reason = response.status === 404 ? "WebPage content not available" : "Could not load WebPage content";
+      throw new Error(reason);
+    }
+    return await response.text();
+  }
+
   listPapers(sessionId: string): Promise<PaperAcquisition[]> {
     return this.request(`/api/sessions/${encodeURIComponent(sessionId)}/papers`);
   }

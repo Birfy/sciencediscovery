@@ -48,4 +48,5 @@ export * from "./custom-mcp.js";
 export * from "./scientific-artifact.js";
 export * from "./web.js";
 export * from "./proxy.js";
+export * from "./tool-graph-registry.js";
 export * from "@sciencediscovery/external-urls";

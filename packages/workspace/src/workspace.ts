@@ -290,6 +290,18 @@ export interface WorkspaceToolOptions {
       signal?: AbortSignal,
     ) => Promise<NpuJob>;
   };
+  /**
+   * Fire-and-forget mirror of one terminal NPU job to the memory graph, called
+   * after the job's ``createdFiles`` were declared as Project artifacts. The
+   * second argument carries the ``declareNpuJobArtifacts`` outputs that landed
+   * successfully (``ok: true`` only — failed declarations are not passed).
+   * Absent = not mirrored. The recorder layer is responsible for skipping
+   * non-terminal jobs and swallowing any failure so this never throws.
+   */
+  observeNpuJob?: (
+    job: NpuJob,
+    artifacts: Array<{ artifact_id: string; path: string; version: number }>,
+  ) => void;
   paperExtractPdf?: (input: {
     artifactJobId: string;
   }, signal?: AbortSignal) => Promise<unknown>;
@@ -1047,6 +1059,15 @@ export function createWorkspaceTools(workspaceRoot: string, options: WorkspaceTo
           const result = await broker.result(jobId, signal);
           const artifacts = await declareNpuJobArtifacts(result.job.createdFiles ?? []);
           const details = artifacts.length > 0 ? { ...result, artifacts } : result;
+          // Mirror the terminal job to the memory graph (fire-and-forget — the
+          // recorder swallows its own failures). Only successfully declared
+          // artifacts carry an artifact_id; failed declarations are skipped so
+          // the produces edge never dangles on a missing Artifact node.
+          options.observeNpuJob?.(result.job, artifacts.filter((artifact): artifact is { artifact_id: string; name: string; ok: true; origin: ScientificArtifact["origin"]; path: string; version: number } => artifact.ok).map((artifact) => ({
+            artifact_id: artifact.artifact_id,
+            path: artifact.path,
+            version: artifact.version,
+          })));
           return { content: [{ type: "text", text: JSON.stringify(details) }], details };
         }
         const job = await broker.cancel(jobId, signal);
@@ -1114,25 +1135,29 @@ export function createWorkspaceTools(workspaceRoot: string, options: WorkspaceTo
   if (options.declareEvidence) {
     const declareEvidenceParameters = Type.Object({
       content: Type.String({ minLength: 1 }),
-      // Source routing: exactly one of source_paper_link / source_file_id.
-      // source_paper_link for a Paper already in the graph; source_file_id for
-      // an uploaded PDF (media_type=application/pdf). Non-PDF data files
-      // (CSV/image/etc) cannot be Evidence sources — use declare_claim's
-      // cites_source_file_aliases instead.
+      // Source routing: exactly one of source_paper_link / source_file_id /
+      // source_webpage_link. source_paper_link for a Paper already in the
+      // graph; source_file_id for an uploaded PDF (media_type=application/pdf);
+      // source_webpage_link for a WebPage already in the graph (web_search /
+      // llm-wiki results). Non-PDF data files (CSV/image/etc) cannot be
+      // Evidence sources — use declare_claim's cites_source_file_aliases
+      // instead.
       source_paper_link: Type.Optional(Type.String({ minLength: 1 })),
       source_file_id: Type.Optional(Type.String({ minLength: 1 })),
+      source_webpage_link: Type.Optional(Type.String({ minLength: 1 })),
       locator: Type.String({ minLength: 1 }),
       evidence_type: Type.String(),
       confidence: Type.String(),
       strength: Type.String(),
     });
     const declareEvidence: AgentTool<typeof declareEvidenceParameters> = {
-      description: "Record a piece of Evidence extracted from a Paper OR an uploaded PDF SourceFile that already exists in this session's memory graph. Creates an Evidence node + an extracts edge from the source (Paper/PDF-SourceFile → Evidence). Pass source_paper_link for a Paper already in the graph, or source_file_id for an uploaded PDF (media_type=application/pdf) — exactly one. Non-PDF data files (CSV/image/etc) cannot be Evidence sources — use declare_claim's cites_source_file_aliases instead. Returns {status:'ok', evidence_id} or a structured error (source_paper_not_found / source_file_not_found / source_file_not_pdf / no_source / ambiguous_source). Use the returned evidence_id as the chip alias target in declare_claim's cites_evidence_aliases and write [evidenceN] in your report body.",
+      description: "Record a piece of Evidence extracted from a Paper, an uploaded PDF SourceFile, or a WebPage that already exists in this session's memory graph. Creates an Evidence node + an extracts edge from the source (Paper/PDF-SourceFile/WebPage → Evidence). Pass source_paper_link for a Paper already in the graph, source_file_id for an uploaded PDF (media_type=application/pdf), or source_webpage_link for a WebPage already in the graph (web_search / llm-wiki results) — exactly one. Non-PDF data files (CSV/image/etc) cannot be Evidence sources — use declare_claim's cites_source_file_aliases instead. WebPage evidence is gated on the page's content: today search returns snippets only (no full text), so source_webpage_link is usually rejected with source_webpage_no_content; prefer source_paper_link (literature Paper) or source_file_id (uploaded PDF) for now. The WebPage path lights up automatically once a page-fetch tool populates the page's content. Returns {status:'ok', evidence_id} or a structured error (source_paper_not_found / source_file_not_found / source_file_not_pdf / source_webpage_not_found / source_webpage_no_content / no_source / ambiguous_source). Use the returned evidence_id as the chip alias target in declare_claim's cites_evidence_aliases and write [evidenceN] in your report body.",
       execute: async (_toolCallId, params) => {
         const result = await options.declareEvidence!({
           content: params.content,
           ...(params.source_paper_link ? { sourcePaperLink: params.source_paper_link } : {}),
           ...(params.source_file_id ? { sourceFileId: params.source_file_id } : {}),
+          ...(params.source_webpage_link ? { sourceWebpageLink: params.source_webpage_link } : {}),
           locator: params.locator,
           evidenceType: params.evidence_type,
           confidence: params.confidence,
@@ -1159,10 +1184,18 @@ export function createWorkspaceTools(workspaceRoot: string, options: WorkspaceTo
       // must NOT go here — it goes via declare_evidence → cites_evidence_
       // aliases (the sidecar rejects a PDF with source_file_is_pdf).
       cites_source_file_aliases: Type.Optional(Type.Record(Type.String(), Type.String())),
+      // alias → "<source>:<identifier>" for a database record this session
+      // retrieved via db_search that directly supports the claim
+      // (DbRecord -[:supports]-> Claim). Value format is "<source>:<identifier>"
+      // (e.g. "uniprot:P38398"), source = the db source id as it appeared in
+      // the search results / the node's badge (uniprot/pdb/chembl/...); a bare
+      // identifier is accepted only when unambiguous within the session, so
+      // prefer "source:identifier" to avoid the 422 db_record_not_found path.
+      cites_dbrecord_aliases: Type.Optional(Type.Record(Type.String(), Type.String())),
       artifact_id: Type.Optional(Type.String({ minLength: 1 })),
     });
     const declareClaim: AgentTool<typeof declareClaimParameters> = {
-      description: "Record a Claim (a cited assertion) and link it to its supporting nodes. Creates a Claim node + supports edges from the cited Evidence/Artifact/SourceFile (Evidence/Artifact/SourceFile → Claim). At least one citation target is required. A Claim is backed by Evidence/Artifact/SourceFile via supports — it does NOT reach a Paper directly: to cite a paper, call declare_evidence first and cite the returned evidence_id here. Uploaded non-PDF data files (CSV/image/etc) are cited directly via cites_source_file_aliases (alias format sourcefile+number, e.g. [sourcefile1]) — a PDF must NOT go this route; declare_evidence it first. Choose aliases of the form evidence+number for Evidence (e.g. [evidence1]) or artifact+number for Artifact (e.g. [artifact1]) or sourcefile+number for uploaded data files (e.g. [sourcefile1]) — no other format. Write each chosen alias token inline in the output body where the claim is asserted; a chip renders only when a [alias] token in the body matches this claim's chip_map. These aliases are platform provenance tags, not academic citations: when the report has a numbered reference list, also write a matching scholarly marker such as [1] next to the claim and map it to reference [1].",
+      description: "Record a Claim (a cited assertion) and link it to its supporting nodes. Creates a Claim node + supports edges from the cited Evidence/Artifact/SourceFile/DbRecord (Evidence/Artifact/SourceFile/DbRecord → Claim). At least one citation target is required. A Claim is backed by Evidence/Artifact/SourceFile/DbRecord via supports — it does NOT reach a Paper directly: to cite a paper, call declare_evidence first and cite the returned evidence_id here. Uploaded non-PDF data files (CSV/image/etc) are cited directly via cites_source_file_aliases (alias format sourcefile+number, e.g. [sourcefile1]) — a PDF must NOT go this route; declare_evidence it first. Database records this session retrieved via db_search (uniprot/pdb/chembl/...) are cited directly via cites_dbrecord_aliases (alias format dbrecord+number, e.g. [dbrecord1]; value format \"<source>:<identifier>\" — e.g. \"uniprot:P38398\"). Choose aliases of the form evidence+number for Evidence (e.g. [evidence1]) or artifact+number for Artifact (e.g. [artifact1]) or sourcefile+number for uploaded data files (e.g. [sourcefile1]) or dbrecord+number for database records (e.g. [dbrecord1]) — no other format. Write each chosen alias token inline in the output body where the claim is asserted; a chip renders only when a [alias] token in the body matches this claim's chip_map. These aliases are platform provenance tags, not academic citations: when the report has a numbered reference list, also write a matching scholarly marker such as [1] next to the claim and map it to reference [1]. Errors: db_record_not_found when the source:identifier (or bare identifier) does not match a DbRecord this session retrieved — pass \"<source>:<identifier>\" (use query_graph to look up the record's source and identifier).",
       execute: async (_toolCallId, params) => {
         const result = await options.declareClaim!({
           content: params.content,
@@ -1172,6 +1205,7 @@ export function createWorkspaceTools(workspaceRoot: string, options: WorkspaceTo
           citesEvidenceAliases: params.cites_evidence_aliases,
           citesArtifactAliases: params.cites_artifact_aliases,
           ...(params.cites_source_file_aliases ? { citesSourceFileAliases: params.cites_source_file_aliases } : {}),
+          ...(params.cites_dbrecord_aliases ? { citesDbrecordAliases: params.cites_dbrecord_aliases } : {}),
           ...(params.artifact_id ? { artifactId: params.artifact_id } : {}),
         });
         // Surface a reminder to write the alias tokens into the output body
@@ -1179,7 +1213,7 @@ export function createWorkspaceTools(workspaceRoot: string, options: WorkspaceTo
         // token in the body matches this claim's chip_map. On error, forward
         // the sidecar's actionable instruction so the LLM can self-correct.
         const instruction = result.status === "ok" && Object.keys(result.chipMap).length
-          ? `Write these alias tokens inline in the output body now, where each claim is asserted: ${Object.keys(result.chipMap).map((alias) => `[${alias}]`).join(", ")}. Aliases must be evidence+number for evidence (e.g. [evidence1]) or artifact+number for artifacts (e.g. [artifact1]) or sourcefile+number for uploaded data files (e.g. [sourcefile1]) — no other format.`
+          ? `Write these alias tokens inline in the output body now, where each claim is asserted: ${Object.keys(result.chipMap).map((alias) => `[${alias}]`).join(", ")}. Aliases must be evidence+number for evidence (e.g. [evidence1]) or artifact+number for artifacts (e.g. [artifact1]) or sourcefile+number for uploaded data files (e.g. [sourcefile1]) or dbrecord+number for database records (e.g. [dbrecord1]) — no other format. For database records, the value must be "<source>:<identifier>" (e.g. "uniprot:P38398").`
           : result.status === "error" ? result.instruction : undefined;
         const text = JSON.stringify(instruction ? { ...result, instruction } : result);
         return { content: [{ type: "text", text }], details: result };

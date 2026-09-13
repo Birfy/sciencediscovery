@@ -29,6 +29,12 @@ REQUIRE ... IF EXISTS`` form). Uses ``CREATE CONSTRAINT IF NOT EXISTS`` so
 re-runs are safe. Called once after a password is set and the driver is
 reachable (inside the ``/internal/neo4j-password`` handler), and safe to
 call again on every boot.
+
+Pre-rename ToolCall nodes still carry the legacy ``task_type`` field as the
+classification (the read path falls back to it via ``n.tool_type ?? n.task_type``
+in Cypher and ``extra.tool_type ?? extra.task_type`` in the TS frontend), so
+no cypher migration is required to keep historical data readable. New writes
+land only on ``tool_type`` + ``tool_name``.
 """
 
 from __future__ import annotations
@@ -42,10 +48,10 @@ log = get_logger("constraints")
 
 _SCHEMA = [
     # Task = a subagent scope node (task_type="subagent"). ToolCall = every
-    # other execution/search node (code_execution/literature_search/…), both
+    # other execution/search node (execution/search/…), both
     # session-main and subagent-internal children. Both share the task_id
-    # business key (one node per execution/search; PR1 dropped SubTask dedup,
-    # so MERGE-on-task_id is the identity).
+    # business key (one node per execution/search; MERGE-on-task_id is the
+    # identity).
     "CREATE CONSTRAINT IF NOT EXISTS FOR (n:Task)     REQUIRE n.task_id IS UNIQUE",
     "CREATE CONSTRAINT IF NOT EXISTS FOR (n:ToolCall) REQUIRE n.task_id IS UNIQUE",
     "CREATE CONSTRAINT IF NOT EXISTS FOR (n:Code)     REQUIRE n.code_id IS UNIQUE",
@@ -78,7 +84,13 @@ _SCHEMA = [
     "CREATE INDEX IF NOT EXISTS FOR (n:Task)         ON (n.status)",
     "CREATE INDEX IF NOT EXISTS FOR (n:Task)         ON (n.task_type)",
     "CREATE INDEX IF NOT EXISTS FOR (n:ToolCall)     ON (n.status)",
-    "CREATE INDEX IF NOT EXISTS FOR (n:ToolCall)     ON (n.task_type)",
+    # ToolCall's coarse-classification field was renamed from ``task_type``
+    # to ``tool_type``. The legacy ``task_type`` field is intentionally
+    # retained on any pre-rename ToolCall nodes (read paths fall back to it
+    # via ``n.tool_type ?? n.task_type``); the legacy index is not dropped
+    # here so the fallback stays fast on those nodes.
+    "CREATE INDEX IF NOT EXISTS FOR (n:ToolCall)     ON (n.tool_type)",
+    "CREATE INDEX IF NOT EXISTS FOR (n:ToolCall)     ON (n.tool_name)",
     "CREATE INDEX IF NOT EXISTS FOR (n:ToolCall)     ON (n.parent_subtask_id)",
     "CREATE INDEX IF NOT EXISTS FOR (n:Evidence)     ON (n.session_id)",
     "CREATE INDEX IF NOT EXISTS FOR (n:Claim)        ON (n.session_id)",
@@ -98,6 +110,19 @@ _SCHEMA = [
     "CREATE INDEX IF NOT EXISTS FOR (n:SearchCell) ON (n.search_id)",
     "CREATE INDEX IF NOT EXISTS FOR (n:SearchRun)  ON (n.session_id)",
     "CREATE INDEX IF NOT EXISTS FOR (n:SearchNode) ON (n.session_id)",
+    # WebPage / DbRecord: search-result products, scoped per session
+    # (same rationale as Paper — a session's subgraph must show every page/
+    # record it retrieved). WebPage keys on url alone: llm-wiki derives its
+    # url deterministically from the page path and web_search returns a bare
+    # external url, so one (session_id, url) unique constraint covers both
+    # (identifier is an optional attribute, not a key). DbRecord keeps the
+    # (session_id, source, identifier) composite — its identifier is only
+    # unique within a source.
+    "CREATE CONSTRAINT IF NOT EXISTS FOR (n:WebPage) REQUIRE (n.session_id, n.url) IS UNIQUE",
+    "CREATE CONSTRAINT IF NOT EXISTS FOR (n:DbRecord) REQUIRE (n.session_id, n.source, n.identifier) IS UNIQUE",
+    "CREATE INDEX IF NOT EXISTS FOR (n:WebPage) ON (n.session_id)",
+    "CREATE INDEX IF NOT EXISTS FOR (n:DbRecord) ON (n.session_id)",
+    "CREATE INDEX IF NOT EXISTS FOR (n:DbRecord) ON (n.retrieved_at)",
 ]
 
 
@@ -157,6 +182,23 @@ def _drop_legacy_artifact_id_constraint(session: Any) -> int:
     return len(names)
 
 
+def _drop_legacy_webpage_identifier_constraint(session: Any) -> int:
+    """Drop any legacy ``(session_id, identifier)`` uniqueness on ``:WebPage``.
+
+    WebPage now keys on ``(session_id, url)`` alone (llm-wiki derives its url
+    deterministically from the page path, so the same page always lands on the
+    same node; identifier became an optional attribute). A leftover
+    ``(session_id, identifier)`` unique constraint would make a url-keyed
+    MERGE fail when the record also carries an identifier that collides with
+    an existing node → 500. Same list + drop-by-name approach as the Paper /
+    Artifact legacy drops. Returns the number dropped.
+    """
+    names = _show_legacy_constraint_names(session, "WebPage", ["session_id", "identifier"])
+    for name in names:
+        session.run(f"DROP CONSTRAINT `{name}`").consume()
+    return len(names)
+
+
 def _migrate_legacy_subtask_label(session: Any) -> None:
     """One-time migration of the legacy ``:SubTask`` label split.
 
@@ -179,7 +221,8 @@ def _migrate_legacy_subtask_label(session: Any) -> None:
             REMOVE n:SubTask SET n:Task
             """
         ).consume()
-        # Every other legacy SubTask (code_execution/literature_search/…) →
+        # Every other legacy SubTask (any non-subagent tool_type — the values
+        # here range over the pre-rename vocabulary too) →
         # :ToolCall. A SubTask with no task_type defaults to ToolCall too
         # (scopes always carry task_type='subagent', so this never eats a scope).
         session.run(
@@ -227,6 +270,10 @@ def ensure_schema() -> None:
         dropped = _drop_legacy_artifact_id_constraint(session)
         if dropped:
             log.info("dropped %d legacy artifact_id-only Artifact constraint(s)", dropped)
+    with driver.session() as session:
+        dropped = _drop_legacy_webpage_identifier_constraint(session)
+        if dropped:
+            log.info("dropped %d legacy (session_id, identifier) WebPage constraint(s)", dropped)
     for statement in _SCHEMA:
         try:
             with driver.session() as session:

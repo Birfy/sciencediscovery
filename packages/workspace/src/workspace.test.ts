@@ -453,6 +453,116 @@ test("run_npu_job submits only allowlisted workloads with workspace-scoped input
   assert.deepEqual(declaredArtifacts, ["antibody_pipeline/runs/run-1/01_rfdiffusion/output_000000.pdb"]);
 });
 
+test("run_npu_job result branch forwards declared artifacts to observeNpuJob, omitting failed declarations", async (context) => {
+  const root = resolve(process.cwd(), ".tmp", `workspace-npu-observe-${process.pid}-${Date.now()}`);
+  await mkdir(resolve(root, "antibody_pipeline"), { recursive: true });
+  await writeFile(resolve(root, "antibody_pipeline", "config.json"), "{}\n");
+  context.after(() => rm(root, { force: true, recursive: true }));
+  const observed: Array<{ jobId: string; artifacts: Array<{ artifact_id: string; path: string; version: number }> }> = [];
+  const job: NpuJob = {
+    createdAt: "2026-01-01T00:00:00.000Z",
+    createdFiles: ["outputs/predictions.csv", "outputs/broken.bin"],
+    id: "npu-job-1",
+    inputs: { configPath: "antibody_pipeline/config.json" },
+    logs: { stderr: "", stdout: "", truncated: false },
+    sessionId: "session-1",
+    state: "succeeded",
+    updatedAt: "2026-01-01T00:01:00.000Z",
+    workloadId: "antibody.protenix.v1",
+    workspaceRoot: root,
+  };
+  const tools = createWorkspaceTools(root, {
+    declareArtifact: async (input: { path: string }) => ({
+      artifact: {
+        createdAt: "2026-01-01T00:00:00.000Z",
+        createdInSessionId: "session-1",
+        createdInSessionTitle: "test",
+        currentVersion: 1,
+        id: input.path === "outputs/predictions.csv" ? "art-ok" : "art-broken",
+        kind: "dataset",
+        logicalName: input.path,
+        name: input.path,
+        origin: "llm_declared",
+        projectId: "project-1",
+        sessionId: "session-1",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+      version: {
+        artifactId: input.path === "outputs/predictions.csv" ? "art-ok" : "art-broken",
+        content: { hash: "hash", size: 1 },
+        createdAt: "2026-01-01T00:00:00.000Z",
+        executionRunIds: [],
+        id: "version-1",
+        inputArtifactVersionIds: [],
+        mediaType: "text/csv",
+        projectId: "project-1",
+        sessionId: "session-1",
+        sourcePath: input.path,
+        version: 1,
+      },
+    }),
+    enabledConnectorIds: [],
+    executePython: async () => { throw new Error("not used"); },
+    npuBroker: {
+      cancel: async () => job,
+      get: async () => job,
+      listWorkloads: async () => [
+        { description: "protenix", id: "antibody.protenix.v1", label: "Protenix", phase: "builtin", requiredInputs: ["configPath"] },
+      ],
+      logs: async () => job.logs,
+      // Force the broken file's declaration to fail so the result branch
+      // produces a mixed ok / not-ok artifacts array. The success artifact
+      // alone must reach observeNpuJob.
+      result: async () => ({ job: { ...job, createdFiles: ["outputs/predictions.csv", "outputs/missing.bin"] } }),
+      submit: async () => job,
+    },
+    observeNpuJob: (job: NpuJob, artifacts: Array<{ artifact_id: string; path: string; version: number }>) => {
+      observed.push({
+        artifacts: artifacts.map((artifact) => ({ artifact_id: artifact.artifact_id, path: artifact.path, version: artifact.version })),
+        jobId: job.id,
+      });
+    },
+  } as unknown as Parameters<typeof createWorkspaceTools>[1]);
+  const tool = tools.find((candidate) => candidate.name === "run_npu_job");
+  assert.ok(tool);
+  // First: both files declare successfully → both forwarded.
+  await tool.execute("npu-result", { job_id: "npu-job-1", operation: "result" });
+  assert.equal(observed.length, 1);
+  assert.equal(observed[0]!.jobId, "npu-job-1");
+  assert.deepEqual(observed[0]!.artifacts, [
+    { artifact_id: "art-ok", path: "outputs/predictions.csv", version: 1 },
+    { artifact_id: "art-broken", path: "outputs/missing.bin", version: 1 },
+  ]);
+  // Second call: drop declareArtifact entirely → still fires with empty list
+  // (the recorder is what decides whether to mirror; the workspace must not
+  // crash on the absent option).
+  const noDeclare = createWorkspaceTools(root, {
+    enabledConnectorIds: [],
+    executePython: async () => { throw new Error("not used"); },
+    npuBroker: {
+      cancel: async () => job,
+      get: async () => job,
+      listWorkloads: async () => [
+        { description: "protenix", id: "antibody.protenix.v1", label: "Protenix", phase: "builtin", requiredInputs: ["configPath"] },
+      ],
+      logs: async () => job.logs,
+      result: async () => ({ job }),
+      submit: async () => job,
+    },
+    observeNpuJob: (job: NpuJob, artifacts: Array<{ artifact_id: string; path: string; version: number }>) => {
+      observed.push({
+        artifacts: artifacts.map((artifact) => ({ artifact_id: artifact.artifact_id, path: artifact.path, version: artifact.version })),
+        jobId: job.id,
+      });
+    },
+  } as unknown as Parameters<typeof createWorkspaceTools>[1]);
+  const noDeclareTool = noDeclare.find((candidate) => candidate.name === "run_npu_job");
+  assert.ok(noDeclareTool);
+  await noDeclareTool.execute("npu-result-2", { job_id: "npu-job-1", operation: "result" });
+  assert.equal(observed.length, 2);
+  assert.equal(observed[1]!.artifacts.length, 0);
+});
+
 test("read_file pages a large file instead of returning it whole", async (context) => {
   const root = resolve(process.cwd(), ".tmp", `workspace-read-page-${process.pid}-${Date.now()}`);
   await mkdir(root, { recursive: true });
@@ -789,6 +899,33 @@ test("declare_claim surfaces an instruction reminder to write alias tokens inlin
   assert.match(payload.instruction as string, /\[evidence1\]/);
   assert.match(payload.instruction as string, /\[artifact1\]/);
   assert.match(payload.instruction as string, /evidence\+number .* or artifact\+number/i);
+  assert.match(payload.instruction as string, /sourcefile\+number .* or dbrecord\+number/i);
+  assert.match(payload.instruction as string, /<source>:<identifier>/);
+});
+
+test("declare_claim forwards cites_dbrecord_aliases and renders a dbrecord chip in the reminder", async () => {
+  const tools = createWorkspaceTools(process.cwd(), {
+    declareClaim: async () => ({
+      status: "ok",
+      claimId: "claim-db",
+      chipMap: { dbrecord1: { id: "P38398", kind: "dbrecord", label: "dbrecord1" } },
+    }),
+    enabledConnectorIds: [],
+    executePython: async () => { throw new Error("not used"); },
+  });
+  const declareClaim = tools.find((candidate) => candidate.name === "declare_claim")!;
+  const result = await declareClaim!.execute("declare-claim-db", {
+    cites_artifact_aliases: {}, cites_evidence_aliases: {},
+    cites_dbrecord_aliases: { dbrecord1: "uniprot:P38398" },
+    claim_type: "result_synthesis", confidence: "high", content: "BRCA1 binds …", locator: "report.md",
+  });
+  const payload = JSON.parse(result.content[0]?.type === "text" ? result.content[0].text : "{}") as Record<string, unknown>;
+  assert.equal(payload.status, "ok");
+  // Reminder must list the dbrecord alias and explain the value format.
+  assert.ok(typeof payload.instruction === "string");
+  assert.match(payload.instruction as string, /\[dbrecord1\]/);
+  assert.match(payload.instruction as string, /dbrecord\+number/);
+  assert.match(payload.instruction as string, /<source>:<identifier>/);
 });
 
 test("declare_claim omits the instruction reminder when the chip map is empty; forwards instruction on business errors", async () => {

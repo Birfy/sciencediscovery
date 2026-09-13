@@ -15,7 +15,7 @@
 import { randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { VersionStore, withWorkspaceMutation } from "@sciencediscovery/cas";
+import { CasStore, VersionStore, withWorkspaceMutation } from "@sciencediscovery/cas";
 import { dirname, resolve } from "node:path";
 import { listSshKeyFiles } from "../ssh-key-files.js";
 
@@ -2371,6 +2371,75 @@ export function createApiServer(config = loadServerConfig(), dependencies: ApiSe
         if (!store.getSession(filesMatch[1]!)) return sendError(response, 404, "Session not found");
         sendJson(response, 200, await listWorkspaceFiles(store, filesMatch[1]!));
         return;
+      }
+
+      // Reverse-proxy a WebPage's full body from the CAS data pool back to the
+      // browser. The broker stores the body as a CAS blob and writes only its
+      // SHA-256 onto the WebPage node (graph = directory; CAS = warehouse), so
+      // the card needs an endpoint that turns ``extra.content_hash`` back into
+      // the original blob.
+      // original blob. Session-scoped on two axes: the session must exist,
+      // AND the WebPage must be in that session's subgraph (filtered by the
+      // sidecar's /subgraph, so a foreign-session WebPage id can never resolve).
+      // 64-hex is the only accepted hash form — anything else is 404, so a
+      // stray slash, a malformed id, or a non-hash field can't smuggle a path
+      // traversal into the CAS read.
+      const webPageContentMatch = url.pathname.match(
+        /^\/api\/sessions\/([^/]+)\/web-pages\/([^/]+)\/content$/,
+      );
+      if (webPageContentMatch && request.method === "GET") {
+        const sessionId = decodeURIComponent(webPageContentMatch[1]!);
+        const webPageId = decodeURIComponent(webPageContentMatch[2]!);
+        if (!store.getSession(sessionId)) return sendError(response, 404, "Session not found");
+        if (!memoryGraphEnabled()) {
+          // Mirror the toggle-off shape of the other /api/memory/* endpoints:
+          // 404 with the same message as "WebPage absent" so the card's
+          // "未抓取" branch stays the visible default until the graph is back.
+          return sendError(response, 404, "WebPage not found or has no content_hash");
+        }
+        try {
+          // Step 1: O(1) lookup of the WebPage's content_hash by node id. The
+          // sidecar resolves the id against session-scoped nodes (url-only vs
+          // identifier-keyed), so a foreign-session WebPage id can never
+          // resolve — the same isolation the old /subgraph filter provided,
+          // without serialising the whole subgraph.
+          const { contentHash, reason } =
+            await memoryGraphClient.getWebPageContentHash(sessionId, webPageId);
+          if (reason === "memory_graph_unreachable") {
+            return sendError(response, 502, "memory graph unreachable");
+          }
+          if (typeof contentHash !== "string" || !/^[a-f0-9]{64}$/.test(contentHash)) {
+            return sendError(response, 404, "WebPage not found or has no content_hash");
+          }
+          // Step 2: read the body from the data pool (same pool the broker /
+          // recorder dataCas write into).
+          const dataCas = new CasStore(store.dataDir, "data");
+          if (!(await dataCas.has(contentHash))) {
+            return sendError(response, 404, "CAS blob missing for this content_hash");
+          }
+          const bytes = await dataCas.read(contentHash);
+          // CAS blobs are content-addressed and immutable by construction, so
+          // a long-lived cache hit is safe — set the immutable header via a
+          // direct writeHead so it overrides the no-store default in
+          // http/response.ts#send. text/plain because the data pool stores
+          // page bodies verbatim (HTML or text); the front-end stripHtml
+          // helper handles HTML cleanup before rendering.
+          response.writeHead(200, {
+            "cache-control": "public, max-age=31536000, immutable",
+            "content-length": Buffer.byteLength(bytes),
+            "content-type": "text/plain; charset=utf-8",
+            "x-content-type-options": "nosniff",
+          });
+          response.end(bytes);
+          return;
+        } catch (error) {
+          apiLog.warn("web_page_content_failed", {
+            errorMessage: shortErrorMessage(error),
+            sessionId,
+            webPageId,
+          });
+          return sendError(response, 500, "WebPage content read failed");
+        }
       }
 
       const workspaceProvenanceMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/workspace\/provenance$/);

@@ -16,17 +16,21 @@
 
 Node labels: a subagent's scope is ``:Task`` (``task_type='subagent'``);
 every execution/search node — whether session-main or a subagent's internal
-child — is ``:ToolCall`` (``code_execution``/``literature_search``/…). MVP
-scope: one ToolCall per execution (no DAG / ``inferred_subtask_types`` state
-machine — dedup is intentionally DROPPED), one Code per execution
+child — is ``:ToolCall`` (``tool_type='execution'/'search'``, plus the evolve
+marker ``'program_evolution'``; pre-rename nodes carry older values, see
+``LEGACY_CLASSIFICATION_ALIASES`` in the web app);
+``tool_name`` carries the full tool identifier such as
+``mcp__arxiv__search``). MVP
 (``code_id = executionId``), one Artifact node per logical artifact id
-(latest fields; versioning is v2). ``upsert_mcp_search`` adds one
-auto-inferred ToolCall per MCP search invocation
-(``task_id = "subtask:mcp:" + invocation_id``, NOT deduplicated — every
-search is its own ToolCall) + Paper nodes deduped by normalized URL
-(re-search only bumps ``retrieved_at`` / ``retrieval_count``) +
-``ToolCall -produces-> Paper`` edges. All writes are ``MERGE`` on the unique
-key so hooks are idempotent across retries.
+(latest fields; versioning is v2). All search/write paths run through the
+unified ``upsert_tool_call``: one ToolCall per invocation (``task_id`` chosen
+by the broker: ``subtask:mcp:<invocation_id>`` for MCP, ``subtask:web:<invocation_id>``
+for the WebBroker, ``subtask:npu:<job_id>`` for NPU jobs, …) + per-product
+Paper/WebPage/DbRecord nodes deduped on their composite keys. The legacy
+``upsert_mcp_search`` / ``_upsert_mcp_search_child`` paths have been
+retired; ``/observe/mcp-search`` no longer exists.
+All writes are ``MERGE`` on the unique key so hooks are idempotent across
+retries.
 """
 
 from __future__ import annotations
@@ -122,9 +126,10 @@ def upsert_execution(
     code_hash: str,
     exit_code: int | None,
     status: str,
-    started_at: str,
+        started_at: str,
     finished_at: str,
-    task_type: str,
+    tool_type: str,
+    tool_name: str | None = None,
     produced_artifacts: list[dict[str, Any]],
     stdout_hash: str | None = None,
     stderr_hash: str | None = None,
@@ -157,8 +162,8 @@ def upsert_execution(
     context), a per-execution SubTask ``subtask:<execution_id>`` is built and
     produces the Code/Artifact — the original main behavior, unchanged. When
     set (this execution ran inside a subagent), a *child* SubTask
-    ``subtask:subagent:<id>:exec:<execution_id>`` is built (task_type is the
-    real ``code_execution`` — NOT ``subagent``), a ``contains`` edge links the
+    ``subtask:subagent:<id>:exec:<execution_id>`` is built (tool_type is the
+    real ``execution`` — NOT ``subagent``), a ``contains`` edge links the
     subagent's scope node to this child, and produces edges run
     ``child → Code`` / ``child → Artifact`` (the scope never carries
     products). The child does not join the session temporal chain — only
@@ -189,7 +194,7 @@ def upsert_execution(
     status = _normalise_subtask_status(status)
 
     # Subagent child path: this execution ran inside a subagent, so it becomes
-    # a child ToolCall (real task_type=code_execution) hung off the subagent's
+    # a child ToolCall (real tool_type=code_execution) hung off the subagent's
     # scope node via contains. Products hang off the child, never the scope.
     if parent_subagent_id is not None:
         _upsert_execution_child(
@@ -204,6 +209,7 @@ def upsert_execution(
             status=status,
             started_at=started_at,
             finished_at=finished_at,
+            tool_name=tool_name,
             produced_artifacts=produced_artifacts,
             stdout_hash=stdout_hash,
             stderr_hash=stderr_hash,
@@ -226,18 +232,21 @@ def upsert_execution(
             session.run(
                 """
                 MERGE (st:ToolCall {task_id: $task_id})
-                  ON CREATE SET st.session_id  = $session_id,
-                                st.status     = $status,
-                                st.task_type  = $task_type,
-                                st.created_at = datetime(),
+                  ON CREATE SET st.session_id   = $session_id,
+                                st.status      = $status,
+                                st.tool_type   = $tool_type,
+                                st.tool_name   = coalesce($tool_name, $tool),
+                                st.created_at  = datetime(),
                                 st.finished_at = $finished_at,
-                                st.turn_id    = $turn_id,
-                                st.seq        = $seq
+                                st.turn_id     = $turn_id,
+                                st.seq         = $seq
                 """,
                 task_id=task_id,
                 session_id=session_id,
                 status=status,
-                task_type=task_type,
+                tool_type=tool_type,
+                tool_name=tool_name,
+                tool=tool,
                 finished_at=finished_at,
                 turn_id=turn_id,
                 seq=seq,
@@ -394,6 +403,7 @@ def _upsert_execution_child(
     session_id: str,
     turn_id: str,
     tool: str,
+    tool_name: str | None,
     language: str | None,
     code_hash: str,
     exit_code: int | None,
@@ -410,7 +420,7 @@ def _upsert_execution_child(
     """Build a subagent child ToolCall for one execution.
 
     The child ``subtask:subagent:<id>:exec:<execution_id>`` carries the real
-    ``code_execution`` task_type (NOT ``subagent`` — that label is the scope's),
+    ``execution`` tool_type (NOT ``subagent`` — that label is the scope's),
     a ``parent_subtask_id`` pointing at the subagent's scope, and a session-level
     ``seq`` assigned once at creation. The scope node is matched (built
     separately by ``upsert_subagent``) and a ``contains`` edge links
@@ -425,7 +435,7 @@ def _upsert_execution_child(
               execution_id, session_id, len(produced_artifacts), scope_task_id)
     try:
         with driver.session() as session:
-            # Child SubTask: real task_type=code_execution, parent_subtask_id
+            # Child SubTask: real tool_type=execution, parent_subtask_id
             # points at the scope, seq assigned once (ON CREATE only — never
             # overwritten on the terminal re-mirror). The scope is matched
             # (not MERGEd here — upsert_subagent owns it) and linked via contains.
@@ -435,12 +445,13 @@ def _upsert_execution_child(
                 MERGE (st:ToolCall {task_id: $task_id})
                   ON CREATE SET st.session_id        = $session_id,
                                 st.status           = $status,
-                                st.task_type        = 'code_execution',
+                                st.tool_type        = 'execution',
+                                st.tool_name        = coalesce($tool_name, $tool),
                                 st.parent_subtask_id = $parent_subtask_id,
                                 st.turn_id          = $turn_id,
                                 st.created_at       = datetime(),
-                                st.finished_at       = $finished_at,
-                                st.seq               = $seq
+                                st.finished_at      = $finished_at,
+                                st.seq              = $seq
                   ON MATCH  SET st.status      = $status,
                                 st.finished_at = $finished_at,
                                 st.turn_id     = $turn_id
@@ -448,6 +459,8 @@ def _upsert_execution_child(
                 task_id=task_id,
                 session_id=session_id,
                 status=status,
+                tool_name=tool_name,
+                tool=tool,
                 parent_subtask_id=scope_task_id,
                 turn_id=turn_id,
                 finished_at=finished_at,
@@ -608,127 +621,198 @@ def _link_source_file_inputs(
         ).consume()
 
 
-def upsert_mcp_search(
+# Normalise a subagent's lifecycle status onto the graph's vocabulary. timed_out
+# collapses to ``failed`` (one red label) but is tagged separately in
+# ``failure_reason`` so it is not confused with a plain error. cancelled and
+# completed pass through verbatim. running is only ever written by the start
+# phase (status="running" never reaches here from a terminal call).
+_SUBAGENT_TERMINAL_STATUSES = {"completed", "failed", "cancelled", "timed_out"}
+
+
+def upsert_tool_call(
     *,
-    invocation_id: str,
+    task_id: str,
     session_id: str,
     turn_id: str,
-    source: str,
+    tool_name: str,
     tool_type: str,
-    retrieved_at: str,
-    records: list[dict[str, Any]],
+    source: str | None = None,
+    status: str = "completed",
+    result_count: int = 0,
+    products: list[dict[str, Any]],
     parent_subagent_id: str | None = None,
 ) -> None:
-    """Upsert one MCP literature search's worth of nodes (SubTask → Papers).
+    """Upsert one tool-call's worth of nodes (ToolCall + products).
 
-    One auto-inferred SubTask per search invocation (``task_type =
-    "literature_search"``, ``task_id = "subtask:mcp:" + invocation_id``,
-    ``source``/``tool_type`` record the MCP source/tool). NOT
-    deduplicated across searches — every search is its own SubTask (same-type
-    SubTasks run multiple times with different content, each must be retained).
-    Papers are deduped by lowercased ``link`` (the normalized URL/DOI); a
-    re-search of the same paper only bumps ``retrieved_at`` and
-    ``retrieval_count``. Each Paper gets a ``SubTask -produces-> Paper`` edge.
-    All writes are MERGE; safe to retry.
+    **Unified write ticket**: the same payload shape covers literature
+    searches (Paper products), web searches (WebPage), and database searches
+    (DbRecord), so the broker/recorder can build one work-order regardless of
+    tool family. This is the only tool-call write path (the legacy
+    ``upsert_mcp_search`` was retired; ``upsert_execution`` keeps the
+    run_python/artifact path). Per product ``product_type`` the function
+    fans out to one of three batches:
 
-    ``parent_subagent_id`` (subagent context) reshapes the write exactly like
-    ``upsert_execution``: a *child* SubTask
-    ``subtask:subagent:<id>:exec:<invocation_id>`` (task_type=literature_search)
-    is built, ``contains`` links the subagent scope to it, and produces runs
-    ``child → Paper`` (the scope carries no papers). The child stays out of the
-    session temporal chain. Main-agent context (``None``) is unchanged.
+    - ``paper`` — session-scoped (session_id, link) MERGE,
+      retrieval_count bumps on re-search;
+    - ``web_page`` — WebPage MERGEd on the key the record carries: an
+      identifier-bearing record (llm-wiki's wiki path) keys on
+      ``(session_id, identifier)``; a url-only record (web_search) keys on
+      ``(session_id, url)``. Two separate UNWIND batches run because the
+      merge keys differ. A product may carry ``content_hash`` (the page body's
+      address in the CAS data pool — the text is never stored on the node);
+      ON MATCH uses COALESCE so a hash-less re-search after a fetch keeps the
+      existing body, and ``has_full_content`` is the boolean flag the read
+      side gates the body view on;
+    - ``db_record`` — DbRecord MERGEd on the composite
+      ``(session_id, source, identifier)`` (uniprot/pdb/…). The ``source``
+      field participates only in the dedup key — the UI never renders it.
+
+    ``parent_subagent_id`` (subagent context) reshapes the write: a *child*
+    ToolCall ``subtask:subagent:<id>:exec:<task_id>`` is built, ``contains``
+    links the subagent scope to it, and produces runs ``child → product``.
+    The child stays out of the session temporal chain. Main-agent context
+    (``None``) is unchanged.
     """
     driver = handle()
     if not driver.is_reachable():
-        log.warning("upsert_mcp_search skipped: Neo4j not reachable (invocation=%s session=%s)",
-                    invocation_id, session_id)
+        log.warning("upsert_tool_call skipped: Neo4j not reachable (task_id=%s session=%s)",
+                    task_id, session_id)
         return
 
-    # Only records with a URL contribute a Paper node; records without a URL
-    # are dropped (no unique key to dedup on for link-based dedup).
+    # Normalise the products once into the three per-type batches. The Paper
+    # path needs link normalisation so a
+    # URL/DOI variant collapses to the same Paper node; the WebPage path needs
+    # the same normalisation for its url-only batch (llm-wiki identifiers are
+    # opaque paths so we leave them untouched). Records without the required
+    # key for their product_type are dropped (no Paper without a link, no
+    # DbRecord without an identifier).
     papers: list[dict[str, Any]] = []
-    for rec in records:
-        url = rec.get("url")
-        if not url:
-            continue
-        link = _normalize_link(str(url))
-        if not link:
-            continue
-        papers.append({
-            "link": link,
-            "title": rec.get("title"),
-            "identifier": rec.get("identifier"),
-            "identifier_type": rec.get("identifierType"),
-            "year": rec.get("year"),
-            "authors": rec.get("authors"),
-            "abstract": rec.get("abstract"),
-            "source": rec.get("source"),
-        })
+    pages: list[dict[str, Any]] = []
+    db_records: list[dict[str, Any]] = []
+    for rec in products:
+        product_type = rec.get("product_type")
+        if product_type == "paper":
+            url = rec.get("url") or rec.get("link")
+            if not url:
+                continue
+            link = _normalize_link(str(url))
+            if not link:
+                continue
+            papers.append({
+                "link": link,
+                "title": rec.get("title"),
+                "identifier": rec.get("identifier"),
+                "identifier_type": rec.get("identifier_type"),
+                "year": rec.get("year"),
+                "authors": rec.get("authors"),
+                "abstract": rec.get("abstract"),
+                "source": rec.get("source"),
+            })
+        elif product_type == "web_page":
+            url = rec.get("url")
+            link = _normalize_link(str(url)) if url else None
+            if not link:
+                # url is the sole canonical key for WebPage (llm-wiki derives
+                # its url deterministically from the page path, and web_search
+                # returns a bare external url), so a record without one has no
+                # merge key and is dropped.
+                continue
+            pages.append({
+                "url": link,
+                # identifier is an optional attribute, not a key: llm-wiki
+                # records carry a wiki path, web_search records carry none.
+                "identifier": rec.get("identifier"),
+                "identifier_type": rec.get("identifier_type"),
+                "title": rec.get("title"),
+                "snippet": rec.get("snippet"),
+                "source_refs": rec.get("source_refs"),
+                # Hash of the page body in the CAS data pool; None on
+                # snippet-only products. The Cypher's ON MATCH COALESCE
+                # keeps an existing hash when None arrives (search after
+                # fetch must not drop the body).
+                "content_hash": rec.get("content_hash"),
+            })
+        elif product_type == "db_record":
+            identifier = rec.get("identifier")
+            db_source = rec.get("source")
+            if not identifier or not db_source:
+                # Both keys required by the (session_id, source, identifier)
+                # unique constraint; a record without one is dropped (the
+                # broker/recorder is expected to always send both).
+                continue
+            url = rec.get("url")
+            normalised_url = _normalize_link(str(url)) if url else None
+            record: dict[str, Any] = {
+                "source": db_source,
+                "identifier": identifier,
+                "identifier_type": rec.get("identifier_type"),
+                "title": rec.get("title"),
+                "snippet": rec.get("snippet"),
+            }
+            if normalised_url:
+                record["url"] = normalised_url
+            db_records.append(record)
 
-    if not papers:
-        log.info("upsert_mcp_search: invocation=%s had no records with a URL; writing SubTask only",
-                 invocation_id)
+    if not papers and not pages and not db_records:
+        log.info("upsert_tool_call: task_id=%s had no products with the required keys; writing ToolCall only",
+                 task_id)
 
-    # Subagent child path: this search ran inside a subagent → child ToolCall
-    # (real task_type=literature_search) hung off the scope via contains, with
-    # produces child→Paper.
+    # Subagent child path: this tool call ran inside a subagent → child ToolCall
+    # hung off the scope via contains, with produces child→product.
     if parent_subagent_id is not None:
-        _upsert_mcp_search_child(
+        _upsert_tool_call_child(
             driver=driver,
-            invocation_id=invocation_id,
+            task_id=task_id,
             session_id=session_id,
             turn_id=turn_id,
-            source=source,
+            tool_name=tool_name,
             tool_type=tool_type,
+            source=source,
+            status=status,
+            result_count=result_count,
             papers=papers,
+            pages=pages,
+            db_records=db_records,
             parent_subagent_id=parent_subagent_id,
         )
         return
 
-    task_id = f"subtask:mcp:{invocation_id}"
-    log.debug("upsert_mcp_search starting: invocation=%s session=%s papers=%d",
-              invocation_id, session_id, len(papers))
+    log.debug("upsert_tool_call starting: task_id=%s session=%s papers=%d pages=%d "
+              "db_records=%d",
+              task_id, session_id, len(papers), len(pages),
+              len(db_records))
 
     try:
         with driver.session() as session:
-            # ToolCall (auto-inferred, one per MCP search; NOT deduped). seq
+            # ToolCall (auto-inferred, one per tool call; NOT deduped). seq
             # assigned once (ON CREATE) so the temporal chain orders by creation.
             seq = _next_session_seq(session, session_id)
             session.run(
                 """
                 MERGE (st:ToolCall {task_id: $task_id})
-                  ON CREATE SET st.session_id  = $session_id,
-                                st.status     = $status,
-                                st.task_type  = 'literature_search',
-                                st.source     = $source,
-                                st.tool_type  = $tool_type,
-                                st.created_at = datetime(),
-                                st.finished_at = datetime(),
+                  ON CREATE SET st.session_id    = $session_id,
+                                st.status       = $status,
+                                st.tool_type    = $tool_type,
+                                st.tool_name    = $tool_name,
+                                st.source       = $source,
+                                st.created_at   = datetime(),
+                                st.finished_at  = datetime(),
                                 st.result_count = $result_count,
-                                st.seq        = $seq
+                                st.seq          = $seq
+                  ON MATCH  SET st.result_count = $result_count
                 """,
                 task_id=task_id,
                 session_id=session_id,
                 source=source,
                 tool_type=tool_type,
-                result_count=len(papers),
-                status="completed",
+                tool_name=tool_name,
+                result_count=result_count,
+                status=status,
                 seq=seq,
             ).consume()
 
-            # Temporal-chain fallback: when this session has no
-            # explicit dependency chain yet, link its auto-inferred SubTasks
-            # (execution/mcp_search) by finished_at into a linear next chain,
-            # only adding edges between consecutive orphans. Idempotent.
             _link_subtasks_by_finish_time(session, session_id)
 
-            # Batch upsert all Papers in one Cypher (UNWIND). Papers are scoped
-            # per session (MERGE on session_id + link) so a session's subgraph
-            # always shows every paper it retrieved, even if another session
-            # searched the same URL first — cross-session sharing of a single
-            # node made papers invisible to all but the first session via the
-            # session_id filter in get_subgraph. Re-search within the same
-            # session bumps retrieval_count.
             if papers:
                 session.run(
                     """
@@ -754,67 +838,152 @@ def upsert_mcp_search(
                     task_id=task_id,
                 ).consume()
 
-        log.info("upsert_mcp_search done: invocation=%s session=%s wrote 1 SubTask + %d Paper(s) + %d produces edges",
-                 invocation_id, session_id, len(papers), len(papers))
+            # WebPage keys on url alone. llm-wiki derives its url
+            # deterministically from the page path (so the same page always
+            # lands on the same node) and web_search returns a bare external
+            # url; both share the (session_id, url) unique key, so a single
+            # MERGE batch covers both. identifier is an optional attribute.
+            # The ON MATCH COALESCE fills it (and the other optional
+            # attributes) when a search-first node later gets a fetch carrying
+            # the wiki path — without it a search→fetch pair would merge onto
+            # the url-only node and the identifier would never land, leaving
+            # the node id stuck on "url:…" and chip/evidence lookups by bare
+            # identifier unable to resolve.
+            if pages:
+                session.run(
+                    """
+                    UNWIND $pages AS page
+                    MERGE (w:WebPage { session_id: $session_id, url: page.url })
+                      ON CREATE SET w.identifier      = page.identifier,
+                                    w.identifier_type = page.identifier_type,
+                                    w.title           = page.title,
+                                    w.snippet         = page.snippet,
+                                    w.source_refs     = page.source_refs,
+                                    w.content_hash    = page.content_hash,
+                                    w.has_full_content = (page.content_hash IS NOT NULL),
+                                    w.retrieval_count = 1,
+                                    w.created_at      = datetime()
+                      ON MATCH SET  w.retrieved_at     = datetime(),
+                                    w.retrieval_count  = coalesce(w.retrieval_count, 0) + 1,
+                                    w.identifier       = coalesce(w.identifier, page.identifier),
+                                    w.identifier_type  = coalesce(w.identifier_type, page.identifier_type),
+                                    w.title            = coalesce(w.title, page.title),
+                                    w.snippet          = coalesce(w.snippet, page.snippet),
+                                    w.source_refs      = coalesce(w.source_refs, page.source_refs),
+                                    w.content_hash     = coalesce(page.content_hash, w.content_hash),
+                                    w.has_full_content = (page.content_hash IS NOT NULL)
+                                                         OR coalesce(w.has_full_content, false)
+                    WITH page, w
+                    MERGE (st:ToolCall { task_id: $task_id })
+                    MERGE (st)-[:produces]->(w)
+                    """,
+                    pages=pages,
+                    session_id=session_id,
+                    task_id=task_id,
+                ).consume()
+
+            if db_records:
+                session.run(
+                    """
+                    UNWIND $records AS rec
+                    MERGE (d:DbRecord { session_id: $session_id, source: rec.source, identifier: rec.identifier })
+                      ON CREATE SET d.identifier_type = rec.identifier_type,
+                                    d.url             = rec.url,
+                                    d.title           = rec.title,
+                                    d.snippet         = rec.snippet,
+                                    d.retrieval_count = 1,
+                                    d.created_at      = datetime()
+                      ON MATCH SET   d.retrieved_at    = datetime(),
+                                    d.retrieval_count = coalesce(d.retrieval_count, 0) + 1
+                    WITH rec, d
+                    MERGE (st:ToolCall { task_id: $task_id })
+                    MERGE (st)-[:produces]->(d)
+                    """,
+                    records=db_records,
+                    session_id=session_id,
+                    task_id=task_id,
+                ).consume()
+
+        log.info("upsert_tool_call done: task_id=%s session=%s wrote 1 ToolCall + %d paper(s) "
+                 "+ %d web_page(s) + %d db_record(s)",
+                 task_id, session_id, len(papers),
+                 len(pages), len(db_records))
     except Exception as exc:
-        log.exception("upsert_mcp_search failed: invocation=%s session=%s: %s",
-                       invocation_id, session_id, exc)
+        log.exception("upsert_tool_call failed: task_id=%s session=%s: %s",
+                      task_id, session_id, exc)
         raise
 
 
-def _upsert_mcp_search_child(
+def _upsert_tool_call_child(
     *,
     driver: Any,
-    invocation_id: str,
+    task_id: str,
     session_id: str,
     turn_id: str,
-    source: str,
+    tool_name: str,
     tool_type: str,
+    source: str | None,
+    status: str,
+    result_count: int,
     papers: list[dict[str, Any]],
+    pages: list[dict[str, Any]],
+    db_records: list[dict[str, Any]],
     parent_subagent_id: str,
 ) -> None:
-    """Build a subagent child ToolCall for one MCP literature search.
+    """Build a subagent child ToolCall for one tool call (unified write path).
 
     Mirrors ``_upsert_execution_child``: child
-    ``subtask:subagent:<id>:exec:<invocation_id>`` (task_type=literature_search),
-    ``contains`` scope→child, ``produces`` child→Paper. The scope is owned by
+    ``subtask:subagent:<id>:exec:<invocation id>``, ``contains`` scope→child,
+    ``produces`` child→{Paper, WebPage, DbRecord}. The three product batches
+    use the same Cypher as the main path. The scope is owned by
     ``upsert_subagent`` and only matched here. The child stays out of the
     session temporal chain.
     """
     scope_task_id = f"subtask:subagent:{parent_subagent_id}"
-    task_id = f"subtask:subagent:{parent_subagent_id}:exec:{invocation_id}"
-    log.debug("upsert_mcp_search (child) starting: invocation=%s session=%s papers=%d scope=%s",
-              invocation_id, session_id, len(papers), scope_task_id)
+    # task_id arrives as the caller-side id ("subtask:mcp:<invocation id>"
+    # from the TS broker, or a bare invocation id); the child-id contract is
+    # subtask:subagent:<sub>:exec:<invocation id> — the same shape the
+    # execution child path writes — so strip one optional "subtask:<scheme>:"
+    # prefix instead of nesting schemes ("exec:subtask:mcp:<id>").
+    parts = task_id.split(":", 2)
+    invocation_ref = parts[2] if parts[0] == "subtask" and len(parts) == 3 else task_id
+    child_task_id = f"subtask:subagent:{parent_subagent_id}:exec:{invocation_ref}"
+    log.debug("upsert_tool_call (child) starting: task_id=%s session=%s papers=%d "
+              "pages=%d db_records=%d scope=%s",
+              task_id, session_id, len(papers), len(pages),
+              len(db_records), scope_task_id)
     try:
         with driver.session() as session:
             seq = _next_session_seq(session, session_id)
             session.run(
                 """
                 MERGE (st:ToolCall {task_id: $task_id})
-                  ON CREATE SET st.session_id        = $session_id,
-                                st.status           = 'completed',
-                                st.task_type        = 'literature_search',
+                  ON CREATE SET st.session_id         = $session_id,
+                                st.status            = $status,
+                                st.tool_type         = $tool_type,
+                                st.tool_name         = $tool_name,
+                                st.source            = $source,
                                 st.parent_subtask_id = $parent_subtask_id,
-                                st.source           = $source,
-                                st.tool_type        = $tool_type,
-                                st.turn_id          = $turn_id,
-                                st.created_at       = datetime(),
-                                st.finished_at      = datetime(),
+                                st.turn_id           = $turn_id,
+                                st.created_at        = datetime(),
+                                st.finished_at       = datetime(),
                                 st.result_count      = $result_count,
-                                st.seq              = $seq
+                                st.seq               = $seq
                   ON MATCH  SET st.result_count = $result_count
                 """,
-                task_id=task_id,
+                task_id=child_task_id,
                 session_id=session_id,
                 parent_subtask_id=scope_task_id,
                 source=source,
                 tool_type=tool_type,
+                tool_name=tool_name,
                 turn_id=turn_id,
-                result_count=len(papers),
+                status=status,
+                result_count=result_count,
                 seq=seq,
             ).consume()
             # Rebuild the scope's internal child chain (contains→first,
-            # next→rest) — shared with the execution child writer.
+            # next→rest) — shared with the execution / mcp_search child writers.
             _link_scope_children(session, session_id, scope_task_id)
 
             if papers:
@@ -839,23 +1008,72 @@ def _upsert_mcp_search_child(
                     """,
                     papers=papers,
                     session_id=session_id,
-                    task_id=task_id,
+                    task_id=child_task_id,
                 ).consume()
 
-        log.info("upsert_mcp_search (child) done: invocation=%s session=%s scope=%s wrote child + %d Paper(s)",
-                 invocation_id, session_id, scope_task_id, len(papers))
+            if pages:
+                session.run(
+                    """
+                    UNWIND $pages AS page
+                    MERGE (w:WebPage { session_id: $session_id, url: page.url })
+                      ON CREATE SET w.identifier      = page.identifier,
+                                    w.identifier_type = page.identifier_type,
+                                    w.title           = page.title,
+                                    w.snippet         = page.snippet,
+                                    w.source_refs     = page.source_refs,
+                                    w.content_hash    = page.content_hash,
+                                    w.has_full_content = (page.content_hash IS NOT NULL),
+                                    w.retrieval_count = 1,
+                                    w.created_at      = datetime()
+                      ON MATCH SET  w.retrieved_at     = datetime(),
+                                    w.retrieval_count  = coalesce(w.retrieval_count, 0) + 1,
+                                    w.identifier       = coalesce(w.identifier, page.identifier),
+                                    w.identifier_type  = coalesce(w.identifier_type, page.identifier_type),
+                                    w.title            = coalesce(w.title, page.title),
+                                    w.snippet          = coalesce(w.snippet, page.snippet),
+                                    w.source_refs      = coalesce(w.source_refs, page.source_refs),
+                                    w.content_hash     = coalesce(page.content_hash, w.content_hash),
+                                    w.has_full_content = (page.content_hash IS NOT NULL)
+                                                         OR coalesce(w.has_full_content, false)
+                    WITH page, w
+                    MERGE (st:ToolCall { task_id: $task_id })
+                    MERGE (st)-[:produces]->(w)
+                    """,
+                    pages=pages,
+                    session_id=session_id,
+                    task_id=child_task_id,
+                ).consume()
+
+            if db_records:
+                session.run(
+                    """
+                    UNWIND $records AS rec
+                    MERGE (d:DbRecord { session_id: $session_id, source: rec.source, identifier: rec.identifier })
+                      ON CREATE SET d.identifier_type = rec.identifier_type,
+                                    d.url             = rec.url,
+                                    d.title           = rec.title,
+                                    d.snippet         = rec.snippet,
+                                    d.retrieval_count = 1,
+                                    d.created_at      = datetime()
+                      ON MATCH SET   d.retrieved_at    = datetime(),
+                                    d.retrieval_count = coalesce(d.retrieval_count, 0) + 1
+                    WITH rec, d
+                    MERGE (st:ToolCall { task_id: $task_id })
+                    MERGE (st)-[:produces]->(d)
+                    """,
+                    records=db_records,
+                    session_id=session_id,
+                    task_id=child_task_id,
+                ).consume()
+
+        log.info("upsert_tool_call (child) done: task_id=%s session=%s scope=%s wrote child + "
+                 "%d paper(s) + %d web_page(s) + %d db_record(s)",
+                 task_id, session_id, scope_task_id, len(papers),
+                 len(pages), len(db_records))
     except Exception as exc:
-        log.exception("upsert_mcp_search (child) failed: invocation=%s session=%s: %s",
-                       invocation_id, session_id, exc)
+        log.exception("upsert_tool_call (child) failed: task_id=%s session=%s: %s",
+                      task_id, session_id, exc)
         raise
-
-
-# Normalise a subagent's lifecycle status onto the graph's vocabulary. timed_out
-# collapses to ``failed`` (one red label) but is tagged separately in
-# ``failure_reason`` so it is not confused with a plain error. cancelled and
-# completed pass through verbatim. running is only ever written by the start
-# phase (status="running" never reaches here from a terminal call).
-_SUBAGENT_TERMINAL_STATUSES = {"completed", "failed", "cancelled", "timed_out"}
 
 
 def _normalise_subagent_status(status: str) -> tuple[str, str | None]:
@@ -913,7 +1131,7 @@ def upsert_subagent(
     the placeholder the run itself publishes) so the scope node never carries
     an empty summary. The scope never carries products — each internal toolcall
     is a separate child ToolCall built by ``upsert_execution`` /
-    ``upsert_mcp_search`` (with ``parent_subagent_id``) and hung off this scope
+    ``upsert_tool_call`` (with ``parent_subagent_id``) and hung off this scope
     via ``contains``. The scope does join the session temporal chain (ordered
     by ``seq``); its children do not.
     """
@@ -1047,7 +1265,7 @@ def _link_scope_children(session: Any, session_id: str, scope_task_id: str) -> N
 
     Children are ``:ToolCall`` nodes carrying ``parent_subtask_id`` pointing at
     the scope's ``task_id`` (written by ``_upsert_execution_child`` /
-    ``_upsert_mcp_search_child``). The scope itself is a ``:Task`` (built by
+    ``_upsert_tool_call_child``). The scope itself is a ``:Task`` (built by
     ``upsert_subagent``) — matched, not MERGEd here. Idempotent: it first
     deletes this scope's existing ``scope_chain`` ``contains`` + ``next``
     edges and rebuilds the whole chain. A scope with 0 or 1 children produces
@@ -1382,18 +1600,29 @@ def declare_evidence(
     confidence: str,
     strength: str,
     source_file_id: str | None = None,
+    source_webpage_link: str | None = None,
 ) -> str | None:
-    """CREATE one Evidence + ``extracts`` (Paper/PDF-SourceFile → Evidence).
+    """CREATE one Evidence + ``extracts`` (Paper/PDF-SourceFile/WebPage → Evidence).
 
-    Two source branches, mutually exclusive:
+    Three source branches, mutually exclusive:
 
     - ``source_paper_link`` set → the Paper branch (legacy): MATCH the Paper
       by normalized link and store ``source_paper_link`` on the Evidence
-      node. ``source_file_id`` is left null.
+      node. ``source_file_id`` and ``source_webpage_link`` are left null.
     - ``source_file_id`` set → the SourceFile-PDF branch (block 3): MATCH the
       SourceFile by ``file_id`` and store ``source_file_id`` on the Evidence
       node (NOT ``source_paper_link`` — see omission-1 note below).
-      ``source_paper_link`` is left null.
+      ``source_paper_link`` and ``source_webpage_link`` are left null.
+    - ``source_webpage_link`` set → the WebPage branch: MATCH the WebPage by
+      ``url`` OR ``identifier`` (web_search vs llm-wiki) and store the matched
+      node's own key as ``source_webpage_link`` on the Evidence node.
+      ``source_paper_link`` and ``source_file_id`` are left null. The value
+      arrives raw (the LLM's input): the Cypher matches both the raw and the
+      ``_normalize_link`` form (url variants normalize onto the upserted key;
+      opaque llm-wiki identifiers only match raw). The server gate rejects
+      pages without a ``content_hash`` (search returns snippets only) with
+      ``source_webpage_no_content``; the chain lights up when a fetch/get_page
+      tool lands the body in the CAS data pool and the upsert writes its hash.
 
     The caller (server.py /persist/evidence) validates the source exists AND
     enforces that a SourceFile used here is a PDF (``media_type=
@@ -1401,7 +1630,9 @@ def declare_evidence(
     with ``source_file_not_pdf`` because data files are not "arguments
     extracted from a document" and must instead directly support a Claim via
     ``declare_claim``'s ``cites_source_file_refs``. This function assumes the
-    caller already did that media_type gate.
+    caller already did that media_type gate. The WebPage branch similarly
+    assumes the caller ran the content gate (rejects with
+    ``source_webpage_no_content`` before this function is called).
 
     Omission-1 note: ``source_file_id`` is stored in its own field, never in
     ``source_paper_link``. ``_normalize_link`` would mangle a file_id
@@ -1422,18 +1653,19 @@ def declare_evidence(
         return None
 
     link = _normalize_link(source_paper_link) if source_paper_link else None
-    log.debug("declare_evidence starting: evidence=%s session=%s paper=%s source_file=%s",
-              evidence_id, session_id, link, source_file_id or "-")
+    log.debug("declare_evidence starting: evidence=%s session=%s paper=%s source_file=%s webpage=%s",
+              evidence_id, session_id, link, source_file_id or "-",
+              source_webpage_link or "-")
     try:
         with driver.session() as session:
             # Branch in Python, not Cypher: the caller (server.py) already
-            # 422'd on both-empty / both-set, so exactly one of (link,
-            # source_file_id) is set here. The two branches CREATE the same
-            # Evidence shape — only source_paper_link / source_file_id differ
-            # and which source the extracts edge points from — so keeping them
-            # as two focused Cypher strings is clearer than a parameter-routed
-            # single query and avoids the subquery-variable-shadowing that a
-            # UNION/CALL approach would need.
+            # 422'd on all-empty / multi-set, so exactly one of (link,
+            # source_file_id, source_webpage_link) is set here. The three
+            # branches CREATE the same Evidence shape — only the source
+            # fields differ and which source the extracts edge points from
+            # — so keeping them as focused Cypher strings is clearer than a
+            # parameter-routed single query and avoids the subquery-variable
+            # -shadowing that a UNION/CALL approach would need.
             if source_file_id:
                 # SourceFile-PDF branch: MATCH by file_id, store source_file_id
                 # (NOT source_paper_link — see omission-1 note in the docstring).
@@ -1441,10 +1673,11 @@ def declare_evidence(
                     """
                     MATCH (sf:SourceFile { file_id: $source_file_id })
                     CREATE (e:Evidence {
-                      evidence_id:       $evidence_id,
-                      content:           $content,
+                      evidence_id:        $evidence_id,
+                      content:            $content,
                       source_paper_link:  null,
                       source_file_id:     $source_file_id,
+                      source_webpage_link: null,
                       locator:            $locator,
                       evidence_type:      $evidence_type,
                       confidence:        $confidence,
@@ -1464,6 +1697,54 @@ def declare_evidence(
                     strength=strength,
                     source_file_id=source_file_id,
                 ).consume()
+            elif source_webpage_link:
+                # WebPage branch: MATCH by url OR identifier — WebPage has
+                # two unique keys depending on which the upsert wrote
+                # (web_search carries a url only; llm-wiki carries an
+                # identifier that's the wiki path). ``source_webpage_link``
+                # arrives as the LLM's raw input, so match BOTH it and its
+                # _normalize_link form: a url variant (trailing slash etc.)
+                # resolves via the normalized form (the upsert stores
+                # normalized urls), an opaque wiki identifier resolves via
+                # the raw form (normalizing it would mangle it into an
+                # https:// URL that matches nothing). Evidence.source_webpage
+                # _link stores the matched node's own key (coalesce(url,
+                # identifier)) — the most faithful pointer back to the page;
+                # the other two source fields are explicit null so the
+                # Evidence shape is uniform across branches. A MATCH that
+                # finds no node is a silent no-op in Cypher; the server's
+                # source_webpage_not_found gate ran first, so this only
+                # happens on a race (node deleted between gate and write).
+                session.run(
+                    """
+                    MATCH (w:WebPage { session_id: $session_id })
+                    WHERE w.url IN [$nlink, $raw] OR w.identifier IN [$nlink, $raw]
+                    CREATE (e:Evidence {
+                      evidence_id:        $evidence_id,
+                      content:            $content,
+                      source_paper_link:  null,
+                      source_file_id:     null,
+                      source_webpage_link: coalesce(w.url, w.identifier),
+                      locator:            $locator,
+                      evidence_type:      $evidence_type,
+                      confidence:        $confidence,
+                      strength:           $strength,
+                      session_id:         $session_id,
+                      created_at:         datetime()
+                    })
+                    MERGE (w)-[:extracts]->(e)
+                    RETURN e.evidence_id AS evidence_id
+                    """,
+                    evidence_id=evidence_id,
+                    session_id=session_id,
+                    content=content,
+                    nlink=_normalize_link(source_webpage_link),
+                    raw=source_webpage_link,
+                    locator=locator,
+                    evidence_type=evidence_type,
+                    confidence=confidence,
+                    strength=strength,
+                ).consume()
             else:
                 # Paper branch: MATCH by (session_id, link), store the
                 # normalized link (legacy behavior, unchanged).
@@ -1471,10 +1752,11 @@ def declare_evidence(
                     """
                     MATCH (p:Paper { session_id: $session_id, link: $link })
                     CREATE (e:Evidence {
-                      evidence_id:       $evidence_id,
-                      content:           $content,
+                      evidence_id:        $evidence_id,
+                      content:            $content,
                       source_paper_link:  $link,
                       source_file_id:     null,
+                      source_webpage_link: null,
                       locator:            $locator,
                       evidence_type:      $evidence_type,
                       confidence:        $confidence,
@@ -1494,8 +1776,9 @@ def declare_evidence(
                     confidence=confidence,
                     strength=strength,
                 ).consume()
-        log.info("declare_evidence done: evidence=%s session=%s paper=%s source_file=%s",
-                 evidence_id, session_id, link or "-", source_file_id or "-")
+        log.info("declare_evidence done: evidence=%s session=%s paper=%s source_file=%s webpage=%s",
+                 evidence_id, session_id, link or "-", source_file_id or "-",
+                 source_webpage_link or "-")
         return evidence_id
     except Exception as exc:
         log.exception("declare_evidence failed: evidence=%s session=%s: %s",
@@ -1515,6 +1798,7 @@ def declare_claim(
     cites_node_ids: list[str],
     cites_artifact_refs: list[dict[str, Any]],
     cites_source_file_refs: list[dict[str, Any]],
+    cites_db_record_refs: list[dict[str, Any]],
     artifact_id: str | None,
     artifact_version: int | None,
 ) -> list[dict[str, Any]]:
@@ -1538,16 +1822,24 @@ def declare_claim(
     extracted from a document", so they skip the Evidence layer). The caller
     (server.py) enforces that only non-PDF SourceFiles take this path (a PDF
     must go via declare_evidence first); this function assumes that gate ran.
+    ``cites_db_record_refs`` is a list of ``{source, identifier}`` dicts for
+    database records (uniprot/pdb/chembl/...) this session retrieved via
+    db_search that directly back the claim — ``DbRecord -[:supports]-> Claim``,
+    mirroring the Artifact path (a curated database record directly backs an
+    assertion, so it skips the Evidence layer the way code-produced artifacts
+    do). DbRecord is keyed on the composite ``(session_id, source, identifier)``,
+    so the cites path passes both fields; the caller (server.py) resolved the
+    LLM-supplied alias value to this triple and 422'd any ambiguity.
     ``artifact_id`` + ``artifact_version`` (the report Artifact + its version)
     build the ``stated_in`` edge (Claim → report Artifact) so the graph can
     navigate "which claim is stated in which report"; the caller verified the
     Artifact exists.
 
     Returns the cited targets ``[{evidence_id?, artifact_id?, version?,
-    file_id?, labels?}]`` so the caller can assemble the chip_map (alias →
-    node) returned to the LLM. The chip_map itself is not persisted here —
-    it lives on the report Artifact version's ``references`` (Node side).
-    Empty list when skipped.
+    file_id?, source?, identifier?, labels?}]`` so the caller can assemble the
+    chip_map (alias → node) returned to the LLM. The chip_map itself is not
+    persisted here — it lives on the report Artifact version's ``references``
+    (Node side). Empty list when skipped.
     """
     driver = handle()
     if not driver.is_reachable():
@@ -1555,9 +1847,10 @@ def declare_claim(
                      claim_id, session_id)
         return []
 
-    log.debug("declare_claim starting: claim=%s session=%s cites=%d art_refs=%d sf_refs=%d artifact=%s",
+    log.debug("declare_claim starting: claim=%s session=%s cites=%d art_refs=%d sf_refs=%d db_refs=%d artifact=%s",
               claim_id, session_id, len(cites_node_ids),
-              len(cites_artifact_refs), len(cites_source_file_refs), artifact_id or "-")
+              len(cites_artifact_refs), len(cites_source_file_refs),
+              len(cites_db_record_refs), artifact_id or "-")
     try:
         with driver.session() as session:
             # MERGE on claim_id (not CREATE) so a retry is idempotent: the
@@ -1617,6 +1910,21 @@ def declare_claim(
                   MERGE (target)-[:supports]->(cl)
                 }
                 WITH cl
+                // cites_db_record_refs: db-search records (uniprot/pdb/chembl/...)
+                // that directly back the claim — DbRecord → Claim (supports), so
+                // it points target → cl. Mirrors the artifact/source_file batches
+                // (a curated database record directly backs an assertion, so it
+                // skips the Evidence layer); an empty list is a no-op (guarded
+                // subquery). Composite key (session_id, source, identifier) — the
+                // caller resolved the LLM-supplied alias value to this triple
+                // and 422'd any ambiguity before we got here.
+                CALL {
+                  WITH cl
+                  UNWIND $cites_db_record_refs AS ref
+                  MATCH (target:DbRecord { session_id: $session_id, source: ref.source, identifier: ref.identifier })
+                  MERGE (target)-[:supports]->(cl)
+                }
+                WITH cl
                 // optional stated_in from the Claim to the report Artifact
                 // (Claim → report Artifact: this claim is stated in this report),
                 // pinned to the report's version. The caller verified the
@@ -1633,6 +1941,8 @@ def declare_claim(
                          artifact_id: cited.artifact_id,
                          version: cited.version,
                          file_id: cited.file_id,
+                         source: cited.source,
+                         identifier: cited.identifier,
                          labels: labels(cited)
                        }) AS cited_targets
                 """,
@@ -1646,6 +1956,7 @@ def declare_claim(
                 cites_node_ids=cites_node_ids,
                 cites_artifact_refs=cites_artifact_refs,
                 cites_source_file_refs=cites_source_file_refs,
+                cites_db_record_refs=cites_db_record_refs,
                 artifact_id=artifact_id,
                 artifact_version=artifact_version,
             ).single())

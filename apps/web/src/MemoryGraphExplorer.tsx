@@ -54,7 +54,7 @@ interface ChainButton {
  * returned nodes/edges ARE the highlight — ``chainEdgeKeys`` just reads them
  * off, it does not re-slice.
  */
-const CHAIN_BUTTONS: Partial<Record<MemoryGraphNodeLabel, ChainButton[]>> = {
+export const CHAIN_BUTTONS: Partial<Record<MemoryGraphNodeLabel, ChainButton[]>> = {
   ResearchGoal: [],
   ToolCall: [],
   Task: [
@@ -78,8 +78,17 @@ const CHAIN_BUTTONS: Partial<Record<MemoryGraphNodeLabel, ChainButton[]>> = {
     { key: "chain.viewCitingClaimForEvidence", kind: "viewCitingClaimForEvidence" },
     { key: "chain.viewCitingArtifactForEvidence", kind: "viewCitingArtifactForEvidence" },
   ],
+  // ``supports``-in reaches four labels (Evidence / Artifact / SourceFile /
+  // DbRecord), so the three citing buttons here are strictly label-filtered
+  // server-side and each carries its OWN i18n key: the batch ``chain_exists``
+  // call is all-or-nothing on unknown kinds (one bad kind 400s the batch and
+  // the BFF catch turns every kind in it false, hiding all of this label's
+  // buttons), so sharing the Artifact section's "chain.viewCitingEvidence" key
+  // would tie this button's fate to an unrelated traversal.
   Claim: [
-    { key: "chain.viewCitingEvidence", kind: "viewCitingEvidenceForClaim" },
+    { key: "chain.viewCitingEvidenceForClaim", kind: "viewCitingEvidenceForClaim" },
+    { key: "chain.viewCitingDbRecordForClaim", kind: "viewCitingDbRecordForClaim" },
+    { key: "chain.viewCitingSourceFileForClaim", kind: "viewCitingSourceFileForClaim" },
     { key: "chain.viewContainingArtifact", kind: "viewContainingArtifact" },
   ],
   Artifact: [
@@ -90,16 +99,31 @@ const CHAIN_BUTTONS: Partial<Record<MemoryGraphNodeLabel, ChainButton[]>> = {
     { key: "chain.viewCitedPaper", kind: "viewCitedPaper" },
     { key: "chain.viewRelatedTask", kind: "viewRelatedTask" },
   ],
+  // No "cited paper" button: a database record has no papers of its own (the
+  // old traversal left the record's neighbourhood on its second hop and landed
+  // on whichever evidence backed the same Claim — see _BUTTON_CHAIN_HOPS in the
+  // sidecar). The claim's own citations are one click further, from the Claim
+  // that viewCitingClaimForDbRecord reaches.
+  DbRecord: [
+    { key: "chain.viewCitingClaimForDbRecord", kind: "viewCitingClaimForDbRecord" },
+    { key: "chain.viewSearchingTaskForDbRecord", kind: "viewSearchingTaskForDbRecord" },
+  ],
+  WebPage: [
+    { key: "chain.viewExtractedEvidenceForWebPage", kind: "viewExtractedEvidenceForWebPage" },
+    { key: "chain.viewCitingClaimForWebPage", kind: "viewCitingClaimForWebPage" },
+    { key: "chain.viewCitingArtifactForWebPage", kind: "viewCitingArtifactForWebPage" },
+    { key: "chain.viewSearchingTaskForWebPage", kind: "viewSearchingTaskForWebPage" },
+  ],
 };
 
-const NODE_LABELS: MemoryGraphNodeLabel[] = ["ResearchGoal", "Task", "ToolCall", "Paper", "Evidence", "Claim", "Code", "Artifact", "SourceFile"];
+export const NODE_LABELS: MemoryGraphNodeLabel[] = ["ResearchGoal", "Task", "ToolCall", "Paper", "Evidence", "Claim", "Code", "Artifact", "SourceFile", "DbRecord", "WebPage"];
 // Edge types shown as Relationship filter chips. MUST stay in sync with
 // MemoryGraphEdgeType (packages/schema) + EDGE_COLORS (MemoryGraphCanvas) —
 // a type listed here but missing from EDGE_COLORS renders a grey chip, and a
 // a type in the schema but missing here silently disappears from the filter
 // (the count is computed from graph.edges, then filtered by this list). Keep
 // the order aligned with EDGE_COLORS so chip colors read top-to-bottom.
-// ``contains`` is the subagent scope→child spine (PR1); it surfaces as a
+// ``contains`` is the subagent scope→child spine; it surfaces as a
 // chip so the user can isolate the scope subtree when a scope is expanded.
 // ``feeds`` links an uploaded SourceFile to its ResearchGoal (upload mirror);
 // it surfaces as a chip so the user can isolate the uploaded-files subtree.
@@ -607,7 +631,7 @@ export function mergeChainScopeExpansions(
 }
 
 /**
- * A child's task_id embeds its scope's id via PR1's ``:exec:`` shape
+ * A child's task_id embeds its scope's id via the ``:exec:`` shape
  * ``subtask:subagent:<scopeId>:exec:<execId>``. Recover the scope id (the
  * prefix before ``:exec:``) so a child node whose ``parent_subtask_id`` is
  * absent can still be attributed to its owning scope for the fold. Returns
@@ -619,11 +643,12 @@ function childScopeFromId(id: string): string | undefined {
 }
 
 /**
- * The owning scope id of a child node — ``extra.parent_subtask_id`` when PR1
- * wrote it, otherwise recovered from the ``:exec:`` task_id shape. Used both
- * to attribute a child to its scope for the fold (mergeExpansions) and to
- * group children per scope for the synthesised ``next`` chain. Returns
- * ``undefined`` when the node is not a scope child (no parent, no marker).
+ * The owning scope id of a child node — ``extra.parent_subtask_id`` when
+ * present, otherwise recovered from the ``:exec:`` task_id shape. Used
+ * both to attribute a child to its scope for the fold (mergeExpansions)
+ * and to group children per scope for the synthesised ``next`` chain.
+ * Returns ``undefined`` when the node is not a scope child (no parent, no
+ * marker).
  */
 function childParentScope(node: { id: string; extra?: Record<string, unknown> }): string | undefined {
   const explicit = node.extra?.parent_subtask_id;
@@ -667,6 +692,31 @@ export function buildScopeChildCounts(nodes: readonly MemoryGraphNode[]): Map<st
 }
 
 /**
+ * Whether the entry-focus effect should run: there is a node the caller asked
+ * the explorer to land on (``initialNodeId``) and it has not been focused yet.
+ *
+ * ``autoChain`` is deliberately NOT part of this decision. It used to gate the
+ * focus, so a caller that named an entry node without also setting autoChain
+ * got ``selectedId = <node>`` on a canvas where ``projectToCanvas`` had folded
+ * that node away — the node was not in ``graph.nodes``, so the detail card
+ * (``graph.nodes.find(id === selectedId)``) never rendered and the click read
+ * as "nothing happened". That is exactly what a report chip jump
+ * ([dbrecord1]/[evidence1] → App.tsx's handleChipClick) does: it passes
+ * ``initialNodeId`` alone. A named entry node is now self-sufficient — the
+ * focus effect keeps it alive via ``extraKeepIds`` (see projectToCanvas)
+ * whatever else the caller passed.
+ *
+ * ``autoChainDone`` is the re-fire guard: the effect marks itself done on every
+ * decision (including "node not in the subgraph → abort"), so a graph poll
+ * cannot re-enter it. The prop-change effect clears it when the caller names a
+ * different entry node while the explorer is open, which is what makes a second
+ * chip click focus the new node.
+ */
+export function shouldFocusEntryNode(initialNodeId: string | undefined, autoChainDone: boolean): boolean {
+  return Boolean(initialNodeId) && !autoChainDone;
+}
+
+/**
  * Full-screen memory-graph explorer.
  *
  * Left column: the product of the selected node. For Artifact nodes this is
@@ -698,6 +748,10 @@ export function MemoryGraphExplorer({
    * just focuses the selected node; the user picks the chain button manually).
    * Accepted but ignored. */
   initialChainKind?: "full" | "task" | "artifact";
+  /** Marker for the modal entry path, used only by the first-open tour (step-1
+   * copy + "wait until the entry has settled before overlaying the canvas").
+   * The entry NODE focus is driven by ``initialNodeId`` alone — see
+   * ``shouldFocusEntryNode``. */
   autoChain?: boolean;
   onClose: () => void;
   onError: (message: string) => void;
@@ -974,8 +1028,9 @@ export function MemoryGraphExplorer({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  // Entry focus (autoChain path): when opened from the artifact/evidence modals
-  // the explorer mounts with ``selectedId = initialNodeId`` (the entry node is
+  // Entry focus: when opened from the artifact/evidence modals OR from a
+  // report chip jump (App.tsx's handleChipClick → pendingMemoryNode) the
+  // explorer mounts with ``selectedId = initialNodeId`` (the entry node is
   // pre-selected and visible in the skeleton). Rather than fetching a chain —
   // which landed a narrow single-edge highlight that read as "just a ring" —
   // the entry now simply highlights the selected node and dims everything else
@@ -984,7 +1039,7 @@ export function MemoryGraphExplorer({
   // picks the chain themselves by clicking a per-node button (clearing the
   // focus first), so the full-graph → chain-overlay transition is explicit.
   useEffect(() => {
-    if (!autoChain || !initialNodeId || autoChainDone) return;
+    if (!shouldFocusEntryNode(initialNodeId, autoChainDone)) return;
     // Mark done the moment we've decided what to do, whether the entry node is
     // in the folded view (focus it) or not (abort). Aborting without marking
     // done would re-fire this on every graph change.
@@ -1000,7 +1055,7 @@ export function MemoryGraphExplorer({
     if (!node) return;
     setFocusNodeId(initialNodeId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoChain, initialNodeId, autoChainDone, subgraph]);
+  }, [initialNodeId, autoChainDone, subgraph]);
 
   // Only offer categories that actually occur, with their counts.
   const labelCounts = useMemo(() => {
@@ -1071,9 +1126,12 @@ export function MemoryGraphExplorer({
   const storage = typeof window !== "undefined" ? window.localStorage : undefined;
 
   const [tourOpen, setTourOpen] = useState(false);
-  // The entry path decides step-1 copy: card (right-rail, no autoChain) lands
-  // on the spine; chain (product/evidence modal, autoChain) lands on a chain.
-  const tourEntry: "card" | "chain" = autoChain ? "chain" : "card";
+  // The entry path decides step-1 copy: card (right-rail, no entry node) lands
+  // on the spine; chain (product/evidence modal or report chip jump) lands on a
+  // single node in focus+fog. Keyed on "did the caller name an entry node"
+  // rather than on autoChain alone, so a chip jump — which passes initialNodeId
+  // without autoChain — gets the copy that matches what is on screen.
+  const tourEntry: "card" | "chain" = autoChain || initialNodeId ? "chain" : "card";
 
   // Pop the tour on first open only (no localStorage flag), but for the chain
   // entry wait until autoChain has settled (the chain fetch landed / found
@@ -1170,7 +1228,8 @@ export function MemoryGraphExplorer({
     // references, not chips, so they never reach this handler.
     const label = reference.kind === "artifact" ? "Artifact"
       : reference.kind === "evidence" ? "Evidence"
-      : reference.kind === "sourcefile" ? "SourceFile" : null;
+      : reference.kind === "sourcefile" ? "SourceFile"
+      : reference.kind === "dbrecord" ? "DbRecord" : null;
     if (!label) return;
     const matchNode = (nodes: readonly MemoryGraphNode[]) => nodes.find((node) => {
       if (node.label !== label) return false;
@@ -1180,8 +1239,9 @@ export function MemoryGraphExplorer({
         return reference.version == null
           || node.extra?.version === reference.version;
       }
-      // Evidence (id=evidence_id) and SourceFile (id=file_id) both key their
-      // node identity on the chip's reference.id directly.
+      // Evidence (id=evidence_id), SourceFile (id=file_id) and DbRecord
+      // (id=identifier — _ID_FIELDS["DbRecord"] in the sidecar) all key
+      // their node identity on the chip's reference.id directly.
       return node.id === reference.id;
     });
     const target = matchNode(graph.nodes);

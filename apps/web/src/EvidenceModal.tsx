@@ -15,10 +15,12 @@
 // Detail viewer for an Evidence node opened from a report chip. Mirrors the
 // ArtifactModal surface so a reader's muscle memory carries over: a three-tab
 // bar (Preview / Provenance / View chain) where Preview shows the evidence
-// itself, Provenance shows the Paper(s) it was extracted from, and View chain
-// opens the memory graph explorer anchored on this evidence node. Uses the
-// same artifact-modal-* chrome so the panel is visually indistinguishable from
-// the artifact viewer while staying a distinct, non-artifact surface.
+// itself, Provenance shows what it was extracted from (a Paper, a SourceFile,
+// or a WebPage — all three reach an Evidence over the same ``extracts`` edge),
+// and View chain opens the memory graph explorer anchored on this evidence
+// node. Uses the same artifact-modal-* chrome so the panel is visually
+// indistinguishable from the artifact viewer while staying a distinct,
+// non-artifact surface.
 
 import { lazy, Suspense, useEffect, useState } from "react";
 
@@ -27,6 +29,7 @@ import type { MemoryGraphChainResult, MemoryGraphNode, MemorySubgraph } from "@s
 import type { ApiClient } from "./api.js";
 import { ErrorBoundary } from "./ErrorBoundary.js";
 import { firstContentValue, humanizeKey, partitionEvidenceExtra } from "./NodeField.js";
+import { WebPageDetail } from "./MemoryGraphProduct.js";
 import { translateActive, useLocale } from "./i18n/index.js";
 
 // Memory graph explorer is heavy; lazy-load to avoid a circular import with
@@ -186,6 +189,14 @@ export function EvidenceModal({ client, evidenceId, onClose, onOpenEvolveRun, on
   // Paper; the UI renders each kind in its own card so the user sees what
   // the evidence was actually drawn from.
   const [sourceFiles, setSourceFiles] = useState<MemoryGraphNode[]>([]);
+  // WebPage nodes upstream of this Evidence (`WebPage -[:extracts]-> Evidence`).
+  // An Evidence declared off a fetched page (evidence_type
+  // "curated-database-record" over a uniprot/wikipathways body, say) is backed
+  // by a WebPage the same way a literature claim is backed by a Paper: same
+  // edge, same direction. Before this list existed the modal collected only
+  // Paper/SourceFile, so a WebPage-backed evidence fell through to "no source
+  // recorded" even though the chain had already handed us the page.
+  const [webPages, setWebPages] = useState<MemoryGraphNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | undefined>();
   // Chain overlay: when set, MemoryGraphExplorer renders full-screen on top
@@ -225,9 +236,14 @@ export function EvidenceModal({ client, evidenceId, onClose, onOpenEvolveRun, on
       // `SourceFile -[:extracts]-> Evidence` is the same edge, walked the
       // same direction, so the chain node list carries the SourceFile in
       // addition to (or instead of) the Paper. Treat them as two surfaces
-      // of the same concept — the provenance tab renders both.
+      // of the same concept — the provenance tab renders both. A WebPage is
+      // the same shape again (the page a fetched body was extracted from),
+      // hence the third filter. The `viewSourcePaper` hop carries the label
+      // "Paper" for documentation only — `_walk_hops` does not filter on it,
+      // so all three labels really do arrive here over one hop.
       setPapers(nodes.filter((node) => node.label === "Paper"));
       setSourceFiles(nodes.filter((node) => node.label === "SourceFile"));
+      setWebPages(nodes.filter((node) => node.label === "WebPage"));
     }).catch((err: Error) => {
       if (active) setError(err.message);
     }).finally(() => {
@@ -356,7 +372,27 @@ export function EvidenceModal({ client, evidenceId, onClose, onOpenEvolveRun, on
                   </article>
                 );
               }) : null}
-              {!papers.length && !sourceFiles.length ? (
+              {webPages.length ? webPages.map((webPage) => (
+                <article className="evidence-source-paper expanded" key={webPage.id}>
+                  <h4 className="evidence-source-paper-label">{t("evidence.webPage")}</h4>
+                  {/* Same card the explorer renders for a WebPage node: the
+                      title links to the page and the Full Text section pulls
+                      the body back from CAS, so "which page did this evidence
+                      come from" and "what did that page say" are answered in
+                      one view. `sessionId` is this modal's session, which is
+                      the WebPage's own — the chain hop matched it on
+                      `next.session_id`. */}
+                  <div className="evidence-source-paper-detail">
+                    <WebPageDetail
+                      client={client}
+                      extra={(webPage.extra as Record<string, unknown> | undefined) ?? {}}
+                      sessionId={sessionId}
+                      webPageId={webPage.id}
+                    />
+                  </div>
+                </article>
+              )) : null}
+              {!papers.length && !sourceFiles.length && !webPages.length ? (
                 <p className="artifact-empty">{t("evidence.noSource")}</p>
               ) : null}
             </div>

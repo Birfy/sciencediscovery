@@ -144,7 +144,19 @@ export interface ObserveExecutionPayload {
   status: string;
   startedAt: string;
   finishedAt: string;
-  taskType: string;
+  /** Coarse classification of the tool (``execution`` / ``search``). Mirrored
+   * onto the ToolCall node's ``tool_type`` property. The execution path sends
+   * ``execution``; search/fetch callers take theirs from the tool registry.
+   * The sink does not validate this — an unknown value lands verbatim (and old
+   * nodes keep the pre-collapse values they were born with, which the web app
+   * folds for display). */
+  toolType: string;
+  /** Full tool identifier (e.g. ``run_shell``). Mirrored onto the ToolCall
+   * node's ``tool_name`` property so the UI can show "this was a run_shell
+   * call" at a glance, and the graph can distinguish run_npu_job from
+   * run_shell without joining Code. Optional — legacy nodes from before
+   * the rename will not have a value (no migration backfills them). */
+  toolName?: string;
   producedArtifacts: MemoryGraphProducedArtifact[];
   /** Provenance addressing info mirrored onto the Code node: CAS hashes for the
    * stdout/stderr/env blocks. null when the Node side has none (shell runs have
@@ -169,8 +181,14 @@ export interface ObserveExecutionPayload {
 // (packages/schema/src/index.ts) and are shared with the frontend so the two
 // sides cannot silently drift when new node types or fields are added.
 
-export interface MemoryGraphMcpRecord {
-  url: string;
+/** Unified tool-call product. ``productType`` decides which write path
+ *  the sidecar dispatches to (Paper / WebPage / DbRecord). The unused field
+ *  groups are simply undefined; the request payload uses snake_case so the
+ *  client→server mapping is one mechanical rename (camelCase→snake_case). */
+export interface MemoryGraphToolCallProduct {
+  productType: "paper" | "web_page" | "db_record";
+  // paper fields
+  link?: string;
   title?: string;
   identifier?: string;
   identifierType?: string;
@@ -178,26 +196,45 @@ export interface MemoryGraphMcpRecord {
   authors?: string[];
   abstract?: string;
   source?: string;
+  // web_page fields
+  url?: string;
+  snippet?: string;
+  sourceRefs?: string[];
+  /** Per-product body hash, written onto the WebPage node's
+   *  ``content_hash`` property. The text itself lives in the CAS data pool,
+   *  never on the node — mirroring SourceFile.content_hash /
+   *  Artifact.content_hash (graph = directory, CAS = warehouse). web_page
+   *  only: absent for paper / db_record products, and absent for a
+   *  snippet-only search hit (nothing was fetched → nothing to hash). */
+  contentHash?: string;
 }
 
-export interface ObserveMcpInvocationPayload {
-  invocationId: string;
+/** Unified tool-call payload. The client converts camelCase → snake_case
+ *  on the way to /observe/tool-call (see MemoryGraphClient.observeToolCall). */
+export interface ObserveToolCallPayload {
+  taskId: string;
   sessionId: string;
   turnId: string;
-  source: string;
+  /** Full tool identifier (e.g. ``mcp__pdb__search_structures``, ``web_search``). */
+  toolName: string;
+  /** Coarse classification (``execution`` / ``search``; the sink stores any
+   *  string verbatim, including the pre-collapse values on old nodes). */
   toolType: string;
-  retrievedAt: string;
-  records: MemoryGraphMcpRecord[];
-  /** When set, this search ran inside a subagent: products hang off the
-   * subagent's child SubTask instead of a per-search SubTask. Absent
-   * (undefined) in main-agent context — behavior unchanged. */
+  /** MCP source id; workspace tools (web_search / run_python) leave it undefined. */
+  source?: string;
+  status?: string;
+  resultCount?: number;
+  products: MemoryGraphToolCallProduct[];
+  /** When set, this tool call ran inside a subagent: products hang off the
+   *  subagent's child ToolCall instead of a per-call ToolCall. Absent in
+   *  main-agent context — behavior unchanged. */
   parentSubagentId?: string;
 }
 
 // subagent = one scope SubTask node, mirrored twice: at start
 // (status="running", finishedAt/summary absent) and at terminal landing
 // (ON MATCH only fills gaps). Each internal toolcall is a separate child
-// SubTask (built by upsert_execution / upsert_mcp_search, which take
+// SubTask (built by upsert_execution / upsert_tool_call, which take
 // parent_subagent_id), so the scope itself never carries products.
 export interface ObserveSubagentPayload {
   subagentId: string;
@@ -299,6 +336,47 @@ export class MemoryGraphClient {
     }
   }
 
+  async observeToolCall(payload: ObserveToolCallPayload): Promise<void> {
+    mgLog.info("observeToolCall in: task_id=%s session=%s tool=%s source=%s products=%d",
+      payload.taskId, payload.sessionId, payload.toolName, payload.source ?? "<none>", payload.products.length);
+    try {
+      await this.post("/observe/tool-call", {
+        task_id: payload.taskId,
+        session_id: payload.sessionId,
+        turn_id: payload.turnId,
+        tool_name: payload.toolName,
+        tool_type: payload.toolType,
+        source: payload.source ?? null,
+        status: payload.status ?? "completed",
+        result_count: payload.resultCount ?? 0,
+        products: payload.products.map((p) => ({
+          product_type: p.productType,
+          // paper fields
+          link: p.link ?? null,
+          title: p.title ?? null,
+          identifier: p.identifier ?? null,
+          identifier_type: p.identifierType ?? null,
+          year: p.year ?? null,
+          authors: p.authors ?? null,
+          abstract: p.abstract ?? null,
+          source: p.source ?? null,
+          // web_page fields
+          url: p.url ?? null,
+          snippet: p.snippet ?? null,
+          source_refs: p.sourceRefs ?? null,
+          content_hash: p.contentHash ?? null,
+        })),
+        parent_subagent_id: payload.parentSubagentId ?? null,
+      });
+      mgLog.info("observeToolCall done: task_id=%s delivered (%d products)",
+        payload.taskId, payload.products.length);
+    } catch (error) {
+      mgLog.warn("observeToolCall failed: task_id=%s, error %s",
+        payload.taskId, error instanceof Error ? error.message : String(error));
+      throw error;
+    }
+  }
+
   /** Push the Neo4j credential (and optional HTTP/user override) to the sidecar.
    *  ``password`` null clears the stored credential; a string sets/replaces it.
    *  HTTP/user are sent only when provided so the sidecar keeps its current
@@ -334,7 +412,8 @@ export class MemoryGraphClient {
         status: payload.status,
         started_at: payload.startedAt,
         finished_at: payload.finishedAt,
-        task_type: payload.taskType,
+        tool_type: payload.toolType,
+        tool_name: payload.toolName ?? null,
         produced_artifacts: payload.producedArtifacts.map((artifact) => ({
           artifact_id: artifact.artifactId,
           path: artifact.path,
@@ -359,39 +438,6 @@ export class MemoryGraphClient {
     } catch (error) {
       mgLog.warn("observeExecution failed: execution=%s, error %s",
         payload.executionId, error instanceof Error ? error.message : String(error));
-      throw error;
-    }
-  }
-
-  async observeMcpInvocation(payload: ObserveMcpInvocationPayload): Promise<void> {
-    const papersWithUrl = payload.records.filter((record) => Boolean(record.url)).length;
-    mgLog.info("observeMcpInvocation in: invocation=%s session=%s source=%s records=%d (%d with url)",
-      payload.invocationId, payload.sessionId, payload.source, payload.records.length, papersWithUrl);
-    try {
-      await this.post("/observe/mcp-search", {
-        invocation_id: payload.invocationId,
-        session_id: payload.sessionId,
-        turn_id: payload.turnId,
-        source: payload.source,
-        tool_type: payload.toolType,
-        retrieved_at: payload.retrievedAt,
-        records: payload.records.map((record) => ({
-          url: record.url,
-          title: record.title,
-          identifier: record.identifier,
-          identifier_type: record.identifierType,
-          year: record.year,
-          authors: record.authors,
-          abstract: record.abstract,
-          source: record.source,
-        })),
-        parent_subagent_id: payload.parentSubagentId ?? null,
-      });
-      mgLog.info("observeMcpInvocation done: invocation=%s delivered (%d papers)",
-        payload.invocationId, papersWithUrl);
-    } catch (error) {
-      mgLog.warn("observeMcpInvocation failed: invocation=%s, error %s",
-        payload.invocationId, error instanceof Error ? error.message : String(error));
       throw error;
     }
   }
@@ -522,6 +568,36 @@ export class MemoryGraphClient {
         sessionId, result.nodes.length, result.edges.length);
     }
     return result;
+  }
+
+  /**
+   * Look up one WebPage's CAS content_hash by node id (O(1) sidecar index
+   * hit) instead of pulling the whole subgraph. Mirrors ``getSubgraph``'s
+   * defensive contract: an unreachable sidecar or an absent node resolves to
+   * ``{ contentHash: null, reason }`` rather than throwing. The id encoding
+   * follows the sidecar's ``_node_identity``: ``"url:<...>"`` for url-only
+   * web_search results, the bare identifier otherwise.
+   */
+  async getWebPageContentHash(
+    sessionId: string,
+    webPageId: string,
+  ): Promise<{ contentHash: string | null; reason?: string }> {
+    const url = `${this.baseUrl}/web-pages/content-hash?session_id=${encodeURIComponent(sessionId)}&web_page_id=${encodeURIComponent(webPageId)}`;
+    let response: Response;
+    try {
+      response = await fetch(url, { headers: this.initHeaders() });
+    } catch (error) {
+      mgLog.warn("getWebPageContentHash error: cannot reach memory-graph service (session=%s): %s",
+        sessionId, error instanceof Error ? error.message : String(error));
+      return { contentHash: null, reason: "memory_graph_unreachable" };
+    }
+    if (!response.ok) {
+      mgLog.warn("getWebPageContentHash not ok: memory-graph returned HTTP %s (session=%s)",
+        response.status, sessionId);
+      return { contentHash: null, reason: "memory_graph_unreachable" };
+    }
+    const body = (await response.json()) as { content_hash?: string | null; reason?: string };
+    return { contentHash: body.content_hash ?? null, reason: body.reason };
   }
 
   /**
@@ -842,12 +918,13 @@ export class MemoryGraphClient {
     try {
       const body = await this.postJsonWithBody("/persist/evidence", {
         content: input.content,
-        // Source routing: exactly one of source_paper_link / source_file_id
-        // (the sidecar 422's on both-empty / both-set). source_paper_link is
-        // optional now (a PDF SourceFile uses source_file_id instead); pass it
-        // only when set so an undefined never shadows a real source_file_id.
+        // Source routing: exactly one of source_paper_link / source_file_id /
+        // source_webpage_link (the sidecar 422's on all-empty / multi-set).
+        // Each is optional; pass only when set so an undefined never shadows
+        // a real source on a different field.
         ...(input.sourcePaperLink ? { source_paper_link: input.sourcePaperLink } : {}),
         ...(input.sourceFileId ? { source_file_id: input.sourceFileId } : {}),
+        ...(input.sourceWebpageLink ? { source_webpage_link: input.sourceWebpageLink } : {}),
         locator: input.locator,
         evidence_type: input.evidenceType,
         confidence: input.confidence,
@@ -881,6 +958,11 @@ export class MemoryGraphClient {
         // No version companion (SourceFile has no version). Absent → no
         // sourcefile cite.
         ...(input.citesSourceFileAliases ? { cites_source_file_aliases: input.citesSourceFileAliases } : {}),
+        // dbrecord cites: alias → "source:identifier" for db-search records
+        // that directly support the claim (DbRecord -[:supports]-> Claim). No
+        // version companion (DbRecord has no version). Absent → no dbrecord
+        // cite.
+        ...(input.citesDbrecordAliases ? { cites_dbrecord_aliases: input.citesDbrecordAliases } : {}),
         ...(input.artifactId ? { artifact_id: input.artifactId } : {}),
         // The report version pins stated_in to the report's exact version; may
         // be absent at declare time (report not landed), re-linked by
@@ -1163,20 +1245,24 @@ export class MemoryGraphSink {
       });
   }
 
-  /** Never throws into the caller. Errors are swallowed and logged. */
-  observeMcpInvocation(payload: ObserveMcpInvocationPayload): void {
+  /** Mirror a tool call into one ToolCall + its products (unified path).
+   *  Never throws; a disabled/unreachable graph leaves the agent loop
+   *  unblocked. The MCP broker emits literature_search / db_search products
+   *  and the WebBroker emits web_search products — both
+   *  funnel through this single write ticket. */
+  observeToolCall(payload: ObserveToolCallPayload): void {
     if (!this.enabled || !this.client) {
-      mgLog.debug("mirror skipped: memory graph not enabled (invocation=%s)", payload.invocationId);
+      mgLog.debug("mirror skipped: memory graph not enabled (tool_call=%s)", payload.taskId);
       return;
     }
-    mgLog.info("mcp search finished, mirroring to memory graph: invocation=%s session=%s",
-      payload.invocationId, payload.sessionId);
+    mgLog.info("tool call finished, mirroring to memory graph: task_id=%s session=%s products=%d",
+      payload.taskId, payload.sessionId, payload.products.length);
     void this.client
-      .observeMcpInvocation(payload)
+      .observeToolCall(payload)
       .then(() => undefined)
       .catch((error: unknown) => {
-        mgLog.warn("mirror failed: invocation=%s session=%s, error %s",
-          payload.invocationId, payload.sessionId,
+        mgLog.warn("mirror failed: task_id=%s session=%s, error %s",
+          payload.taskId, payload.sessionId,
           error instanceof Error ? error.message : String(error));
       });
   }
@@ -1185,7 +1271,7 @@ export class MemoryGraphSink {
    * a disabled/unreachable graph leaves the subagent unblocked. Called twice
    * (start + terminal); MERGE on task_id makes both calls idempotent. The
    * scope never carries products — each internal toolcall is a separate child
-   * hung off this scope by upsert_execution / upsert_mcp_search. */
+   * hung off this scope by upsert_execution / upsert_tool_call. */
   observeSubagent(payload: ObserveSubagentPayload): void {
     if (!this.enabled || !this.client) {
       mgLog.debug("mirror skipped: memory graph not enabled (subagent=%s)", payload.subagentId);

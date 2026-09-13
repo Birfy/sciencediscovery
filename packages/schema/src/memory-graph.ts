@@ -33,7 +33,16 @@ export type MemoryGraphNodeLabel =
   /** One MAP-Elites cell (openevolve only); bounded by islands x bins^2. */
   | "SearchCell"
   /** An uploaded file's existence/origin record (auto-built at upload). */
-  | "SourceFile";
+  | "SourceFile"
+  /** One web page from web_search / llm-wiki search results. Dedup priority:
+   *  (identifier_type, identifier) when present (llm-wiki's wiki path), else
+   *  normalized URL. This iteration's only "content" is snippet — full page
+   *  text lands when get_page / web_fetch enter the registry. */
+  | "WebPage"
+  /** One record from a database search (uniprot/pdb/reactome/clinvar/chembl/
+   *  geo). Dedup key: (source, identifier) composite. source participates in
+   *  dedup only — the UI never renders it. */
+  | "DbRecord";
 
 /**
  * Memory-graph edge types. `produces` is persisted by the MVP/SubTask mirror;
@@ -52,10 +61,11 @@ export type MemoryGraphNodeLabel =
  * scope's internal run). The remaining child ToolCalls are linked to each
  * other by `next` in seq order (first → second → …), so a scope's internal
  * run reads as an ordered chain rather than a star. Not written by the MVP
- * mirror; lands with the subagent write chain (PR1) and is surfaced read-side
- * in PR2. `feeds` links an uploaded SourceFile to the ResearchGoal it feeds
- * into (SourceFile → ResearchGoal), written fire-and-forget at upload time
- * to express "this user-uploaded file provides input to this research".
+ * mirror; lands with the subagent write chain and is surfaced read-side via
+ * the chain helpers. `feeds` links an uploaded SourceFile to the ResearchGoal
+ * it feeds into (SourceFile → ResearchGoal), written fire-and-forget at
+ * upload time to express "this user-uploaded file provides input to this
+ * research".
  */
 
 export type MemoryGraphEdgeType =
@@ -89,7 +99,7 @@ export interface MemoryGraphNode {
   label: MemoryGraphNodeLabel;
   id: string;
   sessionId?: string;
-  /** Label-specific fields. Paper: { link, title, identifier, identifier_type, year?, authors?, abstract?, source, retrieved_at, retrieval_count, created_at }. Task (subagent scope): { task_id, session_id, status, task_type:"subagent", subagent_type?, objective?, summary?, failure_reason?, seq, created_at, finished_at?, turn_id? }. ToolCall (code_execution/literature_search/etc.): { task_id, session_id, status, task_type, parent_subtask_id?, source?, tool_type?, result_count?, finished_at, created_at, turn_id?, seq }. Code/Artifact: as persisted by their upsert path. ResearchGoal: { goal_id, core_objective, domain, topic_scope?, created_at }. SourceFile: { file_id, session_id, name, path, media_type?, size?, content_hash?, origin:"user_upload", created_at }. */
+  /** Label-specific fields. Paper: { link, title, identifier, identifier_type, year?, authors?, abstract?, source, retrieved_at, retrieval_count, created_at }. Task (subagent scope): { task_id, session_id, status, task_type:"subagent", subagent_type?, objective?, summary?, failure_reason?, seq, created_at, finished_at?, turn_id? }. ToolCall (tool_type: execution/search, plus program_evolution on evolve runs; pre-collapse nodes carry code_execution/literature_search/…): { task_id, session_id, status, tool_type, tool_name?, parent_subtask_id?, source?, result_count?, finished_at, created_at, turn_id?, seq }. Code/Artifact: as persisted by their upsert path. ResearchGoal: { goal_id, core_objective, domain, topic_scope?, created_at }. SourceFile: { file_id, session_id, name, path, media_type?, size?, content_hash?, origin:"user_upload", created_at }. WebPage: { url, identifier?, identifier_type?, title?, snippet?, source_refs? (string[]), content? (empty until get_page), retrieved_at?, retrieval_count?, created_at, session_id }. DbRecord: { source (dedup key member, not rendered), identifier, identifier_type?, url?, title?, snippet?, retrieved_at?, retrieval_count?, created_at, session_id }. */
   extra?: Record<string, unknown>;
   createdAt?: string;
 }
@@ -218,8 +228,9 @@ export interface MemoryGraphTraceResult {
 export interface DeclareEvidenceInput {
   content: string;
   /** The source Paper's link (URL/DOI); resolved against existing Paper nodes.
-   * Mutually exclusive with sourceFileId — exactly one must be set (the sidecar
-   * 422's on both-empty / both-set with no_source / ambiguous_source). */
+   * Mutually exclusive with sourceFileId and sourceWebpageLink — exactly one
+   * must be set (the sidecar 422's on all-empty / multi-set with no_source /
+   * ambiguous_source). */
   sourcePaperLink?: string;
   /** An uploaded PDF SourceFile's file_id (media_type=application/pdf). The
    * sidecar gates media_type: a non-PDF data file is rejected with
@@ -227,6 +238,14 @@ export interface DeclareEvidenceInput {
    * declare_claim's citesSourceFileAliases instead). PDFs are an Evidence
    * source here, mirroring the Paper path (SourceFile -[:extracts]-> Evidence). */
   sourceFileId?: string;
+  /** A WebPage's URL (normalized by the sidecar), resolved against existing
+   * WebPage nodes from web_search / llm-wiki. Mutually exclusive with
+   * sourcePaperLink and sourceFileId — exactly one source per Evidence. The
+   * sidecar gates on the page's content: a WebPage whose full text has not
+   * been retrieved (content empty — the norm this iteration, search returns
+   * only snippets) is rejected with source_webpage_no_content; this path
+   * lights up when page-fetch tools populate content. */
+  sourceWebpageLink?: string;
   locator: string;
   evidenceType: string;
   confidence: string;
@@ -258,6 +277,14 @@ export interface DeclareClaimInput {
    * go via declare_evidence (extracts → Evidence) and be cited as Evidence via
    * citesEvidenceAliases (the sidecar rejects a PDF with source_file_is_pdf). */
   citesSourceFileAliases?: Record<string, string>;
+  /** alias → "source:identifier", e.g. {"dbrecord1": "uniprot:P38398"}; the alias
+   * is what the LLM writes into the report body, the value resolves to a DbRecord
+   * this session retrieved via db_search (DbRecord -[:supports]-> Claim, mirroring
+   * the Artifact path — a curated database record directly backs an assertion).
+   * The value format is "<source>:<identifier>" (source = the db source id as it
+   * appeared in the search results / the node's badge, e.g. uniprot|pdb|chembl);
+   * a bare identifier is tolerated when unambiguous within the session. */
+  citesDbrecordAliases?: Record<string, string>;
   /** The report Artifact this claim is stated in; builds the stated_in edge
    * (Claim → Artifact) so the graph can navigate claim → its report. */
   artifactId?: string;
@@ -280,9 +307,10 @@ export interface DeclareError {
   status: "error";
   /** Business code from the sidecar (no_cites_target, source_paper_not_found,
    * source_file_not_found, source_file_not_pdf, source_file_is_pdf,
+   * source_webpage_not_found, source_webpage_no_content,
    * no_source, ambiguous_source, evidence_not_found,
-   * artifact_version_not_found) or memory_graph_disabled / internal_error for
-   * availability failures. */
+   * artifact_version_not_found, db_record_not_found) or memory_graph_disabled
+   * / internal_error for availability failures. */
   code: string;
   message: string;
   /** Actionable next step surfaced to the LLM (e.g. re-call declare_evidence

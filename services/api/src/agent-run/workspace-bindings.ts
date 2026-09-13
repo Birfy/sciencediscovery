@@ -29,7 +29,7 @@ import { readPreparedSkillBundle, readPreparedSkillManifest } from "../skill-san
 
 type ExecutionBindings = Pick<
   WorkspaceAgentOptions,
-  "environmentManagement" | "executePython" | "executeScientific" | "executeShell" | "npuBroker" | "workspaceTransfers" | "shellExecutions" | "timers"
+  "environmentManagement" | "executePython" | "executeScientific" | "executeShell" | "npuBroker" | "observeNpuJob" | "workspaceTransfers" | "shellExecutions" | "timers"
 >;
 
 /**
@@ -331,6 +331,22 @@ export function createWorkspaceExecutionBindings(
           workspaceRoot: options.workspaceRoot,
         });
       },
+    }, observeNpuJob: (job: import("@sciencediscovery/schema").NpuJob, artifacts: Array<{ artifact_id: string; path: string; version: number }>) => {
+      // Fire-and-forget mirror: the recorder swallows its own failures (it
+      // skips non-terminal jobs and the sink catches its own errors). Wrap in
+      // a try/catch here too so a synchronous throw inside the recorder never
+      // surfaces to the surrounding ``result`` binding, which would otherwise
+      // tear down the agent's view of its own result.
+      try {
+        options.provenanceRecorder.observeNpuJob(job, {
+          artifacts,
+          parentSubagentId: options.parentSubagentId,
+          sessionId: options.sessionId,
+          turnId: options.executionId,
+        });
+      } catch {
+        // Intentional: memory-graph mirror is fire-and-forget.
+      }
     } } : {}),
     executePython: async (code: string, signal?: AbortSignal, toolCallId?: string, machine?: string) => {
       options.store.assertSessionWritable(options.sessionId);

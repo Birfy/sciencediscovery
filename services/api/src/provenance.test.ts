@@ -1298,7 +1298,7 @@ test("a report declare without a referencesProvider degrades gracefully to empty
 });
 
 test("parentSubagentId threads through executeShell and declareWorkspaceArtifact; absent in main-agent context", async (context) => {
-  // Regression guard for the subagent write chain (PR1). The Python sidecar
+  // Regression guard for the subagent write chain. The Python sidecar
   // builds a child SubTask only when parent_subagent_id is non-null, so this
   // value must survive every hop of the TS passthrough: RecordExecutionOptions
   // → execute* → observeExecution (first call, on execution), AND

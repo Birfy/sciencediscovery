@@ -548,3 +548,104 @@ test("clearing a Runner's cards stops them reaching the next execution", async (
   }
   assert.deepEqual(payloads[0]?.npuDevices, [4, 6]);
 });
+
+test("NPU broker bindings observe terminal jobs to the memory-graph recorder with the declared artifacts", async () => {
+  const observed: Array<{ job: unknown; options: unknown }> = [];
+  const recorder: ProvenanceRecorder = {
+    observeNpuJob: (job: unknown, options: unknown) => { observed.push({ job, options }); },
+  } as unknown as ProvenanceRecorder;
+  const baseJob: NpuJob = {
+    createdAt: "2026-01-01T00:00:00.000Z",
+    createdFiles: ["outputs/predictions.csv"],
+    exitCode: 0,
+    finishedAt: "2026-01-01T00:05:00.000Z",
+    id: "npu-job-2",
+    inputs: { configPath: "antibody_pipeline/config.json" },
+    logs: { stderr: "", stdout: "ok", truncated: false },
+    sessionId: "session-1",
+    startedAt: "2026-01-01T00:01:00.000Z",
+    state: "succeeded",
+    updatedAt: "2026-01-01T00:05:00.000Z",
+    workloadId: "antibody.protenix.v1",
+    workspaceRoot: "/data/projects/project/sessions/session-1/workspace",
+  };
+  const bindings = createWorkspaceExecutionBindings({
+    agentId: "main",
+    executionId: "run-2",
+    npuBrokerEnabled: true,
+    parentSubagentId: "subagent-7",
+    permission: {
+      getEpoch: () => ({ environmentRevisionId: undefined, id: "epoch-2" }),
+      requirePrivilege: async () => undefined,
+    } as unknown as AgentPermissionRuntime,
+    permissionScopeLabel: "in test",
+    provenanceRecorder: recorder,
+    runnerClient: {} as RunnerClient,
+    sessionId: "session-1",
+    store: { assertSessionWritable() {}, resolveSandboxEgressProxy: () => undefined } as unknown as SessionStore,
+    workspaceRoot: "/data/projects/project/sessions/session-1/workspace",
+  });
+
+  // Successful declarations (ok:true) get forwarded; ok:false entries do not.
+  // The workspace layer already filters ok:false out before calling the bindings
+  // callback (workspace.ts:result branch), so we test the post-filter shape here.
+  await bindings.observeNpuJob!(baseJob, [
+    { artifact_id: "art-1", path: "outputs/predictions.csv", version: 1 },
+  ]);
+
+  // Sanity-check: this shape is the workspace layer's filtered-and-renamed shape.
+  // The bindings callback only forwards it; the recorder is what does the catalog
+  // lookup. We assert the bindings handed the recorder the right tuple.
+  assert.equal(observed.length, 1);
+  assert.equal((observed[0]!.job as { id: string }).id, "npu-job-2");
+  assert.deepEqual(observed[0]!.options, {
+    artifacts: [{ artifact_id: "art-1", path: "outputs/predictions.csv", version: 1 }],
+    parentSubagentId: "subagent-7",
+    sessionId: "session-1",
+    turnId: "run-2",
+  });
+
+  // A recorder that throws inside observeNpuJob must not bubble up — the
+  // callback is fire-and-forget. Without the try/catch guard the agent loop
+  // would crash on a transient memory-graph outage.
+  const throwing: ProvenanceRecorder = {
+    observeNpuJob: () => { throw new Error("recorder offline"); },
+  } as unknown as ProvenanceRecorder;
+  const guarded = createWorkspaceExecutionBindings({
+    agentId: "main",
+    executionId: "run-2",
+    npuBrokerEnabled: true,
+    permission: {
+      getEpoch: () => ({ environmentRevisionId: undefined, id: "epoch-2" }),
+      requirePrivilege: async () => undefined,
+    } as unknown as AgentPermissionRuntime,
+    permissionScopeLabel: "in test",
+    provenanceRecorder: throwing,
+    runnerClient: {} as RunnerClient,
+    sessionId: "session-1",
+    store: { assertSessionWritable() {}, resolveSandboxEgressProxy: () => undefined } as unknown as SessionStore,
+    workspaceRoot: "/data/projects/project/sessions/session-1/workspace",
+  });
+  assert.doesNotThrow(() => guarded.observeNpuJob!(baseJob, [
+    { artifact_id: "art-1", path: "outputs/predictions.csv", version: 1 },
+  ]));
+});
+
+test("NPU broker bindings omit observeNpuJob when the broker is disabled", () => {
+  const bindings = createWorkspaceExecutionBindings({
+    agentId: "main",
+    executionId: "run-3",
+    permission: {
+      getEpoch: () => ({ environmentRevisionId: undefined, id: "epoch-3" }),
+      requirePrivilege: async () => undefined,
+    } as unknown as AgentPermissionRuntime,
+    permissionScopeLabel: "in test",
+    provenanceRecorder: { observeNpuJob: () => undefined } as unknown as ProvenanceRecorder,
+    runnerClient: {} as RunnerClient,
+    sessionId: "session-1",
+    store: { assertSessionWritable() {}, resolveSandboxEgressProxy: () => undefined } as unknown as SessionStore,
+    workspaceRoot: "/workspace",
+  });
+  assert.equal(bindings.observeNpuJob, undefined);
+  assert.equal(bindings.npuBroker, undefined);
+});

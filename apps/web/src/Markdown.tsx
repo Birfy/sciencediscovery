@@ -165,11 +165,15 @@ function remarkGraphChips(options: { index: Map<string, ComposerReference> }) {
  * `session`/`skill` are composer-context references, not chips, so they have
  * no graph node. `paper` is never a chip kind — a Paper is reached indirectly
  * via the Evidence node extracted from it. `sourcefile` is an uploaded file
- * cited directly by a Claim's chip_map (SourceFile -[:supports]-> Claim). */
+ * cited directly by a Claim's chip_map (SourceFile -[:supports]-> Claim).
+ * `dbrecord` is a database record this session retrieved via db_search and
+ * cited directly by a Claim's chip_map (DbRecord -[:supports]-> Claim) —
+ * falls through to the graph explorer (no dedicated modal). */
 export const KIND_TO_LABEL: Record<ComposerReference["kind"], MemoryGraphNodeLabel | undefined> = {
   evidence: "Evidence",
   artifact: "Artifact",
   sourcefile: "SourceFile",
+  dbrecord: "DbRecord",
   session: undefined,
   skill: undefined,
 };

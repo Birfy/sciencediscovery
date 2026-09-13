@@ -383,7 +383,10 @@ async function removeTestRoot(root: string): Promise<void> {
     await api.close();
     testApiOrigins.delete(root);
   }
-  await rm(root, { force: true, recursive: true });
+  // maxRetries: a server torn down just before this may still have detached
+  // async writes in flight (e.g. the fire-and-forget evolution store init);
+  // a concurrent file landing between readdir and rmdir surfaces ENOTEMPTY.
+  await rm(root, { force: true, maxRetries: 10, recursive: true, retryDelay: 100 });
 }
 
 async function startTestApi(
@@ -7117,4 +7120,255 @@ test("closing the server closes the MCP transport it connected at startup", asyn
   await new Promise((settled) => setImmediate(settled));
 
   assert.equal(closed, 1);
+});
+
+// --- WebPage content reverse-proxy from CAS data pool ---------------------
+
+/** Spin up a tiny sidecar whose only job is to serve /web-pages/content-hash
+ *  with whatever node set the test scenario needs. Each call resolves the
+ *  requested web_page_id against the node list (matching node.id, the same
+ *  encoding the API server passes through) and returns that node's
+ *  content_hash. Returns the URL + a setter for the next node list. */
+async function startFakeSidecar(context: TestContext, initial: { nodes?: Array<Record<string, unknown>>; reason?: string }): Promise<{ setNodes(nodes: Array<Record<string, unknown>>): void; url: string }> {
+  let currentNodes = initial.nodes ?? [];
+  const server = createHttpServer((request, response) => {
+    const url = new URL(request.url ?? "/", "http://sidecar.test");
+    if (url.pathname === "/web-pages/content-hash") {
+      const webPageId = url.searchParams.get("web_page_id");
+      const node = currentNodes.find((n) => n.id === webPageId);
+      const contentHash = (node?.extra as Record<string, unknown> | undefined)?.content_hash ?? null;
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(`${JSON.stringify({ content_hash: contentHash })}\n`);
+      return;
+    }
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(`{}\n`);
+  });
+  await new Promise<void>((resolveListen) => server.listen(0, "127.0.0.1", resolveListen));
+  context.after(() => new Promise<void>((resolveClose) => server.close(() => resolveClose())));
+  return {
+    setNodes(nodes) { currentNodes = nodes; },
+    url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
+  };
+}
+
+test("WPC-001 GET /api/sessions/<sid>/web-pages/<id>/content returns the CAS body with immutable cache headers", async (context) => {
+  // Happy path: the WebPage node carries content_hash, the CAS blob exists,
+  // and the endpoint streams it back verbatim with text/plain + immutable.
+  const tempRoot = resolve(process.cwd(), ".tmp", `wpc-happy-${Date.now()}-${process.pid}`);
+  await mkdir(tempRoot, { recursive: true });
+  context.after(() => removeTestRoot(tempRoot));
+
+  // Land a real CAS blob in the data pool (same pool the broker's dataCas
+  // uses).
+  const bodyText = "BRCA1 is a tumor suppressor gene.";
+  const contentHash = createHash("sha256").update(bodyText).digest("hex");
+  const blobPath = resolve(tempRoot, "versioning", "data", "blobs", "sha256", contentHash);
+  await mkdir(resolve(tempRoot, "versioning", "data", "blobs", "sha256"), { recursive: true });
+  await writeFile(blobPath, bodyText, "utf8");
+
+  const fake = await startFakeSidecar(context, {
+    nodes: [
+      {
+        label: "WebPage",
+        id: "url:https://example.test/brca1",
+        extra: { url: "https://example.test/brca1", content_hash: contentHash, has_full_content: true },
+      },
+      { label: "WebPage", id: "wiki/BRCA1", extra: { identifier: "wiki/BRCA1", content_hash: contentHash } },
+    ],
+  });
+
+  const server = createProductionApiServer({ ...testConfig(tempRoot), memoryGraph: { url: fake.url, internalToken: "test" } });
+  await new Promise<void>((resolveListen) => server.listen(0, "127.0.0.1", resolveListen));
+  context.after(() => new Promise<void>((resolveClose) => { server.close(() => resolveClose()); server.closeAllConnections(); }));
+  const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const project = await jsonRequest<{ project: { id: string }; firstSession: { id: string } }>(`${origin}/api/projects`, {
+    body: JSON.stringify({ name: "WebPage content happy" }),
+    headers: { ...authorization, "content-type": "application/json" },
+    method: "POST",
+  });
+  const sessionId = project.body.firstSession.id;
+  // Toggle memory-graph on (default is off → /subgraph proxy returns empty).
+  const enabled = await fetch(`${origin}/api/memory/settings`, {
+    body: JSON.stringify({ enabled: true }),
+    headers: { ...authorization, "content-type": "application/json" },
+    method: "PUT",
+  });
+  assert.equal(enabled.status, 200);
+
+  // URL-keyed WebPage: raw `url:` prefix in the id is what /subgraph returns
+  // for a snippet-only/web_search WebPage.
+  const urlResponse = await fetch(`${origin}/api/sessions/${sessionId}/web-pages/${encodeURIComponent("url:https://example.test/brca1")}/content`, { headers: authorization });
+  assert.equal(urlResponse.status, 200);
+  assert.equal(await urlResponse.text(), bodyText);
+  assert.equal(urlResponse.headers.get("content-type"), "text/plain; charset=utf-8");
+  assert.equal(urlResponse.headers.get("cache-control"), "public, max-age=31536000, immutable");
+
+  // Identifier-keyed WebPage: a wiki path carries a `/` (and is therefore
+  // percent-encoded in the URL). The handler must decode and match against
+  // the bare id the sidecar returned.
+  const idResponse = await fetch(`${origin}/api/sessions/${sessionId}/web-pages/${encodeURIComponent("wiki/BRCA1")}/content`, { headers: authorization });
+  assert.equal(idResponse.status, 200);
+  assert.equal(await idResponse.text(), bodyText);
+});
+
+test("WPC-002 GET /api/sessions/<sid>/web-pages/<id>/content returns 404 for every absent precondition", async (context) => {
+  // Each precondition flips one variable from the happy path. The handler
+  // must refuse with the documented message — session missing, WebPage
+  // missing, content_hash missing, content_hash malformed, CAS blob gone.
+  const tempRoot = resolve(process.cwd(), ".tmp", `wpc-404-${Date.now()}-${process.pid}`);
+  await mkdir(tempRoot, { recursive: true });
+  context.after(() => removeTestRoot(tempRoot));
+
+  // One real CAS blob + a WebPage that references it. We'll later delete the
+  // blob to test the "CAS physically missing" branch.
+  const realBody = "real body";
+  const realHash = createHash("sha256").update(realBody).digest("hex");
+  const blobPath = resolve(tempRoot, "versioning", "data", "blobs", "sha256", realHash);
+  await mkdir(resolve(tempRoot, "versioning", "data", "blobs", "sha256"), { recursive: true });
+  await writeFile(blobPath, realBody, "utf8");
+
+  const fake = await startFakeSidecar(context, {
+    nodes: [
+      { label: "WebPage", id: "wp-hash", extra: { url: "https://example.test/has-hash", content_hash: realHash } },
+      { label: "WebPage", id: "wp-snippet", extra: { url: "https://example.test/snippet-only" } },
+      { label: "WebPage", id: "wp-bad-hash", extra: { url: "https://example.test/bad", content_hash: "not-a-hex-hash" } },
+    ],
+  });
+
+  const server = createProductionApiServer({ ...testConfig(tempRoot), memoryGraph: { url: fake.url, internalToken: "test" } });
+  await new Promise<void>((resolveListen) => server.listen(0, "127.0.0.1", resolveListen));
+  context.after(() => new Promise<void>((resolveClose) => { server.close(() => resolveClose()); server.closeAllConnections(); }));
+  const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const project = await jsonRequest<{ project: { id: string }; firstSession: { id: string } }>(`${origin}/api/projects`, {
+    body: JSON.stringify({ name: "WebPage content 404s" }),
+    headers: { ...authorization, "content-type": "application/json" },
+    method: "POST",
+  });
+  const sessionId = project.body.firstSession.id;
+  await fetch(`${origin}/api/memory/settings`, {
+    body: JSON.stringify({ enabled: true }),
+    headers: { ...authorization, "content-type": "application/json" },
+    method: "PUT",
+  });
+
+  const expect = async (webPageId: string, expectedMessage: RegExp, expectedStatus = 404) => {
+    const response = await fetch(`${origin}/api/sessions/${sessionId}/web-pages/${encodeURIComponent(webPageId)}/content`, { headers: authorization });
+    assert.equal(response.status, expectedStatus, `expected ${expectedStatus} for ${webPageId}, got ${response.status}`);
+    const body = await response.json() as { error?: string };
+    assert.match(body.error ?? "", expectedMessage);
+  };
+
+  // session missing
+  const missingSession = await fetch(`${origin}/api/sessions/${randomUUID()}/web-pages/wp-hash/content`, { headers: authorization });
+  assert.equal(missingSession.status, 404);
+  assert.match((await missingSession.json() as { error?: string }).error ?? "", /Session not found/);
+
+  // WebPage missing from subgraph (id not in the sidecar's set)
+  await expect("wp-does-not-exist", /WebPage not found or has no content_hash/);
+  // WebPage present but no content_hash (snippet-only)
+  await expect("wp-snippet", /WebPage not found or has no content_hash/);
+  // content_hash malformed (defends against bad upstream data; 64-hex gate)
+  await expect("wp-bad-hash", /WebPage not found or has no content_hash/);
+
+  // CAS blob physically missing: delete the file, the endpoint must still
+  // refuse rather than silently 500. The session-scoped CAS read in
+  // dataCas.has() returns false on ENOENT.
+  await rm(blobPath);
+  await expect("wp-hash", /CAS blob missing for this content_hash/);
+});
+
+test("WPC-003 the web-page content endpoint requires auth like the rest of /api", async (context) => {
+  // Without a Bearer token the gateway must return 401, never 200 — same
+  // gate every other /api/sessions/<sid>/... route uses.
+  const tempRoot = resolve(process.cwd(), ".tmp", `wpc-auth-${Date.now()}-${process.pid}`);
+  await mkdir(tempRoot, { recursive: true });
+  context.after(() => removeTestRoot(tempRoot));
+  const fake = await startFakeSidecar(context, { nodes: [] });
+  const server = createProductionApiServer({ ...testConfig(tempRoot), memoryGraph: { url: fake.url, internalToken: "test" } });
+  await new Promise<void>((resolveListen) => server.listen(0, "127.0.0.1", resolveListen));
+  context.after(() => new Promise<void>((resolveClose) => { server.close(() => resolveClose()); server.closeAllConnections(); }));
+  const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const noAuth = await fetch(`${origin}/api/sessions/${randomUUID()}/web-pages/anything/content`);
+  assert.equal(noAuth.status, 401);
+});
+
+test("WPC-004 the memory-graph disabled toggle short-circuits the endpoint without crashing", async (context) => {
+  // Default state: the toggle is OFF. /api/memory/subgraph returns an empty
+  // body with reason="memory_graph_disabled", and the new endpoint should
+  // translate that into a 404 "not found" — never a 5xx. The user-visible
+  // effect is identical to "this session has no WebPage with content".
+  const tempRoot = resolve(process.cwd(), ".tmp", `wpc-disabled-${Date.now()}-${process.pid}`);
+  await mkdir(tempRoot, { recursive: true });
+  context.after(() => removeTestRoot(tempRoot));
+  // Sidecar that errors on /subgraph — disabled toggle should never reach it.
+  const sidecarCalls: string[] = [];
+  const server = createHttpServer((request, response) => {
+    sidecarCalls.push(request.url ?? "");
+    response.writeHead(500, { "content-type": "application/json" });
+    response.end(`{"error":"sidecar should not be hit"}`);
+  });
+  await new Promise<void>((resolveListen) => server.listen(0, "127.0.0.1", resolveListen));
+  context.after(() => new Promise<void>((resolveClose) => server.close(() => resolveClose())));
+  const sidecarUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+
+  const api = createProductionApiServer({ ...testConfig(tempRoot), memoryGraph: { url: sidecarUrl, internalToken: "test" } });
+  await new Promise<void>((resolveListen) => api.listen(0, "127.0.0.1", resolveListen));
+  context.after(() => new Promise<void>((resolveClose) => { api.close(() => resolveClose()); api.closeAllConnections(); }));
+  const origin = `http://127.0.0.1:${(api.address() as AddressInfo).port}`;
+  const project = await jsonRequest<{ project: { id: string }; firstSession: { id: string } }>(`${origin}/api/projects`, {
+    body: JSON.stringify({ name: "Disabled memory graph" }),
+    headers: { ...authorization, "content-type": "application/json" },
+    method: "POST",
+  });
+  const sessionId = project.body.firstSession.id;
+  // Toggle is off by default — no PUT to /api/memory/settings.
+  const response = await fetch(`${origin}/api/sessions/${sessionId}/web-pages/wp-hash/content`, { headers: authorization });
+  assert.equal(response.status, 404);
+  assert.match((await response.json() as { error?: string }).error ?? "", /WebPage not found or has no content_hash/);
+  assert.equal(sidecarCalls.length, 0, "disabled toggle must short-circuit before any sidecar request");
+});
+
+test("WPC-005 a reachable sidecar whose graph is down returns 502, not 404", async (context) => {
+  // The sidecar is reachable (HTTP 200) but its Neo4j is unreachable, so it
+  // answers { content_hash: null, reason: "memory_graph_unreachable" }. The API
+  // server must surface that as a 502 "memory graph unreachable", not a 404
+  // "WebPage not found" — otherwise a graph outage reads as "your data is
+  // gone" in the UI.
+  const tempRoot = resolve(process.cwd(), ".tmp", `wpc-unreachable-${Date.now()}-${process.pid}`);
+  await mkdir(tempRoot, { recursive: true });
+  context.after(() => removeTestRoot(tempRoot));
+  const sidecar = createHttpServer((request, response) => {
+    const url = new URL(request.url ?? "/", "http://sidecar.test");
+    if (url.pathname === "/web-pages/content-hash") {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(`${JSON.stringify({ content_hash: null, reason: "memory_graph_unreachable" })}\n`);
+      return;
+    }
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(`{}\n`);
+  });
+  await new Promise<void>((resolveListen) => sidecar.listen(0, "127.0.0.1", resolveListen));
+  context.after(() => new Promise<void>((resolveClose) => sidecar.close(() => resolveClose())));
+  const sidecarUrl = `http://127.0.0.1:${(sidecar.address() as AddressInfo).port}`;
+
+  const api = createProductionApiServer({ ...testConfig(tempRoot), memoryGraph: { url: sidecarUrl, internalToken: "test" } });
+  await new Promise<void>((resolveListen) => api.listen(0, "127.0.0.1", resolveListen));
+  context.after(() => new Promise<void>((resolveClose) => { api.close(() => resolveClose()); api.closeAllConnections(); }));
+  const origin = `http://127.0.0.1:${(api.address() as AddressInfo).port}`;
+  const project = await jsonRequest<{ project: { id: string }; firstSession: { id: string } }>(`${origin}/api/projects`, {
+    body: JSON.stringify({ name: "WebPage content unreachable" }),
+    headers: { ...authorization, "content-type": "application/json" },
+    method: "POST",
+  });
+  const sessionId = project.body.firstSession.id;
+  await fetch(`${origin}/api/memory/settings`, {
+    body: JSON.stringify({ enabled: true }),
+    headers: { ...authorization, "content-type": "application/json" },
+    method: "PUT",
+  });
+
+  const response = await fetch(`${origin}/api/sessions/${sessionId}/web-pages/wp-anything/content`, { headers: authorization });
+  assert.equal(response.status, 502);
+  assert.match((await response.json() as { error?: string }).error ?? "", /memory graph unreachable/);
 });

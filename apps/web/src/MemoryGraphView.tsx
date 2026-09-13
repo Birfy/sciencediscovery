@@ -48,7 +48,7 @@ export function isMemoryGraphVisible(subgraph: MemorySubgraph | null, health: st
 }
 
 /**
- * A node that ended by cancellation (status === "cancelled", PR1's
+ * A node that ended by cancellation (status === "cancelled",
  * failure_reason="aborted"). Counted separately from completed so the
  * done-badge can split `✓ N done · ⊘ M cancelled` (doc16 §2.5) — cancelled
  * work is terminal-but-failed, neither pending nor succeeded.

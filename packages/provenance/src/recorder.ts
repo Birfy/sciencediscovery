@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 
@@ -32,6 +32,8 @@ import type {
   EnvironmentRevision,
   ExecutionRun,
   KernelMode,
+  NpuJob,
+  NpuJobState,
   PermissionEpoch,
   PythonExecutionResult,
   ResolvedProxy,
@@ -416,7 +418,14 @@ export class ProvenanceRecorder {
         status: run.status,
         stderrHash: run.stderr.hash,
         stdoutHash: run.stdout.hash,
-        taskType: "auto_inferred_from_execution",
+        // The executeShell / executeScientific paths go through the wrapper
+        // and inherit ``toolType: "execution"`` from there. This direct
+        // sink call (artifact-manager style: declareWorkspaceArtifact) writes
+        // a fresh ToolCall with the same classification; ``toolName`` is the
+        // raw tool identifier (run_shell / run_python / run_r) so the canvas
+        // can render it without joining the Code node.
+        toolType: "execution",
+        toolName: run.tool,
         tool: run.tool,
         turnId: run.turnId,
         parentSubagentId: options.parentSubagentId,
@@ -570,11 +579,145 @@ export class ProvenanceRecorder {
   }
 
   /** Fire-and-forget mirror of one execution to the memory graph. Never throws. */
-  private observeExecution(payload: Omit<ObserveExecutionPayload, "taskType"> & { taskType?: string }): void {
+  private observeExecution(payload: Omit<ObserveExecutionPayload, "toolType"> & { toolType?: string }): void {
     this.memoryGraphSink?.observeExecution({
-      taskType: "code_execution",
+      toolType: "execution",
       ...payload,
     } as ObserveExecutionPayload);
+  }
+
+  /**
+   * Hash a "job definition" (workload id + sorted JSON inputs) so the Code
+   * node for an NPU job has a stable, content-derived ``code_hash`` that the
+   * Neo4j MERGE can index. NPU jobs have no source code text (the workload
+   * binary lives on the host runner), so the hash is over "what was asked
+   * for" — same workload + same inputs ⇒ same hash ⇒ same Code node.
+   * Deterministic JSON.stringify with sorted keys keeps the input order from
+   * leaking into the digest.
+   */
+  private npuJobDefinitionHash(job: NpuJob): string {
+    const canonical = JSON.stringify(job.inputs ?? {}, Object.keys(job.inputs ?? {}).sort());
+    return createHash("sha256").update(`${job.workloadId}\n${canonical}`).digest("hex");
+  }
+
+  /** Map an NpuJobState onto the graph's status vocabulary. Non-terminal states
+   *  are returned as undefined so the caller can short-circuit (the agent's
+   *  result polling will eventually reach a terminal state and re-mirror). */
+  private static npuStateToStatus(state: NpuJobState): "succeeded" | "failed" | "cancelled" | undefined {
+    switch (state) {
+      case "succeeded":
+        return "succeeded";
+      case "failed":
+        return "failed";
+      case "cancelled":
+        return "cancelled";
+      case "interrupted":
+        return "failed";
+      case "queued":
+      case "running":
+        return undefined;
+    }
+  }
+
+  /**
+   * Fire-and-forget mirror of one terminal NPU job's state to the memory
+   * graph. Never throws. Called from the workspace layer after the job's
+   * created files were declared as artifacts — only mirrors the ToolCall +
+   * Code and links it to the already-mirrored Artifact versions. Jobs that
+   * haven't reached a terminal state are skipped (no empty ToolCall stub).
+   *
+   * ``artifacts`` carries the subset of ``declareNpuJobArtifacts`` outputs
+   * that landed successfully (``ok: true`` only — failed declarations have
+   * no artifact_id to hang a ``produces`` edge off). The workspace layer
+   * shapes them into the lightweight ``{artifactId, path, version}`` form;
+   * the recorder enriches each entry with the catalog's logicalName /
+   * mediaType / projectId / contentHash so the sink payload satisfies
+   * ``MemoryGraphProducedArtifact``.
+   */
+  observeNpuJob(
+    job: NpuJob,
+    options: {
+      artifacts: Array<{ artifact_id: string; path: string; version: number }>;
+      parentSubagentId?: string;
+      sessionId: string;
+      turnId: string;
+    },
+  ): void {
+    try {
+      const status = ProvenanceRecorder.npuStateToStatus(job.state);
+      if (!status) {
+        // Non-terminal (queued/running). Result was polled before the job
+        // finished; the agent will re-poll and we'll get another shot then.
+        return;
+      }
+      const producedArtifacts = this.enrichNpuArtifacts(options.sessionId, options.artifacts);
+      this.observeExecution({
+        executionId: job.id,
+        sessionId: options.sessionId,
+        turnId: options.turnId,
+        tool: "run_npu_job",
+        toolName: "run_npu_job",
+        language: null,
+        codeHash: this.npuJobDefinitionHash(job),
+        exitCode: job.exitCode ?? null,
+        status,
+        startedAt: job.startedAt ?? job.createdAt,
+        finishedAt: job.finishedAt ?? job.updatedAt,
+        producedArtifacts,
+        stdoutHash: null,
+        stderrHash: null,
+        envHash: job.environmentRevisionId
+          ? this.store.listEnvironmentRevisions().find((revision) => revision.id === job.environmentRevisionId)?.snapshot.hash ?? null
+          : null,
+        parentSubagentId: options.parentSubagentId,
+      });
+    } catch (error) {
+      // Memory-graph mirror must never bubble up into the agent loop. Swallow
+      // and log via the sink's own warn path (it catches its own errors
+      // independently) — this guard only catches errors thrown before the
+      // sink call (e.g. when listEnvironmentRevisions throws on a corrupt
+      // catalog), which would otherwise tear down the result binding.
+      void error;
+    }
+  }
+
+  /** Look up each lightweight artifact in the catalog and return the full
+   *  ``MemoryGraphProducedArtifact`` shape. Versions that have already been
+   *  pruned (no match) are skipped with an empty entry so the produces edge
+   *  doesn't dangle on a missing Artifact node — but the artifact_id / path /
+   *  version still gets through so the sink can attach a partial edge. The
+   *  sink call itself is no-op when its target Neo4j nodes are absent, so a
+   *  missing version record is silent (matches ``recordGeneratedFiles``'s
+   *  fire-and-forget contract). */
+  private enrichNpuArtifacts(
+    sessionId: string,
+    artifacts: Array<{ artifact_id: string; path: string; version: number }>,
+  ): Array<{ artifactId: string; path: string; version: number; logicalName: string; mediaType: string; projectId: string; contentHash?: string; turnId?: string }> {
+    if (!artifacts.length) return [];
+    const artifactsById = new Map(this.store.listArtifacts(sessionId).map((entry) => [entry.id, entry]));
+    const out: Array<{ artifactId: string; path: string; version: number; logicalName: string; mediaType: string; projectId: string; contentHash?: string; turnId?: string }> = [];
+    for (const item of artifacts) {
+      const artifact = artifactsById.get(item.artifact_id);
+      const versions = this.store.listArtifactVersions(sessionId, item.artifact_id);
+      const version = versions.find((entry) => entry.version === item.version) ?? versions.at(-1);
+      if (!version || !artifact) {
+        // Catalog miss — still emit a minimal entry so the agent's view of
+        // produced files keeps its row count, but skip the rich fields. The
+        // sink tolerates missing nodes (MERGE skips absent targets).
+        continue;
+      }
+      out.push({
+        artifactId: item.artifact_id,
+        contentHash: version.content.hash,
+        logicalName: artifact.name,
+        mediaType: version.mediaType,
+        path: item.path,
+        projectId: version.projectId,
+        turnId: version.turnId,
+        version: item.version,
+      });
+    }
+    return out;
   }
 
   async executeShell(options: RecordShellExecutionOptions): Promise<ShellExecutionResult> {
@@ -716,6 +859,7 @@ export class ProvenanceRecorder {
       sessionId: options.sessionId,
       turnId: options.turnId,
       tool: "run_shell",
+      toolName: "run_shell",
       language: null,
       codeHash: code.hash,
       exitCode: result.exitCode,
@@ -890,6 +1034,7 @@ export class ProvenanceRecorder {
       sessionId: options.sessionId,
       turnId: options.turnId,
       tool: result.language === "python" ? "run_python" : "run_r",
+      toolName: result.language === "python" ? "run_python" : "run_r",
       language: result.language,
       codeHash: code.hash,
       exitCode: result.exitCode,

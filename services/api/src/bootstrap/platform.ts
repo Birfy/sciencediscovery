@@ -169,7 +169,11 @@ export function createPlatformServices(
     return map;
   };
   const mcpCatalog = new McpSourceCatalog(mcpRegistry, mcpGateway, mcpProxyMap, (catalog) => customMcpServers.applyCatalog(catalog));
-  const webBroker = new WebBroker(config.dataDir, store, new NativeWebProviderClient());
+  // WebBroker mirrors successful web_search / web_fetch to the graph (WebPage
+  // nodes by URL); the registry's ``toolGraphType(...)`` gates the emit. The
+  // sink is the same instance used by the MCP broker — fire-and-forget in
+  // both paths.
+  const webBroker = new WebBroker(config.dataDir, store, new NativeWebProviderClient(), { memoryGraphSink });
   const mcpBroker = new McpGovernanceBroker(
     config.dataDir,
     store,

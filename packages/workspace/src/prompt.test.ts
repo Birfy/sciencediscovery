@@ -221,7 +221,7 @@ test("memory graph prompt lays out the citation-chain flow in order", () => {
   assert.match(prompt, /cites_evidence_aliases as/i);
   assert.match(prompt, /cites_artifact_aliases as/i);
   assert.match(prompt, /from step 3/i);
-  assert.match(prompt, /Every \[evidenceN\]\/\[artifactN\]\/\[sourcefileN\] token in the body MUST have a matching entry in the same declare_claim's alias params/i);
+  assert.match(prompt, /Every \[evidenceN\]\/\[artifactN\]\/\[sourcefileN\]\/\[dbrecordN\] token in the body MUST have a matching entry in the same declare_claim's alias params/i);
   // Alias format is fixed to evidence+number / artifact+number /
   // sourcefile+number, no other formats.
   assert.match(prompt, /evidence\+number for evidence \(e\.g\. \[evidence1\]\)/i);
