@@ -68,7 +68,8 @@ export interface StateProvider {
 
 /**
  * Optimistic barrier for cooperating local providers. Two complete reads must
- * agree, including revisions. External observations must declare reference-only.
+ * agree, including revisions. Reference-only observations are pinned once per
+ * checkpoint: they are not participants in the local consistency barrier.
  */
 export async function captureStateView(input: {
   id: string;
@@ -81,21 +82,28 @@ export async function captureStateView(input: {
   if (new Set(providers.map((p) => p.id)).size !== providers.length) throw new Error("Duplicate state provider");
   const attempts = input.maxAttempts ?? 3;
   if (!Number.isSafeInteger(attempts) || attempts < 1 || attempts > 10) throw new Error("Invalid state capture retry limit");
+  const references = new Map<string, ComponentState>();
   const read = async () => {
     const values: ComponentState[] = [];
     for (const provider of providers) {
       input.signal.throwIfAborted();
-      const state = await provider.capture(input.signal);
+      const state = references.get(provider.id) ?? await provider.capture(input.signal);
       if (state.id !== provider.id) throw new Error(`State provider identity mismatch: ${provider.id}`);
-      values.push(JSON.parse(canonicalState(state)) as ComponentState);
+      const snapshot = JSON.parse(canonicalState(state)) as ComponentState;
+      if (snapshot.fidelity === "reference-only") references.set(provider.id, snapshot);
+      values.push(snapshot);
     }
     input.signal.throwIfAborted();
     return values;
   };
+  const changed = new Set<string>();
   for (let attempt = 0; attempt < attempts; attempt++) {
     const before = await read();
     const after = await read();
     if (canonicalState(before) === canonicalState(after)) return createStateView({ id: input.id, scope: input.scope, components: after });
+    for (let index = 0; index < before.length; index++) {
+      if (canonicalState(before[index]) !== canonicalState(after[index])) changed.add(before[index]!.id);
+    }
   }
-  throw new Error("State changed during checkpoint capture");
+  throw new Error(`State changed during checkpoint capture: ${[...changed].join(", ")}`);
 }

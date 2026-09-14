@@ -26,3 +26,23 @@ test("capture retries revision changes and rejects continuously changing state",
   await assert.rejects(captureStateView({ ...input, signal: AbortSignal.abort() }), /abort/i);
   await assert.rejects(captureStateView({ ...input, providers: [provider, provider] }), /Duplicate/);
 });
+
+test("reference-only observations are pinned once while local states still converge", async () => {
+  let observations = 0, localReads = 0;
+  const providers: StateProvider[] = [
+    { id: "authorities", capture: async () => ({ ...component(++observations), id: "authorities", fidelity: "reference-only" }) },
+    { id: "plan", capture: async () => component(Math.min(++localReads, 2)) },
+  ];
+  const input = { id: "run:1", scope: "session", signal: new AbortController().signal, providers };
+  const first = await captureStateView(input);
+  assert.equal(observations, 1, "sibling progress must not invalidate the checkpoint");
+  assert.deepEqual(first.read("authorities"), { value: 1 });
+  assert.deepEqual(first.read("plan"), { value: 2 });
+  assert.equal(first.checkpoint.components.find(state => state.id === "authorities")?.fidelity, "reference-only");
+  const next = await captureStateView({ ...input, id: "run:2" });
+  assert.deepEqual(next.read("authorities"), { value: 2 }, "a new checkpoint takes a fresh observation");
+  assert.deepEqual(first.read("authorities"), { value: 1 }, "recording and projection retain the original observation");
+  await assert.rejects(captureStateView({ ...input, providers: [providers[0]!,
+    { id: "plan", capture: async () => component(++localReads) }],
+  }), /State changed during checkpoint capture: plan/);
+});

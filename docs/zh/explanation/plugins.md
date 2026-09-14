@@ -94,7 +94,7 @@ packages/plan/
                  └──────────────→ Recorder 同检查点溯源
 ```
 
-`StateCoordinator` 协调领域命令、迁移与采集；Plan 插件通过它包装更新和快照读取。`captureStateView` 连续采集比对，有限重试后仍有变化就失败，不能把混合时刻的数据标成一致快照。外部不可冻结观测标为 `reference-only`，不是跨服务事务保证。
+`StateCoordinator` 协调领域命令、迁移与采集；Plan 插件通过它包装更新和快照读取。`captureStateView` 对 `captured` 状态连续采集比对，有限重试后仍有变化就失败。外部不可冻结观测标为 `reference-only`，每个检查点只采集并固定一次，不参与本地一致性屏障；兄弟 Agent 的持续进展不会使当前 Agent 无法启动。新检查点重新观测，模型投影和 Recorder 使用同一份固定值。这不是跨服务事务保证，不能把参考观测描述成与本地状态同一时刻的原子快照。
 
 `schemaVersion` 表示数据格式，`revision` 表示该组件状态版本，检查点将各片段关联起来；它们不同于插件包版本或配置组合 revision。`StateView` 校验唯一 ID 和版本、隔离可变引用，contributor 通过 `stateReads` 限定读取范围。缺少必要状态应失败，不应现场再读一份更新数据凑出上下文。
 
