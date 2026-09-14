@@ -1584,6 +1584,7 @@ export function createWorkspaceTools(workspaceRoot: string, options: WorkspaceTo
     };
     tools.push(extractPdf);
   }
+  tools.push(...(options.extraTools ?? []));
   return filterTools(tools, options.toolPolicy);
 }
 
@@ -1927,7 +1928,6 @@ export function createSubagentTools(options: Pick<WorkspaceToolOptions, "runSuba
     };
     tools.push(task);
   }
-  tools.push(...(options.extraTools ?? []));
   return filterTools(tools, options.toolPolicy);
 }
 
