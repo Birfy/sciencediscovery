@@ -3,7 +3,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { schedulerPlugin } from "./index.js";
+import { schedulerPlugin } from "./plugin.js";
 test("default scheduling contribution preserves the task tool and policy", () => {
   const runSubagent = async () => { throw new Error("not invoked"); };
   assert.equal(schedulerPlugin({ runSubagent }).create().contribution.tools[0]?.name, "task");

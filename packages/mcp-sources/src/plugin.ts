@@ -1,8 +1,8 @@
 // Copyright (C) 2026-2026 Huawei Technologies Co., Ltd
 // Licensed under the Apache License, Version 2.0 (the "License");
-import { createLlmWikiSource, createPublicBiomedSources, PUBLIC_BIOMED_SOURCE_DEFINITIONS } from "@sciencediscovery/mcp-sources";
+import { createLlmWikiSource, createPublicBiomedSources, PUBLIC_BIOMED_SOURCE_DEFINITIONS } from "./index.js";
 import type { PluginDefinition } from "@sciencediscovery/plugin-sdk";
-import { uniprotPlugin } from "./uniprot.js";
+import { uniprotPlugin } from "./uniprot-plugin.js";
 import { connectorManifest } from "./manifest.js";
 import type { McpSourceAdapter } from "@sciencediscovery/schema";
 
@@ -31,4 +31,4 @@ export const builtinMcpSourcePlugins: readonly PluginDefinition<ConnectorContrib
 ];
 
 export const builtinMcpSourceManifests = builtinMcpSourcePlugins.map((plugin) => plugin.manifest);
-export { filterEnabledMcpSources } from "@sciencediscovery/mcp-sources";
+export { filterEnabledMcpSources } from "./index.js";

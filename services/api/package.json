@@ -12,7 +12,6 @@
   },
   "dependencies": {
     "@sciencediscovery/plugin-sdk": "workspace:*",
-    "@sciencediscovery/plugin-plan": "workspace:*",
     "@sciencediscovery/artifact-manager": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@sciencediscovery/cas": "workspace:*",
@@ -40,11 +39,10 @@
     "fflate": "0.8.2",
     "undici": "8.7.0",
     "yaml": "2.9.0",
-    "@sciencediscovery/plugin-skill": "workspace:*",
-    "@sciencediscovery/plugin-mcp": "workspace:*",
-    "@sciencediscovery/plugin-scheduler": "workspace:*",
-    "@sciencediscovery/plugin-mcp-sources": "workspace:*",
-    "@sciencediscovery/plugin-artifact-json": "workspace:*"
+    "@sciencediscovery/skill": "workspace:*",
+    "@sciencediscovery/mcp": "workspace:*",
+    "@sciencediscovery/scheduler": "workspace:*",
+    "@sciencediscovery/artifact-json": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "26.1.1",

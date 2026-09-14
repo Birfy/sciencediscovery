@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createPluginScope } from "@sciencediscovery/plugin-sdk";
-import { mcpPlugin } from "./index.js";
+import { mcpPlugin } from "./plugin.js";
 test("MCP contribution preserves source identity, deferral and tool policy", async () => {
   const ports = { mcpTools: [{ name: "fixture_lookup", displayName: "Lookup", description: "lookup", sourceId: "fixture", toolId: "lookup",
     inputSchema: { type: "object" }, routing: { keywords: ["lookup"], mode: "prefer" as const, priority: 1 },

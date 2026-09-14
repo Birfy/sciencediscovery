@@ -1,13 +1,13 @@
 // Copyright (C) 2026-2026 Huawei Technologies Co., Ltd
 // Licensed under the Apache License, Version 2.0 (the "License");
 import type { ComponentProps } from "react";
-import { SkillSettingsSection } from "@sciencediscovery/plugin-skill/web";
-import { McpSettingsSection } from "@sciencediscovery/plugin-mcp/web";
-import { manifest as skill } from "@sciencediscovery/plugin-skill/manifest";
-import { manifest as mcp } from "@sciencediscovery/plugin-mcp/manifest";
-import { manifest as plan } from "@sciencediscovery/plugin-plan/manifest";
-import { manifest as scheduler } from "@sciencediscovery/plugin-scheduler/manifest";
-import { manifest as json } from "@sciencediscovery/plugin-artifact-json/manifest";
+import { SkillSettingsSection } from "@sciencediscovery/skill/web";
+import { McpSettingsSection } from "@sciencediscovery/mcp/web";
+import { manifest as skill } from "@sciencediscovery/skill/manifest";
+import { manifest as mcp } from "@sciencediscovery/mcp/manifest";
+import { manifest as plan } from "@sciencediscovery/plan/manifest";
+import { manifest as scheduler } from "@sciencediscovery/scheduler/manifest";
+import { manifest as json } from "@sciencediscovery/artifact-json/manifest";
 import { mergePluginSettings, pluginEnabled } from "@sciencediscovery/plugin-sdk";
 import { useLocale } from "../i18n/index.js";
 

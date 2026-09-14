@@ -1,19 +1,23 @@
 {
-  "name": "@sciencediscovery/plugin-scheduler",
+  "name": "@sciencediscovery/scheduler",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "exports": {
+    "./plugin": {
+      "types": "./src/plugin.ts",
+      "default": "./dist/plugin.js"
+    },
     ".": {
-      "types": "./src/index.ts",
-      "default": "./dist/index.js"
+      "types": "./src/plugin.ts",
+      "default": "./dist/plugin.js"
     },
     "./manifest": {
       "types": "./src/manifest.ts",
       "default": "./dist/manifest.js"
     }
   },
-  "types": "./src/index.ts",
+  "types": "./src/plugin.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "node --test dist/*.test.js",

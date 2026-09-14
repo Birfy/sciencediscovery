@@ -3,7 +3,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import { canonicalState } from "@sciencediscovery/context";
-import { filterEnabledMcpSources } from "@sciencediscovery/plugin-mcp-sources";
+import { filterEnabledMcpSources } from "@sciencediscovery/mcp-sources";
 import { BridgeError, PluginBridge, mergePluginSettings, negotiatePlugins, pluginEnabled, type BridgeScope } from "@sciencediscovery/plugin-sdk";
 import type { RuntimeSettingsOverrides, RuntimeSettingsDetails, SessionRun } from "@sciencediscovery/schema";
 import type { SessionStore } from "../store.js";

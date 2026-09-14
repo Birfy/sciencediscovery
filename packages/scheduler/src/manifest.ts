@@ -3,7 +3,7 @@
 import type { PluginManifest } from "@sciencediscovery/plugin-sdk";
 export const manifest: PluginManifest = {
   id: "scheduler", version: "0.1.0", apiVersion: 1,
-  entries: {"runtime":".","web":"./manifest"},
+  entries: {"runtime":"./plugin","web":"./manifest"},
   capabilities: ["tools","settings"], contributes: ["tools","settings"],
   services: { requires: [{ id: "subagent.dispatch", version: 1 }] },
   permissions: ["runtime.contribute"],

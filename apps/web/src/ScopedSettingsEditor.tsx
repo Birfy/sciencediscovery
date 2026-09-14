@@ -28,7 +28,7 @@ import type {
 } from "@sciencediscovery/schema";
 
 import { PluginSettingsSections } from "./plugins/settings.js";
-import { normalizeSkillLibraryMounts } from "@sciencediscovery/plugin-skill/web";
+import { normalizeSkillLibraryMounts } from "@sciencediscovery/skill/web";
 
 import { modelOptionLabel } from "./modelLabels.js";
 import { useLocale, type MessageKey } from "./i18n/index.js";

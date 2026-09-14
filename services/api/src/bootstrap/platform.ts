@@ -21,7 +21,7 @@ import { createIdeaTreeAuthorityRegistry, type IdeaTreePersistence } from "@scie
 import { ideaTreeRepositoryForSession } from "../idea-tree/python-client.js";
 import { createMcpSourceRegistry } from "@sciencediscovery/mcp-sources";
 import { createPluginScope } from "@sciencediscovery/plugin-sdk";
-import { builtinMcpSourcePlugins } from "@sciencediscovery/plugin-mcp-sources";
+import { builtinMcpSourcePlugins } from "@sciencediscovery/mcp-sources/plugin";
 import { CustomMcpServers } from "../mcp/custom-servers.js";
 import { shortErrorMessage } from "@sciencediscovery/operational-logging";
 import { reviewerLog } from "@sciencediscovery/provenance";

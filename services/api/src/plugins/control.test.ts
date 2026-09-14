@@ -6,7 +6,7 @@ import { resolve } from "node:path";
 import test, { type TestContext } from "node:test";
 import { SessionStore } from "../store.js";
 import { installedPlugins } from "./catalog.js";
-import { builtinMcpSourceManifests, filterEnabledMcpSources } from "@sciencediscovery/plugin-mcp-sources";
+import { builtinMcpSourceManifests, filterEnabledMcpSources } from "@sciencediscovery/mcp-sources/plugin";
 import { handlePluginRequest } from "./http.js";
 import { createServer } from "node:http";
 import { VersionStore } from "@sciencediscovery/cas";

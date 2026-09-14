@@ -5,7 +5,7 @@ import type { PluginManifest } from "@sciencediscovery/plugin-sdk";
 export function connectorManifest(sourceId: string): PluginManifest {
   return {
     id: `connector.${sourceId}`, version: "0.1.0", apiVersion: 1,
-    entries: { platform: "." },
+    entries: { platform: "./plugin" },
     capabilities: ["connector", "settings"], contributes: ["connector", "settings"],
     services: { requires: [{ id: "mcp.sources", version: 1 }] },
     permissions: ["connector.register"],

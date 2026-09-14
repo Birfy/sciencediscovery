@@ -2,10 +2,10 @@
 // Licensed under the Apache License, Version 2.0 (the "License");
 import { createPluginScope, disabledPluginIds, validatePluginSettings, negotiatePlugins, ServiceRegistry, type PluginSettingsMap, type PluginDefinition } from "@sciencediscovery/plugin-sdk";
 import { installedPlugins } from "./catalog.js";
-import { planPlugin } from "@sciencediscovery/plugin-plan";
-import { skillPlugin } from "@sciencediscovery/plugin-skill";
-import { mcpPlugin } from "@sciencediscovery/plugin-mcp";
-import { schedulerPlugin } from "@sciencediscovery/plugin-scheduler";
+import { planPlugin } from "@sciencediscovery/plan/plugin";
+import { skillPlugin } from "@sciencediscovery/skill/plugin";
+import { mcpPlugin } from "@sciencediscovery/mcp/plugin";
+import { schedulerPlugin } from "@sciencediscovery/scheduler/plugin";
 import type { RuntimeContribution } from "@sciencediscovery/plugin-sdk/runtime";
 import type { WorkspaceAgentOptions } from "@sciencediscovery/workspace";
 import type { PlanStore } from "@sciencediscovery/plan";

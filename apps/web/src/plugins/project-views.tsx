@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0 (the "License");
 import type {ReactNode} from "react";
 import {createViewRegistry} from "@sciencediscovery/plugin-sdk/views";
-import {planView,type PlanViewInput} from "@sciencediscovery/plugin-plan/web";
+import {planView,type PlanViewInput} from "@sciencediscovery/plan/web";
 
 const records=createViewRegistry<PlanViewInput,ReactNode>([planView]);
 /** Recorded/active-run projections remain readable after nextRun configuration changes.

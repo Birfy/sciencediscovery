@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createPluginScope } from "@sciencediscovery/plugin-sdk";
 import { captureStateView, ContextContributorRegistry, registerContextContributorFactories } from "@sciencediscovery/context";
-import { planPlugin } from "./index.js";
+import { planPlugin } from "./plugin.js";
 
 test("plan plugin owns tools, batch policy and fixed-state projection together", async () => {
   let latestCalls = 0;

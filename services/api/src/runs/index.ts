@@ -14,7 +14,7 @@
 
 import { randomUUID } from "node:crypto";
 import { pluginEnabled } from "@sciencediscovery/plugin-sdk";
-import { filterEnabledMcpSources } from "@sciencediscovery/plugin-mcp-sources";
+import { filterEnabledMcpSources } from "@sciencediscovery/mcp-sources";
 import { versioningAuthorities } from "../agent-run/versioning-authorities.js";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { mkdir, readFile, writeFile } from "node:fs/promises";

@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0 (the "License");
 import { createHash } from "node:crypto";
 import { canonicalState, StateCoordinator, type AgentScope } from "@sciencediscovery/context";
-import { createPlanTool, createPlanBatchPolicy, createPlanContextFactory, type PlanStore } from "@sciencediscovery/plan";
+import { createPlanTool, createPlanBatchPolicy, createPlanContextFactory, type PlanStore } from "./index.js";
 import type { RuntimeMessage } from "@sciencediscovery/runtime-core";
 import type { PluginDefinition } from "@sciencediscovery/plugin-sdk";
 import type { RuntimeContribution } from "@sciencediscovery/plugin-sdk/runtime";

@@ -31,11 +31,11 @@
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
     "@sciencediscovery/plugin-sdk": "workspace:*",
-    "@sciencediscovery/plugin-artifact-json": "workspace:*",
-    "@sciencediscovery/plugin-skill": "workspace:*",
-    "@sciencediscovery/plugin-mcp": "workspace:*",
-    "@sciencediscovery/plugin-plan": "workspace:*",
-    "@sciencediscovery/plugin-scheduler": "workspace:*"
+    "@sciencediscovery/artifact-json": "workspace:*",
+    "@sciencediscovery/skill": "workspace:*",
+    "@sciencediscovery/mcp": "workspace:*",
+    "@sciencediscovery/plan": "workspace:*",
+    "@sciencediscovery/scheduler": "workspace:*"
   },
   "devDependencies": {
     "@types/cytoscape": "^3.31.0",

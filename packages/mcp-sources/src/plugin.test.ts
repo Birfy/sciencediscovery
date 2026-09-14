@@ -2,9 +2,9 @@
 // Licensed under the Apache License, Version 2.0 (the "License");
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createBuiltinMcpSourceRegistry, createMcpSourceRegistry } from "@sciencediscovery/mcp-sources";
+import { createBuiltinMcpSourceRegistry, createMcpSourceRegistry } from "./index.js";
 import { createPluginScope, mergePluginSettings } from "@sciencediscovery/plugin-sdk";
-import { builtinMcpSourcePlugins, builtinMcpSourceManifests, filterEnabledMcpSources } from "./index.js";
+import { builtinMcpSourcePlugins, builtinMcpSourceManifests, filterEnabledMcpSources } from "./plugin.js";
 import { connectorManifest } from "./manifest.js";
 
 test("connector manifests share a contract without sharing mutable configuration", () => {

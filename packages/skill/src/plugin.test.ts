@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { DurableContextStore } from "@sciencediscovery/context";
 import { createPluginScope } from "@sciencediscovery/plugin-sdk";
-import { skillPlugin } from "./index.js";
+import { skillPlugin } from "./plugin.js";
 test("Skill package can be disabled without constructing a second tool path", async () => {
   const ports = { skills: [], durable: new DurableContextStore(), scope: "main" as const };
   const scope = await createPluginScope([skillPlugin(ports)], ["skill"]);

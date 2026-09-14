@@ -3,7 +3,7 @@
 
 import { Component, type ReactNode } from "react";
 import { createViewRegistry } from "@sciencediscovery/plugin-sdk/views";
-import { jsonViewer, type JsonPreviewInput } from "@sciencediscovery/plugin-artifact-json/web";
+import { jsonViewer, type JsonPreviewInput } from "@sciencediscovery/artifact-json/web";
 import { useDisabledPlugins } from "./host.js";
 
 /** Trusted bundled entries only; no user paths, eval or remote module loading. */

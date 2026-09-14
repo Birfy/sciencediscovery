@@ -13,7 +13,7 @@
 // limitations under the License.
 
 import { randomUUID } from "node:crypto";
-import { filterEnabledMcpSources } from "@sciencediscovery/plugin-mcp-sources";
+import { filterEnabledMcpSources } from "@sciencediscovery/mcp-sources";
 import { handlePluginRequest } from "../plugins/http.js";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { mkdir, readFile, writeFile } from "node:fs/promises";

@@ -1,23 +1,24 @@
 {
-  "name": "@sciencediscovery/plugin-plan",
+  "name": "@sciencediscovery/skill",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "exports": {
+    "./web": { "types": "./src/web.tsx", "default": "./dist/web.js" },
+    "./plugin": {
+      "types": "./src/plugin.ts",
+      "default": "./dist/plugin.js"
+    },
     ".": {
-      "types": "./src/index.ts",
-      "default": "./dist/index.js"
+      "types": "./src/plugin.ts",
+      "default": "./dist/plugin.js"
     },
     "./manifest": {
       "types": "./src/manifest.ts",
       "default": "./dist/manifest.js"
-    },
-    "./web": {
-      "types": "./src/web.tsx",
-      "default": "./dist/web.js"
     }
   },
-  "types": "./src/index.ts",
+  "types": "./src/plugin.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "node --test dist/*.test.js",
@@ -25,9 +26,8 @@
   },
   "dependencies": {
     "@sciencediscovery/plugin-sdk": "workspace:*",
-    "@sciencediscovery/plan": "workspace:*",
+    "@sciencediscovery/workspace": "workspace:*",
     "@sciencediscovery/context": "workspace:*",
-    "@sciencediscovery/tools": "workspace:*",
     "@sciencediscovery/runtime-core": "workspace:*",
     "@sciencediscovery/schema": "workspace:*"
   },
