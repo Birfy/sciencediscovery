@@ -14,6 +14,7 @@ async function api(page:Page,path:string,data?:unknown) {
  * E2E-META
  * Purpose: Project plugin configuration affects the next Run, Session overrides restore a capability, and an approved experiment is applied without altering unrelated settings.
  * Steps:
+ *   0. Disable PubMed through scoped configuration and verify the Composer hides it; restoring it refreshes the open picker without a reload.
  *   1. Configure internal plugins through the API; Project settings only expose optional extensions and preserve hidden configuration on desktop and narrow screens.
  *   2. Complete a Run without disabled tools; restore Plan through the Session API and see a real Plan card after reload.
  *   3. Prepare a fixed candidate and complete the same task in baseline and candidate Sessions.
@@ -49,6 +50,25 @@ test("项目组合、会话覆盖与审批后的候选应用", {tag:"@mocked"},a
     await expect(dialog).toBeVisible();await dialog.locator("details.plugin-settings > summary").click();return dialog;
   };
   try {
+    await journey.step("连接器选择与项目插件配置一致","关闭 PubMed 后不能勾选它，UniProt 仍可选；恢复后无须刷新即可重新选择 PubMed。",async()=>{
+      const configure=async(enabled:boolean)=>{
+        const baseline=await api(page,root);
+        await api(page,root+"/bridge",{apiVersion:1,pluginId:"host.settings",scope:{projectId:fixture.project.id},kind:"command",method:"replace",
+          input:{expectedRevision:baseline.revision,overrides:{...baseline.settings.overrides,plugins:{"connector.pubmed":{enabled}}}}});
+      };
+      await configure(false);
+      await openProjectSession(page,fixture);
+      await page.locator(".connector-picker-trigger").click();
+      const picker=page.locator(".connector-picker-popover");
+      await expect(picker.getByRole("checkbox",{name:/UniProt/})).toBeVisible();
+      await expect(picker.getByRole("checkbox",{name:/PubMed/})).toHaveCount(0);
+      await configure(true);
+      await expect(picker.getByRole("checkbox",{name:/PubMed/})).toBeVisible();
+      const pubmed=picker.getByRole("checkbox",{name:/PubMed/});
+      // Selection is persisted by the API before the controlled input updates.
+      if (!await pubmed.isChecked()) await pubmed.click();
+      await expect(pubmed).toBeChecked();
+    });
     await journey.step("管理可选扩展而不改动内部插件组合","界面仅有 JSON 预览开关；保存后保留 API 配置的内部和数据源插件关闭项，其他项目不受影响。",async()=>{
       const baseline=await api(page,root);
       await api(page,root+"/bridge",{apiVersion:1,pluginId:"host.settings",scope:{projectId:fixture.project.id},kind:"command",method:"replace",

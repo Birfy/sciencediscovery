@@ -9,6 +9,6 @@ export { connectorName } from "@sciencediscovery/mcp/web";
 export function ConnectorPicker(props:Omit<ComponentProps<typeof McpPicker>,"t"|"icons">) {
   const {t}=useLocale(), disabled=useDisabledPlugins();
   if (disabled.includes("mcp")) return null;
-  return <McpPicker {...props} connectors={props.connectors.filter(item=>item.id!=="uniprot" || !disabled.includes("connector.uniprot"))}
+  return <McpPicker {...props} connectors={props.connectors.filter(item=>!disabled.includes(`connector.${item.id}`))}
     t={t} icons={{database:<DatabaseIcon size={15}/>,external:<ExternalIcon size={13}/>}}/>;
 }
