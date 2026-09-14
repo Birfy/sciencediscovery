@@ -39,6 +39,7 @@ export interface ModelContextSnapshot<I = unknown> {
 }
 
 export interface ContextAssemblyRecord {
+  capturedAt?: string;
   checkpoint?: StateCheckpoint;
   turn: number;
   manifest: AgentStateRef;
@@ -134,6 +135,7 @@ export class AgentVersionRecorder<M extends RuntimeMessage, I, U> implements Tur
   private before!: AgentStateRef;
   private modelContext!: AgentStateRef;
   private context!: AgentStateRef;
+  private activeContext?: AgentStateRef;
   private transcript: M[] = [];
   private observations: AgentStateRef[] = [];
   private turnObservations: { sequence: number; ref: AgentStateRef }[] = [];
@@ -141,6 +143,7 @@ export class AgentVersionRecorder<M extends RuntimeMessage, I, U> implements Tur
   private offsets = new Map<string, number>();
   private children: AgentStateRef[] = [];
   private assemblyTrace: unknown = null;
+  private turnStartedAt = new Date().toISOString();
   private readonly assembler: AgentStateAssembler;
   private inputView?: StateView;
 
@@ -165,11 +168,14 @@ export class AgentVersionRecorder<M extends RuntimeMessage, I, U> implements Tur
     const initialState = await this.state(0, "before", history);
     const start = await this.store.putRecord("TrajectoryStart", { revision: this.revision, initialState });
     await this.refs.commit(this.store, `trajectories/${encodeURIComponent(this.options.trajectoryId)}/start`, null, start);
+    await this.refs.commit(this.store, `agents/${encodeURIComponent(this.options.agentId)}/trajectories/${encodeURIComponent(this.options.trajectoryId)}`, null, start);
   }
 
   async beforeTurn({ turn, history }: Parameters<TurnLifecycle<M, I, U>["beforeTurn"]>[0]): Promise<void> {
     this.turnObservations = [];
+    this.turnStartedAt = new Date().toISOString();
     this.events.clear();
+    this.activeContext = undefined;
     this.children = [];
     this.assemblyTrace = null;
     this.before = await this.state(turn, "before", history);
@@ -198,6 +204,7 @@ export class AgentVersionRecorder<M extends RuntimeMessage, I, U> implements Tur
       boundary: "ProviderModelClient.invoke", input: assembly.modelInput,
     } satisfies ModelContextSnapshot<I>));
     this.context = await this.store.putRecord("ContextAssemblyRecord", jsonValue({
+      capturedAt: new Date().toISOString(),
       turn, manifest: this.manifest, state: this.before, modelContext: this.modelContext, trace: this.assemblyTrace,
       ...(this.inputView ? { checkpoint: this.inputView.checkpoint } : {}),
     } satisfies ContextAssemblyRecord));
@@ -207,6 +214,7 @@ export class AgentVersionRecorder<M extends RuntimeMessage, I, U> implements Tur
     // keeps both attempts while the live audit ref tracks the latest input.
     const name = `attempts/${encodeURIComponent(this.options.trajectoryId)}/${turn}`;
     await this.refs.commit(this.store, name, this.refs.head(name), this.context);
+    this.activeContext = this.context;
   }
 
   async recordObservation(input: { call: RuntimeToolCall; content: string; details?: unknown; isError: boolean; sequence: number }): Promise<void> {
@@ -219,7 +227,7 @@ export class AgentVersionRecorder<M extends RuntimeMessage, I, U> implements Tur
     const stream = event.type === "tool_execution_start" || event.type === "tool_execution_end"
       ? `tool:${event.call.id}` : this.options.agentId;
     const values = this.events.get(stream) ?? [];
-    values.push(jsonValue(event)); this.events.set(stream, values);
+    values.push(jsonValue({ ...event, recordedAt: new Date().toISOString(), contextRef: this.activeContext ?? null })); this.events.set(stream, values);
   }
 
   childCompleted(agentId: string): void {
@@ -244,10 +252,22 @@ export class AgentVersionRecorder<M extends RuntimeMessage, I, U> implements Tur
     }
     const after = await this.state(turn, "after", history);
     this.head = await this.coordinator.commit({
+      startedAt: this.turnStartedAt, finishedAt: new Date().toISOString(),
       agentId: this.options.agentId, trajectoryId: this.options.trajectoryId, turn,
       parent: this.head, revision: this.revision, before: this.before, after,
       context: this.context, modelContext: this.modelContext, actions, childTrajectories: this.children, eventSegments,
     });
+  }
+
+  /** Retain the final partial turn as audit evidence, without advancing the Agent head. */
+  async flushEvents(): Promise<void> {
+    if (!this.refs) return;
+    for (const [stream, events] of this.events) {
+      if (!events.length) continue;
+      const ref = await this.store.putRecord("EventSegment", { stream, events });
+      const name = `trajectory-events/${encodeURIComponent(this.options.trajectoryId)}/${encodeURIComponent(stream)}`;
+      await this.refs.commit(this.store, name, this.refs.head(name), ref);
+    }
   }
 
   close(): void { this.refs?.close(); }

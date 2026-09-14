@@ -623,6 +623,7 @@ class NativeAgent implements NativeAgentHandle {
       if (usage) this.emit({ type: "usage", usage });
       return { finalMessages: structuredClone(this.history.filter((message) => message.role !== "system")) };
     } finally {
+      await this.versionRecorder?.flushEvents().catch((error: unknown) => console.error("Trajectory event flush failed", error instanceof Error ? error.message : "unknown error"));
       this.versionRecorder?.close();
       if (turnTimeoutId) clearTimeout(turnTimeoutId);
       if (idleTimeoutId) clearTimeout(idleTimeoutId);
