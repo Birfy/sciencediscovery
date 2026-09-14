@@ -3,9 +3,9 @@
 import { uniprotMcpSource } from "@sciencediscovery/mcp-sources";
 import type { McpSourceAdapter } from "@sciencediscovery/schema";
 import type { PluginDefinition } from "@sciencediscovery/plugin-sdk";
-import { manifest } from "./manifest.js";
+import { connectorManifest } from "./manifest.js";
 
 export const uniprotPlugin: PluginDefinition<{ sources: McpSourceAdapter[] }> = {
-  manifest,
+  manifest: connectorManifest("uniprot"),
   create: () => ({ contribution: { sources: [uniprotMcpSource] } }),
 };

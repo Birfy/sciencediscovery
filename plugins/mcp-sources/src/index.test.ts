@@ -5,6 +5,18 @@ import test from "node:test";
 import { createBuiltinMcpSourceRegistry, createMcpSourceRegistry } from "@sciencediscovery/mcp-sources";
 import { createPluginScope, mergePluginSettings } from "@sciencediscovery/plugin-sdk";
 import { builtinMcpSourcePlugins, builtinMcpSourceManifests, filterEnabledMcpSources } from "./index.js";
+import { connectorManifest } from "./manifest.js";
+
+test("connector manifests share a contract without sharing mutable configuration", () => {
+  const first = connectorManifest("uniprot");
+  const second = connectorManifest("pubmed");
+  assert.deepEqual({ ...first, id: second.id }, second);
+  assert.notEqual(first.configuration, second.configuration);
+  assert.notEqual(first.services, second.services);
+  for (const manifest of builtinMcpSourceManifests) {
+    assert.deepEqual(manifest, connectorManifest(manifest.id.slice("connector.".length)));
+  }
+});
 
 test("plugin installation preserves every built-in manifest, tool and governance contract", async () => {
   const scope = await createPluginScope(builtinMcpSourcePlugins);

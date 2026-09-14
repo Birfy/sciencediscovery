@@ -13,7 +13,6 @@
   "dependencies": {
     "@sciencediscovery/mcp-sources": "workspace:*",
     "@sciencediscovery/plugin-sdk": "workspace:*",
-    "@sciencediscovery/plugin-uniprot": "workspace:*",
     "@sciencediscovery/schema": "workspace:*"
   },
   "devDependencies": { "@types/node": "26.1.1" }

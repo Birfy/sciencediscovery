@@ -112,8 +112,7 @@ Bridge 在锁内重新校验 `expectedRevision` 与取消状态；ApplyPort 在�
 | --- | --- |
 | `plugins/skill` / `skill` | Skill 工具、渐进披露/目录上下文、状态及选择设置；继续用既有 Skill 目录/库资产 Ports |
 | `plugins/mcp` / `mcp` | MCP 工具贡献、结果提交与设置；继续用既有 MCP 客户端、来源和权限治理 |
-| `plugins/uniprot` / `connector.uniprot` | 注册真实 UniProt 数据源；与 MCP 执行开关组合，关闭后不提供新的对应工具 |
-| `plugins/mcp-sources` / `connector.<source-id>` | 统一安装 UniProt、LLM Wiki 及 11 个公共生物医学源；每个源独立 manifest 和工厂，共用 MCP 执行与治理能力 |
+| `plugins/mcp-sources` / `connector.<source-id>` | 同包管理 UniProt、LLM Wiki 及 11 个公共生物医学源；每个源独立 manifest 和工厂，共用 MCP 执行与治理能力 |
 | `plugins/scheduler` / `scheduler` | 默认 `task` 等子 Agent 调度工具；复用既有 orchestration，不另造调度算法 |
 | `plugins/plan` / `plan` | `update_plan`、批处理策略、协调状态和上下文、项目 Plan 显示 |
 | `plugins/artifact-json` / `artifact-json` | JSON Artifact Web 预览；关闭后仍可查看原始内容 |

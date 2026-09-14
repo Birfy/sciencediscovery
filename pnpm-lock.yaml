@@ -38,9 +38,6 @@ importers:
       '@sciencediscovery/plugin-skill':
         specifier: workspace:*
         version: link:../../plugins/skill
-      '@sciencediscovery/plugin-uniprot':
-        specifier: workspace:*
-        version: link:../../plugins/uniprot
       '@sciencediscovery/schema':
         specifier: workspace:*
         version: link:../../packages/schema
@@ -563,9 +560,6 @@ importers:
       '@sciencediscovery/plugin-sdk':
         specifier: workspace:*
         version: link:../../packages/plugin-sdk
-      '@sciencediscovery/plugin-uniprot':
-        specifier: workspace:*
-        version: link:../uniprot
       '@sciencediscovery/schema':
         specifier: workspace:*
         version: link:../../packages/schema
@@ -649,22 +643,6 @@ importers:
         specifier: 19.2.7
         version: 19.2.7
 
-  plugins/uniprot:
-    dependencies:
-      '@sciencediscovery/mcp-sources':
-        specifier: workspace:*
-        version: link:../../packages/mcp-sources
-      '@sciencediscovery/plugin-sdk':
-        specifier: workspace:*
-        version: link:../../packages/plugin-sdk
-      '@sciencediscovery/schema':
-        specifier: workspace:*
-        version: link:../../packages/schema
-    devDependencies:
-      '@types/node':
-        specifier: 26.1.1
-        version: 26.1.1
-
   services/api:
     dependencies:
       '@modelcontextprotocol/sdk':
@@ -733,9 +711,6 @@ importers:
       '@sciencediscovery/plugin-skill':
         specifier: workspace:*
         version: link:../../plugins/skill
-      '@sciencediscovery/plugin-uniprot':
-        specifier: workspace:*
-        version: link:../../plugins/uniprot
       '@sciencediscovery/provenance':
         specifier: workspace:*
         version: link:../../packages/provenance

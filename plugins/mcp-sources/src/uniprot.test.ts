@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createPluginScope } from "@sciencediscovery/plugin-sdk";
-import { uniprotPlugin } from "./index.js";
+import { uniprotPlugin } from "./uniprot.js";
 test("UniProt contributes the governed source and can be independently disabled", async () => {
   const scope = await createPluginScope([uniprotPlugin]);
   const source = scope.contributions[0]!.sources[0]!;

@@ -35,8 +35,7 @@
     "@sciencediscovery/plugin-skill": "workspace:*",
     "@sciencediscovery/plugin-mcp": "workspace:*",
     "@sciencediscovery/plugin-plan": "workspace:*",
-    "@sciencediscovery/plugin-scheduler": "workspace:*",
-    "@sciencediscovery/plugin-uniprot": "workspace:*"
+    "@sciencediscovery/plugin-scheduler": "workspace:*"
   },
   "devDependencies": {
     "@types/cytoscape": "^3.31.0",
