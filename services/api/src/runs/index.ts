@@ -303,6 +303,13 @@ import { type ServerConfig } from "../bootstrap/config.js";
 import { sendError, sendJson } from "../http/response.js";
 
 const SUBAGENT_PROGRESS_FLUSH_MS = 250;
+
+/** Coalesce streamed subagent text before it reaches the run-event stream.
+ *  Each delta used to persist a full cumulative snapshot of the message, so a
+ *  stream cost O(N^2) in message length: one 2-minute subagent wrote 234 MB
+ *  across 25k lines for 34 logical steps. Consumers still receive
+ *  whole-content snapshots, just at this cadence rather than once per token. */
+const SUBAGENT_STREAM_EMIT_MS = 250;
 const activeSessions = new Map<string, RuntimeSessionRun>();
 const scheduledSessions = new Set<string>();
 const activeRunAbortControllers = new Map<string, AbortController>();
@@ -1501,10 +1508,28 @@ async function executeAgentRun(
             enqueueProgressFlush();
           }, SUBAGENT_PROGRESS_FLUSH_MS);
         };
-        const publishStep = (step: SubagentStep) => {
+        let pendingMessageStep: SubagentStep | undefined;
+        let messageEmitTimer: ReturnType<typeof setTimeout> | undefined;
+        const recordStep = (step: SubagentStep) => {
           const existing = steps.findIndex((candidate) => candidate.id === step.id);
           if (existing >= 0) steps[existing] = step;
           else steps.push(step);
+        };
+        /** Emit the newest coalesced text snapshot. Runs before every other
+         *  event so the stream keeps the order the agent produced. */
+        const flushMessageStep = () => {
+          if (messageEmitTimer) {
+            clearTimeout(messageEmitTimer);
+            messageEmitTimer = undefined;
+          }
+          if (!pendingMessageStep) return;
+          const step = pendingMessageStep;
+          pendingMessageStep = undefined;
+          void emit({ step, subagentId: subagent.id, type: "subagent.step" });
+        };
+        const publishStep = (step: SubagentStep) => {
+          recordStep(step);
+          flushMessageStep();
           void emit({ step, subagentId: subagent.id, type: "subagent.step" });
           scheduleProgressFlush();
         };
@@ -1525,7 +1550,15 @@ async function executeAgentRun(
                 status: "completed",
               };
           activeMessageStep = { id: step.id, kind };
-          publishStep(step);
+          recordStep(step);
+          pendingMessageStep = step;
+          if (!messageEmitTimer) {
+            messageEmitTimer = setTimeout(() => {
+              messageEmitTimer = undefined;
+              flushMessageStep();
+            }, SUBAGENT_STREAM_EMIT_MS);
+          }
+          scheduleProgressFlush();
         };
         try {
           handoff = continuation?.handoff ?? await prepareSubagentHandoff(store, sessionId, subagent.id, subagent.input);
@@ -1812,6 +1845,7 @@ async function executeAgentRun(
           }
           if (event.type === "usage") {
             subagent.usage = event.usage;
+            flushMessageStep();
             void emit({ subagentId: subagent.id, type: "subagent.usage", usage: event.usage });
             scheduleProgressFlush();
           }
@@ -1899,6 +1933,7 @@ async function executeAgentRun(
         for (const request of await store.cancelPendingPermissionRequests(subagent.id)) {
           await emit({ request, type: "permission.resolved" });
         }
+        flushMessageStep();
         if (progressFlushTimer) {
           clearTimeout(progressFlushTimer);
           progressFlushTimer = undefined;
