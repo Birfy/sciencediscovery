@@ -1,6 +1,6 @@
 # 插件化机制
 
-ScienceDiscovery 把可选能力组织为**可信、构建期安装的 workspace 包**，由 API 和 Web 宿主通过显式接口装配。插件化改变的是能力归属与装配方式，不是重新实现 AgentLoop。新增同类能力通常只需增加插件和宿主登记，不必修改模型—工具循环。
+ScienceDiscovery 按能力归属组织 `packages/`，组件通过插件入口接入 API 和 Web 宿主。插件是**可信、构建期安装的扩展**，不是与领域包并列的另一份功能实现。`services/` 负责进程启动和装配；当前整改保留 AgentLoop、工具名、权限、项目配置及存储语义。
 
 本文描述当前实现。需求见 [Issue #80](https://gitcode.com/openJiuwen/sciencediscovery/issues/80)，相关运行原理见 [Agent 后端](agent-backend.md)、[子 Agent 编排](subagent-orchestration.md) 和 [CAS](cas.md)。
 
@@ -36,19 +36,36 @@ Web 插件入口 → 设置、项目面板、Artifact 视图
 | SDK | manifest、生命周期、服务合同、配置验证、Bridge 和运行贡献类型 | `packages/plugin-sdk/src/` |
 | 安装清单 | 明确哪些可信包已随产品安装，不执行用户提供的入口字符串 | `services/api/src/plugins/catalog.ts` |
 | Web 宿主 | 设置、项目视图、预览入口登记；提供 UI 能力与认证 Bridge | `apps/web/src/plugins/` |
-| 插件 | 本能力的贡献、manifest、配置与视图；通过 Ports 使用领域实现 | `plugins/*` |
+| 能力组件 | 领域实现、贡献、manifest、配置与视图归同一包；通过 Ports 使用外部能力 | `packages/*` 的 `./plugin`、`./manifest`、`./web` 公开入口 |
 
 运行贡献的类型是 `RuntimeContribution`：`tools`、`contextFactories`、`stateProviders`、`batchPolicies`，以及可选 `commitResult`。它不是任意回调注册表：写状态要经领域命令，通知不能旁路修改权威数据；工具仍受 ToolRegistry、原权限和审批约束。
+
+### 目录归属与单向依赖
+
+`packages/` 回答“谁拥有这项能力”，不要求必须是公共库。`services/` 回答“启动和部署哪个进程”。`apps/web` 是浏览器外壳。顶层不再维护第二套 `plugins/` 功能树；`services/api/src/plugins` 和 `apps/web/src/plugins` 是宿主装配目录，不是领域实现副本。
+
+代码依赖应为 `services/apps → 能力组件 → 公共合同/基础能力`，package 图必须无环。运行时回调可以指向宿主实现，但组件不能反向 import 宿主。例如 Plan 声明 `PlanStore`，API 注入其实现；组件拥有状态命令和投影，宿主提供权威存储与事务，不能因此建立两份数据库双写。
+
+- 跨包只使用 `package.json.exports`，禁止相对路径绕进另一个包的 `src`；类型依赖也计入包图。
+- `./plugin` 是运行贡献入口，`./manifest` 是轻量描述，`./web` 是浏览器入口。领域根入口不反向导出 Node 插件工厂；Web 不通过根 barrel 引入服务端代码。
+- 接口默认由消费能力或领域所属包定义；仅当需要独立复用/发布或消除实际循环时抽合同包。共享接口不得再依赖具体 Provider。
+- 功能专属 worker 可以与组件同目录；独立进程不意味着另建一份功能归属。服务间走协议，组件工厂不负责读取全局环境或自行启动产品服务。
+- 必需、可替换和允许用户关闭互相独立；未来平台实现也可组件化，但本次不替换 Loop、权限与执行协议。
+
+`pnpm architecture:check` 包含正反例测试和源码/清单图检查：发现反向宿主依赖、循环、非公开跨包导入，以及 `./web`、`./manifest`、`./views` 经仓内运行时依赖链进入 Node builtin 的问题。检查解析静态导入、再导出、类型导入和字面量 dynamic import/require；非字面量动态加载与第三方包内部仍需构建/评审约束，不是安全沙箱。
+
+**既有债务明确保留：** `packages/executor → @sciencediscovery/runner` 仍存在。它涉及签名、部署版本、科学环境 provisioner 与 Runner 分发，早于本次插件整改。检查仅允许清单中已有的精确文件/依赖边，不放行新增文件，也不豁免循环检查；迁移需单独梳理 Runner 合同与分发产物。本次六个组件没有反向宿主依赖，不宣称全仓已完成服务瘦身。
 
 ## 2. 插件包、生命周期与启停
 
 插件包以 `PluginManifest` 声明身份与合同：`id/version/apiVersion`、`entries`、依赖 `requires`、服务 `services`、`permissions`、配置 `configuration`、贡献 `contributes`。`settingsFields` 列明允许该插件设置入口修改的既有业务字段。包路径示例：
 
 ```text
-plugins/plan/
+packages/plan/
   package.json          exports 指向构建产物
+  src/index.ts          领域工具、PlanStore 与上下文实现
   src/manifest.ts       不依赖 Node 运行资源的描述
-  src/index.ts          API 运行贡献工厂
+  src/plugin.ts         API 运行贡献工厂，使用本包领域实现
   src/web.tsx           独立 Web 入口
 ```
 
@@ -110,18 +127,20 @@ Bridge 在锁内重新校验 `expectedRevision` 与取消状态；ApplyPort 在�
 
 | 包 / 插件 ID | 贡献及复用路径 |
 | --- | --- |
-| `plugins/skill` / `skill` | Skill 工具、渐进披露/目录上下文、状态及选择设置；继续用既有 Skill 目录/库资产 Ports |
-| `plugins/mcp` / `mcp` | MCP 工具贡献、结果提交与设置；继续用既有 MCP 客户端、来源和权限治理 |
-| `plugins/mcp-sources` / `connector.<source-id>` | 同包管理 UniProt、LLM Wiki 及 11 个公共生物医学源；每个源独立 manifest 和工厂，共用 MCP 执行与治理能力 |
-| `plugins/scheduler` / `scheduler` | 默认 `task` 等子 Agent 调度工具；复用既有 orchestration，不另造调度算法 |
-| `plugins/plan` / `plan` | `update_plan`、批处理策略、协调状态和上下文、项目 Plan 显示 |
-| `plugins/artifact-json` / `artifact-json` | JSON Artifact Web 预览；关闭后仍可查看原始内容 |
+| `packages/skill` / `skill` | Skill 工具、渐进披露/目录上下文、状态及选择设置；继续用既有 Skill 目录/库资产 Ports |
+| `packages/mcp` / `mcp` | MCP 工具贡献、结果提交与设置；继续用既有 MCP 客户端、来源和权限治理 |
+| `packages/mcp-sources` / `connector.<source-id>` | 同包管理 UniProt、LLM Wiki 及 11 个公共生物医学源；每个源独立 manifest 和工厂，共用 MCP 执行与治理能力 |
+| `packages/scheduler` / `scheduler` | 默认 `task` 等子 Agent 调度工具；复用既有 orchestration，不另造调度算法 |
+| `packages/plan` / `plan` | `update_plan`、批处理策略、协调状态和上下文、项目 Plan 显示 |
+| `packages/artifact-json` / `artifact-json` | JSON Artifact Web 预览；关闭后仍可查看原始内容 |
 
 内置源清单为 `uniprot`、`llm-wiki`、`arxiv`、`pubmed`、`europe-pmc`、`biorxiv`、`medrxiv`、`pdb`、`ensembl`、`reactome`、`clinvar`、`chembl`、`geo`。API 从空注册表开始，仅通过 `builtinMcpSourcePlugins` 注册内置源，不再同时执行旧 builtin 装配。LLM Wiki 配置无效时只跳过该源并记录不含 URL 的诊断，其余源继续启动。
 
 实际工具集合是具体源选择与插件配置的交集：MCP 总能力开启、`connector.<source-id>` 未关闭、且源被当前运行选中，才进入后续权限与治理检查。主 Agent、子 Agent、reviewer 和候选比较共用 `filterEnabledMcpSources`；未选中的源不会因插件默认启用而自动授权。自定义 MCP 服务继续由通用 MCP 插件及已有自定义服务注册流程管理，不为用户输入动态导入插件代码。
 
-这些包封装的是能力贡献与入口，不意味着所有底层代码都搬到 `plugins/`。原权限、审批、存储语义及默认工具名保留；相同能力不能同时从旧 Workspace 专属装配和新插件装配注入。既有 evolve 工具目前仍是宿主内部贡献，不是可配置安装插件。
+这些包封装的是能力贡献与入口，不意味着全仓领域逻辑已经完成迁移。Skill/MCP/调度仍复用 `packages/workspace` 提供的工具工厂；API 中的领域控制面也未全部提取。原权限、审批、存储语义及默认工具名保留；相同能力不能同时从旧 Workspace 专属装配和新插件装配注入。既有 evolve 工具目前仍是宿主内部贡献，不是可配置安装插件。
+
+此次移除私有 `@sciencediscovery/plugin-*` 功能包，调用方改用对应能力包的公开子入口；`plugin-sdk` 保留。插件 ID、配置键和资产数据没有改名，不需要用户迁移设置。构建、CI 打包与 Recorder 源码指纹均使用新能力包；既有历史摘要不重写，新 Run 按新构建生成指纹。
 
 最小候选组合由 `services/api/src/plugins/control.ts` 管理：
 
@@ -136,11 +155,11 @@ Bridge 在锁内重新校验 `expectedRevision` 与取消状态；ApplyPort 在�
 
 ## 6. 如何新增与维护插件
 
-1. **选贡献面。** 工具、上下文、状态、批策略从 `RuntimeContribution` 开始；连接器和 Web 视图使用对应安装入口。优先复用已有领域包，把本能力的装配与 UI 放到插件中。
+1. **确定能力归属与贡献面。** 优先在已有 `packages/<capability>` 内增加插件入口、配置与 UI，不另建同功能 `plugins/<capability>`。工具、上下文、状态、批策略从 `RuntimeContribution` 开始；连接器和 Web 视图使用对应安装入口。
 2. **定义 manifest 和 Ports。** 用独立 `manifest` export 声明稳定 ID、依赖/服务版本、权限、配置字段、生效时机；工厂仅接收实际所需的领域 Ports。不要暴露整个 SessionStore 或 NativeAgent。
 3. **实现生命周期与状态。** `create()` 返回贡献及可选 start/dispose；所有异步工作接受取消。状态必须可序列化、可版本化，命令/采集使用一致边界；context factory 声明 `stateReads`，只从 StateView 投影。
 4. **接入安装点。** API 在 `catalog.ts` 登记 manifest，`runtime.ts` 注入 Ports；平台类能力参考 UniProt 安装方式。Web 分别在 `settings.tsx`、`project-views.tsx`、`artifact-viewers.tsx` 的对应入口登记。新贡献类型需同时扩展宿主合同，不能仅在 manifest 写一个字符串。
-5. **接入构建与发布。** workspace 已包含 `plugins/*`；补齐 package exports、宿主依赖、TypeScript 引用和 lockfile，保证 API 发布产物与 Web bundle 都实际包含入口。
+5. **接入构建与发布。** workspace 统一包含 `packages/*`；补齐 `./plugin`、`./manifest`、按需 `./web` exports、宿主依赖、TypeScript 配置和 lockfile，保证 API 发布产物与 Web bundle 都实际包含入口。插件入口导入本包领域实现，不通过自引用形成根入口循环。
 6. **验证维护合同。** 测试依赖缺失、启停、取消/失败清理、固定状态投影、配置继承/CAS、主子 reviewer 组合；用户旅程验证关闭后没有新执行通路、历史仍可读。运行 `pnpm typecheck`、`pnpm architecture:check` 和受影响构建/测试。
 
-可从 [Plan 插件](../../../plugins/plan/src/index.ts) 与 [manifest](../../../plugins/plan/src/manifest.ts) 开始阅读；协议类型见 [SDK](../../../packages/plugin-sdk/src/index.ts)，设置事务见 [SessionStore](../../../services/api/src/store.ts)，完整 HTTP 设置回归旅程见 [plugin-settings-journey](../../../test/api/plugin-settings-journey.mjs)。
+可从 [Plan 插件入口](../../../packages/plan/src/plugin.ts)、[领域实现](../../../packages/plan/src/index.ts) 与 [manifest](../../../packages/plan/src/manifest.ts) 开始阅读；协议类型见 [SDK](../../../packages/plugin-sdk/src/index.ts)，设置事务见 [SessionStore](../../../services/api/src/store.ts)，完整 HTTP 设置回归旅程见 [plugin-settings-journey](../../../test/api/plugin-settings-journey.mjs)。
