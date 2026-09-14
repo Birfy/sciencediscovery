@@ -15,6 +15,7 @@
 import type { ChatMessage, RemoteWorkspaceSyncRecord } from "@sciencediscovery/schema";
 
 import { WebApiClient } from "./web.js";
+import type { TrajectoryPort } from "@sciencediscovery/trajectory";
 
 export { ApiRequestError } from "./auth.js";
 
@@ -30,6 +31,16 @@ export interface RunnerWorkspaceBinding {
 }
 
 export class ApiClient extends WebApiClient {
+  readonly trajectory: TrajectoryPort = {
+    index: (id, signal) => this.request(`/api/sessions/${encodeURIComponent(id)}/trajectory`, { signal }),
+    detail: (id, entry, signal) => this.request(`/api/sessions/${encodeURIComponent(id)}/trajectory/detail?id=${encodeURIComponent(entry)}`, { signal }),
+    export: async (id, signal) => {
+      const response = await fetch(`/api/sessions/${encodeURIComponent(id)}/trajectory/export`, { signal, headers: { authorization: `Bearer ${this.token}` } });
+      this.reportAuthStatus(response.status);
+      if (!response.ok) throw new Error(`Export failed (${response.status})`);
+      return response.blob();
+    },
+  };
   forEnvironmentRunner(runnerId: string): ApiClient {
     return new RunnerEnvironmentApiClient(this.token, this.onAuthFailure, runnerId);
   }

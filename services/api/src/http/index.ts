@@ -18,6 +18,7 @@ import { handlePluginRequest } from "../plugins/http.js";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { CasStore, VersionStore, withWorkspaceMutation } from "@sciencediscovery/cas";
+import { sessionTrajectory } from "../trajectory.js";
 import { dirname, resolve } from "node:path";
 import { listSshKeyFiles } from "../ssh-key-files.js";
 
@@ -2588,6 +2589,34 @@ export function createApiServer(config = loadServerConfig(), dependencies: ApiSe
         return;
       }
 
+      const trajectoryMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/trajectory(?:\/(detail|export))?$/);
+      if (trajectoryMatch && request.method === "GET") {
+        const sessionId = decodeURIComponent(trajectoryMatch[1]!);
+        if (!store.getSession(sessionId)) return sendError(response, 404, "Session not found");
+        const controller = new AbortController();
+        response.once("close", () => controller.abort());
+        const view = await sessionTrajectory(store, sessionId, controller.signal);
+        response.setHeader("Cache-Control", "no-store");
+        if (trajectoryMatch[2] === "detail") {
+          const detail = await view.detail(url.searchParams.get("id") ?? "");
+          return detail ? sendJson(response, 200, detail) : sendError(response, 404, "Trajectory entry not found");
+        }
+        if (trajectoryMatch[2] === "export") {
+          response.writeHead(200, { "Content-Type": "application/x-ndjson", "Content-Disposition": "attachment; filename=trajectory.ndjson" });
+          try {
+            for await (const line of view.exportRecords()) {
+              if (!response.write(line)) await new Promise<void>((resolve, reject) => {
+                const close = () => { response.off("drain", drain); reject(new Error("Export disconnected")); };
+                const drain = () => { response.off("close", close); resolve(); };
+                response.once("drain", drain); response.once("close", close);
+              });
+            }
+            response.end();
+          } catch { response.destroy(); }
+          return;
+        }
+        return sendJson(response, 200, view.index);
+      }
       const sessionRunsMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/runs$/);
       if (sessionRunsMatch && request.method === "GET") {
         if (!store.getSession(sessionRunsMatch[1]!)) return sendError(response, 404, "Session not found");

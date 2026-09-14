@@ -116,6 +116,7 @@ import {
 const EVOLVE_CARD_POLL_MS = 3_000;
 
 import { ApiClient, ApiRequestError, isAbortError } from "./api.js";
+import { TrajectoryViewer } from "@sciencediscovery/trajectory/web";
 import { createSessionActivity } from "./run-stream/session-activity.js";
 import { groupArtifactsBySession, upsertArtifactSession } from "./artifact-session-groups.js";
 import { mergePermissionRequestSnapshot } from "./permission-state.js";
@@ -991,6 +992,7 @@ function shouldRefreshUsageForEvent(workspaceView: "session" | "usage", event: R
 
 export function App() {
   const { locale, setLocale, t } = useLocale();
+  const [trajectorySession, setTrajectorySession] = useState<{ id: string; title: string }>();
   // No built-in fallback token: the server generates one on its first start and
   // prints it, so a browser that has never been given a token starts empty, is
   // rejected with 401, and is handed the Connection settings dialog.
@@ -4067,6 +4069,7 @@ export function App() {
   return (
     <PluginWebHost client={client} projectId={activeProjectId} sessionId={activeSessionId}>
     <div className="app-shell">
+      {trajectorySession && <TrajectoryViewer key={trajectorySession.id} sessionId={trajectorySession.id} title={trajectorySession.title} port={client.trajectory} locale={locale} onClose={() => setTrajectorySession(undefined)} />}
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-mark"><BrandIcon size={24} /></div>
@@ -4314,6 +4317,7 @@ export function App() {
                 ) : null}
               </div>
               <div className="session-bar-meta">
+                {session && <button type="button" onClick={() => setTrajectorySession({ id: session.id, title: session.title })}>{locale.startsWith("zh") ? "轨迹" : "Trajectory"}</button>}
                 {session ? <span className="session-runner-target" title={selectedRunnerIds.length
                   ? t("app.runnerSelectionTooltip", { hosts: selectedRunnerNames.join(", ") })
                   : t("app.runnerSelectionEmpty")}>

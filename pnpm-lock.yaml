@@ -44,6 +44,9 @@ importers:
       '@sciencediscovery/skill':
         specifier: workspace:*
         version: link:../../packages/skill
+      '@sciencediscovery/trajectory':
+        specifier: workspace:*
+        version: link:../../packages/trajectory
       cytoscape:
         specifier: ^3.34.0
         version: 3.34.1
@@ -589,6 +592,22 @@ importers:
         specifier: 26.1.1
         version: 26.1.1
 
+  packages/trajectory:
+    dependencies:
+      '@sciencediscovery/cas':
+        specifier: workspace:*
+        version: link:../cas
+    devDependencies:
+      '@types/node':
+        specifier: 26.1.1
+        version: 26.1.1
+      '@types/react':
+        specifier: 19.2.17
+        version: 19.2.17
+      react:
+        specifier: 19.2.7
+        version: 19.2.7
+
   packages/workspace:
     dependencies:
       '@sciencediscovery/model':
@@ -694,6 +713,9 @@ importers:
       '@sciencediscovery/tools':
         specifier: workspace:*
         version: link:../../packages/tools
+      '@sciencediscovery/trajectory':
+        specifier: workspace:*
+        version: link:../../packages/trajectory
       '@sciencediscovery/workspace':
         specifier: workspace:*
         version: link:../../packages/workspace

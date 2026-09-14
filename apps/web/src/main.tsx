@@ -16,6 +16,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import { App } from "./App.js";
+import "@sciencediscovery/trajectory/style.css";
 import { LocaleProvider } from "./i18n/index.js";
 import "katex/dist/katex.min.css";
 import "./styles.css";

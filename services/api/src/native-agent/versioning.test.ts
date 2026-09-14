@@ -13,6 +13,7 @@ import { AgentLoop, type RuntimeMessage } from "@sciencediscovery/runtime-core";
 import { createAgentRun } from "../agent-run/create-agent-run.js";
 import { setModelTurnStreamerForTest, type ModelTurnStreamer } from "./index.js";
 import { AgentStateAssembler, AgentVersionRecorder, agentHeadName, type AgentStateSnapshot, type ContextAssemblyRecord, type ModelContextSnapshot } from "./versioning.js";
+import { openSessionTrajectory } from "@sciencediscovery/trajectory/server";
 
 test("turn state uses a committed Workspace tree while the next execution is still writing", async (t) => {
   await mkdir(resolve(".tmp"), { recursive: true });
@@ -101,6 +102,17 @@ test("production AgentRun records exact contexts, complete observations, sequent
     if (entry.type === "file") assert.deepEqual(await store.readData(entry.content), await readFile(resolve(workspace, "result.txt")));
     const modelContext = (await store.readRecord<{ input: ModelInput }>(first.modelContext, "ModelContextSnapshot")).value;
     assert.deepEqual(modelContext.input, received[0]);
+    const trajectory = await openSessionTrajectory(dataDir, { sessionId: "session-version", agents: [{ id: "main:session-version", label: "Main" }], events: [
+      { id: "mcp-first", agentId: "main:session-version", createdAt: first.finishedAt!, runId: "request-1", event: { type: "mcp.invocation", toolCallId: "first", toolId: "write" } },
+    ] }, new AbortController().signal);
+    const mcp = trajectory.index.entries.find(item => item.kind === "mcp")!;
+    assert.ok(mcp.contextId);
+    assert.deepEqual((await trajectory.detail(mcp.id))!.context!.input, received[0]);
+    assert.equal((await trajectory.detail(mcp.id))!.context!.blocks[0]!.attribution, "recorded");
+    const event = trajectory.index.entries.find(item => item.label === "tool_execution_start")!;
+    assert.ok(event.timestamp);
+    assert.ok(event.endTime);
+    assert.deepEqual((await trajectory.detail(event.id))!.context!.input, received[0]);
     const inputState = (await store.readRecord<AgentStateSnapshot>(first.before)).value;
     const assembly = (await store.readRecord<ContextAssemblyRecord>(first.context)).value;
     assert.deepEqual(assembly.checkpoint, inputState.checkpoint);
