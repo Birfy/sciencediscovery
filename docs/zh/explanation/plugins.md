@@ -56,9 +56,9 @@ plugins/plan/
 
 `createPluginScope` 按依赖顺序构造和启动，失败时清理已创建实例，销毁按逆序执行；`start` 接收 `AbortSignal`，取消必须传递到异步工作。资源释放应幂等。当前是可信进程内扩展，manifest 权限检查不是恶意代码的隔离沙箱。
 
-配置按 **global → project → session** 逐层覆盖，插件配置按 ID/字段合并。省略表示继承；`enabled:false` 是显式关闭。`configuration.applies` 支持 `nextRun` 或 `restart` 声明，**当前六个插件均为 nextRun**，不能据此宣称已支持通用热重载。
+配置按 **global → project → session** 逐层覆盖，插件配置按 ID/字段合并。省略表示继承；`enabled:false` 是显式关闭。`configuration.applies` 支持 `nextRun` 或 `restart` 声明，当前安装插件均声明 nextRun，不能据此宣称已支持通用热重载。数据源适配器在启动时装配，项目设置在下次运行筛选可用源，不是动态卸载进程级适配器。
 
-**界面与装配能力分开：** 普通设置只在“可选扩展”中提供 UniProt 与 JSON 预览开关。Skill、MCP、Plan、默认多 Agent 调度不提供整体开关；用户仍在相应入口选择具体 Skill、MCP 服务和连接器。后端配置 API 继续支持所有插件的项目/会话级启停、继承和 nextRun 冻结，未因界面收敛而限制。已有配置关闭内置能力时，页面显示说明且保存时原样保留，不自动启用、不迁移数据。
+**界面与装配能力分开：** “可选扩展”仅提供 JSON 预览开关，不再单独提供 UniProt 或其他内置 MCP 类型的插件总开关。Skill、MCP、Plan、默认多 Agent 调度也不提供整体开关；用户仍在相应入口选择具体 Skill、MCP 服务和连接器。后端配置 API 继续支持所有插件的项目/会话级启停、继承和 nextRun 冻结。已有配置原样保留，不自动启用、不迁移数据。
 
 运行开始固定配置、Skill 资产等组合，主 Agent、子 Agent、reviewer 使用同一组合选择，在各自作用域装配贡献。运行中编辑不会改写已冻结的工具集合。前端设置/查看器会刷新当前显示选择；历史 Plan 和 Artifact 仍可读取，关闭执行贡献不等于删除历史，也不妨碍以后重新配置。
 
@@ -113,11 +113,16 @@ Bridge 在锁内重新校验 `expectedRevision` 与取消状态；ApplyPort 在�
 | `plugins/skill` / `skill` | Skill 工具、渐进披露/目录上下文、状态及选择设置；继续用既有 Skill 目录/库资产 Ports |
 | `plugins/mcp` / `mcp` | MCP 工具贡献、结果提交与设置；继续用既有 MCP 客户端、来源和权限治理 |
 | `plugins/uniprot` / `connector.uniprot` | 注册真实 UniProt 数据源；与 MCP 执行开关组合，关闭后不提供新的对应工具 |
+| `plugins/mcp-sources` / `connector.<source-id>` | 统一安装 UniProt、LLM Wiki 及 11 个公共生物医学源；每个源独立 manifest 和工厂，共用 MCP 执行与治理能力 |
 | `plugins/scheduler` / `scheduler` | 默认 `task` 等子 Agent 调度工具；复用既有 orchestration，不另造调度算法 |
 | `plugins/plan` / `plan` | `update_plan`、批处理策略、协调状态和上下文、项目 Plan 显示 |
 | `plugins/artifact-json` / `artifact-json` | JSON Artifact Web 预览；关闭后仍可查看原始内容 |
 
-这些包封装的是能力贡献与入口，不意味着所有底层代码都搬到 `plugins/`。原权限、审批、存储语义及默认工具名保留；相同能力不能同时从旧 Workspace 专属装配和新插件装配注入。既有 evolve 工具目前仍是宿主内部贡献，并非六个可配置安装包之一。
+内置源清单为 `uniprot`、`llm-wiki`、`arxiv`、`pubmed`、`europe-pmc`、`biorxiv`、`medrxiv`、`pdb`、`ensembl`、`reactome`、`clinvar`、`chembl`、`geo`。API 从空注册表开始，仅通过 `builtinMcpSourcePlugins` 注册内置源，不再同时执行旧 builtin 装配。LLM Wiki 配置无效时只跳过该源并记录不含 URL 的诊断，其余源继续启动。
+
+实际工具集合是具体源选择与插件配置的交集：MCP 总能力开启、`connector.<source-id>` 未关闭、且源被当前运行选中，才进入后续权限与治理检查。主 Agent、子 Agent、reviewer 和候选比较共用 `filterEnabledMcpSources`；未选中的源不会因插件默认启用而自动授权。自定义 MCP 服务继续由通用 MCP 插件及已有自定义服务注册流程管理，不为用户输入动态导入插件代码。
+
+这些包封装的是能力贡献与入口，不意味着所有底层代码都搬到 `plugins/`。原权限、审批、存储语义及默认工具名保留；相同能力不能同时从旧 Workspace 专属装配和新插件装配注入。既有 evolve 工具目前仍是宿主内部贡献，不是可配置安装插件。
 
 最小候选组合由 `services/api/src/plugins/control.ts` 管理：
 

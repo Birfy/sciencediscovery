@@ -6,6 +6,7 @@ import { resolve } from "node:path";
 import test, { type TestContext } from "node:test";
 import { SessionStore } from "../store.js";
 import { installedPlugins } from "./catalog.js";
+import { builtinMcpSourceManifests, filterEnabledMcpSources } from "@sciencediscovery/plugin-mcp-sources";
 import { handlePluginRequest } from "./http.js";
 import { createServer } from "node:http";
 import { VersionStore } from "@sciencediscovery/cas";
@@ -19,6 +20,26 @@ async function fixture(t:TestContext) {
   return {store,project,root,control:store.plugins};
 }
 const signal=()=>new AbortController().signal;
+
+test("all built-in source plugins support project isolation, session inheritance and persisted Bridge configuration", async t => {
+  const { store, project, control } = await fixture(t);
+  const other = await store.createProject("Independent sources");
+  const session = await store.createSession(project.id, "Child", {}, {}, { allowUnconfiguredModel: true });
+  const selected = builtinMcpSourceManifests.map(item => item.id.slice("connector.".length));
+  for (const manifest of builtinMcpSourceManifests) {
+    const scope = { projectId: project.id };
+    await control.bridge(scope).invoke({ apiVersion: 1, pluginId: manifest.id, scope, kind: "command", method: "configure",
+      input: { expectedRevision: control.snapshot(scope).revision, settings: { enabled: false } } }, signal());
+    const inherited = store.getSessionSettings(session.id).effective.plugins;
+    assert.equal(inherited?.[manifest.id]?.enabled, false);
+    assert.ok(!filterEnabledMcpSources(selected, inherited).includes(manifest.id.slice("connector.".length)));
+    assert.notEqual(store.getProjectSettings(other.id).effective.plugins?.[manifest.id]?.enabled, false);
+  }
+  store.close(); await store.load();
+  assert.deepEqual(filterEnabledMcpSources(selected, store.getSessionSettings(session.id).effective.plugins), []);
+  await store.replaceSessionSettings(session.id, { plugins: { "connector.pubmed": { enabled: true } } });
+  assert.deepEqual(filterEnabledMcpSources(selected, store.getSessionSettings(session.id).effective.plugins), ["pubmed"]);
+});
 
 test("ApplyPort and every classic settings writer share the catalog mutation boundary", async t => {
   for (const writer of ["project", "session", "global", "composer", "runner"] as const) {

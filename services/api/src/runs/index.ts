@@ -14,6 +14,7 @@
 
 import { randomUUID } from "node:crypto";
 import { pluginEnabled } from "@sciencediscovery/plugin-sdk";
+import { filterEnabledMcpSources } from "@sciencediscovery/plugin-mcp-sources";
 import { versioningAuthorities } from "../agent-run/versioning-authorities.js";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -1610,8 +1611,7 @@ async function executeAgentRun(
             ...(specialist?.enabledSkillIds ?? []),
             ...(roleSkillId ? [roleSkillId] : []),
           ])];
-          const subagentConnectorIds = !pluginEnabled(settingsSnapshot.plugins, "mcp") ? [] : [...new Set([...settingsSnapshot.enabledConnectorIds, ...(specialist?.connectorIds ?? [])])]
-            .filter((id) => id !== "uniprot" || pluginEnabled(settingsSnapshot.plugins, "connector.uniprot"));
+          const subagentConnectorIds = filterEnabledMcpSources([...new Set([...settingsSnapshot.enabledConnectorIds, ...(specialist?.connectorIds ?? [])])], settingsSnapshot.plugins);
           const subagentWorkspaceRoot = store.agentWorkspacePath(sessionId, subagent.id);
           const subagentSnapshots = scopeRuntimeSkills(skillCatalog.resolve(subagentSkillIds), "subagent");
           const subagentSkillPackagesRoot = subagentSnapshots.length
@@ -2675,8 +2675,7 @@ export function computeSettingsSnapshot(store: SessionStore, sessionId: string):
     enabledSkillIds: [...new Set([...resolved.enabledSkillIds, ...(sessionSpecialist?.enabledSkillIds ?? [])])],
   };
   if (!pluginEnabled(snapshot.plugins, "skill")) { snapshot.enabledSkillIds = []; snapshot.enabledSkillLibraries = []; }
-  if (!pluginEnabled(snapshot.plugins, "mcp")) snapshot.enabledConnectorIds = [];
-  else if (!pluginEnabled(snapshot.plugins, "connector.uniprot")) snapshot.enabledConnectorIds = snapshot.enabledConnectorIds.filter((id) => id !== "uniprot");
+  snapshot.enabledConnectorIds = filterEnabledMcpSources(snapshot.enabledConnectorIds, snapshot.plugins);
   const model = store.getModel(snapshot.modelId);
   if (!model) return snapshot;
   const protocol = model.apiProtocol ?? (model.baseUrl.includes("/api/plan")

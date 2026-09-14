@@ -49,31 +49,32 @@ test("项目组合、会话覆盖与审批后的候选应用", {tag:"@mocked"},a
     await expect(dialog).toBeVisible();await dialog.locator("details.plugin-settings > summary").click();return dialog;
   };
   try {
-    await journey.step("管理可选扩展而不改动内部插件组合","界面仅有 UniProt、JSON 开关；保存后保留 API 配置的内部关闭项，其他项目不受影响。",async()=>{
+    await journey.step("管理可选扩展而不改动内部插件组合","界面仅有 JSON 预览开关；保存后保留 API 配置的内部和数据源插件关闭项，其他项目不受影响。",async()=>{
       const baseline=await api(page,root);
       await api(page,root+"/bridge",{apiVersion:1,pluginId:"host.settings",scope:{projectId:fixture.project.id},kind:"command",method:"replace",
-        input:{expectedRevision:baseline.revision,overrides:{...baseline.settings.overrides,plugins:Object.fromEntries(["plan","skill","mcp","scheduler"].map(id=>[id,{enabled:false}]))}}});
+        input:{expectedRevision:baseline.revision,overrides:{...baseline.settings.overrides,plugins:Object.fromEntries(["plan","skill","mcp","scheduler","connector.uniprot","connector.pubmed"].map(id=>[id,{enabled:false}]))}}});
       const other=await api(page,"/api/projects",{name:"Independent plugins "+Date.now()});
       otherProjectId=other.project.id;
       const dialog=await openSettings("project");
-      for(const id of ["plan","skill","mcp","scheduler"]) await expect(dialog.getByLabel(id+" plugin",{exact:true})).toHaveCount(0);
-      for(const id of ["connector.uniprot","artifact-json"]) await dialog.getByLabel(id+" plugin",{exact:true}).selectOption("disabled");
+      for(const id of ["plan","skill","mcp","scheduler","connector.uniprot","connector.pubmed"]) await expect(dialog.getByLabel(id+" plugin",{exact:true})).toHaveCount(0);
+      await dialog.getByLabel("artifact-json plugin",{exact:true}).selectOption("disabled");
       await dialog.getByRole("button",{name:/Save .*settings|保存.*设置/}).click();
       await expect.poll(async()=> (await api(page,root)).settings.effective.plugins.plan.enabled).toBe(false);
       await page.reload();
       await page.locator("details.plugin-settings > summary").click();
-      await expect(page.getByLabel("connector.uniprot plugin",{exact:true})).toHaveValue("disabled");
+      await expect(page.getByLabel("connector.uniprot plugin",{exact:true})).toHaveCount(0);
+      await expect(page.getByLabel("artifact-json plugin",{exact:true})).toHaveValue("disabled");
       await expect(page.getByText(/Existing configuration disables|已有配置关闭了内置能力/)).toBeVisible();
       const current=await api(page,root),independent=await api(page,"/api/projects/"+otherProjectId+"/plugins");
-      for(const id of ["plan","skill","mcp","scheduler"]){
+      for(const id of ["plan","skill","mcp","scheduler","connector.uniprot","connector.pubmed"]){
         expect(current.settings.effective.plugins[id].enabled).toBe(false);
         expect(independent.settings.effective.plugins?.[id]?.enabled).not.toBe(false);
       }
     });
-    await journey.step("窄屏查看项目可选扩展","两个可选开关及内部配置提示可读，没有水平溢出。",async()=>{
+    await journey.step("窄屏查看项目可选扩展","JSON 预览开关及内部配置提示可读，没有水平溢出。",async()=>{
       await page.setViewportSize({width:390,height:844});
       await page.getByLabel("artifact-json plugin",{exact:true}).scrollIntoViewIfNeeded();
-      await expect(page.getByLabel("connector.uniprot plugin",{exact:true})).toBeVisible();
+      await expect(page.getByLabel("artifact-json plugin",{exact:true})).toBeVisible();
       expect(await page.locator(".plugin-settings").evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);
     });
     await journey.step("执行后端按项目裁剪的组合","下一次实际模型调用没有 Plan、Skill、MCP 或调度工具。",async()=>{

@@ -3,6 +3,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import { canonicalState } from "@sciencediscovery/context";
+import { filterEnabledMcpSources } from "@sciencediscovery/plugin-mcp-sources";
 import { BridgeError, PluginBridge, mergePluginSettings, negotiatePlugins, pluginEnabled, type BridgeScope } from "@sciencediscovery/plugin-sdk";
 import type { RuntimeSettingsOverrides, RuntimeSettingsDetails, SessionRun } from "@sciencediscovery/schema";
 import type { SessionStore } from "../store.js";
@@ -242,8 +243,8 @@ export class PluginControl {
 }
 
 function runtimeSelection(settings: RuntimeSettingsOverrides) {
-  const skills = pluginEnabled(settings.plugins, "skill"), mcp = pluginEnabled(settings.plugins, "mcp");
+  const skills = pluginEnabled(settings.plugins, "skill");
   return { modelId:settings.modelId ?? null, plugins: settings.plugins ?? {}, enabledSkillIds: skills ? [...settings.enabledSkillIds ?? []].sort() : [],
     enabledSkillLibraries: skills ? settings.enabledSkillLibraries ?? [] : [],
-    enabledConnectorIds: mcp ? (settings.enabledConnectorIds ?? []).filter((id) => id !== "uniprot" || pluginEnabled(settings.plugins, "connector.uniprot")).sort() : [] };
+    enabledConnectorIds: filterEnabledMcpSources(settings.enabledConnectorIds ?? [], settings.plugins).sort() };
 }

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 import { randomUUID } from "node:crypto";
+import { filterEnabledMcpSources } from "@sciencediscovery/plugin-mcp-sources";
 import { handlePluginRequest } from "../plugins/http.js";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -403,8 +404,7 @@ export function createApiServer(config = loadServerConfig(), dependencies: ApiSe
           },
         };
         const reviewerSkills = runtimeSettings.plugins?.skill?.enabled === false ? [] : skillCatalog.resolve(["citation-reviewer", "computation-reviewer", "literature-searcher"]);
-        const reviewerConnectorIds = runtimeSettings.plugins?.mcp?.enabled === false ? [] : runtimeSettings.enabledConnectorIds
-          .filter((id) => id !== "uniprot" || runtimeSettings.plugins?.["connector.uniprot"]?.enabled !== false);
+        const reviewerConnectorIds = filterEnabledMcpSources(runtimeSettings.enabledConnectorIds, runtimeSettings.plugins);
         const reviewerWorkspace: WorkspaceAgentOptions = {
           pluginSettings: structuredClone(runtimeSettings.plugins),
           config: {

@@ -555,6 +555,25 @@ importers:
         specifier: 19.2.7
         version: 19.2.7
 
+  plugins/mcp-sources:
+    dependencies:
+      '@sciencediscovery/mcp-sources':
+        specifier: workspace:*
+        version: link:../../packages/mcp-sources
+      '@sciencediscovery/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/plugin-sdk
+      '@sciencediscovery/plugin-uniprot':
+        specifier: workspace:*
+        version: link:../uniprot
+      '@sciencediscovery/schema':
+        specifier: workspace:*
+        version: link:../../packages/schema
+    devDependencies:
+      '@types/node':
+        specifier: 26.1.1
+        version: 26.1.1
+
   plugins/plan:
     dependencies:
       '@sciencediscovery/context':
@@ -699,6 +718,9 @@ importers:
       '@sciencediscovery/plugin-mcp':
         specifier: workspace:*
         version: link:../../plugins/mcp
+      '@sciencediscovery/plugin-mcp-sources':
+        specifier: workspace:*
+        version: link:../../plugins/mcp-sources
       '@sciencediscovery/plugin-plan':
         specifier: workspace:*
         version: link:../../plugins/plan

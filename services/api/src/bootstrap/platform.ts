@@ -19,9 +19,9 @@ import { McpSourceCatalog, type McpTransportClient } from "@sciencediscovery/dat
 import { RemoteComputeClient } from "@sciencediscovery/executor";
 import { createIdeaTreeAuthorityRegistry, type IdeaTreePersistence } from "@sciencediscovery/idea-tree";
 import { ideaTreeRepositoryForSession } from "../idea-tree/python-client.js";
-import { createBuiltinMcpSourceRegistry } from "@sciencediscovery/mcp-sources";
+import { createMcpSourceRegistry } from "@sciencediscovery/mcp-sources";
 import { createPluginScope } from "@sciencediscovery/plugin-sdk";
-import { uniprotPlugin } from "@sciencediscovery/plugin-uniprot";
+import { builtinMcpSourcePlugins } from "@sciencediscovery/plugin-mcp-sources";
 import { CustomMcpServers } from "../mcp/custom-servers.js";
 import { shortErrorMessage } from "@sciencediscovery/operational-logging";
 import { reviewerLog } from "@sciencediscovery/provenance";
@@ -161,9 +161,9 @@ export function createPlatformServices(
     );
   };
   const provenanceRecorder = new ProvenanceRecorder(config.dataDir, store, memoryGraphSink);
-  const mcpRegistry = createBuiltinMcpSourceRegistry({ exclude: ["uniprot"] });
+  const mcpRegistry = createMcpSourceRegistry();
   // Sources register before discovery. They still use the existing MCP governance broker.
-  const connectorPlugins = createPluginScope([uniprotPlugin], dependencies.disabledConnectorPlugins);
+  const connectorPlugins = createPluginScope(builtinMcpSourcePlugins, dependencies.disabledConnectorPlugins);
   const customMcpServers = new CustomMcpServers(config.dataDir, mcpRegistry, (ids) => store.setCustomConnectorIds(ids), () => mcpCatalog.refresh(), (id) => store.removeCustomConnectorReferences(id));
   const mcpGateway: McpTransportClient = dependencies.mcpTransport
     ?? new McpNodeClient(() => customMcpServers.transportConfig(), customMcpServers.oauth, apiLog);
@@ -493,6 +493,7 @@ export async function initializePlatformServices(
   const connectorPlugins = await services.connectorPlugins;
   await connectorPlugins.start(new AbortController().signal);
   for (const contribution of connectorPlugins.contributions) {
+    for (const diagnostic of contribution.diagnostics ?? []) apiLog.warn("connector_plugin_unavailable", diagnostic);
     for (const source of contribution.sources) mcpRegistry.register(source);
   }
   await initializeComponent("skill_catalog", () => skillCatalog.load());

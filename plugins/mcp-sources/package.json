@@ -1,0 +1,20 @@
+{
+  "name": "@sciencediscovery/plugin-mcp-sources",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": { "types": "./src/index.ts", "default": "./dist/index.js" } },
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node --test dist/*.test.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@sciencediscovery/mcp-sources": "workspace:*",
+    "@sciencediscovery/plugin-sdk": "workspace:*",
+    "@sciencediscovery/plugin-uniprot": "workspace:*",
+    "@sciencediscovery/schema": "workspace:*"
+  },
+  "devDependencies": { "@types/node": "26.1.1" }
+}

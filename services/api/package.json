@@ -43,6 +43,7 @@
     "@sciencediscovery/plugin-skill": "workspace:*",
     "@sciencediscovery/plugin-mcp": "workspace:*",
     "@sciencediscovery/plugin-scheduler": "workspace:*",
+    "@sciencediscovery/plugin-mcp-sources": "workspace:*",
     "@sciencediscovery/plugin-uniprot": "workspace:*",
     "@sciencediscovery/plugin-artifact-json": "workspace:*"
   },
