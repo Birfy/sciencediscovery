@@ -180,16 +180,24 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
     await journey.step("核对单次模型用量", "主子 Agent 每次请求只显示一个最终返回，带本次 Token 用量，不重复展示流式正文。", async () => {
       await dialog.getByLabel("Agent", { exact: true }).selectOption("all");
       await dialog.getByLabel("事件类型", { exact: true }).selectOption("output");
-      const finalResponse = await page.request.get(`${apiBaseUrl()}/api/sessions/${fixture!.session.id}/trajectory`, { headers: authorizationHeader() });
+      const responsePromise = page.waitForResponse(response => response.url().endsWith(`/api/sessions/${fixture!.session.id}/trajectory`) && response.request().method() === "GET");
+      await dialog.getByRole("button", { name: "刷新", exact: true }).click();
+      const finalResponse = await responsePromise;
       const finalIndex = await finalResponse.json();
-      const outputs = finalIndex.entries.filter((e: { eventType?: string }) => e.eventType === "model.completed");
-      expect(outputs).toHaveLength(5); // Three main requests and two child requests.
+      const outputs = finalIndex.entries.filter((e: { eventType?: string }) => e.eventType === "model.completed") as Array<{ id: string; agentId: string; runId: string; contextId: string; turn: number }>;
+      // A resumed child can add requests. Verify identities, not an incidental total.
+      expect(outputs.length).toBeGreaterThanOrEqual(5);
+      expect(new Set(outputs.map(e => `${e.agentId}:${e.runId}:${e.contextId}`)).size).toBe(outputs.length);
+      for (const output of outputs) expect(finalIndex.entries.some((e: { kind: string; contextId: string }) => e.kind === "input" && e.contextId === output.contextId)).toBe(true);
       await expect(dialog.locator(".trajectory-event-list button")).toHaveCount(outputs.length);
       await expect(dialog.locator('.trajectory-event-list button:not([data-event-type="model.completed"])')).toHaveCount(0);
       await expect(dialog.locator(".trajectory-mark")).toHaveCount(outputs.length);
       await dialog.getByLabel("Agent", { exact: true }).selectOption({ label: "独立核查" });
-      await expect(dialog.locator(".trajectory-event-list button")).toHaveCount(2);
-      await dialog.locator('[data-event-type="model.completed"]').last().click();
+      const children = outputs.filter(e => e.agentId.startsWith("subagent:"));
+      await expect(dialog.locator(".trajectory-event-list button")).toHaveCount(children.length);
+      const childAnswer = children.find(e => e.turn === 1)!;
+      expect(childAnswer).toBeTruthy();
+      await dialog.locator(`[data-entry-id="${childAnswer.id}"]`).click();
       await expect(dialog.locator(".trajectory-readable")).toContainText("TRAJECTORY_CHILD 已核验。");
       await expect(dialog.locator(".trajectory-readable")).toContainText("本次请求用量");
       await dialog.getByLabel("Agent", { exact: true }).selectOption("all");
