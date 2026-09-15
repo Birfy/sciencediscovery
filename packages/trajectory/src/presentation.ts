@@ -5,7 +5,7 @@ import { object, text, type TrajectoryDetail, type TrajectoryEntry, type Traject
 export function internalEntry(entry: TrajectoryEntry): boolean {
   const type = entry.eventType ?? entry.label;
   if (type === "state_changed") return ["idle", "assembling_context", "calling_model", "executing_tools", "completed"].includes(entry.status ?? "");
-  return ["turn_start", "response_start", "response_settled", "model_usage", "assistant.response.started", "assistant.response.settled"].includes(type)
+  return ["turn_start", "response_start", "response_settled", "model_usage", "assistant.response.started", "assistant.response.settled", "session.updated", "run.queued", "run.status"].includes(type)
     || entry.id.startsWith("before:");
 }
 
@@ -30,24 +30,23 @@ export function entryTitle(entry: TrajectoryEntry, zh: boolean): string {
   return entry.label;
 }
 
-export interface RecordGroup { id: string; agentId: string; runId?: string; turn?: number; invocation?: number; entries: TrajectoryEntry[] }
-/** Group only by recorded context identity, never by a guessed timestamp or turn. */
+export interface RecordGroup { id: string; agentId: string; runId?: string; entries: TrajectoryEntry[] }
+/** Visual groups belong to an Agent Run. Context identity stays on each entry. */
 export function recordGroups(index: TrajectoryIndex): RecordGroup[] {
-  const groups = new Map<string, RecordGroup>(), attempts = new Map<string, number>();
+  const groups = new Map<string, RecordGroup>();
   for (const entry of [...index.entries, ...(index.untimedEntries ?? index.historicalEntries ?? [])]) {
-    const id = `${entry.agentId}:${entry.contextId ?? entry.id}`;
+    const id = JSON.stringify([entry.agentId, entry.runId ? ["run", entry.runId] : ["context", entry.contextId ?? "unassociated"]]);
     let group = groups.get(id);
-    if (!group) { group = { id, agentId: entry.agentId, runId: entry.runId, turn: entry.turn, entries: [] }; groups.set(id, group); }
-    group.runId ??= entry.runId; group.turn ??= entry.turn;
+    if (!group) { group = { id, agentId: entry.agentId, runId: entry.runId, entries: [] }; groups.set(id, group); }
     group.entries.push(entry);
   }
   for (const group of groups.values()) {
-    if (group.entries.some(e => e.contextId)) {
-      const key = `${group.agentId}:${group.runId}`;
-      group.invocation = (attempts.get(key) ?? 0) + 1; attempts.set(key, group.invocation);
+    // Insert untimed inputs next to the exact recorded invocation, not at Run start.
+    for (const input of group.entries.filter(e => !e.timestamp && e.kind === "input" && e.contextId)) {
+      const target = group.entries.findIndex(e => e !== input && e.contextId === input.contextId);
+      const current = group.entries.indexOf(input);
+      if (target >= 0 && current > target) { group.entries.splice(current, 1); group.entries.splice(target, 0, input); }
     }
-    // An untimed input is still the input of this invocation, not an older version.
-    group.entries = [...group.entries.filter(e => !e.timestamp && e.kind === "input"), ...group.entries.filter(e => e.timestamp || e.kind !== "input")];
   }
   return [...groups.values()];
 }
@@ -93,6 +92,15 @@ export function contentSections(detail: TrajectoryDetail, zh: boolean): ContentS
     const message = object(value.assistantMessage ?? result.assistantMessage ?? value.message);
     add(tr("模型输出", "Model output"), packets.length ? packets.map(p => text(p.delta ?? p.text ?? "")).join("") : message.content ?? value.delta ?? value.content ?? step.content);
     add(tr("返回的思考", "Returned thinking"), message.reasoningContent ?? message.reasoning_content ?? message.thinking);
+    if ((detail.entry.eventType ?? detail.entry.label) === "model.completed" || value.result) {
+      const usage = object(value.usage ?? result.usage);
+      const fields = Object.fromEntries([
+        ["inputTokens", tr("输入 Token", "Input tokens")], ["outputTokens", tr("输出 Token", "Output tokens")],
+        ["totalTokens", tr("总 Token", "Total tokens")], ["cacheReadTokens", tr("缓存读取 Token", "Cache read tokens")],
+        ["cacheWriteTokens", tr("缓存写入 Token", "Cache write tokens")],
+      ].flatMap(([key, label]) => typeof usage[key!] === "number" ? [[label!, usage[key!]]] : []));
+      add(tr("本次请求用量", "This request's usage"), Object.keys(fields).length ? fields : tr("未记录", "Not recorded"), "fields");
+    }
     add(tr("请求调用的工具", "Requested tools"), value.toolCalls ?? result.toolCalls ?? message.tool_calls, "fields");
   } else if (detail.entry.kind === "state" && value.checkpoint) {
     const checkpoint = object(value.checkpoint);
