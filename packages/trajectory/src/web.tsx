@@ -52,7 +52,12 @@ export function TrajectoryViewer({ sessionId, title, port, locale, onClose }: {
     port.detail(sessionId, selected, controller.signal).then(setDetail).catch(reason => { if (!controller.signal.aborted) setError(String(reason)); });
     return () => controller.abort();
   }, [sessionId, selected, port, revision]);
-  useEffect(() => { list.current?.querySelector<HTMLElement>('[aria-current="true"]')?.scrollIntoView({ block: "nearest" }); }, [selected]);
+  useEffect(() => {
+    const reveal = () => list.current?.querySelector<HTMLElement>('[aria-current="true"]')?.scrollIntoView({ block: "nearest" });
+    reveal(); const observer = new ResizeObserver(reveal);
+    if (list.current) observer.observe(list.current);
+    return () => observer.disconnect();
+  }, [selected]);
   const groups = useMemo(() => index ? recordGroups(index).map(group => ({ ...group, entries: group.entries.filter(e => (showInternal || !internalEntry(e)) && (filter === "all" || e.kind === filter) && (agent === "all" || e.agentId === agent)) })).filter(group => group.entries.length) : [], [index, showInternal, filter, agent]);
   const entries = useMemo(() => groups.flatMap(group => group.entries), [groups]);
   const timelineEntries = entries.filter(e => e.timestamp);

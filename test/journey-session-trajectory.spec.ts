@@ -127,6 +127,7 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       await dialog.getByRole("button", { name: "原始 JSON", exact: true }).click();
       await expect(dialog.locator(".trajectory-raw")).toContainText("run_shell");
       await dialog.getByRole("button", { name: "解析内容", exact: true }).click();
+      await expect(dialog.locator(".trajectory-readable dt").filter({ hasText: "command" })).toBeInViewport();
     });
     await journey.step("窄屏阅读", "查看器不超出视口，Run 标签、记录切换和工具输入可见。", async () => {
       await page.setViewportSize({ width: 390, height: 844 });
@@ -134,6 +135,9 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       await expect(dialog.getByRole("button", { name: "关闭轨迹" })).toBeVisible();
       await expect(dialog.getByRole("button", { name: "全部记录", exact: true })).toBeInViewport();
       await expect(dialog.locator(".trajectory-detail-heading .trajectory-run")).toBeVisible();
+      await expect(dialog.locator('.trajectory-event-list button[aria-current="true"]')).toBeInViewport({ ratio: 0.95 });
+      await dialog.locator(".trajectory-readable dt").filter({ hasText: "command" }).scrollIntoViewIfNeeded();
+      await expect(dialog.locator(".trajectory-readable dt").filter({ hasText: "command" })).toBeInViewport();
       const listHeight = await dialog.locator(".trajectory-event-list").evaluate(el => el.clientHeight);
       expect(await dialog.locator(".trajectory-event-list button").first().evaluate(el => el.clientHeight)).toBeLessThanOrEqual(listHeight);
     });
