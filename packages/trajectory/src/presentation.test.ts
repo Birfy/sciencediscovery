@@ -38,6 +38,7 @@ test("thinking and model stream packets render only recorded text", () => {
 });
 
 test("tools parse arguments, retain invalid JSON and show results, MCP payloads and command output", () => {
+  assert.deepEqual(sections("tool", { call: { name: "run_shell", args: { command: "printf actual" } } }).map(s => s.value), ["run_shell", { command: "printf actual" }]);
   const tool = sections("tool", { call: { name: "run_shell", arguments: '{"command":"printf ok"}' }, result: { message: { content: "ok" } } });
   assert.deepEqual(tool.map(s => s.value), ["run_shell", { command: "printf ok" }, "ok"]);
   assert.equal(sections("tool", { arguments: "invalid JSON" })[0]!.value, "invalid JSON");
