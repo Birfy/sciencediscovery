@@ -88,7 +88,7 @@ test("production AgentRun records exact contexts, complete observations, sequent
     const final = (await store.readRecord<TrajectoryStep>(head, "TrajectoryStep")).value;
     const first = (await store.readRecord<TrajectoryStep>(final.parent!, "TrajectoryStep")).value;
     assert.equal(first.actions.length, 3);
-    assert.deepEqual(first.eventSegments.map((s) => s.stream).sort(), ["main:session-version", "tool:first", "tool:last"]);
+    assert.deepEqual(first.eventSegments, []); // Events live in the Agent journal, not CAS segments.
     assert.equal(first.childTrajectories.length, 0);
     const state = (await store.readRecord<AgentStateSnapshot>(final.after, "AgentStateSnapshot")).value;
     assert.equal(state.transcript.length, 5);
@@ -103,7 +103,7 @@ test("production AgentRun records exact contexts, complete observations, sequent
     const modelContext = (await store.readRecord<{ input: ModelInput }>(first.modelContext, "ModelContextSnapshot")).value;
     assert.deepEqual(modelContext.input, received[0]);
     const trajectory = await openSessionTrajectory(dataDir, { sessionId: "session-version", agents: [{ id: "main:session-version", label: "Main" }], events: [
-      { id: "mcp-first", agentId: "main:session-version", createdAt: first.finishedAt!, runId: "request-1", event: { type: "mcp.invocation", toolCallId: "first", toolId: "write" } },
+      { id: "mcp-first", agentId: "main:session-version", createdAt: new Date().toISOString(), runId: "request-1", event: { type: "mcp.invocation", toolCallId: "first", toolId: "write" } },
     ] }, new AbortController().signal);
     const mcp = trajectory.index.entries.find(item => item.kind === "mcp")!;
     assert.ok(mcp.contextId);
@@ -112,6 +112,10 @@ test("production AgentRun records exact contexts, complete observations, sequent
     const event = trajectory.index.entries.find(item => item.label === "tool_execution_start")!;
     assert.ok(event.timestamp);
     assert.ok(event.endTime);
+    const journalEntries = trajectory.index.entries.filter(item => item.streamId === "journal");
+    assert.ok(journalEntries.every(item => item.runId === "trajectory-1" && item.timestamp && item.sequence));
+    assert.deepEqual(trajectory.index.historicalEntries, []);
+    assert.ok(journalEntries.findIndex(item => item.label === "model.completed") < journalEntries.findIndex(item => item.label === "tool_execution_start"));
     assert.deepEqual((await trajectory.detail(event.id))!.context!.input, received[0]);
     const inputState = (await store.readRecord<AgentStateSnapshot>(first.before)).value;
     const assembly = (await store.readRecord<ContextAssemblyRecord>(first.context)).value;

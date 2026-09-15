@@ -3,14 +3,17 @@
 
 /** Browser-safe contracts; the host owns authentication and Session authorization. */
 export type TrajectoryKind = "state" | "input" | "output" | "thinking" | "tool" | "mcp" | "lifecycle";
-export interface TrajectoryAgent { id: string; label: string; parentId?: string }
+export interface TrajectoryAgent { id: string; label: string; parentId?: string; parentRunId?: string }
 export interface TrajectoryEntry {
   id: string; agentId: string; kind: TrajectoryKind; label: string;
   timestamp: string | null; endTime?: string; contextId?: string; runId?: string; turn?: number;
+  sequence?: number; streamId?: string; requestExecutionId?: string;
 }
 export interface TrajectoryIndex {
   schemaVersion: 1; sessionId: string; capturedAt: string;
   agents: TrajectoryAgent[]; entries: TrajectoryEntry[]; warnings: string[];
+  /** Versions without a reliable event association never become timeline markers. */
+  historicalEntries?: TrajectoryEntry[];
 }
 export interface ContextBlock {
   id: string; kind: string; source: string; content: string;
@@ -59,6 +62,8 @@ export function redact(value: unknown): unknown {
 }
 export function eventKind(value: unknown): TrajectoryKind {
   const event = object(value), type = String(event.type ?? ""), step = object(event.step);
+  if (type === "context.captured") return "input";
+  if (type === "model.completed") return "output";
   if (type.includes("thinking") || event.kind === "thinking" || step.kind === "thinking") return "thinking";
   if (type.includes("mcp")) return "mcp";
   if (type.includes("tool") || step.kind === "tool") {

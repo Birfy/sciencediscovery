@@ -62,6 +62,12 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       expect(await dialog.locator(".trajectory-minimap button").count()).toBeGreaterThan(2);
       await expect(dialog.locator(".trajectory-context section").first()).not.toContainText("来源未记录");
       await expect(dialog.locator(".trajectory-axis")).toContainText(/\d{2}:\d{2}:\d{2}/);
+      await expect(dialog.locator(".trajectory-event-list .trajectory-run").first()).toContainText(/Run .+ · #\d+|Run .+ · turn \d+ · #\d+/);
+      await dialog.getByRole("button", { name: /^历史版本/ }).click();
+      await expect(dialog.locator(".trajectory-history-notice")).toBeVisible();
+      expect(await dialog.locator(".trajectory-mark").count()).toBeGreaterThan(5);
+      await dialog.getByRole("button", { name: /^事件时间线/ }).click();
+      await dialog.locator(".trajectory-event-list button").filter({ hasText: "context.captured" }).first().click();
       await dialog.locator(".trajectory-minimap button").last().click();
       expect(await dialog.locator(".trajectory-context").evaluate(el => el.scrollTop)).toBeGreaterThan(0);
       await dialog.getByRole("button", { name: "Agent 状态", exact: true }).click();
@@ -81,6 +87,17 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       const records = Buffer.concat(chunks).toString().trim().split("\n").map(line => JSON.parse(line));
       expect(records[0].sessionId).toBe(fixture!.session.id);
       expect(records.at(-1).type).toBe("complete");
+      expect(records[0].historicalEntries).toEqual([]);
+      const streams = new Map<string, number[]>();
+      for (const entry of records[0].entries) {
+        expect(Number.isFinite(Date.parse(entry.timestamp))).toBe(true);
+        if (entry.streamId !== "journal") continue;
+        const key = `${entry.agentId}:${entry.runId}`;
+        streams.set(key, [...(streams.get(key) ?? []), entry.sequence]);
+      }
+      expect(streams.size).toBeGreaterThanOrEqual(2);
+      for (const sequences of streams.values()) expect(sequences).toEqual([...sequences].sort((a, b) => a - b));
+      expect(records[0].entries.some((e: { id: string }) => /^(action:|before:|after:)/.test(e.id))).toBe(false);
       expect(records.some(r => r.context?.input && r.entry.agentId.startsWith("subagent:"))).toBe(true);
       const unauthorized = await page.request.get(`${apiBaseUrl()}/api/sessions/${fixture!.session.id}/trajectory`, { headers: { authorization: "Bearer wrong" } });
       expect(unauthorized.status()).toBe(401);

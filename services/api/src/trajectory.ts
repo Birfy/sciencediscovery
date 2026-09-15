@@ -8,7 +8,7 @@ import type { SessionStore } from "./store.js";
 export async function sessionTrajectory(store: SessionStore, sessionId: string, signal: AbortSignal) {
   const mainId = `main:${sessionId}`, children = store.listSubagents(sessionId);
   const agents: TrajectoryAgent[] = [{ id: mainId, label: "Main Agent" }, ...children.map(child => ({
-    id: `subagent:${child.id}`, label: child.input.description || child.id, parentId: mainId,
+    id: `subagent:${child.id}`, label: child.input.description || child.id, parentId: mainId, parentRunId: child.parentTurnId,
   }))];
   const events: RecordedEvent[] = [];
   const recordedSteps = new Set<string>();
@@ -22,12 +22,12 @@ export async function sessionTrajectory(store: SessionStore, sessionId: string, 
         if (typeof step.id === "string") recordedSteps.add(`${stream.agentId}:${step.id}`);
         const toolId = trace.id ?? trace.toolCallId ?? step.toolCallId;
         if (typeof toolId === "string") tools.set(toolId, stream.agentId);
-        events.push({ id: `${run.id}:${stream.id}:${record.sequence}`, agentId: stream.agentId, createdAt: record.createdAt, runId: run.id, event });
+        events.push({ id: `${run.id}:${stream.id}:${record.sequence}`, agentId: stream.agentId, streamId: stream.id, sequence: record.sequence, createdAt: record.createdAt, runId: run.id, event });
       }
     }
     for (const [id, agentId] of tools) {
       for (const record of await store.listRunStreamEvents(sessionId, run.id, `tool-${id}`)) {
-        events.push({ id: `${run.id}:tool-${id}:${record.sequence}`, agentId, createdAt: record.createdAt, runId: run.id, event: record.event });
+        events.push({ id: `${run.id}:tool-${id}:${record.sequence}`, agentId, streamId: `tool-${id}`, sequence: record.sequence, createdAt: record.createdAt, runId: run.id, event: record.event });
       }
     }
   }
@@ -40,7 +40,8 @@ export async function sessionTrajectory(store: SessionStore, sessionId: string, 
     }
   }
   for (const invocation of await store.listMcpInvocations(sessionId)) {
-    const child = children.find(item => item.steps.some(step => step.toolCallId === invocation.toolCallId));
+    const owners = children.filter(item => item.parentTurnId === invocation.turnId && item.steps.some(step => step.toolCallId === invocation.toolCallId));
+    const child = owners.length === 1 ? owners[0] : undefined;
     events.push({ id: `mcp:${invocation.id}`, agentId: child ? `subagent:${child.id}` : mainId,
       createdAt: invocation.startedAt, runId: invocation.turnId, event: { type: "mcp.invocation", ...invocation } });
   }

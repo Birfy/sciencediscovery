@@ -6,6 +6,7 @@
   "exports": {
     ".": { "types": "./src/index.ts", "default": "./dist/index.js" },
     "./server": { "types": "./src/server.ts", "default": "./dist/server.js" },
+    "./journal": { "types": "./src/journal.ts", "default": "./dist/journal.js" },
     "./web": { "types": "./src/web.tsx", "default": "./dist/web.js" },
     "./style.css": "./src/style.css"
   },

@@ -605,7 +605,14 @@ class NativeAgent implements NativeAgentHandle {
             return contextAssembler.assemble(input);
           },
         },
-        modelClient,
+        modelClient: {
+          isInputTooLargeError: error => modelClient.isInputTooLargeError(error),
+          invoke: async (input, signal, observer) => {
+            const result = await modelClient.invoke(input, signal, observer);
+            await this.versionRecorder?.modelCompleted(result);
+            return result;
+          },
+        },
         toolDispatcher: this.toolRegistry,
         eventSink: (event) => {
           this.versionRecorder?.event(event);

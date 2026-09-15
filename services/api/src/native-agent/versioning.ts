@@ -11,6 +11,7 @@ import {
 } from "@sciencediscovery/cas";
 import type { RuntimeMessage, RuntimeToolCall, RunEvent, TurnLifecycle } from "@sciencediscovery/runtime-core";
 import type { StateCheckpoint, StateView, StateProvider } from "@sciencediscovery/context";
+import { TrajectoryJournal } from "@sciencediscovery/trajectory/journal";
 
 export interface AgentVersioningOptions {
   agentId: string;
@@ -139,11 +140,10 @@ export class AgentVersionRecorder<M extends RuntimeMessage, I, U> implements Tur
   private transcript: M[] = [];
   private observations: AgentStateRef[] = [];
   private turnObservations: { sequence: number; ref: AgentStateRef }[] = [];
-  private events = new Map<string, unknown[]>();
-  private offsets = new Map<string, number>();
   private children: AgentStateRef[] = [];
   private assemblyTrace: unknown = null;
-  private turnStartedAt = new Date().toISOString();
+  private currentTurn = 0;
+  private journal?: TrajectoryJournal;
   private readonly assembler: AgentStateAssembler;
   private inputView?: StateView;
 
@@ -169,12 +169,15 @@ export class AgentVersionRecorder<M extends RuntimeMessage, I, U> implements Tur
     const start = await this.store.putRecord("TrajectoryStart", { revision: this.revision, initialState });
     await this.refs.commit(this.store, `trajectories/${encodeURIComponent(this.options.trajectoryId)}/start`, null, start);
     await this.refs.commit(this.store, `agents/${encodeURIComponent(this.options.agentId)}/trajectories/${encodeURIComponent(this.options.trajectoryId)}`, null, start);
+    this.journal = new TrajectoryJournal(this.store, { agentId: this.options.agentId,
+      runId: this.options.trajectoryId, requestExecutionId: this.options.requestExecutionId });
+    this.journal.append({ type: "run.started", stateRef: initialState }, { revisionRef: this.revision, stateRef: initialState });
+    await this.journal.flush();
   }
 
   async beforeTurn({ turn, history }: Parameters<TurnLifecycle<M, I, U>["beforeTurn"]>[0]): Promise<void> {
     this.turnObservations = [];
-    this.turnStartedAt = new Date().toISOString();
-    this.events.clear();
+    this.currentTurn = turn;
     this.activeContext = undefined;
     this.children = [];
     this.assemblyTrace = null;
@@ -204,7 +207,6 @@ export class AgentVersionRecorder<M extends RuntimeMessage, I, U> implements Tur
       boundary: "ProviderModelClient.invoke", input: assembly.modelInput,
     } satisfies ModelContextSnapshot<I>));
     this.context = await this.store.putRecord("ContextAssemblyRecord", jsonValue({
-      capturedAt: new Date().toISOString(),
       turn, manifest: this.manifest, state: this.before, modelContext: this.modelContext, trace: this.assemblyTrace,
       ...(this.inputView ? { checkpoint: this.inputView.checkpoint } : {}),
     } satisfies ContextAssemblyRecord));
@@ -215,6 +217,8 @@ export class AgentVersionRecorder<M extends RuntimeMessage, I, U> implements Tur
     const name = `attempts/${encodeURIComponent(this.options.trajectoryId)}/${turn}`;
     await this.refs.commit(this.store, name, this.refs.head(name), this.context);
     this.activeContext = this.context;
+    this.journal?.append({ type: "context.captured", turn, contextRef: this.context, stateRef: this.before }, { contextRef: this.context, stateRef: this.before });
+    await this.journal?.flush();
   }
 
   async recordObservation(input: { call: RuntimeToolCall; content: string; details?: unknown; isError: boolean; sequence: number }): Promise<void> {
@@ -224,10 +228,17 @@ export class AgentVersionRecorder<M extends RuntimeMessage, I, U> implements Tur
   }
 
   event(event: RunEvent<U>): void {
-    const stream = event.type === "tool_execution_start" || event.type === "tool_execution_end"
-      ? `tool:${event.call.id}` : this.options.agentId;
-    const values = this.events.get(stream) ?? [];
-    values.push(jsonValue({ ...event, recordedAt: new Date().toISOString(), contextRef: this.activeContext ?? null })); this.events.set(stream, values);
+    this.journal?.append({ type: event.type, turn: this.currentTurn,
+      ...(this.activeContext ? { contextRef: this.activeContext } : {}),
+      ...("responseId" in event ? { responseId: event.responseId } : {}),
+      ...("kind" in event ? { kind: event.kind } : {}),
+      ...("call" in event ? { callId: event.call.id } : {}),
+    }, jsonValue(event));
+  }
+
+  async modelCompleted(result: unknown): Promise<void> {
+    this.journal?.append({ type: "model.completed", turn: this.currentTurn, contextRef: this.activeContext }, jsonValue(result));
+    await this.journal?.flush();
   }
 
   childCompleted(agentId: string): void {
@@ -244,30 +255,19 @@ export class AgentVersionRecorder<M extends RuntimeMessage, I, U> implements Tur
       actions.push(await this.store.putRecord("ToolAction", jsonValue({ call, result: results[index], observation: raw[index] ?? null })));
     }
     const eventSegments: TrajectoryStep["eventSegments"] = [];
-    for (const [stream, events] of this.events) {
-      const start = this.offsets.get(stream) ?? 0;
-      const end = start + events.length;
-      eventSegments.push({ stream, start, end, events: await this.store.putRecord("EventSegment", { stream, events }) });
-      this.offsets.set(stream, end);
-    }
     const after = await this.state(turn, "after", history);
     this.head = await this.coordinator.commit({
-      startedAt: this.turnStartedAt, finishedAt: new Date().toISOString(),
       agentId: this.options.agentId, trajectoryId: this.options.trajectoryId, turn,
       parent: this.head, revision: this.revision, before: this.before, after,
       context: this.context, modelContext: this.modelContext, actions, childTrajectories: this.children, eventSegments,
     });
+    this.journal?.append({ type: "state.committed", turn, contextRef: this.context, stateRef: after }, { stateRef: after, stepRef: this.head });
+    await this.journal?.flush();
   }
 
-  /** Retain the final partial turn as audit evidence, without advancing the Agent head. */
+  /** Drain the event journal even after failure, without advancing the Agent head. */
   async flushEvents(): Promise<void> {
-    if (!this.refs) return;
-    for (const [stream, events] of this.events) {
-      if (!events.length) continue;
-      const ref = await this.store.putRecord("EventSegment", { stream, events });
-      const name = `trajectory-events/${encodeURIComponent(this.options.trajectoryId)}/${encodeURIComponent(stream)}`;
-      await this.refs.commit(this.store, name, this.refs.head(name), ref);
-    }
+    await this.journal?.flush();
   }
 
   close(): void { this.refs?.close(); }
