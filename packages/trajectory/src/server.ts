@@ -180,7 +180,7 @@ export async function openSessionTrajectory(dataDir: string, source: SessionTraj
           for (const [i, action] of step.actions.entries()) {
             const payload = object(await record(action)), call = object(payload.call);
             if (typeof call.id === "string") rememberCall(call.id, contextId, agent.id);
-            add({ id: `action:${ref.digest}:${i}`, agentId: agent.id, runId: step.trajectoryId, kind: i === 0 ? "output" : eventKind({ type: "tool", call }), label: `${i === 0 ? "Model result" : String(call.name ?? "Tool result")} · turn ${step.turn}`, timestamp: null, turn: step.turn, contextId }, async () => payload);
+            add({ id: `action:${ref.digest}:${i}`, agentId: agent.id, runId: step.trajectoryId, kind: i === 0 ? "output" : eventKind({ type: "tool", call }), ...(i === 0 ? { eventType: "model.completed" } : {}), label: `${i === 0 ? "Model result" : String(call.name ?? "Tool result")} · turn ${step.turn}`, timestamp: null, turn: step.turn, contextId }, async () => payload);
           }
           add({ id: `after:${ref.digest}`, agentId: agent.id, runId: step.trajectoryId, kind: "state", label: `State after · turn ${step.turn}`, timestamp: null, turn: step.turn, contextId }, () => record(step.after, "AgentStateSnapshot"));
         } catch (error) {

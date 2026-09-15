@@ -13,7 +13,7 @@ import { cleanupJourney, createProjectAndSession, openProjectSession, scriptedMo
  *   2. Inspect real-time lanes, select a model input, and navigate contributed context sections.
  *   3. Inspect reasoning with its exact context, export NDJSON, and verify Session isolation.
  *   4. Read tool arguments and results, with an optional raw JSON view.
- *   5. Inspect per-request token usage on its model response.
+ *   5. Inspect one final output per request with its token usage, without duplicate streaming text.
  *   6. Reload the trajectory URL and inspect later request messages and narrow-screen layout.
  *   7. Close the viewer with the keyboard and return to the Session.
  * Environment: Isolated current-worktree API/Web and Runner at E2E_BASE_URL.
@@ -177,9 +177,22 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       await dialog.getByRole("button", { name: "解析内容", exact: true }).click();
       await expect(dialog.locator(".trajectory-readable dt").filter({ hasText: "command" })).toBeInViewport();
     });
-    await journey.step("核对单次模型用量", "模型返回展示该次请求的 Token 用量，不是 Session 累计值。", async () => {
+    await journey.step("核对单次模型用量", "主子 Agent 每次请求只显示一个最终返回，带本次 Token 用量，不重复展示流式正文。", async () => {
       await dialog.getByLabel("Agent", { exact: true }).selectOption("all");
       await dialog.getByLabel("事件类型", { exact: true }).selectOption("output");
+      const finalResponse = await page.request.get(`${apiBaseUrl()}/api/sessions/${fixture!.session.id}/trajectory`, { headers: authorizationHeader() });
+      const finalIndex = await finalResponse.json();
+      const outputs = finalIndex.entries.filter((e: { eventType?: string }) => e.eventType === "model.completed");
+      expect(outputs).toHaveLength(5); // Three main requests and two child requests.
+      await expect(dialog.locator(".trajectory-event-list button")).toHaveCount(outputs.length);
+      await expect(dialog.locator('.trajectory-event-list button:not([data-event-type="model.completed"])')).toHaveCount(0);
+      await expect(dialog.locator(".trajectory-mark")).toHaveCount(outputs.length);
+      await dialog.getByLabel("Agent", { exact: true }).selectOption({ label: "独立核查" });
+      await expect(dialog.locator(".trajectory-event-list button")).toHaveCount(2);
+      await dialog.locator('[data-event-type="model.completed"]').last().click();
+      await expect(dialog.locator(".trajectory-readable")).toContainText("TRAJECTORY_CHILD 已核验。");
+      await expect(dialog.locator(".trajectory-readable")).toContainText("本次请求用量");
+      await dialog.getByLabel("Agent", { exact: true }).selectOption("all");
       await dialog.locator('[data-event-type="model.completed"]').first().click();
       const usage = dialog.locator(".trajectory-readable section").filter({ has: page.getByRole("heading", { name: "本次请求用量", exact: true }) });
       await expect(usage).toContainText("输入 Token20");

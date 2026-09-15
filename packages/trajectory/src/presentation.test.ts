@@ -18,6 +18,21 @@ test("hide only known bookkeeping; failures, waiting, recovery and unknown event
   assert.equal(internalEntry(entry({ kind: "state", eventType: "state_changed", status: "waiting_external" })), true);
 });
 
+test("main and child trajectories show final responses only, keeping thinking and failure evidence", () => {
+  for (const agentId of ["main:s", "subagent:child"]) {
+    for (const eventType of ["assistant.delta", "subagent.step", "model_delta", "text_delta"]) {
+      assert.equal(internalEntry(entry({ agentId, kind: "output", eventType })), true);
+    }
+    for (const id of ["event:response", "journal:response", "action:legacy:0"]) {
+      assert.equal(internalEntry(entry({ id, agentId, kind: "output", eventType: "model.completed" })), false);
+    }
+    assert.equal(internalEntry(entry({ agentId, kind: "thinking", eventType: "model_delta" })), false);
+    assert.equal(internalEntry(entry({ agentId, kind: "lifecycle", eventType: "run.failed" })), false);
+    // No final response exists: a partial stream must still not look completed.
+    assert.deepEqual([entry({ agentId, kind: "output", eventType: "assistant.delta" })].filter(e => !internalEntry(e)), []);
+  }
+});
+
 test("timeline separates model and tools and packs overlapping intervals without moving timestamps", () => {
   const at = (n: number) => new Date(n).toISOString();
   const values = [

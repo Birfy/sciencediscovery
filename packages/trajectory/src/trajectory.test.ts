@@ -9,6 +9,7 @@ import { CasStore, RefStore, VersionStore } from "@sciencediscovery/cas";
 import { contextBlocks, eventKind, redact } from "./index.js";
 import { openSessionTrajectory, orderEvents, type RecordedEvent } from "./server.js";
 import { readAgentJournal, type JournalEvent } from "./journal.js";
+import { internalEntry } from "./presentation.js";
 
 test("exact admitted system sections preserve order and separators, not rejected proposals", () => {
   const input = { systemPrompt: "rules\nscience", history: [{ role: "user", content: "question" }], tools: [{ name: "search" }] };
@@ -59,6 +60,26 @@ test("failed attempts remain inspectable, scoped, immutable and self-contained i
     assert.equal(other.index.entries.length, 0);
     const controller = new AbortController(); controller.abort();
     await assert.rejects(openSessionTrajectory(directory, { sessionId: "session", agents: [{ id: agentId, label: "Main" }], events: [] }, controller.signal));
+  } finally { refs.close(); await rm(directory, { recursive: true, force: true }); }
+});
+
+test("legacy committed ModelAction remains a final response without inventing a timestamp", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "trajectory-final-"));
+  const store = new VersionStore(directory), refs = await RefStore.open(store), agentId = "main:s";
+  try {
+    const state = await store.putRecord("AgentStateSnapshot", { agentId });
+    const modelContext = await store.putRecord("ModelContextSnapshot", { input: { systemPrompt: "exact", history: [], tools: [] } });
+    const context = await store.putRecord("ContextAssemblyRecord", { state, modelContext, turn: 0 });
+    const result = { assistantMessage: { content: "final answer" }, usage: { inputTokens: 7 } };
+    const action = await store.putRecord("ModelAction", { modelContext, result });
+    const step = await store.putRecord("TrajectoryStep", { agentId, trajectoryId: "r", turn: 0, context, before: state, after: state, actions: [action], eventSegments: [] });
+    await refs.commit(store, `agents/${encodeURIComponent(agentId)}/head`, null, step);
+    const view = await openSessionTrajectory(directory, { sessionId: "s", agents: [{ id: agentId, label: "Main" }], events: [] }, new AbortController().signal);
+    const output = view.index.untimedEntries!.find(e => e.kind === "output")!;
+    assert.equal(output.eventType, "model.completed");
+    assert.equal(internalEntry(output), false);
+    assert.equal(output.timestamp, null);
+    assert.deepEqual((await view.detail(output.id))!.value, { modelContext, result });
   } finally { refs.close(); await rm(directory, { recursive: true, force: true }); }
 });
 

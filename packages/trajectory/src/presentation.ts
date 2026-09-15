@@ -4,6 +4,10 @@ import { object, text, type TrajectoryDetail, type TrajectoryEntry, type Traject
 
 export function internalEntry(entry: TrajectoryEntry): boolean {
   const type = entry.eventType ?? entry.label;
+  // The trajectory is a completed-request view, not the live chat projection.
+  // Keep the recorded final response (including usage/tools), never promote a
+  // partial stream to a result. Raw stream records remain available in exports.
+  if (entry.kind === "output" && type !== "model.completed") return true;
   if (entry.kind === "state" || type === "run.started") return true;
   if (type === "state_changed") return ["idle", "assembling_context", "calling_model", "executing_tools", "completed"].includes(entry.status ?? "");
   return ["turn_start", "response_start", "response_settled", "model_usage", "assistant.response.started", "assistant.response.settled", "session.updated", "run.queued", "run.status"].includes(type)
