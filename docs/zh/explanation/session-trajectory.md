@@ -47,6 +47,8 @@ Session 入口 ── 认证 TrajectoryPort ── trajectory/web
 
 ## 接口与导出
 
+部分旧子 Agent 事件只保存参数摘要，没有完整 `args`。执行归属、唯一 callId 和工具名匹配后，读取投影可从旧 EventSegment 补充完整参数；若双方都有参数且不一致则不合并。补充仅发生在读取结果中，不改写原 JSONL 或 CAS。
+
 | 接口 | 返回 |
 |---|---|
 | `GET /api/sessions/:id/trajectory` | Agent 列表、事件 entries、无时间记录 untimedEntries、真实时间和完整性提示；historicalEntries 保留为兼容别名 |

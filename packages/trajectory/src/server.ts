@@ -126,7 +126,7 @@ export async function openSessionTrajectory(dataDir: string, source: SessionTraj
         const starts = scoped.filter(item => {
           const { type, trace } = toolRecord(item.event);
           return type === "tool.started" && trace.id === call.id && trace.name === call.name
-            && isDeepStrictEqual(trace.args ?? {}, call.args ?? {});
+            && (trace.args === undefined || isDeepStrictEqual(trace.args, call.args ?? {}));
         });
         const finished = event.type === "tool_execution_end";
         const candidates = finished ? scoped.filter(item => {
@@ -276,6 +276,7 @@ export async function openSessionTrajectory(dataDir: string, source: SessionTraj
     const legacy = legacyLinks.get(item.id);
     const contextId = contextRef ? `context:${contextRef.digest}` : legacy?.contextId ?? call?.contextId ?? responses.get(`${item.agentId}:${String(event.responseId ?? evidence.responseId)}`);
     if (legacy?.args && event.trace && !trace.args) payload = { ...object(payload), trace: { ...trace, args: legacy.args } };
+    if (legacy?.args && event.type === "subagent.step" && !step.args) payload = { ...object(payload), step: { ...step, args: legacy.args } };
     if (contextId && callId) rememberCall(scopedCall, contextId, item.agentId);
     if (contextId && typeof (event.responseId ?? evidence.responseId) === "string") responses.set(`${item.agentId}:${String(event.responseId ?? evidence.responseId)}`, contextId);
     const eventType = event.type === "subagent.step" && step.kind === "tool"

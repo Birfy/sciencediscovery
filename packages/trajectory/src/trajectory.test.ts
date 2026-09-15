@@ -247,6 +247,16 @@ for (const child of [false, true]) test(`legacy parallel ${child ? "child" : "ma
     else (partial[1]!.event as { chunk: string }).chunk = "truncated";
     assert.equal((await open(partial)).index.entries.filter(e => e.id.startsWith("segment:")).length, 1, "incomplete output keeps the complete legacy result");
     assert.equal((await open([...source, { ...source[0]!, id: "repeated-call" }])).index.entries.filter(e => e.id.startsWith("segment:")).length, 2, "ambiguous repeated IDs are not merged");
+    const missingArgs = structuredClone(source);
+    for (const e of missingArgs) {
+      const value = e.event as { trace?: { args?: unknown }; step?: { args?: unknown } };
+      if (value.trace) delete value.trace.args;
+      if (value.step) delete value.step.args;
+    }
+    const enriched = await open(missingArgs);
+    assert.equal(enriched.index.entries.filter(e => e.id.startsWith("segment:")).length, 0, "unique scoped calls can inherit missing full arguments from legacy evidence");
+    const enrichedDetail = (await enriched.detail("event:python-0"))!.value as { trace?: { args: unknown }; step?: { args: unknown } };
+    assert.deepEqual(enrichedDetail.trace?.args ?? enrichedDetail.step?.args, { description: "python" });
   } finally { refs.close(); await rm(directory, { recursive: true, force: true }); }
 });
 
