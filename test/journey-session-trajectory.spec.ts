@@ -96,6 +96,14 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
     await journey.step("刷新后继续核对后续请求", "URL 保留轨迹弹窗；后续输入包含上一轮结果和最新问题，默认定位最新消息。", async () => {
       await page.reload();
       await expect(dialog).toBeVisible();
+      await dialog.getByRole("button", { name: "关闭轨迹", exact: true }).click();
+      await expect(page).not.toHaveURL(/trajectory=open/);
+      await page.goBack();
+      await expect(dialog).toBeVisible();
+      await page.goForward();
+      await expect(dialog).toBeHidden();
+      await page.goBack();
+      await expect(dialog).toBeVisible();
       await expect(dialog.locator('[data-event-type="context.captured"]').first()).toBeVisible();
       const indexResponse = await page.request.get(`${apiBaseUrl()}/api/sessions/${fixture!.session.id}/trajectory`, { headers: authorizationHeader() });
       const index = await indexResponse.json();
@@ -117,6 +125,7 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       await expect(dialog.locator(".trajectory-context")).toContainText("请确认上一轮结论。");
       await expect(dialog.locator(".trajectory-context")).toContainText("主任务核查完成。");
       await expect(dialog.locator(".trajectory-context-summary")).toContainText("条消息");
+      await expect(dialog.locator('.trajectory-context section[id^="trajectory-message-"] details').first()).not.toHaveAttribute("open", "");
       await dialog.getByRole("button", { name: "最新消息", exact: true }).click();
       expect(await dialog.locator(".trajectory-context").evaluate(el => el.scrollTop)).toBeGreaterThan(0);
     });
