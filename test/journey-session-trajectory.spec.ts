@@ -76,7 +76,9 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       const headings = await dialog.locator(".trajectory-event-group > header").evaluateAll(nodes => nodes.map(node => `${node.querySelector("strong")?.textContent}:${node.querySelector("small")?.getAttribute("title")}`));
       expect(headings.length).toBeGreaterThanOrEqual(3);
       expect(new Set(headings).size).toBe(headings.length);
-      expect(await dialog.locator(".trajectory-event-group").first().locator("button").count()).toBeGreaterThan(5);
+      const invocationGroup = dialog.locator(".trajectory-event-group").filter({ has: page.locator('[data-event-type="context.captured"]') }).first();
+      await expect(invocationGroup.locator('[data-event-type="context.captured"]')).toHaveCount(2);
+      await expect(invocationGroup.locator('[data-event-type="tool.started"]')).toHaveCount(1);
       for (const type of ["session.updated", "run.queued", "run.status", "model_usage"]) await expect(dialog.locator(`[data-event-type="${type}"]`)).toHaveCount(0);
       await dialog.getByRole("button", { name: "模型上下文", exact: true }).click();
       await expect(dialog.locator(".trajectory-context section").first()).toBeVisible();
