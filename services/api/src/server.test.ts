@@ -149,6 +149,8 @@ function rootSseGolden(stream: string): string[] {
       !event.type.startsWith("subagent.")
       && event.type !== "run.queued"
       && event.type !== "run.status"
+      // Evidence-only records are not chat milestones; checked independently below.
+      && event.type !== "agent.record"
     )
     .map((event) => event.type);
 }
@@ -3957,6 +3959,13 @@ test("API runs one observable subagent through task and keeps nested task denied
     "subagent.usage",
     "subagent.updated",
   ]]);
+  const evidenceEvents = parseSseEvents(stream).filter(event => event.type === "agent.record");
+  assert.equal(evidenceEvents.filter(event => event.name === "context.captured").length, 3);
+  assert.equal(evidenceEvents.filter(event => event.name === "model.completed").length, 3);
+  assert.ok(evidenceEvents.every(event => {
+    const evidence = event.evidence as import("@sciencediscovery/schema").AgentEventEvidence;
+    return evidence.agentRunId && evidence.contextRef && Number.isFinite(Date.parse(evidence.recordedAt));
+  }));
   const streamedAssistantSteps = parseSseEvents(stream).flatMap((rawEvent) => {
     const event = rawEvent as { step?: SubagentStep; type: string };
     return event.type === "subagent.step" && event.step?.kind === "assistant" ? [event.step] : [];
