@@ -10,12 +10,13 @@ import { cleanupJourney, createProjectAndSession, openProjectSession, scriptedMo
  * Purpose: Inspect and export a Session's real multi-agent trajectory and frozen model contexts.
  * Steps:
  *   1. Run a main Agent and delegated child, then continue the Session with a second Run.
- *   2. Inspect real-time lanes, select a model input, and navigate contributed context sections.
+ *   2. Keep all time lanes visible while selecting one Agent's records and navigating its input.
  *   3. Inspect reasoning with its exact context, export NDJSON, and verify Session isolation.
  *   4. Read tool arguments and results, with an optional raw JSON view.
  *   5. Inspect one final output per request with its token usage, without duplicate streaming text.
- *   6. Reload the trajectory URL and inspect later request messages and narrow-screen layout.
- *   7. Close the viewer with the keyboard and return to the Session.
+ *   6. Inspect tools as a separate collapsible field and labeled context navigation.
+ *   7. Reload the trajectory URL and inspect later request messages and narrow-screen layout.
+ *   8. Close the viewer with the keyboard and return to the Session.
  * Environment: Isolated current-worktree API/Web and Runner at E2E_BASE_URL.
  * Type: mocked
  * LLM: journey-owned deterministic HTTP model with main/subagent scripts.
@@ -117,13 +118,13 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       expect(await dialog.locator(".trajectory-minimap button").count()).toBeGreaterThan(2);
       await expect(dialog.locator(".trajectory-context section").first()).not.toContainText("来源未记录");
       await expect(dialog.locator('.trajectory-context [id^="trajectory-tool-"]')).toHaveCount(0);
-      await expect(dialog.locator(".trajectory-tools")).not.toHaveAttribute("open", "");
-      await dialog.locator(".trajectory-tools > summary").click();
+      await expect(dialog.locator(".trajectory-tools > button")).toHaveAttribute("aria-expanded", "false");
+      await dialog.locator(".trajectory-tools > button").click();
       await expect(dialog.locator(".trajectory-tool-list > details").first()).toBeVisible();
       const definition = dialog.locator(".trajectory-tool-list > details").filter({ has: page.locator("summary", { hasText: /^task$/ }) });
       await definition.locator("summary").click();
       await expect(definition.locator("pre")).toContainText("task");
-      await dialog.locator(".trajectory-tools > summary").click();
+      await dialog.locator(".trajectory-tools > button").click();
       await expect(dialog.locator(".trajectory-tool-list")).toBeHidden();
       await expect(dialog.locator(".trajectory-minimap")).toContainText("用户");
       expect(await dialog.locator(".trajectory-minimap").evaluate(node => node.clientWidth)).toBeGreaterThanOrEqual(100);
@@ -204,6 +205,15 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       await dialog.getByRole("button", { name: "最新消息", exact: true }).click();
       expect(await dialog.locator(".trajectory-context").evaluate(el => el.scrollTop)).toBeGreaterThan(0);
     });
+    await journey.step("展开独立工具定义", "工具定义属于独立 tools 字段，按名称折叠展示；消息中的工具结果仍留在消息原位置。", async () => {
+      await dialog.locator(".trajectory-tools > button").click();
+      const definition = dialog.locator(".trajectory-tool-list > details").filter({ has: page.locator("summary", { hasText: /^task$/ }) });
+      await definition.locator("summary").click();
+      await expect(definition.locator("pre")).toContainText("task");
+      await definition.locator("summary").scrollIntoViewIfNeeded();
+      expect(await dialog.locator(".trajectory-context").evaluate(el => el.clientHeight)).toBeGreaterThan(30);
+      await expect(dialog.locator('.trajectory-context [id^="trajectory-tool-"]')).toHaveCount(0);
+    });
     await journey.step("选择思考节点并导出", "已记录思考对应固定上下文，导出含完整结束标记，未授权和其他 Session 无法读取。", async () => {
       await dialog.getByLabel("事件类型", { exact: true }).selectOption("thinking");
       await dialog.locator(".trajectory-event-list button").filter({ hasText: "思考内容" }).first().click();
@@ -249,6 +259,7 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       await dialog.getByRole("button", { name: "原始 JSON", exact: true }).click();
       await expect(dialog.locator(".trajectory-raw")).toContainText("run_shell");
       await dialog.getByRole("button", { name: "解析内容", exact: true }).click();
+      await dialog.locator(".trajectory-readable dt").filter({ hasText: "command" }).scrollIntoViewIfNeeded();
       await expect(dialog.locator(".trajectory-readable dt").filter({ hasText: "command" })).toBeInViewport();
     });
     await journey.step("核对单次模型用量", "主子 Agent 每次请求只显示一个最终返回，带本次 Token 用量，不重复展示流式正文。", async () => {
@@ -303,18 +314,19 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       expect(await pane.evaluate(el => el.clientHeight)).toBeGreaterThan(35);
       await dialog.locator(".trajectory-minimap button").last().click();
       await expect(dialog.locator(".trajectory-minimap button").last()).toHaveAttribute("aria-current", "true");
-      await dialog.locator(".trajectory-tools > summary").click();
+      await dialog.locator(".trajectory-tools > button").click();
       await expect(dialog.locator(".trajectory-tool-list")).toBeInViewport();
       expect(await pane.evaluate(el => el.clientHeight)).toBeGreaterThan(0);
       expect(await dialog.locator(".trajectory-input").evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
       await dialog.locator(".trajectory-tool-list > details").first().locator("summary").click();
       await expect(dialog.locator(".trajectory-tool-list > details").first().locator("pre")).toBeVisible();
-      await dialog.locator(".trajectory-tools > summary").click();
+      await dialog.locator(".trajectory-tools > button").click();
       await dialog.getByRole("button", { name: "原始 JSON", exact: true }).click();
       await expect(dialog.locator(".trajectory-raw")).toContainText('"systemPrompt"');
       await expect(dialog.locator(".trajectory-raw")).toContainText('"tools"');
       await dialog.getByRole("button", { name: "解析内容", exact: true }).click();
-      await expect(dialog.locator(".trajectory-tools")).not.toHaveAttribute("open", "");
+      await expect(dialog.locator(".trajectory-tools > button")).toHaveAttribute("aria-expanded", "false");
+      await expect(dialog.locator('.trajectory-minimap button[aria-current="true"]')).toBeInViewport({ ratio: 0.9 });
     });
     await journey.step("返回会话", "键盘 Escape 返回 Session，轨迹入口保持单行可见。", async () => {
       await page.keyboard.press("Escape");
