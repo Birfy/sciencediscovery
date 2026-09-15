@@ -9,10 +9,11 @@ import { cleanupJourney, createProjectAndSession, openProjectSession, scriptedMo
  * E2E-META
  * Purpose: Inspect and export a Session's real multi-agent trajectory and frozen model contexts.
  * Steps:
- *   1. Run a main Agent and delegated child with returned thinking and a local tool.
+ *   1. Run a main Agent and delegated child, then continue the Session with a second Run.
  *   2. Inspect real-time lanes, select a model input, and navigate contributed context sections.
  *   3. Inspect reasoning with its exact context, export NDJSON, and verify Session isolation.
- *   4. Inspect narrow-screen layout and close the viewer with the keyboard.
+ *   4. Inspect narrow-screen layout, Run labels and record-view controls.
+ *   5. Close the viewer with the keyboard and return to the Session.
  * Environment: Isolated current-worktree API/Web and Runner at E2E_BASE_URL.
  * Type: mocked
  * LLM: journey-owned deterministic HTTP model with main/subagent scripts.
@@ -26,10 +27,10 @@ import { cleanupJourney, createProjectAndSession, openProjectSession, scriptedMo
 test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, async ({ page, journey }) => {
   test.setTimeout(180_000);
   await page.addInitScript(() => localStorage.setItem("sciencediscovery-locale", "zh-CN"));
-  const stub = await scriptedModel([
+  const stub = await scriptedModel([[
     { tool: "task", arguments: { description: "独立核查", prompt: "Use run_shell to print TRAJECTORY_CHILD, then report success.", subagent_type: "general-purpose" }, reasoning: "先委派独立核查。", delayMs: 300 },
     { text: "主任务核查完成。", reasoning: "结合子任务结果形成结论。" },
-  ], [
+  ], [{ text: "第二轮确认完成。" }]], [
     { tool: "run_shell", arguments: { command: "printf TRAJECTORY_CHILD" }, reasoning: "核对工具执行结果。", delayMs: 300 },
     { text: "TRAJECTORY_CHILD 已核验。" },
   ]);
@@ -43,6 +44,9 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       const terminal = await waitForRunTerminal(page, fixture!.session.id, run.id);
       expect(terminal.status).toBe("completed");
       await expect(page.getByText("主任务核查完成。", { exact: true }).first()).toBeVisible();
+      const followup = await sendUserMessage(page, fixture!.session.id, "请确认上一轮结论。");
+      expect((await waitForRunTerminal(page, fixture!.session.id, followup.id)).status).toBe("completed");
+      await expect(page.getByText("第二轮确认完成。", { exact: true }).first()).toBeVisible();
       const entry = page.getByRole("button", { name: "轨迹", exact: true });
       await expect(entry).toHaveClass(/secondary-button compact-button/);
       await expect(entry).toHaveCSS("border-radius", "7px");
@@ -95,7 +99,9 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
         const key = `${entry.agentId}:${entry.runId}`;
         streams.set(key, [...(streams.get(key) ?? []), entry.sequence]);
       }
-      expect(streams.size).toBeGreaterThanOrEqual(2);
+      expect(streams.size).toBeGreaterThanOrEqual(3);
+      const mainStarts = records[0].entries.filter((e: { agentId: string; label: string; turn: number }) => e.agentId.startsWith("main:") && e.label === "context.captured" && e.turn === 0);
+      expect(new Set(mainStarts.map((e: { runId: string }) => e.runId)).size).toBe(2);
       for (const sequences of streams.values()) expect(sequences).toEqual([...sequences].sort((a, b) => a - b));
       expect(records[0].entries.some((e: { id: string }) => /^(action:|before:|after:)/.test(e.id))).toBe(false);
       expect(records.some(r => r.context?.input && r.entry.agentId.startsWith("subagent:"))).toBe(true);
@@ -104,10 +110,14 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       const foreign = await page.request.get(`${apiBaseUrl()}/api/sessions/${fixture!.session.id}/trajectory/detail?id=foreign`, { headers: authorizationHeader() });
       expect(foreign.status()).toBe(404);
     });
-    await journey.step("窄屏阅读和关闭", "查看器不超出视口，键盘 Escape 返回 Session。", async () => {
+    await journey.step("窄屏阅读", "查看器不超出视口，Run 标签、历史切换和上下文导航可见。", async () => {
       await page.setViewportSize({ width: 390, height: 844 });
       expect(await dialog.evaluate(el => el.getBoundingClientRect().right <= window.innerWidth + 1)).toBe(true);
       await expect(dialog.getByRole("button", { name: "关闭轨迹" })).toBeVisible();
+      await expect(dialog.getByRole("button", { name: /^历史版本/ })).toBeInViewport();
+      await expect(dialog.locator(".trajectory-detail-heading .trajectory-run")).toBeVisible();
+    });
+    await journey.step("返回会话", "键盘 Escape 返回 Session，轨迹入口保持单行可见。", async () => {
       await page.keyboard.press("Escape");
       await expect(dialog).toBeHidden();
       await expect(page.getByRole("button", { name: "轨迹", exact: true })).toBeInViewport();
