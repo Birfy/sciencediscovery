@@ -137,6 +137,7 @@ export class AgentVersionRecorder<M extends RuntimeMessage, I, U> implements Tur
   private head: AgentStateRef | null = null;
   private before!: AgentStateRef;
   private modelContext!: AgentStateRef;
+  private modelAction?: AgentStateRef;
   private context!: AgentStateRef;
   private activeContext?: AgentStateRef;
   private transcript: M[] = [];
@@ -208,6 +209,7 @@ export class AgentVersionRecorder<M extends RuntimeMessage, I, U> implements Tur
     this.modelContext = await this.store.putRecord("ModelContextSnapshot", jsonValue({
       boundary: "ProviderModelClient.invoke", input: assembly.modelInput,
     } satisfies ModelContextSnapshot<I>));
+    this.modelAction = undefined;
     this.context = await this.store.putRecord("ContextAssemblyRecord", jsonValue({
       turn, manifest: this.manifest, state: this.before, modelContext: this.modelContext, trace: this.assemblyTrace,
       ...(this.inputView ? { checkpoint: this.inputView.checkpoint } : {}),
@@ -239,7 +241,10 @@ export class AgentVersionRecorder<M extends RuntimeMessage, I, U> implements Tur
 
   async modelCompleted(result: unknown): Promise<void> {
     await this.pending;
-    await this.record("model.completed", jsonValue(result));
+    // Persist the authoritative action once, before tools run (including failures).
+    // Both the Run event and the committed Step reference this same object.
+    this.modelAction = await this.store.putRecord("ModelAction", jsonValue({ modelContext: this.modelContext, result }));
+    await this.record("model.completed", undefined, undefined, this.evidence(), this.modelAction);
   }
 
   childCompleted(agentId: string): void {
@@ -251,7 +256,7 @@ export class AgentVersionRecorder<M extends RuntimeMessage, I, U> implements Tur
     this.transcript.push(structuredClone(modelTurn.assistantMessage), ...results.map((result) => structuredClone(result.message)));
     const raw = this.turnObservations.sort((a, b) => a.sequence - b.sequence).map((item) => item.ref);
     this.observations.push(...raw);
-    const actions: AgentStateRef[] = [await this.store.putRecord("ModelAction", jsonValue({ modelContext: this.modelContext, result: modelTurn }))];
+    const actions: AgentStateRef[] = [this.modelAction ?? await this.store.putRecord("ModelAction", jsonValue({ modelContext: this.modelContext, result: modelTurn }))];
     for (const [index, call] of modelTurn.toolCalls.entries()) {
       actions.push(await this.store.putRecord("ToolAction", jsonValue({ call, result: results[index], observation: raw[index] ?? null })));
     }
@@ -273,11 +278,11 @@ export class AgentVersionRecorder<M extends RuntimeMessage, I, U> implements Tur
   }
 
   private record(name: Extract<RunStreamEvent, { type: "agent.record" }>["name"], payload?: unknown,
-    stateRef?: AgentStateRef, evidence = this.evidence()): Promise<void> {
+    stateRef?: AgentStateRef, evidence = this.evidence(), existingPayload?: AgentStateRef): Promise<void> {
     if (!this.options.recordEvent) return Promise.resolve();
     const value = structuredClone(payload);
     this.pending = this.pending.then(async () => {
-      const payloadRef = value === undefined ? undefined : await this.store.putRecord("AgentEventPayload", value);
+      const payloadRef = existingPayload ?? (value === undefined ? undefined : await this.store.putRecord("AgentEventPayload", value));
       await this.options.recordEvent!({ type: "agent.record", name, evidence: { ...evidence, ...(stateRef ? { stateRef } : {}) },
         ...(payloadRef ? { payloadRef } : {}) });
     });

@@ -1,6 +1,7 @@
 // Copyright (C) 2026-2026 Huawei Technologies Co., Ltd
 // Licensed under the Apache License, Version 2.0 (the "License");
 import { CasStore, RefStore, VersionStore, type AgentStateRef, type TrajectoryStep } from "@sciencediscovery/cas";
+import { isDeepStrictEqual } from "node:util";
 import { contextBlocks, eventKind, object, redact, type TrajectoryAgent, type TrajectoryDetail, type TrajectoryEntry, type TrajectoryIndex } from "./index.js";
 import { readAgentJournal, type JournalEvent } from "./journal.js";
 
@@ -12,6 +13,15 @@ interface Assembly { capturedAt?: string; state: AgentStateRef; modelContext: Ag
 function timestamp(value: unknown): string | null {
   return typeof value === "string" && Number.isFinite(Date.parse(value)) ? new Date(value).toISOString() : null;
 }
+function toolRecord(value: unknown): { type: unknown; trace: Record<string, unknown> } {
+  const event = object(value), step = object(event.step);
+  if (event.type === "subagent.step" && step.kind === "tool") return {
+    type: step.status === "running" ? "tool.started" : "tool.completed",
+    trace: { id: step.toolCallId, name: step.toolName, args: step.args, status: step.status,
+      details: step.details, ...(step.status !== "running" ? { output: step.content } : {}) },
+  };
+  return { type: event.type, trace: object(event.trace) };
+}
 
 /** A read projection over an authorized Session's refs. Never accepts arbitrary client CAS refs. */
 export async function openSessionTrajectory(dataDir: string, source: SessionTrajectorySource, signal: AbortSignal) {
@@ -20,7 +30,8 @@ export async function openSessionTrajectory(dataDir: string, source: SessionTraj
   const states = new Map<string, AgentStateRef>(), linkedContexts = new Set<string>();
   const journal: JournalEvent[] = [], journalRuns = new Set<string>(), coveredExecutions = new Set<string>();
   const unifiedRuns = new Set<string>();
-  const contexts = new Map<string, { ref: AgentStateRef; assembly: Assembly; agentId: string }>();
+  const contexts = new Map<string, { ref: AgentStateRef; assembly: Assembly; agentId: string; runId?: string; requestId?: string }>();
+  const legacyLinks = new Map<string, { contextId: string; args?: unknown }>();
   const responses = new Map<string, string>(), calls = new Map<string, { contextId: string; agentId: string } | null>();
   const rememberCall = (id: string, contextId: string, agentId: string) => {
     const previous = calls.get(id);
@@ -62,9 +73,15 @@ export async function openSessionTrajectory(dataDir: string, source: SessionTraj
     const assembly = await record(ref, "ContextAssemblyRecord") as Assembly;
     const state = object(await record(assembly.state, "AgentStateSnapshot"));
     if (state.agentId !== agentId) throw new Error("Context ownership mismatch");
-    contexts.set(id, { ref, assembly, agentId });
+    let requestId: string | undefined;
+    if (state.agentRevision) {
+      const revision = object(await record(state.agentRevision as AgentStateRef, "AgentRevision"));
+      if (revision.agentId !== agentId) throw new Error("Revision ownership mismatch");
+      if (typeof revision.requestExecutionId === "string") requestId = revision.requestExecutionId;
+    }
     // A snapshot is not an event, even if an old producer embedded a timestamp.
     const runId = typeof state.trajectoryId === "string" ? state.trajectoryId : undefined;
+    contexts.set(id, { ref, assembly, agentId, runId, requestId });
     add({ id: `before:${ref.digest}`, agentId, runId, kind: "state", label: `State before · turn ${assembly.turn}`, timestamp: null, turn: assembly.turn, contextId: id }, () => record(assembly.state, "AgentStateSnapshot"));
     add({ id, agentId, runId, kind: "input", label: `Model input · turn ${assembly.turn}`, timestamp: null, turn: assembly.turn, contextId: id }, () => record(assembly.modelContext, "ModelContextSnapshot"));
   };
@@ -95,6 +112,41 @@ export async function openSessionTrajectory(dataDir: string, source: SessionTraj
       if (contextRef) { await addContext(agentId, contextRef); linkedContexts.add(`context:${contextRef.digest}`); }
       if (contextRef && typeof event.responseId === "string") responses.set(`${agentId}:${event.responseId}`, `context:${contextRef.digest}`);
       if (contextRef && typeof object(event.call).id === "string") rememberCall(String(object(event.call).id), `context:${contextRef.digest}`, agentId);
+      // A legacy tool segment and the Run stream describe the same invocation.
+      // Require authority-derived execution scope, unique call identity, arguments
+      // and (for completion) the full result. Never deduplicate on wall-clock proximity.
+      if (contextRef && ["tool_execution_start", "tool_execution_end"].includes(String(event.type))) {
+        const contextId = `context:${contextRef.digest}`, context = contexts.get(contextId)!;
+        const requestId = source.agents.find(a => a.id === agentId)?.parentRunId ?? context.requestId;
+        const call = object(event.call);
+        const scoped = source.events.filter(item => item.agentId === agentId && (
+          object(object(item.event).evidence).contextRef
+            ? object(object(object(item.event).evidence).contextRef).digest === contextRef.digest
+            : requestId !== undefined && item.runId === requestId));
+        const starts = scoped.filter(item => {
+          const { type, trace } = toolRecord(item.event);
+          return type === "tool.started" && trace.id === call.id && trace.name === call.name
+            && isDeepStrictEqual(trace.args ?? {}, call.args ?? {});
+        });
+        const finished = event.type === "tool_execution_end";
+        const candidates = finished ? scoped.filter(item => {
+          const { type, trace } = toolRecord(item.event);
+          if (type !== "tool.completed" || trace.id !== call.id || trace.name !== call.name
+            || trace.status !== (event.isError ? "failed" : "completed") || !isDeepStrictEqual(trace.details, event.details)) return false;
+          const outputs = scoped.filter(output => object(output.event).type === "tool.output" && object(output.event).toolCallId === call.id);
+          const content = trace.output ?? (outputs.length ? outputs.map(output => String(object(output.event).chunk ?? "")).join("") : undefined);
+          return content === event.content;
+        }) : starts;
+        if (starts.length === 1 && candidates.length === 1 && typeof call.id === "string") {
+          const target = candidates[0]!;
+          const previous = legacyLinks.get(target.id);
+          if (!previous || previous.contextId === contextId) {
+            legacyLinks.set(target.id, { contextId, args: call.args });
+            rememberCall(`${agentId}:${target.runId}:${call.id}`, contextId, agentId);
+            continue;
+          }
+        }
+      }
       // Prefer the original Run stream only with exact response identity and
       // equal complete content. Equal text in different responses is legitimate.
       if (event.type === "model_delta" && typeof event.responseId === "string") {
@@ -221,7 +273,9 @@ export async function openSessionTrajectory(dataDir: string, source: SessionTraj
     const callId = String(event.toolCallId ?? trace.id ?? trace.toolCallId ?? step.toolCallId ?? "");
     const scopedCall = `${item.agentId}:${item.runId}:${callId}`;
     const call = calls.has(scopedCall) ? calls.get(scopedCall) : coveredExecutions.has(`${item.agentId}:${item.runId}`) ? undefined : calls.get(callId);
-    const contextId = contextRef ? `context:${contextRef.digest}` : call?.contextId ?? responses.get(`${item.agentId}:${String(event.responseId ?? evidence.responseId)}`);
+    const legacy = legacyLinks.get(item.id);
+    const contextId = contextRef ? `context:${contextRef.digest}` : legacy?.contextId ?? call?.contextId ?? responses.get(`${item.agentId}:${String(event.responseId ?? evidence.responseId)}`);
+    if (legacy?.args && event.trace && !trace.args) payload = { ...object(payload), trace: { ...trace, args: legacy.args } };
     if (contextId && callId) rememberCall(scopedCall, contextId, item.agentId);
     if (contextId && typeof (event.responseId ?? evidence.responseId) === "string") responses.set(`${item.agentId}:${String(event.responseId ?? evidence.responseId)}`, contextId);
     const eventType = event.type === "subagent.step" && step.kind === "tool"
@@ -248,9 +302,12 @@ export async function openSessionTrajectory(dataDir: string, source: SessionTraj
       ...(typeof evidence.turn === "number" ? { turn: evidence.turn } : {}),
       ...(typeof evidence.requestExecutionId === "string" ? { requestExecutionId: evidence.requestExecutionId } : {}),
       ...(endTime ? { endTime } : {}), runId: typeof evidence.agentRunId === "string" ? evidence.agentRunId : item.runId,
-      streamId: item.streamId ?? "events", sequence: item.sequence }, async () => event.type === "agent.record" && event.payloadRef
-        ? { ...object(await record(event.payloadRef as AgentStateRef, "AgentEventPayload")), ...event, type: eventType }
-        : payload);
+      streamId: item.streamId ?? "events", sequence: item.sequence }, async () => {
+        if (event.type !== "agent.record" || !event.payloadRef) return payload;
+        const saved = await store.readRecord(event.payloadRef as AgentStateRef);
+        if (saved.kind !== "AgentEventPayload" && !(event.name === "model.completed" && saved.kind === "ModelAction")) throw new Error("Unexpected event payload kind");
+        return { ...object(saved.kind === "ModelAction" ? object(saved.value).result : saved.value), ...event, type: eventType };
+      });
   }
   const ordered = orderEvents(entries);
   entries.splice(0, entries.length, ...ordered);

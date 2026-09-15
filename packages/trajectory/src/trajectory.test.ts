@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CasStore, RefStore, VersionStore } from "@sciencediscovery/cas";
 import { contextBlocks, eventKind, redact } from "./index.js";
-import { openSessionTrajectory, orderEvents } from "./server.js";
+import { openSessionTrajectory, orderEvents, type RecordedEvent } from "./server.js";
 import { readAgentJournal, type JournalEvent } from "./journal.js";
 
 test("exact admitted system sections preserve order and separators, not rejected proposals", () => {
@@ -190,6 +190,63 @@ test("legacy EventSegment and original thinking are one entry only with exact id
     source.events[0]!.event.delta = "partial";
     const partial = await openSessionTrajectory(directory, source, new AbortController().signal);
     assert.equal(partial.index.entries.length, 3, "unequal content must not be silently discarded");
+  } finally { refs.close(); await rm(directory, { recursive: true, force: true }); }
+});
+
+for (const child of [false, true]) test(`legacy parallel ${child ? "child" : "main"} tools reuse Run records without merging distinct executions`, async () => {
+  const directory = await mkdtemp(join(tmpdir(), "trajectory-tool-duplicates-"));
+  const store = new VersionStore(directory), refs = await RefStore.open(store);
+  const agentId = child ? "subagent:child" : "main:s", runId = "request", trajectoryId = "agent-run";
+  try {
+    const agentRevision = await store.putRecord("AgentRevision", { agentId, requestExecutionId: runId });
+    const state = await store.putRecord("AgentStateSnapshot", { agentId, trajectoryId, agentRevision });
+    const modelContext = await store.putRecord("ModelContextSnapshot", { input: { systemPrompt: "exact", history: [], tools: [] } });
+    const contextRef = await store.putRecord("ContextAssemblyRecord", { state, modelContext, turn: 0 });
+    const start = await store.putRecord("TrajectoryStart", { state });
+    await refs.commit(store, `agents/${encodeURIComponent(agentId)}/trajectories/${trajectoryId}`, null, start);
+    const source: RecordedEvent[] = [];
+    for (const id of ["python", "shell"]) {
+      const call = { id, name: "task", args: { description: id } };
+      const events = [
+        { type: "tool_execution_start", call, contextRef, recordedAt: "2026-09-15T02:10:46.019Z" },
+        { type: "tool_execution_end", call, contextRef, recordedAt: "2026-09-15T02:16:06.880Z", content: `result-${id}`, isError: id === "shell" },
+      ];
+      const segment = await store.putRecord("EventSegment", { events });
+      await refs.commit(store, `trajectory-events/${trajectoryId}/${id}`, null, segment);
+      for (const [n, event] of [
+        { type: "tool.started", trace: { ...call, status: "running" } },
+        { type: "tool.output", toolCallId: id, chunk: `result-${id}` },
+        { type: "tool.completed", trace: { id, name: "task", status: id === "shell" ? "failed" : "completed", outputStream: `tool-${id}` } },
+      ].entries()) source.push({ id: `${id}-${n}`, agentId, runId, sequence: source.length + 1,
+        createdAt: n === 0 ? "2026-09-15T02:10:46.027Z" : "2026-09-15T02:16:06.887Z",
+        event: child && n !== 1 ? { type: "subagent.step", step: { kind: "tool", toolCallId: id, toolName: "task", args: call.args,
+          status: n === 0 ? "running" : id === "shell" ? "failed" : "completed", content: n === 0 ? "input" : `result-${id}` } } : event });
+    }
+    const open = (events = source) => openSessionTrajectory(directory, { sessionId: "s", agents: [{ id: agentId, label: "Main" }], events }, new AbortController().signal);
+    const view = await open();
+    assert.equal(view.index.entries.filter(e => e.eventType === "tool.started").length, 2);
+    assert.equal(view.index.entries.filter(e => e.id.startsWith("segment:")).length, 0);
+    assert.equal(view.index.entries.filter(e => e.endTime).length, 4); // Two tool intervals and two output packets.
+    for (const id of ["python", "shell"]) for (const n of [0, 2]) {
+      const detail = (await view.detail(`event:${id}-${n}`))!;
+      assert.equal(detail.entry.contextId, `context:${contextRef.digest}`);
+      assert.ok(detail.context);
+      const value = detail.value as { trace?: { args: unknown }; step?: { args: unknown } };
+      assert.deepEqual(value.trace?.args ?? value.step?.args, { description: id });
+    }
+    const exported: string[] = []; for await (const line of view.exportRecords()) exported.push(line);
+    assert.equal(JSON.parse(exported.at(-1)!).entries, 6);
+    const foreign = await open(source.map(e => ({ ...e, runId: "other-request" })));
+    assert.equal(foreign.index.entries.filter(e => e.id.startsWith("segment:")).length, 4, "reused IDs in another execution must remain distinct");
+    const changed = structuredClone(source);
+    const changedValue = changed[0]!.event as { trace?: { args: unknown }; step?: { args: unknown } };
+    (changedValue.trace ?? changedValue.step)!.args = { description: "different" };
+    assert.equal((await open(changed)).index.entries.filter(e => e.id.startsWith("segment:")).length, 2, "different inputs cannot suppress either boundary");
+    const partial = structuredClone(source);
+    if (child) (partial[2]!.event as { step: { content: string } }).step.content = "truncated";
+    else (partial[1]!.event as { chunk: string }).chunk = "truncated";
+    assert.equal((await open(partial)).index.entries.filter(e => e.id.startsWith("segment:")).length, 1, "incomplete output keeps the complete legacy result");
+    assert.equal((await open([...source, { ...source[0]!, id: "repeated-call" }])).index.entries.filter(e => e.id.startsWith("segment:")).length, 2, "ambiguous repeated IDs are not merged");
   } finally { refs.close(); await rm(directory, { recursive: true, force: true }); }
 });
 

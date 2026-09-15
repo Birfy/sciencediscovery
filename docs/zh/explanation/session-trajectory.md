@@ -39,7 +39,9 @@ Session 入口 ── 认证 TrajectoryPort ── trajectory/web
 
 没有聊天等价物的信息，以 `agent.record` 补充到同一事件流：`context.captured` 发布调用输入，`model.completed` 引用完整模型返回（含本次 usage），`state.committed` 关联成功 Step 后的状态，`context_recovery` 记录输入超限恢复。CAS 正文先持久化，入口随后写入。主 Agent 使用 main 流，子 Agent 使用已有 subagent 流，命令输出仍使用原工具输出流；这些文件都是同一 Run 事件体系，不要求物理合并成一个大文件。单流按 sequence 排序，跨流按队首的采集时间合并；不以 CAS hash、文件 mtime 或整轮结束时间排序。跨机器严格因果排序不是当前承诺。
 
-旧独立 journal 和 `EventSegment` 只读兼容，不迁移、不重写、不删除。旧 EventSegment 与 Run 增量具有相同 Agent、responseId、通道且完整文本相同时，展示优先采用原 Run 事件，保留确切上下文关联；不同响应的相同文字不是重复。工具输出与 MCP 审计只在调用 ID 与 Agent/请求范围无歧义时关联。无可靠时间的调用标注「时间未记录」，不画时间轴位置；固定模型输入不会因后续调用而过期。备份必须同时包含 Run 事件流、旧兼容日志、CAS 和引用库；未来增加 GC 时，这些入口的内容引用均需纳入存活根。没有入口、没有记录的时间或正文，不从当前状态补造。
+旧独立 journal 和 `EventSegment` 只读兼容，不迁移、不重写、不删除。旧 EventSegment 与 Run 增量具有相同 Agent、responseId、通道且完整文本相同时，展示优先采用原 Run 事件，保留确切上下文关联；不同响应的相同文字不是重复。旧工具开始/结束事件按 Agent、权威执行归属、唯一 callId、工具名和完整参数匹配原 Run 工具事件；结束还须匹配状态、完整输出和 details。主子 Agent 都支持；重复 ID、不同参数或不完整结果不能静默合并。工具输出与 MCP 审计只在调用 ID 与 Agent/请求范围无歧义时关联。无可靠时间的调用标注「时间未记录」，不画时间轴位置；固定模型输入不会因后续调用而过期。备份必须同时包含 Run 事件流、旧兼容日志、CAS 和引用库；未来增加 GC 时，这些入口的内容引用均需纳入存活根。没有入口、没有记录的时间或正文，不从当前状态补造。
+
+轨迹读取端不写数据。完整模型返回只保存一个 `ModelAction`，Run 的 `model.completed.payloadRef` 与成功 Step 的 action 指向同一对象；即使工具后续失败，也可读取已经发布的模型返回。旧 `AgentEventPayload` 仍可读。模型上下文和 Agent 状态复用版本系统快照；MCP 审计、命令输出、聊天增量有各自既有消费者，不因轨迹展示再复制一套。流式增量与最终模型返回分别表示生成过程与完整调用结果，不把它们误当成两次模型调用。
 
 系统提示来源需以 `admitted.sections`、`rendered.sectionIds` 与实际 `systemPrompt` 逐字核对。未通过核对或走 legacy 回退时显示实际系统提示并标注来源不可用；候选贡献/压缩过程留在组装证据中，不冒充最终输入。工具定义与消息按实际输入顺序展示。
 

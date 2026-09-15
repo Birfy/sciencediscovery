@@ -103,6 +103,15 @@ test("production AgentRun records exact contexts, complete observations, sequent
     const first = (await store.readRecord<TrajectoryStep>(final.parent!, "TrajectoryStep")).value;
     assert.equal(first.actions.length, 3);
     assert.deepEqual(first.eventSegments, []); // Only the existing Run stream owns events.
+    const modelRecords = events.map(item => item.event as RunStreamEvent).filter(event => event.type === "agent.record" && event.name === "model.completed");
+    assert.equal(modelRecords.length, 2);
+    for (const [i, step] of [first, final].entries()) {
+      const recorded = modelRecords[i]!;
+      assert.equal(recorded.type, "agent.record");
+      if (recorded.type !== "agent.record") throw new Error("Expected model record");
+      assert.deepEqual(recorded.payloadRef, step.actions[0], "Run and Step reuse the same authoritative ModelAction");
+      assert.equal((await store.readRecord(recorded.payloadRef!)).kind, "ModelAction");
+    }
     await assert.rejects(access(resolve(dataDir, "trajectories")), { code: "ENOENT" });
     assert.equal(first.childTrajectories.length, 0);
     const state = (await store.readRecord<AgentStateSnapshot>(final.after, "AgentStateSnapshot")).value;
