@@ -52,10 +52,10 @@ export function IdeaResearchCard({client, sessionId, onError, onResearchAvailabi
     finally {setBusy(false);}
   }
   const view = items.find(i => i.research.id === selected) ?? items[0];
-  if (!view) return error ? <p role="alert">{error} <button type="button" onClick={() => void load()}>重试</button></p> : null;
+  if (!view) return error ? <p role="alert">{error} <button className="secondary-button compact-button" type="button" onClick={() => void load()}>重试</button></p> : null;
   const r = view.research;
   return <section ref={element} className="idea-research-panel" aria-label="Idea Tree 研究控制">
-    {error && <p role="alert">{error} <button type="button" onClick={() => { void load(); setReconnect(n => n + 1); }}>重新连接</button></p>}
+    {error && <p role="alert">{error} <button className="secondary-button compact-button" type="button" onClick={() => { void load(); setReconnect(n => n + 1); }}>重新连接</button></p>}
     <button className="idea-tree-view" type="button" onClick={() => setOpen(true)}>
       <span className="idea-tree-view-header"><strong>Idea Tree</strong><em>{IDEA_RESEARCH_STATUSES[r.status] ?? r.status}</em></span>
       <span className="idea-tree-view-objective">{r.objective}</span>

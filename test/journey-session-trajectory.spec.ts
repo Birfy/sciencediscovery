@@ -43,10 +43,17 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       const terminal = await waitForRunTerminal(page, fixture!.session.id, run.id);
       expect(terminal.status).toBe("completed");
       await expect(page.getByText("主任务核查完成。", { exact: true }).first()).toBeVisible();
+      const entry = page.getByRole("button", { name: "轨迹", exact: true });
+      await expect(entry).toHaveClass(/secondary-button compact-button/);
+      await expect(entry).toHaveCSS("border-radius", "7px");
+      await expect(entry).toHaveCSS("min-height", "34px");
+      await entry.focus();
+      await expect(entry).toBeFocused();
     });
     const dialog = page.getByRole("dialog", { name: "Session 轨迹" });
     await journey.step("查看时间轴和上下文来源", "主子 Agent 共用时间坐标，输入展示实际贡献块，彩色导航可跳转。", async () => {
       await page.getByRole("button", { name: "轨迹", exact: true }).click();
+      await expect(dialog.getByRole("button", { name: "刷新", exact: true })).toHaveCSS("border-radius", "7px");
       await expect(dialog.locator(".trajectory-lane")).toHaveCount(2);
       await expect(dialog.locator(".trajectory-context section").first()).toBeVisible();
       expect(await dialog.locator(".trajectory-mark").count()).toBeGreaterThan(5);
@@ -84,6 +91,7 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       await expect(dialog.getByRole("button", { name: "关闭轨迹" })).toBeVisible();
       await page.keyboard.press("Escape");
       await expect(dialog).toBeHidden();
+      await expect(page.getByRole("button", { name: "轨迹", exact: true })).toBeInViewport();
     });
   } finally { if (fixture) await cleanupJourney(page, fixture); await stub.stop(); }
 });

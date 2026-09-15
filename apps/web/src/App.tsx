@@ -4317,7 +4317,7 @@ export function App() {
                 ) : null}
               </div>
               <div className="session-bar-meta">
-                {session && <button type="button" onClick={() => setTrajectorySession({ id: session.id, title: session.title })}>{locale.startsWith("zh") ? "轨迹" : "Trajectory"}</button>}
+                {session && <button className="secondary-button compact-button" type="button" aria-haspopup="dialog" onClick={() => setTrajectorySession({ id: session.id, title: session.title })}>{locale.startsWith("zh") ? "轨迹" : "Trajectory"}</button>}
                 {session ? <span className="session-runner-target" title={selectedRunnerIds.length
                   ? t("app.runnerSelectionTooltip", { hosts: selectedRunnerNames.join(", ") })
                   : t("app.runnerSelectionEmpty")}>

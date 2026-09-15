@@ -104,7 +104,7 @@ function LegacyIdeaTreeView({
     return () => clearInterval(timer);
   }, [hasIdeaTreeRun, load]);
 
-  if (loadError) return <div role="alert">{loadError} <button type="button" onClick={() => void load(selectedTreeId.current)}>Retry Idea Tree</button></div>;
+  if (loadError) return <div role="alert">{loadError} <button className="secondary-button compact-button" type="button" onClick={() => void load(selectedTreeId.current)}>Retry Idea Tree</button></div>;
   if (!graph) return null;
   const completed = graph.nodes.filter((node) => node.status === "done").length;
   const running = graph.nodes.filter((node) => node.status === "running").length;
