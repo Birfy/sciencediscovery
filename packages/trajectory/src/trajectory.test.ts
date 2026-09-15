@@ -2,13 +2,13 @@
 // Licensed under the Apache License, Version 2.0 (the "License");
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { appendFile, mkdtemp, rm } from "node:fs/promises";
+import { appendFile, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CasStore, RefStore, VersionStore } from "@sciencediscovery/cas";
 import { contextBlocks, eventKind, redact } from "./index.js";
 import { openSessionTrajectory, orderEvents } from "./server.js";
-import { readAgentJournal, TrajectoryJournal } from "./journal.js";
+import { readAgentJournal, type JournalEvent } from "./journal.js";
 
 test("exact admitted system sections preserve order and separators, not rejected proposals", () => {
   const input = { systemPrompt: "rules\nscience", history: [{ role: "user", content: "question" }], tools: [{ name: "search" }] };
@@ -81,7 +81,19 @@ test("journal entries own order, exact context and run identity without snapshot
   const agentId = "main:s", signal = new AbortController().signal;
   try {
     for (const runId of ["run-a", "run-b"]) {
-      const journal = new TrajectoryJournal(store, { agentId, runId, requestExecutionId: runId });
+      // Construct an old on-disk fixture; production has no journal writer.
+      let pending = Promise.resolve(), sequence = 0;
+      const journal = { append(fields: Partial<JournalEvent>, payload: unknown) {
+        pending = pending.then(async () => {
+          const payloadRef = await store.putRecord("TrajectoryEventPayload", payload);
+          const folder = join(directory, "trajectories", Buffer.from(agentId).toString("base64url"));
+          await mkdir(folder, { recursive: true });
+          await appendFile(join(folder, `${Buffer.from(runId).toString("base64url")}.jsonl`), JSON.stringify({
+            schemaVersion: 1, agentId, runId, requestExecutionId: runId, sequence: ++sequence,
+            recordedAt: new Date().toISOString(), ...fields, payloadRef,
+          }) + "\n");
+        });
+      }, flush: () => pending };
       const state = await store.putRecord("AgentStateSnapshot", { agentId, trajectoryId: runId, checkpoint: { revision: runId } });
       const modelContext = await store.putRecord("ModelContextSnapshot", { input: { systemPrompt: runId, history: [], tools: [] } });
       const context = await store.putRecord("ContextAssemblyRecord", { state, modelContext, turn: 0 });
@@ -125,6 +137,60 @@ test("stream sequence wins over equal timestamps, hash IDs and backwards wall cl
     { id: "hash-b", sequence: 3, timestamp: "2026-09-15T10:00:02.000Z" },
   ].map(e => ({ ...e, agentId: "main:s", runId: "r", streamId: "journal", kind: "state" as const, label: "state.committed" }));
   assert.deepEqual(orderEvents([entries[2]!, entries[0]!, entries[1]!]).map(e => e.sequence), [1, 2, 3]);
+});
+
+test("original Run events carry exact input, state, producer time and per-request usage", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "trajectory-run-events-"));
+  const store = new VersionStore(directory), agentId = "main:s";
+  try {
+    const stateRef = await store.putRecord("AgentStateSnapshot", { agentId, trajectoryId: "agent-run" });
+    const modelContext = await store.putRecord("ModelContextSnapshot", { input: { systemPrompt: "rules", history: [{ role: "tool", content: "latest result" }], tools: [] } });
+    const contextRef = await store.putRecord("ContextAssemblyRecord", { state: stateRef, modelContext, turn: 2 });
+    const payloadRef = await store.putRecord("AgentEventPayload", { assistantMessage: { content: "answer" }, usage: { inputTokens: 7, outputTokens: 3 } });
+    const evidence = { agentId, agentRunId: "agent-run", requestExecutionId: "r", turn: 2, contextRef, stateRef,
+      recordedAt: "2026-09-15T10:00:00.000Z" };
+    const events = [
+      { type: "agent.record", name: "context.captured", evidence },
+      { type: "assistant.thinking.delta", delta: "think", responseId: "response", evidence: { ...evidence, endedAt: "2026-09-15T10:00:01.000Z" } },
+      { type: "agent.record", name: "model.completed", payloadRef, evidence: { ...evidence, responseId: "response" } },
+    ].map((event, i) => ({ id: `${i}`, agentId, runId: "r", streamId: "main", sequence: i + 1,
+      createdAt: "2026-09-15T10:00:09.000Z", event }));
+    const view = await openSessionTrajectory(directory, { sessionId: "s", agents: [{ id: agentId, label: "Main" }], events }, new AbortController().signal);
+    assert.equal(view.index.entries.length, 3);
+    assert.deepEqual(view.index.historicalEntries, []);
+    assert.ok(view.index.entries.every(e => e.streamId === "main" && e.runId === "agent-run" && e.turn === 2 && e.timestamp === evidence.recordedAt));
+    assert.equal(view.index.entries[1]!.endTime, "2026-09-15T10:00:01.000Z");
+    const detail = (await view.detail("event:2"))!;
+    assert.equal((detail.value as { usage: { inputTokens: number } }).usage.inputTokens, 7);
+    assert.equal(JSON.stringify(detail.context!.input).includes("latest result"), true);
+    const exported: string[] = []; for await (const line of view.exportRecords()) exported.push(line);
+    assert.equal(JSON.parse(exported.at(-1)!).entries, 3);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("legacy EventSegment and original thinking are one entry only with exact identity and content", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "trajectory-duplicates-"));
+  const store = new VersionStore(directory), refs = await RefStore.open(store), agentId = "main:s";
+  try {
+    const state = await store.putRecord("AgentStateSnapshot", { agentId });
+    const modelContext = await store.putRecord("ModelContextSnapshot", { input: { systemPrompt: "exact", history: [], tools: [] } });
+    const contextRef = await store.putRecord("ContextAssemblyRecord", { state, modelContext, turn: 0 });
+    const start = await store.putRecord("TrajectoryStart", { state });
+    await refs.commit(store, `agents/${encodeURIComponent(agentId)}/trajectories/r`, null, start);
+    const events = [{ type: "model_delta", kind: "thinking", responseId: "same", delta: "same content", contextRef, recordedAt: "2026-09-15T02:10:37.558Z" }];
+    const segment = await store.putRecord("EventSegment", { events });
+    await refs.commit(store, "trajectory-events/r/main", null, segment);
+    const source = { sessionId: "s", agents: [{ id: agentId, label: "Main" }], events: ["same", "different"].map(responseId => ({
+      id: responseId, agentId, runId: "r", createdAt: "2026-09-15T02:10:37.559Z", event: { type: "assistant.thinking.delta", responseId, delta: "same content" },
+    })) };
+    const view = await openSessionTrajectory(directory, source, new AbortController().signal);
+    assert.equal(view.index.entries.length, 2, "another response with equal text is not a duplicate");
+    assert.ok(view.index.entries.every(e => e.id.startsWith("event:") && e.runId === "r"));
+    assert.ok((await view.detail("event:same"))!.context);
+    source.events[0]!.event.delta = "partial";
+    const partial = await openSessionTrajectory(directory, source, new AbortController().signal);
+    assert.equal(partial.index.entries.length, 3, "unequal content must not be silently discarded");
+  } finally { refs.close(); await rm(directory, { recursive: true, force: true }); }
 });
 
 test("MCP audit detail resolves owned payloads and redacts credentials", async () => {

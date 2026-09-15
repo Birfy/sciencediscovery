@@ -6900,6 +6900,21 @@ test("delta coalescing publishes a window when its timer fires", async () => {
   assert.equal(published.length, 1, "an empty buffer flushes to nothing");
 });
 
+test("delta coalescing preserves producer interval and cannot cross evidence boundaries", async () => {
+  const published: RunStreamEvent[] = [];
+  const sink = createDeltaCoalescingSink(event => { published.push(event); }, 10_000);
+  const evidence = { agentId: "main:s", agentRunId: "a", requestExecutionId: "r", turn: 0, recordedAt: "2026-09-15T10:00:00.000Z" };
+  await sink.emit({ type: "assistant.delta", responseId: "response", delta: "a", evidence });
+  await sink.emit({ type: "assistant.delta", responseId: "response", delta: "b", evidence: { ...evidence, recordedAt: "2026-09-15T10:00:02.000Z" } });
+  await sink.emit({ type: "assistant.delta", responseId: "response", delta: "c", evidence: { ...evidence, agentRunId: "b" } });
+  await sink.flush();
+  assert.equal(published.length, 2);
+  assert.deepEqual(published[0], { type: "assistant.delta", responseId: "response", delta: "ab",
+    evidence: { ...evidence, endedAt: "2026-09-15T10:00:02.000Z" } });
+  assert.equal(published[1]!.evidence!.agentRunId, "b");
+  assert.equal("endedAt" in evidence, false, "coalescing must not mutate producer metadata");
+});
+
 test("delta coalescing never merges text across response identities", async () => {
   const published: RunStreamEvent[] = [];
   const sink = createDeltaCoalescingSink((event) => { published.push(event); }, 10_000, 1_000);
@@ -6984,6 +6999,13 @@ test("publishing routes growable payloads into child streams and keeps the main 
   });
   const subagentStream = await store.listRunStreamEvents(session.id, run.id, `subagent-${subagent.id}`);
   assert.equal(subagentStream.length, 1, "subagent process events live in their own stream");
+
+  const evidence = { agentId: `subagent:${subagent.id}`, agentRunId: "child-run", requestExecutionId: "child-request", turn: 0,
+    recordedAt: "2026-09-15T10:00:00.000Z" };
+  await publishRunEvent(store, session.id, run.id, { type: "agent.record", name: "context.captured", evidence });
+  const childRecords = await store.listRunStreamEvents(session.id, run.id, `subagent-${subagent.id}`);
+  assert.equal(childRecords.length, 2);
+  assert.deepEqual(childRecords[1]!.event.evidence, evidence);
 
   await publishRunEvent(store, session.id, run.id, { subagent, type: "subagent.updated" });
   const main = await store.listSessionRunEvents(session.id, run.id);

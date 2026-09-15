@@ -16,10 +16,13 @@ Session 标题旁的 **轨迹** 入口打开只读查看器。它将主 Agent、
 ## 组件与数据链路
 
 ```text
-AgentVersionRecorder ── Agent / Run 事件 JSONL ── 时间、序号、类型、引用
+NativeAgent / AgentVersionRecorder ── SessionStore 原有 Run 事件 JSONL
+                                  │ 正文 / 思考 / 工具事件 + evidence
                                   │ contextRef / stateRef / payloadRef
                                   └───────── CAS：State / Context / Step / 正文
-SessionStore ────────── 既有工具输出流 + MCP 审计 ── 补充事件入口
+                                  │
+                                  ├── 聊天投影
+既有工具输出流 + MCP 审计 ───────────┤
                                   │
 API 鉴权与 Session 范围适配 ── trajectory/server
                                   │ index / detail / export
@@ -32,11 +35,11 @@ Session 入口 ── 认证 TrajectoryPort ── trajectory/web
 
 ### 事件与版本各司其职
 
-`trajectory/journal` 在数据根的 `trajectories/<agent-key>/<run-key>.jsonl` 追加事件，两个 key 均为 ID 的 base64url 编码。每行包含 Agent、Agent Run、请求执行 ID、递增 sequence、记录时刻、事件类型，以及 `contextRef` / `stateRef` / `payloadRef`。采集边界先确定时间和序号，再先保存 CAS 正文、后追加入口；CAS hash 只寻址内容，不决定时间或顺序。备份必须同时保留 journal、CAS 和引用库。
+新执行只写 SessionStore 已有的 Run 事件流，不再创建独立 `trajectories/<agent-key>/<run-key>.jsonl`。原 JSONL 外层 `{createdAt, sequence, event}` 不变：`createdAt` 是持久化时间，`sequence` 是该文件内的顺序。`event.evidence` 增加 `agentId`、`agentRunId`、`requestExecutionId`、`turn`、采集时刻 `recordedAt` 和可选 `responseId` / `contextRef` / `stateRef`。连续增量合并时保留首个采集时间及 `endedAt`，不跨响应、Agent Run 或上下文合并。正文、思考和工具过程沿用原事件，不再平行记录一份原始事件日志。
 
-`context.captured` 发布调用输入，`model.completed` 在模型返回时记录完整结果，工具开始/结束记录执行区间，`state.committed` 指向成功 Step 后的状态。运行时增量事件也进入同一 journal。单个 Agent Run 内按 sequence 排序，多个流按各自队首的记录时间合并；时钟回拨时保留原始时间并提示，不倒置同流序号。跨机器的严格因果排序不是当前承诺。
+没有聊天等价物的信息，以 `agent.record` 补充到同一事件流：`context.captured` 发布调用输入，`model.completed` 引用完整模型返回（含本次 usage），`state.committed` 关联成功 Step 后的状态，`context_recovery` 记录输入超限恢复。CAS 正文先持久化，入口随后写入。主 Agent 使用 main 流，子 Agent 使用已有 subagent 流，命令输出仍使用原工具输出流；这些文件都是同一 Run 事件体系，不要求物理合并成一个大文件。单流按 sequence 排序，跨流按队首的采集时间合并；不以 CAS hash、文件 mtime 或整轮结束时间排序。跨机器严格因果排序不是当前承诺。
 
-新 journal 已覆盖的模型/工具生命周期不再从聊天投影重复生成；失败和取消原因仍保留。工具输出与 MCP 审计仍从原入口读取，只在调用 ID 与 Agent/请求范围可以确切关联时挂接上下文。旧 `EventSegment` 只作为兼容事件源。无可靠时间的调用记录标注「时间未记录」，不画时间轴位置；有明确 contextId 则归入该次调用，否则独立列出。固定模型输入不是过期版本，不因后续调用出现而失效；调用前状态是快照引用，默认不重复显示为内部事件。绝不以文件修改时间、CAS hash 或整轮结束时间伪造节点时间。
+旧独立 journal 和 `EventSegment` 只读兼容，不迁移、不重写、不删除。旧 EventSegment 与 Run 增量具有相同 Agent、responseId、通道且完整文本相同时，展示优先采用原 Run 事件，保留确切上下文关联；不同响应的相同文字不是重复。工具输出与 MCP 审计只在调用 ID 与 Agent/请求范围无歧义时关联。无可靠时间的调用标注「时间未记录」，不画时间轴位置；固定模型输入不会因后续调用而过期。备份必须同时包含 Run 事件流、旧兼容日志、CAS 和引用库；未来增加 GC 时，这些入口的内容引用均需纳入存活根。没有入口、没有记录的时间或正文，不从当前状态补造。
 
 系统提示来源需以 `admitted.sections`、`rendered.sectionIds` 与实际 `systemPrompt` 逐字核对。未通过核对或走 legacy 回退时显示实际系统提示并标注来源不可用；候选贡献/压缩过程留在组装证据中，不冒充最终输入。工具定义与消息按实际输入顺序展示。
 

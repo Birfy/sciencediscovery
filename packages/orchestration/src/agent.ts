@@ -2,14 +2,14 @@
 // Licensed under the Apache License, Version 2.0 (the "License");
 
 import type { ModelUsage } from "@sciencediscovery/model";
-import type { SubagentUsage } from "@sciencediscovery/schema";
+import type { AgentEventEvidence, SubagentUsage } from "@sciencediscovery/schema";
 import type { AgentToolResult } from "@sciencediscovery/tools";
 
 export type AssistantMessageEvent =
   | { delta: string; responseId: string; type: "text_delta" }
   | { delta: string; responseId: string; type: "thinking_delta" };
 
-export type AgentEvent =
+export type AgentEvent = { evidence?: AgentEventEvidence } & (
   | { type: "turn_start" }
   /** One actual model invoke attempt begins; its text/thinking deltas carry the
    *  same `responseId`. Legacy compatibility belongs to stored Run events. */
@@ -23,7 +23,7 @@ export type AgentEvent =
   | { type: "usage"; usage: SubagentUsage }
   /** The last turn was cut at `max_tokens`. Emitted only when it was, so a
    *  consumer that ignores it behaves exactly as before. */
-  | { type: "turn_truncated" };
+  | { type: "turn_truncated" });
 
 export interface Agent {
   abort(): void;

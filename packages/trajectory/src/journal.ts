@@ -1,8 +1,8 @@
 // Copyright (C) 2026-2026 Huawei Technologies Co., Ltd
 // Licensed under the Apache License, Version 2.0 (the "License");
-import { appendFile, mkdir, readdir, readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { VersionStore, type AgentStateRef } from "@sciencediscovery/cas";
+import type { AgentStateRef } from "@sciencediscovery/cas";
 
 /** Events own time/order; immutable objects own potentially large contents. */
 export interface JournalEvent {
@@ -21,37 +21,10 @@ export interface JournalEvent {
   stateRef?: AgentStateRef;
   payloadRef: AgentStateRef;
 }
-type Identity = Pick<JournalEvent, "agentId" | "runId" | "requestExecutionId">;
-type EventFields = Pick<JournalEvent, "type" | "turn" | "responseId" | "callId" | "kind" | "contextRef" | "stateRef">;
 const key = (id: string) => Buffer.from(id).toString("base64url");
 const agentDirectory = (dataDir: string, agentId: string) => join(dataDir, "trajectories", key(agentId));
 
-export class TrajectoryJournal {
-  private sequence = 0;
-  private pending = Promise.resolve();
-  private error: unknown;
-  constructor(private readonly store: VersionStore, private readonly identity: Identity) {}
-
-  append(fields: EventFields, payload: unknown): void {
-    // Capture at the producer boundary, before asynchronous payload persistence.
-    const event = { ...this.identity, ...fields, schemaVersion: 1 as const,
-      recordedAt: new Date().toISOString(), sequence: ++this.sequence };
-    const value = structuredClone(payload);
-    this.pending = this.pending.then(async () => {
-      if (this.error) return;
-      const payloadRef = await this.store.putRecord("TrajectoryEventPayload", value);
-      const directory = agentDirectory(this.store.dataDir, event.agentId);
-      await mkdir(directory, { recursive: true });
-      await appendFile(join(directory, `${key(event.runId)}.jsonl`), JSON.stringify({ ...event, payloadRef }) + "\n", { mode: 0o600 });
-    }).catch(error => { this.error = error; });
-  }
-
-  async flush(): Promise<void> {
-    await this.pending;
-    if (this.error) throw this.error;
-  }
-}
-
+/** Read-only compatibility for previously recorded independent journals. */
 export async function readAgentJournal(dataDir: string, agentId: string, signal: AbortSignal): Promise<{ events: JournalEvent[]; warnings: string[] }> {
   const directory = agentDirectory(dataDir, agentId), events: JournalEvent[] = [], warnings: string[] = [];
   let files: string[];

@@ -11,7 +11,7 @@ import {
 } from "@sciencediscovery/cas";
 import type { RuntimeMessage, RuntimeToolCall, RunEvent, TurnLifecycle } from "@sciencediscovery/runtime-core";
 import type { StateCheckpoint, StateView, StateProvider } from "@sciencediscovery/context";
-import { TrajectoryJournal } from "@sciencediscovery/trajectory/journal";
+import type { AgentEventEvidence, RunStreamEvent } from "@sciencediscovery/schema";
 
 export interface AgentVersioningOptions {
   agentId: string;
@@ -19,6 +19,8 @@ export interface AgentVersioningOptions {
   requestExecutionId: string;
   /** Authority adapter, not a reconstruction from truncated model messages. */
   readAuthorities?: () => Promise<unknown>;
+  /** The host's existing persisted Run stream, not a second trajectory log. */
+  recordEvent?: (event: RunStreamEvent) => Promise<void>;
 }
 
 export interface AgentManifest {
@@ -143,7 +145,8 @@ export class AgentVersionRecorder<M extends RuntimeMessage, I, U> implements Tur
   private children: AgentStateRef[] = [];
   private assemblyTrace: unknown = null;
   private currentTurn = 0;
-  private journal?: TrajectoryJournal;
+  private responseId?: string;
+  private pending = Promise.resolve();
   private readonly assembler: AgentStateAssembler;
   private inputView?: StateView;
 
@@ -169,16 +172,13 @@ export class AgentVersionRecorder<M extends RuntimeMessage, I, U> implements Tur
     const start = await this.store.putRecord("TrajectoryStart", { revision: this.revision, initialState });
     await this.refs.commit(this.store, `trajectories/${encodeURIComponent(this.options.trajectoryId)}/start`, null, start);
     await this.refs.commit(this.store, `agents/${encodeURIComponent(this.options.agentId)}/trajectories/${encodeURIComponent(this.options.trajectoryId)}`, null, start);
-    this.journal = new TrajectoryJournal(this.store, { agentId: this.options.agentId,
-      runId: this.options.trajectoryId, requestExecutionId: this.options.requestExecutionId });
-    this.journal.append({ type: "run.started", stateRef: initialState }, { revisionRef: this.revision, stateRef: initialState });
-    await this.journal.flush();
   }
 
   async beforeTurn({ turn, history }: Parameters<TurnLifecycle<M, I, U>["beforeTurn"]>[0]): Promise<void> {
     this.turnObservations = [];
     this.currentTurn = turn;
     this.activeContext = undefined;
+    this.responseId = undefined;
     this.children = [];
     this.assemblyTrace = null;
     this.before = await this.state(turn, "before", history);
@@ -203,6 +203,8 @@ export class AgentVersionRecorder<M extends RuntimeMessage, I, U> implements Tur
   }
 
   async afterAssembly({ turn, assembly }: Parameters<TurnLifecycle<M, I, U>["afterAssembly"]>[0]): Promise<void> {
+    // The new response ID is allocated by the loop after assembly, including retries.
+    this.responseId = undefined;
     this.modelContext = await this.store.putRecord("ModelContextSnapshot", jsonValue({
       boundary: "ProviderModelClient.invoke", input: assembly.modelInput,
     } satisfies ModelContextSnapshot<I>));
@@ -217,8 +219,7 @@ export class AgentVersionRecorder<M extends RuntimeMessage, I, U> implements Tur
     const name = `attempts/${encodeURIComponent(this.options.trajectoryId)}/${turn}`;
     await this.refs.commit(this.store, name, this.refs.head(name), this.context);
     this.activeContext = this.context;
-    this.journal?.append({ type: "context.captured", turn, contextRef: this.context, stateRef: this.before }, { contextRef: this.context, stateRef: this.before });
-    await this.journal?.flush();
+    await this.record("context.captured", undefined, this.before);
   }
 
   async recordObservation(input: { call: RuntimeToolCall; content: string; details?: unknown; isError: boolean; sequence: number }): Promise<void> {
@@ -227,18 +228,18 @@ export class AgentVersionRecorder<M extends RuntimeMessage, I, U> implements Tur
     this.turnObservations.push({ sequence: input.sequence, ref });
   }
 
-  event(event: RunEvent<U>): void {
-    this.journal?.append({ type: event.type, turn: this.currentTurn,
-      ...(this.activeContext ? { contextRef: this.activeContext } : {}),
-      ...("responseId" in event ? { responseId: event.responseId } : {}),
-      ...("kind" in event ? { kind: event.kind } : {}),
-      ...("call" in event ? { callId: event.call.id } : {}),
-    }, jsonValue(event));
+  event(event: RunEvent<U>): AgentEventEvidence {
+    if (event.type === "turn_start") this.currentTurn = event.turn;
+    if (event.type === "response_start") this.responseId = event.responseId;
+    if (event.type === "context_recovery") {
+      void this.record("context_recovery", jsonValue(event));
+    }
+    return this.evidence();
   }
 
   async modelCompleted(result: unknown): Promise<void> {
-    this.journal?.append({ type: "model.completed", turn: this.currentTurn, contextRef: this.activeContext }, jsonValue(result));
-    await this.journal?.flush();
+    await this.pending;
+    await this.record("model.completed", jsonValue(result));
   }
 
   childCompleted(agentId: string): void {
@@ -261,13 +262,33 @@ export class AgentVersionRecorder<M extends RuntimeMessage, I, U> implements Tur
       parent: this.head, revision: this.revision, before: this.before, after,
       context: this.context, modelContext: this.modelContext, actions, childTrajectories: this.children, eventSegments,
     });
-    this.journal?.append({ type: "state.committed", turn, contextRef: this.context, stateRef: after }, { stateRef: after, stepRef: this.head });
-    await this.journal?.flush();
+    await this.record("state.committed", undefined, after);
   }
 
-  /** Drain the event journal even after failure, without advancing the Agent head. */
+  private evidence(): AgentEventEvidence {
+    return { agentId: this.options.agentId, agentRunId: this.options.trajectoryId,
+      requestExecutionId: this.options.requestExecutionId, recordedAt: new Date().toISOString(), turn: this.currentTurn,
+      ...(this.responseId ? { responseId: this.responseId } : {}),
+      ...(this.activeContext ? { contextRef: this.activeContext, stateRef: this.before } : {}) };
+  }
+
+  private record(name: Extract<RunStreamEvent, { type: "agent.record" }>["name"], payload?: unknown,
+    stateRef?: AgentStateRef, evidence = this.evidence()): Promise<void> {
+    if (!this.options.recordEvent) return Promise.resolve();
+    const value = structuredClone(payload);
+    this.pending = this.pending.then(async () => {
+      const payloadRef = value === undefined ? undefined : await this.store.putRecord("AgentEventPayload", value);
+      await this.options.recordEvent!({ type: "agent.record", name, evidence: { ...evidence, ...(stateRef ? { stateRef } : {}) },
+        ...(payloadRef ? { payloadRef } : {}) });
+    });
+    // Synchronous loop notifications are drained at the next awaited boundary.
+    void this.pending.catch(() => undefined);
+    return this.pending;
+  }
+
+  /** Drain supplemental records even after failure, without advancing the Agent head. */
   async flushEvents(): Promise<void> {
-    await this.journal?.flush();
+    await this.pending;
   }
 
   close(): void { this.refs?.close(); }

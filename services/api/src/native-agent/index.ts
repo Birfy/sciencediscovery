@@ -615,8 +615,7 @@ class NativeAgent implements NativeAgentHandle {
         },
         toolDispatcher: this.toolRegistry,
         eventSink: (event) => {
-          this.versionRecorder?.event(event);
-          this.emitRuntimeEvent(event);
+          this.emitRuntimeEvent(event, this.versionRecorder?.event(event));
           if (event.type === "model_usage") reportedModelUsage = true;
         },
         turnLifecycle: this.versionRecorder,
@@ -716,16 +715,17 @@ class NativeAgent implements NativeAgentHandle {
     for (const listener of this.listeners) listener(event);
   }
 
-  private emitRuntimeEvent(event: RunEvent<ModelUsage>): void {
+  private emitRuntimeEvent(event: RunEvent<ModelUsage>, evidence?: import("@sciencediscovery/schema").AgentEventEvidence): void {
+    const emit = (value: AgentEvent) => this.emit({ ...value, ...(evidence ? { evidence } : {}) });
     switch (event.type) {
       case "turn_start":
-        this.emit({ type: "turn_start" });
+        emit({ type: "turn_start" });
         break;
       case "response_start":
-        this.emit({ responseId: event.responseId, turn: event.turn, type: "response_start" });
+        emit({ responseId: event.responseId, turn: event.turn, type: "response_start" });
         break;
       case "model_delta":
-        this.emit({
+        emit({
           type: "message_update",
           assistantMessageEvent: event.kind === "text"
             ? { type: "text_delta", delta: event.delta, responseId: event.responseId }
@@ -733,10 +733,10 @@ class NativeAgent implements NativeAgentHandle {
         });
         break;
       case "response_settled":
-        this.emit({ responseId: event.responseId, turn: event.turn, type: "response_settled" });
+        emit({ responseId: event.responseId, turn: event.turn, type: "response_settled" });
         break;
       case "tool_execution_start":
-        this.emit({
+        emit({
           type: "tool_execution_start",
           toolCallId: event.call.id,
           toolName: event.call.name,
@@ -744,7 +744,7 @@ class NativeAgent implements NativeAgentHandle {
         });
         break;
       case "tool_execution_end":
-        this.emit({
+        emit({
           type: "tool_execution_end",
           toolCallId: event.call.id,
           toolName: event.call.name,
@@ -756,10 +756,10 @@ class NativeAgent implements NativeAgentHandle {
         });
         break;
       case "model_usage":
-        this.emit({ type: "model_usage", usage: event.usage, usageReported: true });
+        emit({ type: "model_usage", usage: event.usage, usageReported: true });
         break;
       case "completed":
-        if (event.truncated) this.emit({ type: "turn_truncated" });
+        if (event.truncated) emit({ type: "turn_truncated" });
         break;
       case "context_recovery":
       case "state_changed":

@@ -19,6 +19,7 @@ export async function openSessionTrajectory(dataDir: string, source: SessionTraj
   const entries: TrajectoryEntry[] = [], historicalEntries: TrajectoryEntry[] = [], loaders = new Map<string, () => Promise<unknown>>();
   const states = new Map<string, AgentStateRef>(), linkedContexts = new Set<string>();
   const journal: JournalEvent[] = [], journalRuns = new Set<string>(), coveredExecutions = new Set<string>();
+  const unifiedRuns = new Set<string>();
   const contexts = new Map<string, { ref: AgentStateRef; assembly: Assembly; agentId: string }>();
   const responses = new Map<string, string>(), calls = new Map<string, { contextId: string; agentId: string } | null>();
   const rememberCall = (id: string, contextId: string, agentId: string) => {
@@ -28,10 +29,18 @@ export async function openSessionTrajectory(dataDir: string, source: SessionTraj
     calls.set(id, previous === null || previous && previous.contextId !== contextId ? null : { contextId, agentId });
   };
   const warnings = new Set<string>(), agentIds = new Set(source.agents.map(a => a.id));
+  for (const item of source.events) {
+    const evidence = object(object(item.event).evidence);
+    if (evidence.agentId === item.agentId && typeof evidence.agentRunId === "string") {
+      unifiedRuns.add(`${item.agentId}:${evidence.agentRunId}`);
+      journalRuns.add(`${item.agentId}:${evidence.agentRunId}`);
+    }
+  }
   for (const agent of source.agents) {
     const result = await readAgentJournal(dataDir, agent.id, signal);
     result.warnings.forEach(w => warnings.add(w));
     for (const event of result.events) {
+      if (unifiedRuns.has(`${agent.id}:${event.runId}`)) continue;
       journal.push(event); journalRuns.add(`${agent.id}:${event.runId}`);
       coveredExecutions.add(`${agent.id}:${agent.parentRunId ?? event.requestExecutionId}`);
       if (event.contextRef) linkedContexts.add(`context:${event.contextRef.digest}`);
@@ -46,7 +55,10 @@ export async function openSessionTrajectory(dataDir: string, source: SessionTraj
   };
   const addContext = async (agentId: string, ref: AgentStateRef) => {
     const id = `context:${ref.digest}`;
-    if (contexts.has(id)) return;
+    if (contexts.has(id)) {
+      if (contexts.get(id)!.agentId !== agentId) throw new Error("Context ownership mismatch");
+      return;
+    }
     const assembly = await record(ref, "ContextAssemblyRecord") as Assembly;
     const state = object(await record(assembly.state, "AgentStateSnapshot"));
     if (state.agentId !== agentId) throw new Error("Context ownership mismatch");
@@ -83,6 +95,14 @@ export async function openSessionTrajectory(dataDir: string, source: SessionTraj
       if (contextRef) { await addContext(agentId, contextRef); linkedContexts.add(`context:${contextRef.digest}`); }
       if (contextRef && typeof event.responseId === "string") responses.set(`${agentId}:${event.responseId}`, `context:${contextRef.digest}`);
       if (contextRef && typeof object(event.call).id === "string") rememberCall(String(object(event.call).id), `context:${contextRef.digest}`, agentId);
+      // Prefer the original Run stream only with exact response identity and
+      // equal complete content. Equal text in different responses is legitimate.
+      if (event.type === "model_delta" && typeof event.responseId === "string") {
+        const type = event.kind === "thinking" ? "assistant.thinking.delta" : "assistant.delta";
+        const candidates = source.events.filter(item => item.agentId === agentId && object(item.event).type === type
+          && object(item.event).responseId === event.responseId);
+        if (candidates.length && candidates.map(item => String(object(item.event).delta ?? "")).join("") === object(value).delta) continue;
+      }
       add({ id: `segment:${ref.digest}:${first}`, agentId, streamId: `segment:${ref.digest}`, sequence: first, kind: eventKind(event), label: String(event.type),
         eventType: String(event.type), ...(typeof event.state === "string" ? { status: event.state } : {}),
         timestamp: timestamp(event.recordedAt), ...(endTime ? { endTime } : {}), ...(contextRef ? { contextId: `context:${contextRef.digest}` } : {}) }, async () => value);
@@ -173,31 +193,64 @@ export async function openSessionTrajectory(dataDir: string, source: SessionTraj
     const item = source.events[i]!;
     if (!agentIds.has(item.agentId)) continue;
     const event = object(item.event), step = object(event.step);
+    const metadata = object(event.evidence);
+    const evidence = metadata.agentId === item.agentId ? metadata : {};
+    const contextRef = evidence.contextRef as AgentStateRef | undefined;
+    if (contextRef) {
+      try { await addContext(item.agentId, contextRef); linkedContexts.add(`context:${contextRef.digest}`); }
+      catch { signal.throwIfAborted(); warnings.add("A Run event context is missing or invalid; the event remains available."); }
+    }
     // Chat projections of recorded model/tool events are not a second timeline.
     // Command output, MCP audit and product-side events retain their own entries.
-    if (coveredExecutions.has(`${item.agentId}:${item.runId}`) &&
+    if (!event.evidence && coveredExecutions.has(`${item.agentId}:${item.runId}`) &&
       !/^(tool\.output|mcp\.|artifact\.|workspace\.|permission\.|run\.failed|run\.cancelled)/.test(String(event.type))) continue;
-    let payload: unknown = item.event, endTime = timestamp(event.finishedAt);
+    let payload: unknown = item.event, endTime = timestamp(evidence.endedAt ?? event.finishedAt);
     if (["assistant.delta", "assistant.thinking.delta", "tool.output"].includes(String(event.type))) {
       const packets = [item];
       while (i + 1 < source.events.length) {
         const next = source.events[i + 1]!, nextEvent = object(next.event);
-        if (next.agentId !== item.agentId || next.runId !== item.runId || nextEvent.type !== event.type || nextEvent.responseId !== event.responseId || nextEvent.toolCallId !== event.toolCallId) break;
+        if (next.agentId !== item.agentId || next.runId !== item.runId || next.streamId !== item.streamId || nextEvent.type !== event.type || nextEvent.responseId !== event.responseId || nextEvent.toolCallId !== event.toolCallId
+          || object(object(nextEvent.evidence).contextRef).digest !== object(evidence.contextRef).digest) break;
         packets.push(next); i++;
       }
       payload = { ...event, packets };
-      endTime = timestamp(packets.at(-1)!.createdAt);
+      const lastEvidence = object(object(packets.at(-1)!.event).evidence);
+      endTime = timestamp(lastEvidence.endedAt ?? lastEvidence.recordedAt ?? packets.at(-1)!.createdAt);
     }
     const trace = object(event.trace ?? step.toolTrace);
     const callId = String(event.toolCallId ?? trace.id ?? trace.toolCallId ?? step.toolCallId ?? "");
     const scopedCall = `${item.agentId}:${item.runId}:${callId}`;
     const call = calls.has(scopedCall) ? calls.get(scopedCall) : coveredExecutions.has(`${item.agentId}:${item.runId}`) ? undefined : calls.get(callId);
-    const contextId = call?.contextId ?? responses.get(`${item.agentId}:${String(event.responseId)}`);
-    add({ id: `event:${item.id}`, agentId: call?.agentId ?? item.agentId, kind: eventKind(event),
-      eventType: String(event.type), ...(typeof event.state === "string" ? { status: event.state } : {}),
+    const contextId = contextRef ? `context:${contextRef.digest}` : call?.contextId ?? responses.get(`${item.agentId}:${String(event.responseId ?? evidence.responseId)}`);
+    if (contextId && callId) rememberCall(scopedCall, contextId, item.agentId);
+    if (contextId && typeof (event.responseId ?? evidence.responseId) === "string") responses.set(`${item.agentId}:${String(event.responseId ?? evidence.responseId)}`, contextId);
+    const eventType = event.type === "subagent.step" && step.kind === "tool"
+      ? step.status === "running" ? "tool.started" : "tool.completed"
+      : event.type === "subagent.step" && step.kind === "system" && /^Turn \d+ started$/.test(String(step.content))
+        ? "turn_start" : String(event.type === "agent.record" ? event.name : event.type);
+    const id = `event:${item.id}`;
+    if (evidence.stateRef) states.set(id, evidence.stateRef as AgentStateRef);
+    if (event.type === "tool.started" || (event.type === "subagent.step" && step.kind === "tool" && step.status === "running")) {
+      const finish = source.events.find(candidate => {
+        const value = object(candidate.event), otherStep = object(value.step), otherTrace = object(value.trace);
+        return candidate.agentId === item.agentId && candidate.runId === item.runId
+          && object(value.evidence).agentRunId === evidence.agentRunId
+          && object(object(value.evidence).contextRef).digest === contextRef?.digest
+          && ((value.type === "tool.completed" && otherTrace.id === callId)
+            || (value.type === "subagent.step" && otherStep.toolCallId === callId && otherStep.status !== "running"));
+      });
+      if (finish) endTime = timestamp(object(object(finish.event).evidence).recordedAt ?? finish.createdAt);
+    }
+    add({ id, agentId: item.agentId, kind: eventKind({ ...event, type: eventType }),
+      eventType, ...(typeof event.state === "string" ? { status: event.state } : {}),
       ...(contextId ? { contextId } : {}),
-      label: String(event.toolId ?? trace.name ?? trace.tool ?? step.toolName ?? step.kind ?? event.type ?? "event"), timestamp: timestamp(item.createdAt),
-      ...(endTime ? { endTime } : {}), runId: item.runId, streamId: item.streamId ?? "events", sequence: item.sequence }, async () => payload);
+      label: String(event.toolId ?? trace.name ?? trace.tool ?? step.toolName ?? step.kind ?? eventType), timestamp: timestamp(evidence.recordedAt ?? item.createdAt),
+      ...(typeof evidence.turn === "number" ? { turn: evidence.turn } : {}),
+      ...(typeof evidence.requestExecutionId === "string" ? { requestExecutionId: evidence.requestExecutionId } : {}),
+      ...(endTime ? { endTime } : {}), runId: typeof evidence.agentRunId === "string" ? evidence.agentRunId : item.runId,
+      streamId: item.streamId ?? "events", sequence: item.sequence }, async () => event.type === "agent.record" && event.payloadRef
+        ? { ...object(await record(event.payloadRef as AgentStateRef, "AgentEventPayload")), ...event, type: eventType }
+        : payload);
   }
   const ordered = orderEvents(entries);
   entries.splice(0, entries.length, ...ordered);

@@ -36,6 +36,7 @@ export interface AgentRunBindings {
   createAgent?: (options: NativeAgentOptions) => NativeAgentHandle;
   contextContributorFactories?: readonly ContextContributorFactory<AgentHistoryMessage>[];
   observer?: (event: AgentEvent) => void;
+  recordEvent?: (event: import("@sciencediscovery/schema").RunStreamEvent) => Promise<void>;
   planStore?: PlanStore;
   runIdleTimeoutMs?: number;
   readVersioningAuthorities?: () => Promise<unknown>;
@@ -62,6 +63,7 @@ export function createAgentRun(
       agentId: `${profile.kind}:${profile.gatewayThreadId}`,
       trajectoryId: input.agentRunId,
       requestExecutionId: input.requestExecutionId,
+      ...(bindings.recordEvent ? { recordEvent: bindings.recordEvent } : {}),
       readAuthorities: async () => ({
         plan: await bindings.planStore?.latest() ?? null,
         resources: profile.resources,

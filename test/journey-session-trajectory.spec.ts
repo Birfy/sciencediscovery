@@ -149,7 +149,7 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       const streams = new Map<string, number[]>();
       for (const entry of records[0].entries) {
         expect(Number.isFinite(Date.parse(entry.timestamp))).toBe(true);
-        if (entry.streamId !== "journal") continue;
+        if (entry.streamId !== "main" && !entry.streamId?.startsWith("subagent-")) continue;
         const key = `${entry.agentId}:${entry.runId}`;
         streams.set(key, [...(streams.get(key) ?? []), entry.sequence]);
       }
@@ -167,7 +167,7 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
     await journey.step("阅读工具参数", "工具卡片展示实际输入，原始 JSON 可切换。", async () => {
       await dialog.getByLabel("事件类型", { exact: true }).selectOption("tool");
       await dialog.getByLabel("Agent", { exact: true }).selectOption({ label: "独立核查" });
-      await dialog.locator('[data-event-type="tool_execution_start"]').first().click();
+      await dialog.locator('[data-event-type="tool.started"]').first().click();
       await expect(dialog.locator(".trajectory-readable")).toContainText("输入参数");
       await expect(dialog.locator(".trajectory-readable")).toContainText("printf TRAJECTORY_CHILD");
       await dialog.getByRole("button", { name: "原始 JSON", exact: true }).click();

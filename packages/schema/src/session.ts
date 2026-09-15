@@ -366,7 +366,23 @@ export interface SessionRun {
   webForceRefresh?: boolean;
 }
 
-export type RunStreamEvent =
+/** Producer identity and immutable evidence; createdAt on the envelope is storage time. */
+export interface AgentEventEvidence {
+  agentId: string;
+  agentRunId: string;
+  requestExecutionId: string;
+  recordedAt: string;
+  endedAt?: string;
+  turn: number;
+  responseId?: string;
+  contextRef?: { pool: "agent-state"; digest: `sha256:${string}`; size: number; mediaType: string };
+  stateRef?: { pool: "agent-state"; digest: `sha256:${string}`; size: number; mediaType: string };
+}
+
+export type RunStreamEvent = { evidence?: AgentEventEvidence } & (
+  /** Evidence with no chat equivalent. Bodies remain in immutable CAS objects. */
+  | { type: "agent.record"; name: "context.captured" | "state.committed" | "model.completed" | "context_recovery";
+      payloadRef?: { pool: "agent-state"; digest: `sha256:${string}`; size: number; mediaType: string } }
   | { model: ModelRunInfo; runId: string; settings: EffectiveRuntimeSettings; type: "run.started" }
   | { session: Session; type: "session.updated" }
   /**
@@ -430,7 +446,7 @@ export type RunStreamEvent =
   | { message: ChatMessage; type: "reviewer_checkpoint.updated" }
   | { files: WorkspaceFile[]; message: ChatMessage; type: "run.completed" }
   | { reason: string; type: "run.cancelled" }
-  | { error: string; errorCode: RunFailureCode; type: "run.failed" };
+  | { error: string; errorCode: RunFailureCode; type: "run.failed" });
 
 /**
  * Stable failure classes for a run. The classification accompanies the original
