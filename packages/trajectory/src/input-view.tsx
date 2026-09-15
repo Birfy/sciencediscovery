@@ -45,8 +45,11 @@ export function InputContent({ context, zh }: { context: NonNullable<TrajectoryD
     if (!raw) jump(messages.at(-1)?.id ?? sections.context[0]?.id);
   }, [context, raw]);
   useEffect(() => {
-    const selected = outline.current?.querySelector<HTMLElement>('[aria-current="true"]');
-    selected?.scrollIntoView({ block: "nearest" });
+    const reveal = () => outline.current?.querySelector<HTMLElement>('[aria-current="true"]')?.scrollIntoView({ block: "nearest" });
+    reveal();
+    const observer = new ResizeObserver(reveal);
+    if (outline.current) observer.observe(outline.current);
+    return () => observer.disconnect();
   }, [active, raw]);
   return <div className="trajectory-input">
     <div className="trajectory-context-summary trajectory-input-toolbar">

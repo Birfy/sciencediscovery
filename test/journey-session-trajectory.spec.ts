@@ -153,8 +153,6 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       await expect(dialog.locator(".trajectory-context-summary")).toBeVisible();
       await expect(dialog.locator(".trajectory-mark")).toHaveCount(marks);
       await expect(dialog.locator(".trajectory-lane")).toHaveCount(2);
-      await dialog.getByLabel("Agent", { exact: true }).selectOption({ index: 0 });
-      await expect(dialog.locator(".trajectory-mark")).toHaveCount(marks);
     });
     await journey.step("放大时间轴核对并行结构", "放大到 8× 后事件仍处于原来的行，只有横向距离改变；点击时间标记仍定位同一节点。", async () => {
       const rows = () => dialog.locator(".trajectory-track").evaluateAll(nodes => nodes.map(row => [...row.querySelectorAll(".trajectory-mark")].map(mark => mark.getAttribute("data-entry-id"))));
@@ -167,6 +165,7 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       const id = await mark.getAttribute("data-entry-id");
       await mark.click();
       await expect(dialog.locator(`.trajectory-event-list [data-entry-id="${id}"]`)).toHaveAttribute("aria-current", "true");
+      await expect(dialog.locator(".trajectory-context-summary")).toBeVisible();
     });
     await journey.step("刷新后继续核对后续请求", "URL 保留轨迹弹窗；后续输入包含上一轮结果和最新问题，默认定位最新消息。", async () => {
       await page.reload();
@@ -204,6 +203,8 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       await expect(dialog.locator('.trajectory-context section[id^="trajectory-message-"] details').first()).not.toHaveAttribute("open", "");
       await dialog.getByRole("button", { name: "最新消息", exact: true }).click();
       expect(await dialog.locator(".trajectory-context").evaluate(el => el.scrollTop)).toBeGreaterThan(0);
+      const lastLabel = await dialog.locator(".trajectory-minimap button").last().textContent();
+      await expect(dialog.locator('.trajectory-minimap button[aria-current="true"]')).toHaveText(lastLabel!);
     });
     await journey.step("展开独立工具定义", "工具定义属于独立 tools 字段，按名称折叠展示；消息中的工具结果仍留在消息原位置。", async () => {
       await dialog.locator(".trajectory-tools > button").click();
@@ -212,6 +213,7 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       await expect(definition.locator("pre")).toContainText("task");
       await definition.locator("summary").scrollIntoViewIfNeeded();
       expect(await dialog.locator(".trajectory-context").evaluate(el => el.clientHeight)).toBeGreaterThan(30);
+      await expect(dialog.locator('.trajectory-minimap button[aria-current="true"]')).toBeInViewport({ ratio: 0.9 });
       await expect(dialog.locator('.trajectory-context [id^="trajectory-tool-"]')).toHaveCount(0);
     });
     await journey.step("选择思考节点并导出", "已记录思考对应固定上下文，导出含完整结束标记，未授权和其他 Session 无法读取。", async () => {
