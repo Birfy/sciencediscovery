@@ -116,6 +116,8 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       await expect(dialog.getByRole("button", { name: "关闭轨迹" })).toBeVisible();
       await expect(dialog.getByRole("button", { name: /^历史版本/ })).toBeInViewport();
       await expect(dialog.locator(".trajectory-detail-heading .trajectory-run")).toBeVisible();
+      const listHeight = await dialog.locator(".trajectory-event-list").evaluate(el => el.clientHeight);
+      expect(await dialog.locator(".trajectory-event-list button").first().evaluate(el => el.clientHeight)).toBeLessThanOrEqual(listHeight);
     });
     await journey.step("返回会话", "键盘 Escape 返回 Session，轨迹入口保持单行可见。", async () => {
       await page.keyboard.press("Escape");
