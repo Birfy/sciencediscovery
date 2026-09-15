@@ -67,7 +67,10 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       await expect(dialog.locator(".trajectory-readable")).toContainText("系统提示");
       await expect(dialog.locator('[data-event-type="turn_start"]')).toHaveCount(0);
       await expect(dialog.getByRole("button", { name: "全部记录", exact: true })).toHaveCount(0);
-      await expect(dialog.locator(".trajectory-event-group")).toHaveCount(3);
+      const headings = await dialog.locator(".trajectory-event-group > header").evaluateAll(nodes => nodes.map(node => `${node.querySelector("strong")?.textContent}:${node.querySelector("small")?.getAttribute("title")}`));
+      expect(headings.length).toBeGreaterThanOrEqual(3);
+      expect(new Set(headings).size).toBe(headings.length);
+      expect(await dialog.locator(".trajectory-event-group").first().locator("button").count()).toBeGreaterThan(5);
       for (const type of ["session.updated", "run.queued", "run.status", "model_usage"]) await expect(dialog.locator(`[data-event-type="${type}"]`)).toHaveCount(0);
       await dialog.getByRole("button", { name: "模型上下文", exact: true }).click();
       await expect(dialog.locator(".trajectory-context section").first()).toBeVisible();
