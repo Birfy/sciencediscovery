@@ -1364,7 +1364,9 @@ export function App() {
   /** Persisted Reviewer checkpoints survive a browser refresh; do not rely only on local request state. */
   const reviewerCheckpointRunning = Boolean(session?.messages.some((message) =>
     message.kind === "reviewer_checkpoint" && message.reviewerCheckpoint?.status === "running"));
-  const reviewerAuditRunning = reviewerAuditTasks.some((task) => task.status === "queued" || task.status === "running");
+  /** Queued work must keep polling, but is not yet a cancellable review. */
+  const reviewerAuditPending = reviewerAuditTasks.some((task) => task.status === "queued" || task.status === "running");
+  const reviewerAuditRunning = reviewerAuditTasks.some((task) => task.status === "running");
   const reviewerTaskDiscoveryVersionIds = session?.id
     ? reviewerTaskDiscoveryVersions[session.id] ?? EMPTY_STRING_ARRAY
     : EMPTY_STRING_ARRAY;
@@ -2080,7 +2082,7 @@ export function App() {
   // small state until terminal, so background audits never block the chat.
   useEffect(() => {
     const sessionId = session?.id;
-    if (!sessionId || (!reviewerCheckpointRunning && !reviewerAuditRunning && !reviewerTaskDiscoveryPending)) return;
+    if (!sessionId || (!reviewerCheckpointRunning && !reviewerAuditPending && !reviewerTaskDiscoveryPending)) return;
     let active = true;
     let discoveryMisses = 0;
     const refreshReviewerCheckpoint = () => {
@@ -2116,7 +2118,7 @@ export function App() {
       active = false;
       window.clearInterval(timer);
     };
-  }, [client, reviewerAuditRunning, reviewerCheckpointRunning, reviewerTaskDiscoveryPending, reviewerTaskDiscoveryVersionIds, session?.id]);
+  }, [client, reviewerAuditPending, reviewerCheckpointRunning, reviewerTaskDiscoveryPending, reviewerTaskDiscoveryVersionIds, session?.id]);
 
   useEffect(() => {
     const visibleSessionId = activeSessionId;
