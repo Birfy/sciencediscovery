@@ -70,7 +70,8 @@ test("historical timestamps remain unknown instead of a fabricated timeline posi
     ] }, new AbortController().signal);
     assert.equal(view.index.entries.length, 0);
     assert.equal(view.index.historicalEntries![0]!.timestamp, null);
-    assert.ok(view.index.warnings.some(w => w.includes("timestamps")));
+    assert.deepEqual(view.index.untimedEntries, view.index.historicalEntries);
+    assert.ok(view.index.warnings.some(w => w.includes("timestamp")));
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 

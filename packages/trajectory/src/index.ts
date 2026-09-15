@@ -8,12 +8,15 @@ export interface TrajectoryEntry {
   id: string; agentId: string; kind: TrajectoryKind; label: string;
   timestamp: string | null; endTime?: string; contextId?: string; runId?: string; turn?: number;
   sequence?: number; streamId?: string; requestExecutionId?: string;
+  eventType?: string; status?: string;
 }
 export interface TrajectoryIndex {
   schemaVersion: 1; sessionId: string; capturedAt: string;
   agents: TrajectoryAgent[]; entries: TrajectoryEntry[]; warnings: string[];
-  /** Versions without a reliable event association never become timeline markers. */
+  /** @deprecated Compatibility alias of untimedEntries; not superseded versions. */
   historicalEntries?: TrajectoryEntry[];
+  /** Records without a reliable event timestamp; not superseded versions. */
+  untimedEntries?: TrajectoryEntry[];
 }
 export interface ContextBlock {
   id: string; kind: string; source: string; content: string;

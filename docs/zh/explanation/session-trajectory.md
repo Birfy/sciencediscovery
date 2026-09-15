@@ -9,7 +9,8 @@ Session 标题旁的 **轨迹** 入口打开只读查看器。它将主 Agent、
 3. 在「模型上下文」查看该调用真正使用的输入；「Agent 状态」查看固定 StateView 对应的状态；「事件内容」查看返回的思考、工具输入输出等；「组装证据」查看动态上下文选择、预算与回退记录。
 4. 上下文右侧彩色导航按贡献来源着色，点击跳到对应段落。未记录来源的消息会明确标注，不根据内容猜测贡献者。
 5. 导出 NDJSON 保存轨迹证据。文件可能包含用户对话和工具返回的敏感业务内容，请妥善保管。
-6. 左侧「事件时间线」显示真实事件，「历史版本」单独保留没有可靠事件时间的旧快照。Run 表示一次 Agent 执行，turn 是该 Run 内的轮次，# 是该事件流的序号；新 Run 从 turn 0 开始不表示顺序错误。
+6. 左侧默认「执行过程」保留模型、工具、MCP、状态检查点及失败、等待、恢复等节点；「全部记录」还能查看内部轮次、响应边界和用量通知。记录按确切调用引用归组。Run 表示一次 Agent 执行，turn 是该 Run 内的轮次，# 是事件流序号；新 Run 从 turn 0 开始不表示顺序错误。
+7. 右侧首先显示「事件内容」：思考展示原文，工具展示名称、输入参数和返回结果，模型输入展示系统提示、消息与工具定义，状态检查点展示摘要。可切换「原始 JSON」检查原始字段；未知结构不猜测正文，仍可查看 JSON。模型上下文、Agent 状态及组装证据继续独立可查。
 
 ## 组件与数据链路
 
@@ -34,7 +35,7 @@ Session 入口 ── 认证 TrajectoryPort ── trajectory/web
 
 `context.captured` 发布调用输入，`model.completed` 在模型返回时记录完整结果，工具开始/结束记录执行区间，`state.committed` 指向成功 Step 后的状态。运行时增量事件也进入同一 journal。单个 Agent Run 内按 sequence 排序，多个流按各自队首的记录时间合并；时钟回拨时保留原始时间并提示，不倒置同流序号。跨机器的严格因果排序不是当前承诺。
 
-新 journal 已覆盖的模型/工具生命周期不再从聊天投影重复生成。工具输出与 MCP 审计仍从原入口读取，只在调用 ID 与 Agent/请求范围可以确切关联时挂接上下文。旧 `EventSegment` 只作为兼容事件源；旧 CAS 中的 ModelAction、State、Context 若没有事件入口关联，只在「历史版本」显示，绝不以文件修改时间、CAS hash 或整轮结束时间伪造节点时间。
+新 journal 已覆盖的模型/工具生命周期不再从聊天投影重复生成；失败和取消原因仍保留。工具输出与 MCP 审计仍从原入口读取，只在调用 ID 与 Agent/请求范围可以确切关联时挂接上下文。旧 `EventSegment` 只作为兼容事件源。无可靠时间的调用记录标注「时间未记录」，不画时间轴位置；有明确 contextId 则归入该次调用，否则独立列出。固定模型输入不是过期版本，不因后续调用出现而失效；调用前状态是快照引用，默认不重复显示为内部事件。绝不以文件修改时间、CAS hash 或整轮结束时间伪造节点时间。
 
 系统提示来源需以 `admitted.sections`、`rendered.sectionIds` 与实际 `systemPrompt` 逐字核对。未通过核对或走 legacy 回退时显示实际系统提示并标注来源不可用；候选贡献/压缩过程留在组装证据中，不冒充最终输入。工具定义与消息按实际输入顺序展示。
 
@@ -42,11 +43,11 @@ Session 入口 ── 认证 TrajectoryPort ── trajectory/web
 
 | 接口 | 返回 |
 |---|---|
-| `GET /api/sessions/:id/trajectory` | Agent 列表、事件 entries、分离的 historicalEntries、真实时间和完整性提示 |
+| `GET /api/sessions/:id/trajectory` | Agent 列表、事件 entries、无时间记录 untimedEntries、真实时间和完整性提示；historicalEntries 保留为兼容别名 |
 | `GET /api/sessions/:id/trajectory/detail?id=…` | 本 Session 节点及其上下文、状态和组装证据 |
 | `GET /api/sessions/:id/trajectory/export` | NDJSON 下载 |
 
-导出首行为 `type: trajectory`，分别列出事件与历史版本索引，随后为两类记录的 `type: entry` 自包含详情，末行为 `type: complete` 和总记录数。断流或读取失败的文件没有完整结束标记，不能当作完整导出。导出是观察证据，不是可执行恢复包：工作区二进制、外部 MCP 服务和环境进程不随文件打包。
+导出首行为 `type: trajectory`，分别列出有时间与无时间记录索引，随后为记录的 `type: entry` 自包含详情，末行为 `type: complete` 和总记录数。界面过滤不删底层记录、不影响导出；兼容别名不会导致详情重复导出。断流或读取失败的文件没有完整结束标记，不能当作完整导出。导出是观察证据，不是可执行恢复包：工作区二进制、外部 MCP 服务和环境进程不随文件打包。
 
 API 不提供任意 CAS 地址读取，必须先解析当前 Session 的主子 Agent 和发布引用；不存在的 Session/节点返回 404，未认证返回 401。结构化凭证字段会脱敏，但自由文本仍可能含敏感内容。
 

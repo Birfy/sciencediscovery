@@ -84,6 +84,7 @@ export async function openSessionTrajectory(dataDir: string, source: SessionTraj
       if (contextRef && typeof event.responseId === "string") responses.set(`${agentId}:${event.responseId}`, `context:${contextRef.digest}`);
       if (contextRef && typeof object(event.call).id === "string") rememberCall(String(object(event.call).id), `context:${contextRef.digest}`, agentId);
       add({ id: `segment:${ref.digest}:${first}`, agentId, streamId: `segment:${ref.digest}`, sequence: first, kind: eventKind(event), label: String(event.type),
+        eventType: String(event.type), ...(typeof event.state === "string" ? { status: event.state } : {}),
         timestamp: timestamp(event.recordedAt), ...(endTime ? { endTime } : {}), ...(contextRef ? { contextId: `context:${contextRef.digest}` } : {}) }, async () => value);
     }
   };
@@ -148,9 +149,15 @@ export async function openSessionTrajectory(dataDir: string, source: SessionTraj
     const finish = event.type === "tool_execution_start" ? journal.find(e => e.agentId === event.agentId && e.runId === event.runId
       && e.type === "tool_execution_end" && e.callId === event.callId && e.sequence > event.sequence && e.contextRef?.digest === event.contextRef?.digest) : undefined;
     const id = `journal:${event.agentId}:${event.runId}:${event.sequence}`;
+    let status: unknown;
+    if (event.type === "state_changed") {
+      try { status = object(await record(event.payloadRef, "TrajectoryEventPayload")).state; }
+      catch { signal.throwIfAborted(); warnings.add(`State notification payload unavailable: ${id}`); }
+    }
     if (event.stateRef) states.set(id, event.stateRef);
     add({ id, agentId: event.agentId, runId: event.runId, requestExecutionId: event.requestExecutionId,
       streamId: "journal", sequence: event.sequence, turn: event.turn, contextId,
+      eventType: event.type, ...(typeof status === "string" ? { status } : {}),
       kind: eventKind(event), label: event.type, timestamp: timestamp(event.recordedAt),
       ...(finish ? { endTime: finish.recordedAt } : packets.length > 1 ? { endTime: packets.at(-1)!.recordedAt } : {}),
     }, async () => {
@@ -169,7 +176,7 @@ export async function openSessionTrajectory(dataDir: string, source: SessionTraj
     // Chat projections of recorded model/tool events are not a second timeline.
     // Command output, MCP audit and product-side events retain their own entries.
     if (coveredExecutions.has(`${item.agentId}:${item.runId}`) &&
-      !/^(tool\.output|mcp\.|artifact\.|workspace\.|permission\.)/.test(String(event.type))) continue;
+      !/^(tool\.output|mcp\.|artifact\.|workspace\.|permission\.|run\.failed|run\.cancelled)/.test(String(event.type))) continue;
     let payload: unknown = item.event, endTime = timestamp(event.finishedAt);
     if (["assistant.delta", "assistant.thinking.delta", "tool.output"].includes(String(event.type))) {
       const packets = [item];
@@ -187,6 +194,7 @@ export async function openSessionTrajectory(dataDir: string, source: SessionTraj
     const call = calls.has(scopedCall) ? calls.get(scopedCall) : coveredExecutions.has(`${item.agentId}:${item.runId}`) ? undefined : calls.get(callId);
     const contextId = call?.contextId ?? responses.get(`${item.agentId}:${String(event.responseId)}`);
     add({ id: `event:${item.id}`, agentId: call?.agentId ?? item.agentId, kind: eventKind(event),
+      eventType: String(event.type), ...(typeof event.state === "string" ? { status: event.state } : {}),
       ...(contextId ? { contextId } : {}),
       label: String(event.toolId ?? trace.name ?? trace.tool ?? step.toolName ?? step.kind ?? event.type ?? "event"), timestamp: timestamp(item.createdAt),
       ...(endTime ? { endTime } : {}), runId: item.runId, streamId: item.streamId ?? "events", sequence: item.sequence }, async () => payload);
@@ -195,9 +203,9 @@ export async function openSessionTrajectory(dataDir: string, source: SessionTraj
   entries.splice(0, entries.length, ...ordered);
   // Context snapshots referenced by events are details, not standalone markers.
   const history = historicalEntries.filter(e => !(e.contextId && linkedContexts.has(e.contextId) && (e.id.startsWith("before:") || e.id.startsWith("context:"))));
-  if (history.length) warnings.add("Unlinked historical versions or events without timestamps are in History, not on the real-time axis.");
+  if (history.length) warnings.add("Some invocation records have no reliable event timestamp. They remain inspectable with their invocation, but have no wall-clock position.");
   if (source.events.length && !contexts.size) warnings.add("No recorded model contexts are available for this Session.");
-  const index: TrajectoryIndex = { schemaVersion: 1, sessionId: source.sessionId, capturedAt: new Date().toISOString(), agents: source.agents, entries, historicalEntries: history, warnings: [...warnings] };
+  const index: TrajectoryIndex = { schemaVersion: 1, sessionId: source.sessionId, capturedAt: new Date().toISOString(), agents: source.agents, entries, untimedEntries: history, historicalEntries: history, warnings: [...warnings] };
   async function detail(id: string): Promise<TrajectoryDetail | undefined> {
     signal.throwIfAborted();
     const entry = [...entries, ...history].find(e => e.id === id), load = loaders.get(id);
