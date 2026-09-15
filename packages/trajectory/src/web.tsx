@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0 (the "License");
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { object, text, type ContextBlock, type TrajectoryDetail, type TrajectoryEntry, type TrajectoryIndex, type TrajectoryKind, type TrajectoryPort } from "./index.js";
-import { entryTitle, internalEntry, recordGroups, timelineRows, visibleKinds } from "./presentation.js";
+import { entryTitle, internalEntry, recordGroups, timelineEnd, timelineRows, timelineScale, visibleKinds } from "./presentation.js";
 import { EventContent } from "./content-view.js";
 
 const colors: Record<TrajectoryKind, string> = { state: "#d97706", input: "#2563eb", output: "#059669", thinking: "#9333ea", tool: "#db2777", mcp: "#0891b2", lifecycle: "#64748b" };
@@ -70,17 +70,19 @@ export function TrajectoryViewer({ sessionId, title, port, locale, onClose }: {
   const entries = useMemo(() => groups.flatMap(group => group.entries), [groups]);
   const timelineEntries = entries.filter(e => e.timestamp);
   useEffect(() => { if (!entries.some(e => e.id === selected)) setSelected(entries[0]?.id); }, [entries, selected]);
-  const times = index?.entries.flatMap(e => e.timestamp ? [Date.parse(e.timestamp), ...(e.endTime ? [Date.parse(e.endTime)] : [])] : []) ?? [];
-  const start = times.length ? times.reduce((a, b) => Math.min(a, b)) : 0, end = times.length ? times.reduce((a, b) => Math.max(a, b)) : 0, duration = Math.max(1, end - start);
+  const scale = useMemo(() => timelineScale(index?.entries.filter(e => !internalEntry(e)) ?? [], trackWidth * zoom), [index, trackWidth, zoom]);
   const choose = (entry: TrajectoryEntry) => { setSelected(entry.id); setTab("event"); setError(""); };
   const jumpContext = (id: string | undefined) => { if (id) content.current?.querySelector<HTMLElement>(`#trajectory-${id}`)?.scrollIntoView({ block: "start" }); };
   const messages = detail?.context?.blocks.filter(b => b.id.startsWith("message-")) ?? [];
   useEffect(() => {
-    const measure = () => setTrackWidth(timeline.current?.querySelector(".trajectory-track")?.clientWidth ?? 450);
+    // Measure the viewport, not the expanded content: otherwise minimum marker
+    // spacing feeds back into the next measurement and keeps growing the axis.
+    const measure = () => setTrackWidth(Math.max(450, (timeline.current?.clientWidth ?? 630)
+      - (timeline.current?.querySelector(".trajectory-axis>span")?.getBoundingClientRect().width ?? 160) - 20));
     measure(); const observer = new ResizeObserver(measure);
     if (timeline.current) observer.observe(timeline.current);
     return () => observer.disconnect();
-  }, [index, zoom]);
+  }, [index]);
   useEffect(() => {
     if (tab !== "context") return;
     // Long repeated system prompts must not conceal the current request's conversation.
@@ -127,10 +129,11 @@ export function TrajectoryViewer({ sessionId, title, port, locale, onClose }: {
     {loading && <p role="status">{tr("正在读取轨迹…", "Loading trajectory…")}</p>}
     {index && <>
       <div className="trajectory-toolbar"><div className="trajectory-legend">{visibleKinds.map(kind => <span key={kind}><i style={{ background: colors[kind] }} />{labels[kind]}</span>)}</div><label>{tr("时间轴缩放", "Timeline zoom")} <select value={zoom} onChange={e => setZoom(Number(e.target.value))}>{[1, 2, 4, 8].map(n => <option key={n} value={n}>{n}×</option>)}</select></label></div>
-      <div className="trajectory-timeline" ref={timeline} aria-label={tr("真实时间多 Agent 时间轴", "Multi-agent wall-clock timeline")}><div style={{ minWidth: `${zoom * 100}%` }}>
-        <div className="trajectory-axis"><span>{times.length ? new Date(start).toLocaleDateString() : "—"}</span><div>{[0, .25, .5, .75, 1].map(f => <time key={f}>{time(times.length ? new Date(start + duration * f).toISOString() : null)}</time>)}</div></div>
-        {index.agents.map(a => <div className="trajectory-lane" key={a.id}><strong title={a.id}>{a.parentId ? "↳ " : ""}{a.label}</strong><div className="trajectory-tracks">{timelineRows(timelineEntries.filter(e => e.agentId === a.id), duration, trackWidth).map((row, i) => <div className="trajectory-track" data-category={row.category} key={i} aria-label={`${a.label} · ${row.category}`}>
-          {row.entries.map(e => <button key={e.id} className={selected === e.id ? "trajectory-mark selected" : "trajectory-mark"} style={{ left: `${98 * (Date.parse(e.timestamp!) - start) / duration}%`, background: colors[e.kind], width: e.endTime ? `max(8px, ${98 * Math.max(0, Date.parse(e.endTime) - Date.parse(e.timestamp!)) / duration}%)` : undefined }} title={`${time(e.timestamp)} · ${labels[e.kind]} · ${entryTitle(e, zh)} · Run ${e.runId ?? "—"}`} aria-label={`${a.label} ${time(e.timestamp)} ${labels[e.kind]} ${entryTitle(e, zh)}`} onClick={() => choose(e)} />)}
+      {scale.expanded && <p className="trajectory-notice">{tr("密集时间点已横向展开以保留分隔；分行仅表示真实时间重叠，悬停可查看精确时间。", "Dense timestamps are spaced apart; rows reflect real time overlaps only. Hover for exact times.")}</p>}
+      <div className="trajectory-timeline" ref={timeline} aria-label={tr("真实时间多 Agent 时间轴", "Multi-agent wall-clock timeline")}><div style={{ width: `calc(var(--trajectory-label-width, 160px) + ${scale.width + 20}px)` }}>
+        <div className="trajectory-axis"><span>{timelineEntries.length ? new Date(scale.start).toLocaleDateString() : "—"}</span><div>{[0, .25, .5, .75, 1].map(f => <time key={f}>{time(timelineEntries.length ? new Date(scale.time((scale.width - 8) * f)).toISOString() : null)}</time>)}</div></div>
+        {index.agents.map(a => <div className="trajectory-lane" data-agent-id={a.id} key={a.id}><strong title={a.id}>{a.parentId ? "↳ " : ""}{a.label}</strong><div className="trajectory-tracks">{timelineRows(timelineEntries.filter(e => e.agentId === a.id)).map((row, i) => <div className="trajectory-track" data-category={row.category} key={i} aria-label={`${a.label} · ${row.category}`}>
+          {row.entries.map(e => <button key={e.id} data-entry-id={e.id} className={selected === e.id ? "trajectory-mark selected" : "trajectory-mark"} style={{ left: scale.x(Date.parse(e.timestamp!)), background: colors[e.kind], width: Math.max(8, scale.x(timelineEnd(e)) - scale.x(Date.parse(e.timestamp!)) - 2) }} title={`${time(e.timestamp)} · ${labels[e.kind]} · ${entryTitle(e, zh)} · Run ${e.runId ?? "—"}`} aria-label={`${a.label} ${time(e.timestamp)} ${labels[e.kind]} ${entryTitle(e, zh)}`} onClick={() => choose(e)} />)}
         </div>)}</div></div>)}
       </div></div>
       {index.warnings.length > 0 && <details className="trajectory-warnings"><summary>{tr("记录完整性说明", "Recording completeness")} ({index.warnings.length})</summary>{index.warnings.map(w => <p key={w}>{w}</p>)}</details>}

@@ -73,6 +73,30 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       await expect(dialog.locator('.trajectory-track[data-category="model"]').first()).toBeVisible();
       await expect(dialog.locator('.trajectory-track[data-category="tools"]').first()).toBeVisible();
       await expect(dialog.locator(".trajectory-mark").first()).toHaveCSS("height", "10px");
+      // A visual hit target must never turn sequential events into concurrency.
+      const rowStructure = () => dialog.locator(".trajectory-lane").evaluateAll(lanes => lanes.map(lane => ({
+        agent: lane.getAttribute("data-agent-id"), rows: [...lane.querySelectorAll(".trajectory-track")].map(row => ({
+          category: row.getAttribute("data-category"), ids: [...row.querySelectorAll(".trajectory-mark")].map(mark => mark.getAttribute("data-entry-id")),
+        })),
+      })));
+      const beforeZoom = await rowStructure();
+      const initialWidth = await dialog.locator(".trajectory-track").first().evaluate(node => node.clientWidth);
+      for (const zoom of ["2", "4", "8", "1"]) {
+        await dialog.getByLabel("时间轴缩放").selectOption(zoom);
+        expect(await rowStructure()).toEqual(beforeZoom);
+      }
+      await expect.poll(() => dialog.locator(".trajectory-track").first().evaluate(node => node.clientWidth)).toBe(initialWidth);
+      const size = page.viewportSize()!;
+      await page.setViewportSize({ width: 390, height: 844 });
+      expect(await rowStructure()).toEqual(beforeZoom);
+      await page.setViewportSize(size);
+      await expect.poll(() => dialog.locator(".trajectory-track").first().evaluate(node => node.clientWidth)).toBe(initialWidth);
+      const separations = await dialog.locator(".trajectory-track").evaluateAll(rows => rows.flatMap(row => {
+        const boxes = [...row.querySelectorAll(".trajectory-mark")].map(mark => mark.getBoundingClientRect());
+        return boxes.slice(1).map((box, i) => box.left - boxes[i]!.right);
+      }));
+      expect(separations.length).toBeGreaterThan(0);
+      expect(separations.every(gap => gap >= 1.9)).toBe(true);
       await expect(dialog.getByRole("button", { name: "事件内容", exact: true })).toHaveAttribute("aria-pressed", "true");
       await expect(dialog.locator(".trajectory-readable")).toContainText("系统提示");
       await expect(dialog.locator('[data-event-type="turn_start"]')).toHaveCount(0);
@@ -98,6 +122,18 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       expect(await dialog.locator(".trajectory-context").evaluate(el => el.scrollTop)).toBeGreaterThan(0);
       await dialog.getByRole("button", { name: "Agent 状态", exact: true }).click();
       await expect(dialog.locator(".trajectory-raw")).toContainText("checkpoint");
+    });
+    await journey.step("放大时间轴核对并行结构", "放大到 8× 后事件仍处于原来的行，只有横向距离改变；点击时间标记仍定位同一节点。", async () => {
+      const rows = () => dialog.locator(".trajectory-track").evaluateAll(nodes => nodes.map(row => [...row.querySelectorAll(".trajectory-mark")].map(mark => mark.getAttribute("data-entry-id"))));
+      const before = await rows();
+      const width = await dialog.locator(".trajectory-track").first().evaluate(node => node.clientWidth);
+      await dialog.getByLabel("时间轴缩放").selectOption("8");
+      await expect.poll(() => dialog.locator(".trajectory-track").first().evaluate(node => node.clientWidth)).toBeGreaterThan(width);
+      expect(await rows()).toEqual(before);
+      const mark = dialog.locator(".trajectory-mark").first();
+      const id = await mark.getAttribute("data-entry-id");
+      await mark.click();
+      await expect(dialog.locator(`.trajectory-event-list [data-entry-id="${id}"]`)).toHaveAttribute("aria-current", "true");
     });
     await journey.step("刷新后继续核对后续请求", "URL 保留轨迹弹窗；后续输入包含上一轮结果和最新问题，默认定位最新消息。", async () => {
       await page.reload();
@@ -202,7 +238,7 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       await expect(dialog.locator(".trajectory-event-list button")).toHaveCount(children.length);
       const childAnswer = children.find(e => e.turn === 1)!;
       expect(childAnswer).toBeTruthy();
-      await dialog.locator(`[data-entry-id="${childAnswer.id}"]`).click();
+      await dialog.locator(`.trajectory-event-list [data-entry-id="${childAnswer.id}"]`).click();
       await expect(dialog.locator(".trajectory-readable")).toContainText("TRAJECTORY_CHILD 已核验。");
       await expect(dialog.locator(".trajectory-readable")).toContainText("本次请求用量");
       await dialog.getByLabel("Agent", { exact: true }).selectOption("all");

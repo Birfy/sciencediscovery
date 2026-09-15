@@ -15,26 +15,59 @@ export function internalEntry(entry: TrajectoryEntry): boolean {
 }
 
 export interface TimelineRow { category: "model" | "tools" | "events"; entries: TrajectoryEntry[] }
-/** Pack visual intervals, including the minimum clickable width of point events. */
-export function timelineRows(entries: TrajectoryEntry[], duration: number, width: number): TimelineRow[] {
-  const minimum = Math.max(1, duration) * 8 / Math.max(1, width * .98);
+/** Half-open real intervals; instantaneous events coincide only at the same time. */
+export function timelineRows(entries: TrajectoryEntry[]): TimelineRow[] {
   const rows: TimelineRow[] = [];
   for (const category of ["model", "tools", "events"] as const) {
-    const ends: number[] = [], lanes: TrajectoryEntry[][] = [];
+    const ends: { time: number; point: boolean }[] = [], lanes: TrajectoryEntry[][] = [];
     const candidates = entries.filter(e => e.timestamp && Number.isFinite(Date.parse(e.timestamp)) &&
       (e.kind === "tool" || e.kind === "mcp" ? "tools" : ["input", "output", "thinking"].includes(e.kind) ? "model" : "events") === category)
-      .sort((a, b) => Date.parse(a.timestamp!) - Date.parse(b.timestamp!));
+      .sort((a, b) => Date.parse(a.timestamp!) - Date.parse(b.timestamp!) || a.id.localeCompare(b.id));
     for (const entry of candidates) {
       const start = Date.parse(entry.timestamp!);
-      const end = entry.endTime ? Date.parse(entry.endTime) : start;
-      let row = ends.findIndex(value => value <= start);
+      const end = timelineEnd(entry);
+      let row = ends.findIndex(value => value.time < start || (value.time === start && !value.point));
       if (row < 0) { row = lanes.length; lanes.push([]); }
       lanes[row]!.push(entry);
-      ends[row] = Math.max(start + minimum, Number.isFinite(end) ? end : start);
+      ends[row] = { time: end, point: end === start };
     }
     rows.push(...lanes.map(entries => ({ category, entries })));
   }
   return rows;
+}
+
+export function timelineEnd(entry: TrajectoryEntry): number {
+  const start = Date.parse(entry.timestamp!);
+  const end = entry.endTime ? Date.parse(entry.endTime) : start;
+  return Number.isFinite(end) ? Math.max(start, end) : start;
+}
+
+/** Shared across agents: dense timestamps get breathing room, never extra rows.
+ * The monotone scale preserves simultaneity/order; labels use its inverse so
+ * expanded gaps cannot masquerade as a uniform wall-clock scale. */
+export function timelineScale(entries: TrajectoryEntry[], width: number) {
+  const times = [...new Set(entries.filter(e => e.timestamp && Number.isFinite(Date.parse(e.timestamp)))
+    .flatMap(e => [Date.parse(e.timestamp!), timelineEnd(e)]))].sort((a, b) => a - b);
+  if (!times.length) times.push(0);
+  const duration = Math.max(1, times.at(-1)! - times[0]!);
+  const pixels = [0];
+  let expanded = false;
+  for (let i = 1; i < times.length; i++) {
+    const gap = (times[i]! - times[i - 1]!) / duration * Math.max(1, width - 8);
+    expanded ||= gap < 10;
+    pixels.push(pixels[i - 1]! + Math.max(10, gap));
+  }
+  // Binary interpolation in either direction keeps all lanes and axis labels aligned.
+  const interpolate = (value: number, from: number[], to: number[]) => {
+    if (value <= from[0]!) return to[0]!;
+    if (value >= from.at(-1)!) return to.at(-1)!;
+    let lo = 0, hi = from.length - 1;
+    while (hi - lo > 1) { const mid = (lo + hi) >>> 1; if (from[mid]! <= value) lo = mid; else hi = mid; }
+    return to[lo]! + (value - from[lo]!) / (from[hi]! - from[lo]!) * (to[hi]! - to[lo]!);
+  };
+  return { width: Math.max(width, pixels.at(-1)! + 8), expanded, start: times[0]!,
+    x: (time: number) => interpolate(time, times, pixels),
+    time: (pixel: number) => interpolate(pixel, pixels, times) };
 }
 
 export function entryTitle(entry: TrajectoryEntry, zh: boolean): string {

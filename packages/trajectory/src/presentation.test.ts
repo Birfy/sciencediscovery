@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0 (the "License");
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { contentSections, internalEntry, recordGroups, timelineRows, visibleKinds } from "./presentation.js";
+import { contentSections, internalEntry, recordGroups, timelineEnd, timelineRows, timelineScale, visibleKinds } from "./presentation.js";
 import type { TrajectoryEntry, TrajectoryIndex, TrajectoryKind } from "./index.js";
 
 const entry = (values: Partial<TrajectoryEntry> = {}): TrajectoryEntry => ({ id: "e", agentId: "main:s", kind: "lifecycle", label: "event", timestamp: null, ...values });
@@ -47,11 +47,58 @@ test("timeline separates model and tools and packs overlapping intervals without
     entry({ id: "later", kind: "input", timestamp: at(101) }),
     entry({ id: "unknown-time", kind: "input", timestamp: null }),
   ];
-  const rows = timelineRows(values, 200, 400);
+  const rows = timelineRows(values);
   assert.deepEqual(rows.map(r => [r.category, r.entries.map(e => e.id)]), [
-    ["model", ["model", "later"]], ["model", ["other-model"]], ["model", ["near-point"]], ["tools", ["tool"]],
+    ["model", ["model", "later"]], ["model", ["other-model", "near-point"]], ["tools", ["tool"]],
   ]);
   assert.equal(values[0]!.timestamp, at(0));
+});
+
+test("real overlap, touching ends and coincident points determine rows independently of drawing", () => {
+  const at = (n: number) => new Date(n).toISOString();
+  const values = [
+    entry({ id: "a", kind: "tool", timestamp: at(0), endTime: at(100) }),
+    entry({ id: "b", kind: "tool", timestamp: at(50), endTime: at(100) }),
+    entry({ id: "c", kind: "tool", timestamp: at(100) }),
+    entry({ id: "d", kind: "tool", timestamp: at(100) }),
+    entry({ id: "e", kind: "tool", timestamp: at(101), endTime: "invalid" }),
+    entry({ id: "f", kind: "tool", timestamp: at(102), endTime: at(90) }),
+    entry({ id: "invalid", kind: "tool", timestamp: "invalid" }),
+  ];
+  const expected = [["a", "c", "e", "f"], ["b", "d"]];
+  assert.deepEqual(timelineRows(values).map(row => row.entries.map(e => e.id)), expected);
+  assert.deepEqual(timelineRows([...values].reverse()).map(row => row.entries.map(e => e.id)), expected);
+  for (const width of [450, 900, 3600, 7200]) {
+    const scale = timelineScale(values, width);
+    assert.deepEqual(timelineRows(values).map(row => row.entries.map(e => e.id)), expected);
+    for (const row of timelineRows(values)) {
+      for (let i = 1; i < row.entries.length; i++) {
+        const previous = row.entries[i - 1]!, current = row.entries[i]!;
+        const previousLeft = scale.x(Date.parse(previous.timestamp!));
+        const previousRight = previousLeft + Math.max(8, scale.x(timelineEnd(previous)) - previousLeft - 2);
+        assert.ok(scale.x(Date.parse(current.timestamp!)) - previousRight >= 1.99);
+      }
+    }
+  }
+});
+
+test("dense spacing uses a shared monotone clock across agents without changing recorded times", () => {
+  const values = [0, 1, 2, 10000].map((n, i) => entry({ id: String(i), agentId: `agent-${i % 2}`, timestamp: new Date(n).toISOString() }));
+  const original = structuredClone(values);
+  for (const width of [450, 3600]) {
+    const scale = timelineScale(values, width);
+    assert.equal(scale.expanded, true);
+    assert.ok(scale.width >= width);
+    for (let i = 0; i < values.length; i++) {
+      const time = Date.parse(values[i]!.timestamp!);
+      assert.ok(Math.abs(scale.time(scale.x(time)) - time) < .001);
+      assert.ok(scale.x(time) + 8 <= scale.width);
+      if (i) assert.ok(scale.x(time) - scale.x(Date.parse(values[i - 1]!.timestamp!)) >= 10);
+    }
+  }
+  assert.deepEqual(values, original);
+  assert.equal(timelineScale([], 450).width, 450);
+  assert.equal(timelineScale([values[0]!], 450).x(0), 0);
 });
 
 test("one heading per Agent Run; retries retain exact context identities and untimed input placement", () => {
