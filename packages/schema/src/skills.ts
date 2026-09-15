@@ -131,7 +131,7 @@ export interface CreateSkillRequest {
   description: string;
   instructions: string;
   license?: string;
-  metadata?: Record<string, string>;
+  metadata?: Record<string, unknown>;
   name: string;
   sourceSessionId?: string;
 }
