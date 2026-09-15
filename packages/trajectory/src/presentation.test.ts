@@ -2,23 +2,27 @@
 // Licensed under the Apache License, Version 2.0 (the "License");
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { contentSections, internalEntry, recordGroups, timelineRows } from "./presentation.js";
+import { contentSections, internalEntry, recordGroups, timelineRows, visibleKinds } from "./presentation.js";
 import type { TrajectoryEntry, TrajectoryIndex, TrajectoryKind } from "./index.js";
 
 const entry = (values: Partial<TrajectoryEntry> = {}): TrajectoryEntry => ({ id: "e", agentId: "main:s", kind: "lifecycle", label: "event", timestamp: null, ...values });
 const sections = (kind: TrajectoryKind, value: unknown) => contentSections({ entry: entry({ kind }), value }, true);
 
-test("hide only known bookkeeping; failures, waiting, recovery and unknown events remain visible", () => {
-  for (const eventType of ["turn_start", "response_start", "response_settled", "model_usage", "session.updated", "run.queued", "run.status"]) assert.equal(internalEntry(entry({ eventType })), true);
-  for (const status of ["assembling_context", "calling_model", "executing_tools", "completed"]) assert.equal(internalEntry(entry({ eventType: "state_changed", status })), true);
-  for (const status of ["failed", "cancelled", "waiting_external", "future_status", undefined]) assert.equal(internalEntry(entry({ eventType: "state_changed", status })), false);
-  for (const eventType of ["context_recovery", "run.failed", "state.committed", "unknown"]) assert.equal(internalEntry(entry({ eventType })), false);
-  assert.equal(internalEntry(entry({ eventType: "run.started" })), true);
-  assert.equal(internalEntry(entry({ kind: "state", eventType: "state.committed" })), true);
-  assert.equal(internalEntry(entry({ kind: "state", eventType: "state_changed", status: "waiting_external" })), true);
+test("hide every lifecycle and state category, but retain model and tool evidence", () => {
+  assert.deepEqual(visibleKinds, ["input", "output", "thinking", "tool", "mcp"]);
+  for (const agentId of ["main:s", "subagent:child"]) {
+    for (const kind of ["state", "lifecycle"] as const) {
+      for (const eventType of ["run.started", "run.completed", "run.failed", "run.cancelled", "context_recovery", "subagent.updated", "unknown"]) {
+        assert.equal(internalEntry(entry({ agentId, kind, eventType })), true);
+      }
+    }
+    for (const kind of ["input", "thinking", "tool", "mcp"] as const) {
+      assert.equal(internalEntry(entry({ agentId, kind, status: "failed" })), false);
+    }
+  }
 });
 
-test("main and child trajectories show final responses only, keeping thinking and failure evidence", () => {
+test("main and child trajectories show final responses only, keeping thinking", () => {
   for (const agentId of ["main:s", "subagent:child"]) {
     for (const eventType of ["assistant.delta", "subagent.step", "model_delta", "text_delta"]) {
       assert.equal(internalEntry(entry({ agentId, kind: "output", eventType })), true);
@@ -27,7 +31,7 @@ test("main and child trajectories show final responses only, keeping thinking an
       assert.equal(internalEntry(entry({ id, agentId, kind: "output", eventType: "model.completed" })), false);
     }
     assert.equal(internalEntry(entry({ agentId, kind: "thinking", eventType: "model_delta" })), false);
-    assert.equal(internalEntry(entry({ agentId, kind: "lifecycle", eventType: "run.failed" })), false);
+    assert.equal(internalEntry(entry({ agentId, kind: "lifecycle", eventType: "run.failed" })), true);
     // No final response exists: a partial stream must still not look completed.
     assert.deepEqual([entry({ agentId, kind: "output", eventType: "assistant.delta" })].filter(e => !internalEntry(e)), []);
   }

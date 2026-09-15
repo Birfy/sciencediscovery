@@ -63,6 +63,10 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       await page.getByRole("button", { name: "轨迹", exact: true }).click();
       await expect(dialog.getByRole("button", { name: "刷新", exact: true })).toHaveCSS("border-radius", "7px");
       await expect(dialog.locator(".trajectory-lane")).toHaveCount(2);
+      await expect(dialog.locator(".trajectory-legend")).not.toContainText("生命周期");
+      await expect(dialog.getByLabel("事件类型", { exact: true }).locator('option[value="lifecycle"]')).toHaveCount(0);
+      await expect(dialog.locator('.trajectory-track[data-category="events"]')).toHaveCount(0);
+      for (const type of ["subagent.updated", "run.completed", "run.failed", "run.cancelled", "context_recovery"]) await expect(dialog.locator(`[data-event-type="${type}"]`)).toHaveCount(0);
       await expect(page).toHaveURL(/trajectory=open/);
       for (const type of ["run.started", "state_changed", "state.committed"]) await expect(dialog.locator(`.trajectory-event-list [data-event-type="${type}"]`)).toHaveCount(0);
       await expect(dialog.getByText(/非过期|已过期/)).toHaveCount(0);
@@ -148,6 +152,7 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       expect(records[0].sessionId).toBe(fixture!.session.id);
       expect(records.at(-1).type).toBe("complete");
       expect(records[0].historicalEntries).toEqual([]);
+      expect(records[0].entries.some((e: { kind: string }) => e.kind === "lifecycle")).toBe(true); // Presentation does not delete audit evidence.
       const streams = new Map<string, number[]>();
       for (const entry of records[0].entries) {
         expect(Number.isFinite(Date.parse(entry.timestamp))).toBe(true);
