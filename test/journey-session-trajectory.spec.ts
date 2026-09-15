@@ -47,6 +47,8 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       await expect(entry).toHaveClass(/secondary-button compact-button/);
       await expect(entry).toHaveCSS("border-radius", "7px");
       await expect(entry).toHaveCSS("min-height", "34px");
+      await expect(entry).toHaveCSS("white-space", "nowrap");
+      await expect(entry).toHaveCSS("height", "34px");
       await entry.focus();
       await expect(entry).toBeFocused();
     });
@@ -92,6 +94,7 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       await page.keyboard.press("Escape");
       await expect(dialog).toBeHidden();
       await expect(page.getByRole("button", { name: "轨迹", exact: true })).toBeInViewport();
+      await expect(page.getByRole("button", { name: "轨迹", exact: true })).toHaveCSS("height", "34px");
     });
   } finally { if (fixture) await cleanupJourney(page, fixture); await stub.stop(); }
 });
