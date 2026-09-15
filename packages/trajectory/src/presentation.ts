@@ -4,9 +4,33 @@ import { object, text, type TrajectoryDetail, type TrajectoryEntry, type Traject
 
 export function internalEntry(entry: TrajectoryEntry): boolean {
   const type = entry.eventType ?? entry.label;
+  if (entry.kind === "state" || type === "run.started") return true;
   if (type === "state_changed") return ["idle", "assembling_context", "calling_model", "executing_tools", "completed"].includes(entry.status ?? "");
   return ["turn_start", "response_start", "response_settled", "model_usage", "assistant.response.started", "assistant.response.settled", "session.updated", "run.queued", "run.status"].includes(type)
     || entry.id.startsWith("before:");
+}
+
+export interface TimelineRow { category: "model" | "tools" | "events"; entries: TrajectoryEntry[] }
+/** Pack visual intervals, including the minimum clickable width of point events. */
+export function timelineRows(entries: TrajectoryEntry[], duration: number, width: number): TimelineRow[] {
+  const minimum = Math.max(1, duration) * 8 / Math.max(1, width * .98);
+  const rows: TimelineRow[] = [];
+  for (const category of ["model", "tools", "events"] as const) {
+    const ends: number[] = [], lanes: TrajectoryEntry[][] = [];
+    const candidates = entries.filter(e => e.timestamp && Number.isFinite(Date.parse(e.timestamp)) &&
+      (e.kind === "tool" || e.kind === "mcp" ? "tools" : ["input", "output", "thinking"].includes(e.kind) ? "model" : "events") === category)
+      .sort((a, b) => Date.parse(a.timestamp!) - Date.parse(b.timestamp!));
+    for (const entry of candidates) {
+      const start = Date.parse(entry.timestamp!);
+      const end = entry.endTime ? Date.parse(entry.endTime) : start;
+      let row = ends.findIndex(value => value <= start);
+      if (row < 0) { row = lanes.length; lanes.push([]); }
+      lanes[row]!.push(entry);
+      ends[row] = Math.max(start + minimum, Number.isFinite(end) ? end : start);
+    }
+    rows.push(...lanes.map(entries => ({ category, entries })));
+  }
+  return rows;
 }
 
 export function entryTitle(entry: TrajectoryEntry, zh: boolean): string {

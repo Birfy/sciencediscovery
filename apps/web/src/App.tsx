@@ -992,7 +992,6 @@ function shouldRefreshUsageForEvent(workspaceView: "session" | "usage", event: R
 
 export function App() {
   const { locale, setLocale, t } = useLocale();
-  const [trajectorySession, setTrajectorySession] = useState<{ id: string; title: string }>();
   // No built-in fallback token: the server generates one on its first start and
   // prints it, so a browser that has never been given a token starts empty, is
   // rejected with 401, and is handed the Connection settings dialog.
@@ -1019,6 +1018,7 @@ export function App() {
   // The URL is parsed once at mount: it seeds the initial view and queues the
   // Project/Session selection until the lists arrive (see the load effects).
   const [initialView] = useState(() => parseViewState(window.location.pathname, window.location.search));
+  const [trajectorySession, setTrajectorySession] = useState<{ id: string; title: string } | undefined>(() => initialView.trajectory && initialView.sessionId ? { id: initialView.sessionId, title: "" } : undefined);
   const [sessionListState, setSessionListState] = useState<SessionListState>(() => initialView.sessionFilter ?? "active");
   const [activeProjectId, setActiveProjectId] = useState<string>();
   const [activeSessionId, setActiveSessionId] = useState<string>();
@@ -1632,6 +1632,7 @@ export function App() {
     if (!projectsLoaded || !sessionsLoaded) return;
     const view: ViewState = {
       artifact: artifactModalName,
+      trajectory: trajectorySession && trajectorySession.id === activeSessionId ? true : undefined,
       projectId: activeProjectId,
       sessionFilter: sessionListState,
       sessionId: activeSessionId,
@@ -1660,7 +1661,7 @@ export function App() {
     const url = `${next}${window.location.hash}`;
     if (replace) window.history.replaceState(null, "", url);
     else window.history.pushState(null, "", url);
-  }, [activeProjectId, activeSessionId, artifactModalName, projectsLoaded, sessionListState, sessionsLoaded, settingsTarget, showConfig, systemSettingsGroup, urlEpoch, workspaceCollapsed, workspaceView]);
+  }, [activeProjectId, activeSessionId, artifactModalName, trajectorySession, projectsLoaded, sessionListState, sessionsLoaded, settingsTarget, showConfig, systemSettingsGroup, urlEpoch, workspaceCollapsed, workspaceView]);
 
   // URL → main view: browser back/forward re-applies the encoded view. Invalid
   // ids degrade to the loaded lists' defaults instead of a blank screen.
@@ -1673,6 +1674,7 @@ export function App() {
       pendingSettingsRef.current = null;
       if (view.workspaceOpen !== undefined) setWorkspaceCollapsed(!view.workspaceOpen);
       setArtifactModalName(view.artifact);
+      setTrajectorySession(view.trajectory && view.sessionId ? { id: view.sessionId, title: "" } : undefined);
       setArtifactModalVersion(undefined);
       setArtifactModalSessionId(undefined);
       if (view.settingsKind === "system") openSystemSettings();
@@ -4069,7 +4071,7 @@ export function App() {
   return (
     <PluginWebHost client={client} projectId={activeProjectId} sessionId={activeSessionId}>
     <div className="app-shell">
-      {trajectorySession && <TrajectoryViewer key={trajectorySession.id} sessionId={trajectorySession.id} title={trajectorySession.title} port={client.trajectory} locale={locale} onClose={() => setTrajectorySession(undefined)} />}
+      {trajectorySession && session?.id === trajectorySession.id && activeSessionId === trajectorySession.id && <TrajectoryViewer key={trajectorySession.id} sessionId={trajectorySession.id} title={session.title} port={client.trajectory} locale={locale} onClose={() => setTrajectorySession(undefined)} />}
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-mark"><BrandIcon size={24} /></div>

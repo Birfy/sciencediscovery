@@ -34,10 +34,11 @@
  * When several layers apply at once the settings layer wins the path, then
  * Usage, then Session, then Project.
  *
- * Query keys (only these three):
+ * Query keys:
  * - `filter`    `archived` | `all`: Session list filter (default `active` omitted)
  * - `panel`     `open` | `collapsed`: right-hand workspace panel
  * - `artifact`  workspace-relative path of the open artifact; `/` stays unescaped
+ * - `trajectory` `open`: trajectory overlay for the Session in the path
  */
 
 export type SettingsKind = "project" | "session" | "system";
@@ -62,6 +63,7 @@ export interface ViewState {
   /** Right-hand panel; `undefined` means "fall back to the local preference". */
   workspaceOpen?: boolean;
   artifact?: string;
+  trajectory?: true;
 }
 
 const GROUP_SEGMENT = /^[a-z][a-z0-9-]*$/;
@@ -112,6 +114,7 @@ export function parseViewState(pathname: string, search: string): ViewState {
   else if (panel === "collapsed") view.workspaceOpen = false;
   const artifact = params.get("artifact");
   if (artifact) view.artifact = artifact;
+  if (view.sessionId && params.get("trajectory") === "open") view.trajectory = true;
   return view;
 }
 
@@ -141,6 +144,7 @@ export function serializeViewState(view: ViewState): { pathname: string; search:
   if (view.sessionFilter && view.sessionFilter !== "active") query.push(`filter=${view.sessionFilter}`);
   if (view.workspaceOpen !== undefined) query.push(`panel=${view.workspaceOpen ? "open" : "collapsed"}`);
   if (view.artifact) query.push(`artifact=${encodeQueryValue(view.artifact)}`);
+  if (view.trajectory && view.sessionId && pathname.includes("/sessions/")) query.push("trajectory=open");
   return { pathname, search: query.length ? `?${query.join("&")}` : "" };
 }
 
@@ -157,5 +161,6 @@ export function isPrimaryViewChange(previous: ViewState, next: ViewState): boole
     || previous.view !== next.view
     || previous.settingsKind !== next.settingsKind
     || previous.settingsTargetId !== next.settingsTargetId
-    || previous.artifact !== next.artifact;
+    || previous.artifact !== next.artifact
+    || previous.trajectory !== next.trajectory;
 }

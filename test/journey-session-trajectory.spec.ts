@@ -14,7 +14,7 @@ import { cleanupJourney, createProjectAndSession, openProjectSession, scriptedMo
  *   3. Inspect reasoning with its exact context, export NDJSON, and verify Session isolation.
  *   4. Read tool arguments and results, with an optional raw JSON view.
  *   5. Inspect per-request token usage on its model response.
- *   6. Inspect narrow-screen layout and Run labels.
+ *   6. Reload the trajectory URL and inspect later request messages and narrow-screen layout.
  *   7. Close the viewer with the keyboard and return to the Session.
  * Environment: Isolated current-worktree API/Web and Runner at E2E_BASE_URL.
  * Type: mocked
@@ -63,6 +63,12 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       await page.getByRole("button", { name: "轨迹", exact: true }).click();
       await expect(dialog.getByRole("button", { name: "刷新", exact: true })).toHaveCSS("border-radius", "7px");
       await expect(dialog.locator(".trajectory-lane")).toHaveCount(2);
+      await expect(page).toHaveURL(/trajectory=open/);
+      for (const type of ["run.started", "state_changed", "state.committed"]) await expect(dialog.locator(`.trajectory-event-list [data-event-type="${type}"]`)).toHaveCount(0);
+      await expect(dialog.getByText(/非过期|已过期/)).toHaveCount(0);
+      await expect(dialog.locator('.trajectory-track[data-category="model"]').first()).toBeVisible();
+      await expect(dialog.locator('.trajectory-track[data-category="tools"]').first()).toBeVisible();
+      await expect(dialog.locator(".trajectory-mark").first()).toHaveCSS("height", "10px");
       await expect(dialog.getByRole("button", { name: "事件内容", exact: true })).toHaveAttribute("aria-pressed", "true");
       await expect(dialog.locator(".trajectory-readable")).toContainText("系统提示");
       await expect(dialog.locator('[data-event-type="turn_start"]')).toHaveCount(0);
@@ -86,6 +92,33 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       expect(await dialog.locator(".trajectory-context").evaluate(el => el.scrollTop)).toBeGreaterThan(0);
       await dialog.getByRole("button", { name: "Agent 状态", exact: true }).click();
       await expect(dialog.locator(".trajectory-raw")).toContainText("checkpoint");
+    });
+    await journey.step("刷新后继续核对后续请求", "URL 保留轨迹弹窗；后续输入包含上一轮结果和最新问题，默认定位最新消息。", async () => {
+      await page.reload();
+      await expect(dialog).toBeVisible();
+      await expect(dialog.locator('[data-event-type="context.captured"]').first()).toBeVisible();
+      const indexResponse = await page.request.get(`${apiBaseUrl()}/api/sessions/${fixture!.session.id}/trajectory`, { headers: authorizationHeader() });
+      const index = await indexResponse.json();
+      const main = index.entries.filter((e: { agentId: string; kind: string }) => e.agentId.startsWith("main:") && e.kind === "input");
+      let target: { id: string; contextId: string } | undefined;
+      for (const candidate of main) {
+        const response = await page.request.get(`${apiBaseUrl()}/api/sessions/${fixture!.session.id}/trajectory/detail?id=${encodeURIComponent(candidate.id)}`, { headers: authorizationHeader() });
+        const detail = await response.json();
+        if (JSON.stringify(detail.context?.input.history).includes("请确认上一轮结论。")) {
+          expect(JSON.stringify(detail.context.input.history)).toContain("主任务核查完成。");
+          expect(detail.context.input.history.length).toBeGreaterThan(1);
+          target = candidate; break;
+        }
+      }
+      expect(target).toBeTruthy();
+      expect(target!.contextId).not.toBe(main[0].contextId);
+      await dialog.locator(`.trajectory-event-list button[data-entry-id="${target!.id}"]`).click();
+      await dialog.getByRole("button", { name: "模型上下文", exact: true }).click();
+      await expect(dialog.locator(".trajectory-context")).toContainText("请确认上一轮结论。");
+      await expect(dialog.locator(".trajectory-context")).toContainText("主任务核查完成。");
+      await expect(dialog.locator(".trajectory-context-summary")).toContainText("条消息");
+      await dialog.getByRole("button", { name: "最新消息", exact: true }).click();
+      expect(await dialog.locator(".trajectory-context").evaluate(el => el.scrollTop)).toBeGreaterThan(0);
     });
     await journey.step("选择思考节点并导出", "已记录思考对应固定上下文，导出含完整结束标记，未授权和其他 Session 无法读取。", async () => {
       await dialog.getByLabel("事件类型", { exact: true }).selectOption("thinking");
@@ -158,6 +191,7 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
     await journey.step("返回会话", "键盘 Escape 返回 Session，轨迹入口保持单行可见。", async () => {
       await page.keyboard.press("Escape");
       await expect(dialog).toBeHidden();
+      await expect(page).not.toHaveURL(/trajectory=open/);
       await expect(page.getByRole("button", { name: "轨迹", exact: true })).toBeInViewport();
       await expect(page.getByRole("button", { name: "轨迹", exact: true })).toHaveCSS("height", "34px");
     });

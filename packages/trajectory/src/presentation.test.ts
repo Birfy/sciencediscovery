@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0 (the "License");
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { contentSections, internalEntry, recordGroups } from "./presentation.js";
+import { contentSections, internalEntry, recordGroups, timelineRows } from "./presentation.js";
 import type { TrajectoryEntry, TrajectoryIndex, TrajectoryKind } from "./index.js";
 
 const entry = (values: Partial<TrajectoryEntry> = {}): TrajectoryEntry => ({ id: "e", agentId: "main:s", kind: "lifecycle", label: "event", timestamp: null, ...values });
@@ -13,6 +13,26 @@ test("hide only known bookkeeping; failures, waiting, recovery and unknown event
   for (const status of ["assembling_context", "calling_model", "executing_tools", "completed"]) assert.equal(internalEntry(entry({ eventType: "state_changed", status })), true);
   for (const status of ["failed", "cancelled", "waiting_external", "future_status", undefined]) assert.equal(internalEntry(entry({ eventType: "state_changed", status })), false);
   for (const eventType of ["context_recovery", "run.failed", "state.committed", "unknown"]) assert.equal(internalEntry(entry({ eventType })), false);
+  assert.equal(internalEntry(entry({ eventType: "run.started" })), true);
+  assert.equal(internalEntry(entry({ kind: "state", eventType: "state.committed" })), true);
+  assert.equal(internalEntry(entry({ kind: "state", eventType: "state_changed", status: "waiting_external" })), true);
+});
+
+test("timeline separates model and tools and packs overlapping intervals without moving timestamps", () => {
+  const at = (n: number) => new Date(n).toISOString();
+  const values = [
+    entry({ id: "model", kind: "thinking", timestamp: at(0), endTime: at(100) }),
+    entry({ id: "tool", kind: "tool", timestamp: at(0), endTime: at(100) }),
+    entry({ id: "other-model", kind: "output", timestamp: at(50) }),
+    entry({ id: "near-point", kind: "input", timestamp: at(51) }),
+    entry({ id: "later", kind: "input", timestamp: at(101) }),
+    entry({ id: "unknown-time", kind: "input", timestamp: null }),
+  ];
+  const rows = timelineRows(values, 200, 400);
+  assert.deepEqual(rows.map(r => [r.category, r.entries.map(e => e.id)]), [
+    ["model", ["model", "later"]], ["model", ["other-model"]], ["model", ["near-point"]], ["tools", ["tool"]],
+  ]);
+  assert.equal(values[0]!.timestamp, at(0));
 });
 
 test("one heading per Agent Run; retries retain exact context identities and untimed input placement", () => {

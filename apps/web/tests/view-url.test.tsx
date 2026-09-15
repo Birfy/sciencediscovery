@@ -22,6 +22,15 @@ function assertRoundTrip(view: ViewState): void {
   assert.deepEqual(parseViewState(pathname, search), view, `${pathname}${search}`);
 }
 
+test("trajectory overlay round-trips only for a Session and participates in back/forward", () => {
+  const base: ViewState = { projectId: "p1", sessionId: "s1", workspaceOpen: false };
+  assertRoundTrip({ ...base, trajectory: true });
+  assert.equal(isPrimaryViewChange(base, { ...base, trajectory: true }), true);
+  assert.deepEqual(parseViewState("/", "?trajectory=open"), {});
+  assert.equal(serializeViewState({ trajectory: true }).search, "");
+  assert.equal(parseViewState("/projects/p1/sessions/s1", "?trajectory=wrong").trajectory, undefined);
+});
+
 test("the full path table serializes and parses back", () => {
   assert.equal(serializeViewState({}).pathname, "/");
   assert.equal(serializeViewState({ view: "usage" }).pathname, "/usage");
