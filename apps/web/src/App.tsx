@@ -708,7 +708,7 @@ export type SystemSettingsGroup =
   | "timeouts"
   | "web";
 
-const SYSTEM_SETTINGS_GROUPS: Array<{
+export const SYSTEM_SETTINGS_GROUPS: Array<{
   id: SystemSettingsGroup;
 }> = [
   { id: "global" },
@@ -763,10 +763,17 @@ function findResourceTarget(
   return session ? { id: session.id, kind, label: session.title } : undefined;
 }
 
+/**
+ * Groups the "Runners" category reaches instead of listing them by label: the
+ * category renders one entry per registered Runner (`runner:<id>`) and these
+ * are the panes those entries and the `+` button open.
+ */
+export const RUNNER_SETTINGS_GROUPS = ["remote", "environments", "runner-add"] as const;
+
 const SETTINGS_CATEGORIES = [
   { id: "general", groups: ["global", "language"] },
   { id: "runners", groups: [] },
-  { id: "capabilities", groups: ["models", "mcp", "web", "memory-graph", "skills", "specialists"] },
+  { id: "capabilities", groups: ["models", "mcp", "web", "memory-graph", "idea-tree", "skills", "specialists"] },
   { id: "access", groups: ["proxies", "sandbox-network", "permissions", "connection"] },
   { id: "resources", groups: ["timeouts", "quotas", "runtime"] },
 ] as const;
@@ -780,7 +787,8 @@ export function SystemSettingsLayout({ activeGroup, children, onSelect, runners 
   const { t } = useLocale();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [navigationOpen, setNavigationOpen] = useState(false);
-  const runnerGroup = activeGroup.startsWith("runner:") || ["remote", "environments", "runner-add"].includes(activeGroup);
+  const runnerGroup = activeGroup.startsWith("runner:")
+    || (RUNNER_SETTINGS_GROUPS as readonly string[]).includes(activeGroup);
   useEffect(() => {
     const category = SETTINGS_CATEGORIES.find((item) => item.id === "runners" ? runnerGroup : (item.groups as readonly string[]).includes(activeGroup));
     if (category) setCollapsed((current) => ({ ...current, [category.id]: false }));
