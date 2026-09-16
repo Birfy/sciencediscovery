@@ -5,6 +5,24 @@ import { test } from "./helpers/e2e.ts";
 import { apiBaseUrl, authorizationHeader } from "./e2e-auth.js";
 import { cleanupJourney, createProjectAndSession, openProjectSession, scriptedModel, sendUserMessage, waitForRunTerminal, type JourneyFixture } from "./helpers/journeys.ts";
 
+/** Ctrl+wheel over the timeline zooms around the pointer; deltaY maps to exp(-deltaY * 0.002). */
+async function ctrlWheelZoom(page: Page, viewer: Locator, deltaY: number): Promise<void> {
+  const box = (await viewer.locator(".trajectory-timeline").boundingBox())!;
+  await page.mouse.move(box.x + box.width * 0.6, box.y + box.height / 2);
+  await page.keyboard.down("Control");
+  await page.mouse.wheel(0, deltaY);
+  await page.keyboard.up("Control");
+}
+
+/** Show exactly one event kind in the list filter (clear all, then check one). */
+async function filterOnlyKind(viewer: Locator, label: string): Promise<void> {
+  const menu = viewer.locator(".trajectory-kinds");
+  await menu.locator("summary").click();
+  await menu.getByRole("button", { name: "清空", exact: true }).click();
+  await menu.locator("label", { hasText: label }).locator("input").check();
+  await menu.locator("summary").click();
+}
+
 /**
  * E2E-META
  * Purpose: Inspect and export a Session's real multi-agent trajectory inline in the conversation area.
@@ -30,24 +48,6 @@ import { cleanupJourney, createProjectAndSession, openProjectSession, scriptedMo
  * Credentials: E2E_API_TOKEN for the isolated local stack only.
  * CostSideEffects: Temporary model, Project and Session removed in finally; no external cost.
  */
-/** Ctrl+wheel over the timeline zooms around the pointer; deltaY maps to exp(-deltaY * 0.002). */
-async function ctrlWheelZoom(page: Page, viewer: Locator, deltaY: number): Promise<void> {
-  const box = (await viewer.locator(".trajectory-timeline").boundingBox())!;
-  await page.mouse.move(box.x + box.width * 0.6, box.y + box.height / 2);
-  await page.keyboard.down("Control");
-  await page.mouse.wheel(0, deltaY);
-  await page.keyboard.up("Control");
-}
-
-/** Show exactly one event kind in the list filter (clear all, then check one). */
-async function filterOnlyKind(viewer: Locator, label: string): Promise<void> {
-  const menu = viewer.locator(".trajectory-kinds");
-  await menu.locator("summary").click();
-  await menu.getByRole("button", { name: "清空", exact: true }).click();
-  await menu.locator("label", { hasText: label }).locator("input").check();
-  await menu.locator("summary").click();
-}
-
 test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, async ({ page, journey }) => {
   test.setTimeout(180_000);
   await page.addInitScript(() => localStorage.setItem("sciencediscovery-locale", "zh-CN"));
