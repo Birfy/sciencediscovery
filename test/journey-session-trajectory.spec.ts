@@ -1,6 +1,6 @@
 // Copyright (C) 2026-2026 Huawei Technologies Co., Ltd
 // Licensed under the Apache License, Version 2.0 (the "License");
-import { expect, type Page, type Locator } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 import { test } from "./helpers/e2e.ts";
 import { apiBaseUrl, authorizationHeader } from "./e2e-auth.js";
 import { cleanupJourney, createProjectAndSession, openProjectSession, scriptedModel, sendUserMessage, waitForRunTerminal, type JourneyFixture } from "./helpers/journeys.ts";
@@ -36,6 +36,15 @@ async function ctrlWheelZoom(page: Page, viewer: Locator, deltaY: number): Promi
   await page.keyboard.down("Control");
   await page.mouse.wheel(0, deltaY);
   await page.keyboard.up("Control");
+}
+
+/** Show exactly one event kind in the list filter (clear all, then check one). */
+async function filterOnlyKind(viewer: Locator, label: string): Promise<void> {
+  const menu = viewer.locator(".trajectory-kinds");
+  await menu.locator("summary").click();
+  await menu.getByRole("button", { name: "清空", exact: true }).click();
+  await menu.locator("label", { hasText: label }).locator("input").check();
+  await menu.locator("summary").click();
 }
 
 test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, async ({ page, journey }) => {
@@ -83,7 +92,11 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       await expect(viewer.getByRole("button", { name: "刷新", exact: true })).toHaveCSS("border-radius", "7px");
       await expect(viewer.locator(".trajectory-lane")).toHaveCount(2);
       await expect(viewer.locator(".trajectory-legend")).not.toContainText("生命周期");
-      await expect(viewer.getByLabel("事件类型", { exact: true }).locator('option[value="lifecycle"]')).toHaveCount(0);
+      await expect(viewer.locator(".trajectory-kinds-panel label").filter({ hasText: "生命周期" })).toHaveCount(0);
+      // Filters: Agent first, then the multi-select kind dropdown.
+      const agentSelectBox = (await viewer.getByLabel("Agent", { exact: true }).boundingBox())!;
+      const kindsBox = (await viewer.locator(".trajectory-kinds > summary").boundingBox())!;
+      expect(agentSelectBox.x).toBeLessThan(kindsBox.x);
       // The horizontal scrollbar is always on; the zoom menu and the dense-spacing notice are gone.
       await expect(viewer.locator(".trajectory-scroll")).toHaveCSS("overflow-x", "scroll");
       await expect(viewer.locator(".trajectory-scroll")).toHaveCSS("scrollbar-gutter", "stable");
@@ -167,13 +180,15 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
     });
     await journey.step("切换单个 Agent 查看", "下方只展示选中 Agent；时间图保留全部 Agent，点击子任务时间标记自动切换并定位。", async () => {
       const marks = await viewer.locator(".trajectory-mark").count();
-      await viewer.getByLabel("事件类型", { exact: true }).selectOption("output");
+      await filterOnlyKind(viewer, "模型输出");
       const childMark = viewer.locator('.trajectory-lane[data-agent-id^="subagent:"] .trajectory-mark[data-kind="input"]').first();
       const childId = await childMark.getAttribute("data-entry-id");
       const childAgent = await viewer.locator('.trajectory-lane[data-agent-id^="subagent:"]').getAttribute("data-agent-id");
       await childMark.click();
       await expect(viewer.getByLabel("Agent", { exact: true })).toHaveValue(childAgent!);
-      await expect(viewer.getByLabel("事件类型", { exact: true })).toHaveValue("all");
+      // Clicking a mark whose kind was filtered out resets the kind filter to all-checked.
+      expect(await viewer.locator(".trajectory-kinds-panel input").evaluateAll(nodes => nodes.every(n => (n as HTMLInputElement).checked))).toBe(true);
+      await expect(viewer.locator(".trajectory-kinds > summary")).toContainText("所有类型");
       await expect(viewer.locator(`.trajectory-event-list [data-entry-id="${childId}"]`)).toHaveAttribute("aria-current", "true");
       const names = await viewer.locator(".trajectory-event-group > header strong").allTextContents();
       expect(names.length).toBeGreaterThan(0);
@@ -339,7 +354,7 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       await expect(viewer.locator('.trajectory-context [id^="trajectory-tool-"]')).toHaveCount(0);
     });
     await journey.step("选择思考节点并导出", "已记录思考对应固定上下文，导出含完整结束标记，未授权和其他 Session 无法读取。", async () => {
-      await viewer.getByLabel("事件类型", { exact: true }).selectOption("thinking");
+      await filterOnlyKind(viewer, "思考");
       await viewer.locator(".trajectory-event-list button").filter({ hasText: "思考内容" }).first().click();
       await expect(viewer.locator(".trajectory-readable")).toContainText("先委派独立核查。");
       await expect(viewer.locator(".trajectory-raw")).toHaveCount(0);
@@ -375,7 +390,7 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       expect(foreign.status()).toBe(404);
     });
     await journey.step("阅读工具参数", "工具卡片展示实际输入，原始 JSON 可切换。", async () => {
-      await viewer.getByLabel("事件类型", { exact: true }).selectOption("tool");
+      await filterOnlyKind(viewer, "工具");
       await viewer.getByLabel("Agent", { exact: true }).selectOption({ label: "独立核查" });
       await viewer.locator('[data-event-type="tool.started"]').first().click();
       await expect(viewer.locator(".trajectory-readable")).toContainText("输入参数");
@@ -388,7 +403,7 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
     });
     await journey.step("核对单次模型用量", "主子 Agent 每次请求只显示一个最终返回，带本次 Token 用量，不重复展示流式正文。", async () => {
       await viewer.getByLabel("Agent", { exact: true }).selectOption({ index: 0 });
-      await viewer.getByLabel("事件类型", { exact: true }).selectOption("output");
+      await filterOnlyKind(viewer, "模型输出");
       const responsePromise = page.waitForResponse(response => response.url().endsWith(`/api/sessions/${fixture!.session.id}/trajectory`) && response.request().method() === "GET");
       await viewer.getByRole("button", { name: "刷新", exact: true }).click();
       const finalResponse = await responsePromise;
@@ -440,7 +455,7 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       expect(await viewer.locator(".trajectory-events").evaluate(el => el.clientHeight)).toBeGreaterThan(eventsBefore + 20);
     });
     await journey.step("窄屏查看输入分区", "消息和工具定义独立显示；带文字的彩色导航可定位，工具列表可折叠且不越出视口。", async () => {
-      await viewer.getByLabel("事件类型", { exact: true }).selectOption("input");
+      await filterOnlyKind(viewer, "模型输入");
       await viewer.locator(".trajectory-event-list button").last().click();
       await expect(viewer.locator(".trajectory-context-summary")).toBeVisible();
       await expect(viewer.locator(".trajectory-minimap")).toContainText("用户");

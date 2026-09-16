@@ -63,7 +63,7 @@ export function TrajectoryViewer({ sessionId, title, port, locale, onClose }: {
   const labels: Record<TrajectoryKind, string> = { state: tr("状态", "State"), input: tr("模型输入", "Input"), output: tr("模型输出", "Output"), thinking: tr("思考", "Thinking"), tool: tr("工具", "Tool"), mcp: "MCP", lifecycle: tr("生命周期", "Lifecycle") };
   const [index, setIndex] = useState<TrajectoryIndex>(), [selected, setSelected] = useState<string>(), [detail, setDetail] = useState<TrajectoryDetail>();
   const [error, setError] = useState(""), [loading, setLoading] = useState(true), [revision, setRevision] = useState(0), [exporting, setExporting] = useState(false);
-  const [filter, setFilter] = useState("all"), [agent, setAgent] = useState(""), [tab, setTab] = useState("event"), [zoom, setZoom] = useState(1);
+  const [kinds, setKinds] = useState<Set<TrajectoryKind>>(() => new Set(visibleKinds)), [agent, setAgent] = useState(""), [tab, setTab] = useState("event"), [zoom, setZoom] = useState(1);
   const [trackWidth, setTrackWidth] = useState(450);
   // Section sizes the user drags to change. Undefined until first drag so the
   // CSS defaults stay authoritative; the measured fallback keeps the timeline
@@ -75,7 +75,7 @@ export function TrajectoryViewer({ sessionId, title, port, locale, onClose }: {
   const [contentMax, setContentMax] = useState(TIMELINE_MAX);
   const [narrow, setNarrow] = useState(() => window.matchMedia("(max-width: 720px)").matches);
   const timeline = useRef<HTMLDivElement>(null), scrollPane = useRef<HTMLDivElement>(null), labelsCol = useRef<HTMLDivElement>(null);
-  const view = useRef<HTMLDivElement>(null), list = useRef<HTMLDivElement>(null), exportController = useRef<AbortController>(undefined);
+  const view = useRef<HTMLDivElement>(null), list = useRef<HTMLDivElement>(null), kindsMenu = useRef<HTMLDetailsElement>(null), exportController = useRef<AbortController>(undefined);
   const zoomRef = useRef(zoom); zoomRef.current = zoom;
   const scaleRef = useRef<ReturnType<typeof timelineScale>>(undefined);
   const zoomAnchor = useRef<{ time: number; clientX: number }>(undefined);
@@ -155,14 +155,14 @@ export function TrajectoryViewer({ sessionId, title, port, locale, onClose }: {
     return () => observer.disconnect();
   }, [selected]);
   const selectedAgent = index?.agents.find(a => a.id === agent)?.id ?? index?.agents.find(a => !a.parentId)?.id ?? index?.agents[0]?.id ?? "";
-  const groups = useMemo(() => index ? recordGroups(index).map(group => ({ ...group, entries: group.entries.filter(e => !internalEntry(e) && (filter === "all" || e.kind === filter) && e.agentId === selectedAgent) })).filter(group => group.entries.length) : [], [index, filter, selectedAgent]);
+  const groups = useMemo(() => index ? recordGroups(index).map(group => ({ ...group, entries: group.entries.filter(e => !internalEntry(e) && kinds.has(e.kind) && e.agentId === selectedAgent) })).filter(group => group.entries.length) : [], [index, kinds, selectedAgent]);
   const entries = useMemo(() => groups.flatMap(group => group.entries), [groups]);
   // The overview is global; the lower list is scoped to exactly one Agent.
   const timelineEntries = index?.entries.filter(e => e.timestamp && !internalEntry(e)) ?? [];
   useEffect(() => { if (!entries.some(e => e.id === selected)) setSelected(entries[0]?.id); }, [entries, selected]);
   const scale = useMemo(() => timelineScale(index?.entries.filter(e => !internalEntry(e)) ?? [], trackWidth * zoom), [index, trackWidth, zoom]);
   scaleRef.current = scale;
-  const choose = (entry: TrajectoryEntry) => { setAgent(entry.agentId); if (filter !== "all" && filter !== entry.kind) setFilter("all"); setSelected(entry.id); setTab("event"); setError(""); };
+  const choose = (entry: TrajectoryEntry) => { setAgent(entry.agentId); setKinds(current => current.has(entry.kind) ? current : new Set(visibleKinds)); setSelected(entry.id); setTab("event"); setError(""); };
   const associatedInput = index && [...index.entries, ...(index.untimedEntries ?? index.historicalEntries ?? [])].find(e => e.kind === "input" && e.agentId === detail?.entry.agentId && e.runId === detail?.entry.runId && !!e.contextId && e.contextId === detail?.entry.contextId);
   useEffect(() => {
     // Measure the scrollable track pane, not the expanded content: otherwise
@@ -216,6 +216,18 @@ export function TrajectoryViewer({ sessionId, title, port, locale, onClose }: {
     const cap = Math.ceil(inner.getBoundingClientRect().height + (pane.offsetHeight - pane.clientHeight));
     return Math.max(TIMELINE_MIN, Math.min(TIMELINE_MAX, value, cap));
   };
+  const kindSummary = kinds.size === visibleKinds.length ? tr("所有类型", "All types")
+    : kinds.size === 0 ? tr("未选类型", "No types")
+    : kinds.size === 1 ? labels[[...kinds][0]!]
+    : tr(`${kinds.size} 类`, `${kinds.size} types`);
+  useEffect(() => {
+    const close = (event: PointerEvent) => {
+      const menu = kindsMenu.current;
+      if (menu?.open && !menu.contains(event.target as Node)) menu.open = false;
+    };
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, []);
   const download = async () => {
     const controller = new AbortController(); exportController.current = controller; setExporting(true); setError("");
     try {
@@ -255,7 +267,7 @@ export function TrajectoryViewer({ sessionId, title, port, locale, onClose }: {
       </div></div></div>
       <ResizeHandle orientation="horizontal" label={tr("调整时间轴高度", "Resize timeline")} value={timelineHeight ?? measuredTimeline} min={TIMELINE_MIN} max={contentMax} onResize={v => setTimelineHeight(capTimeline(v))} />
       {index.warnings.length > 0 && <details className="trajectory-warnings"><summary>{tr("记录完整性说明", "Recording completeness")} ({index.warnings.length})</summary>{index.warnings.map(w => <p key={w}>{w}</p>)}</details>}
-      <div className="trajectory-body" style={bodyStyle}><aside className="trajectory-events"><div className="trajectory-filters"><select aria-label={tr("事件类型", "Event type")} value={filter} onChange={e => setFilter(e.target.value)}><option value="all">{tr("所有类型", "All types")}</option>{visibleKinds.map(k => <option key={k} value={k}>{labels[k]}</option>)}</select><select aria-label="Agent" value={selectedAgent} onChange={e => setAgent(e.target.value)}>{index.agents.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}</select></div>
+      <div className="trajectory-body" style={bodyStyle}><aside className="trajectory-events"><div className="trajectory-filters"><select aria-label="Agent" value={selectedAgent} onChange={e => setAgent(e.target.value)}>{index.agents.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}</select><details className="trajectory-kinds" ref={kindsMenu}><summary aria-label={tr("事件类型", "Event type")}>{kindSummary}</summary><div className="trajectory-kinds-panel"><div className="trajectory-kinds-actions"><button type="button" onClick={() => setKinds(new Set(visibleKinds))}>{tr("全选", "All")}</button><button type="button" onClick={() => setKinds(new Set())}>{tr("清空", "None")}</button></div>{visibleKinds.map(k => <label key={k}><input type="checkbox" checked={kinds.has(k)} onChange={e => setKinds(current => { const next = new Set(current); if (e.target.checked) next.add(k); else next.delete(k); return next; })} /><i style={{ background: colors[k] }} />{labels[k]}</label>)}</div></details></div>
       <div className="trajectory-event-list" ref={list}>{groups.length ? groups.map(group => <section className="trajectory-event-group" key={group.id}><header><strong>{index.agents.find(a => a.id === group.agentId)?.label}</strong><small title={group.runId}>Run {group.runId?.slice(0, 8) ?? "—"}</small></header>{group.entries.map(e => <button key={e.id} data-entry-id={e.id} data-event-type={e.eventType ?? e.label} aria-current={selected === e.id ? "true" : undefined} onClick={() => choose(e)} style={{ "--event-color": colors[e.kind] } as CSSProperties}><span><i />{labels[e.kind]}<time>{e.timestamp ? time(e.timestamp) : tr("时间未记录", "Time not recorded")}</time></span><strong>{entryTitle(e, zh)}</strong><small className="trajectory-run" title={e.runId}>{e.turn !== undefined ? `turn ${e.turn}` : ""}{e.sequence !== undefined ? ` · #${e.sequence}` : ""}{!e.timestamp ? tr(" · 调用记录", " · Invocation record") : ""}</small></button>)}</section>) : <p>{tr("暂无匹配的记录", "No matching records")}</p>}</div></aside>
       <ResizeHandle orientation={narrow ? "horizontal" : "vertical"} label={narrow ? tr("调整列表高度", "Resize event list") : tr("调整列表宽度", "Resize event list")} value={listSize ?? (narrow ? DEFAULT_LIST_HEIGHT : DEFAULT_LIST_WIDTH)} min={narrow ? LIST_H_MIN : LIST_W_MIN} max={narrow ? LIST_H_MAX : LIST_W_MAX} onResize={setListSize} />
       <section className="trajectory-detail"><nav aria-label={tr("详情类型", "Detail type")}>{[["event", tr("事件内容", "Event content")], ["state", tr("Agent 状态", "Agent state")]].map(([id, label]) => <button key={id} aria-pressed={tab === id} onClick={() => setTab(id!)}>{label}</button>)}{detail && detail.entry.id === selected && detail.entry.kind !== "input" && associatedInput && <button className="trajectory-input-link" onClick={() => choose(associatedInput)}>{tr("查看本次输入", "View request input")}</button>}</nav>
