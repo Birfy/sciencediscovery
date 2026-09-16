@@ -91,7 +91,12 @@ test("研究员交付报告后可看到独立完成的自动审核", { tag: "@mo
       }>;
       expect(records.at(-1)).toMatchObject({ policy: "record", status: "ready", taskId: auditTask!.id });
       expect(records.at(-1)!.reviewIds.length).toBeGreaterThan(0);
-      await expect(page.locator(".reviewer-specialist-card").last()).toContainText("Reviewer Specialist");
+      // The card names the Artifact it reviewed and the level it ran at; the
+      // words "Reviewer Specialist" appear nowhere in it, so the timeline is
+      // identified by what the record is about rather than by a brand string.
+      const auditCard = page.locator(".reviewer-specialist-card").last();
+      await expect(auditCard).toContainText("results/report.md");
+      await expect(auditCard).toContainText("Quick");
     });
   } finally {
     await page.request.put(`${apiBaseUrl()}/api/reviewer-specialist/settings`, { data: { enabled: false }, headers: authorizationHeader() }).catch(() => undefined);
