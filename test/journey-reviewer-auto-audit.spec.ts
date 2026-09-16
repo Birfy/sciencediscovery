@@ -71,14 +71,26 @@ test("研究员交付报告后可看到独立完成的自动审核", { tag: "@mo
       // QUICK_BATCH_QUIET_MS (60 s, audit-coordinator.ts) so a burst of
       // artifacts becomes one audit. The wait must outlast that window: the
       // default 10 s poll expires while the product is behaving correctly.
+      let auditTask: { id: string; status: string } | undefined;
       await expect.poll(async () => {
         const response = await page.request.get(`${apiBaseUrl()}/api/sessions/${fixture.session.id}/reviewer-audit-tasks`, { headers: authorizationHeader() });
-        const tasks = await response.json() as Array<{ status: string }>;
-        return tasks.at(-1)?.status;
+        auditTask = (await response.json() as Array<{ id: string; status: string }>).at(-1);
+        return auditTask?.status;
       }, { timeout: 90_000 }).toBe("completed");
       const feedback = await page.request.get(`${apiBaseUrl()}/api/sessions/${fixture.session.id}/review-feedback`, { headers: authorizationHeader() });
       expect(feedback.ok()).toBeTruthy();
-      expect((await feedback.json() as Array<{ content: string }>).at(-1)?.content).toContain("Reviewer Specialist feedback");
+      // A `ReviewFeedback` record carries findings, a policy and a handoff
+      // status — it has no `content` string. "Reviewer Specialist feedback" is
+      // the header the *run context* builds out of these records when the lead
+      // Agent next reads them, so asserting it here read `undefined` off every
+      // record the audit has ever written. Assert the handoff itself instead:
+      // the completed task produced a read-only record that is ready for the
+      // lead Agent and points back at the reviews it came from.
+      const records = await feedback.json() as Array<{
+        policy: string; reviewIds: string[]; status: string; taskId: string;
+      }>;
+      expect(records.at(-1)).toMatchObject({ policy: "record", status: "ready", taskId: auditTask!.id });
+      expect(records.at(-1)!.reviewIds.length).toBeGreaterThan(0);
       await expect(page.locator(".reviewer-specialist-card").last()).toContainText("Reviewer Specialist");
     });
   } finally {
