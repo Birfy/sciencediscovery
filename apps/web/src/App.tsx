@@ -1663,6 +1663,13 @@ export function App() {
     else window.history.pushState(null, "", url);
   }, [activeProjectId, activeSessionId, artifactModalName, trajectorySession, projectsLoaded, sessionListState, sessionsLoaded, settingsTarget, showConfig, systemSettingsGroup, urlEpoch, workspaceCollapsed, workspaceView]);
 
+  // Leaving a Session closes its inline trajectory view: switching back must
+  // not silently reopen it and rewrite the path. The activeSessionId guard
+  // keeps deep links working — it is only known once the lists have loaded.
+  useEffect(() => {
+    if (activeSessionId && trajectorySession && trajectorySession.id !== activeSessionId) setTrajectorySession(undefined);
+  }, [activeSessionId, trajectorySession]);
+
   // URL → main view: browser back/forward re-applies the encoded view. Invalid
   // ids degrade to the loaded lists' defaults instead of a blank screen.
   useEffect(() => {

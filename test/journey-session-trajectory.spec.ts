@@ -19,6 +19,7 @@ import { cleanupJourney, createProjectAndSession, openProjectSession, scriptedMo
  *   8. Keep Agent labels pinned during horizontal scroll, zoom with Ctrl+wheel.
  *   9. Reload the trajectory URL and inspect later request messages and narrow-screen layout.
  *  10. Close the viewer with the keyboard and return to the Session.
+ *  11. Switching away from the Session closes the trajectory; switching back does not reopen it.
  * Environment: Isolated current-worktree API/Web and Runner at E2E_BASE_URL.
  * Type: mocked
  * LLM: journey-owned deterministic HTTP model with main/subagent scripts.
@@ -494,6 +495,29 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       await page.getByRole("button", { name: "对话", exact: true }).click();
       await expect(viewer).toBeHidden();
       await expect(page.locator(".messages")).toBeVisible();
+    });
+    await journey.step("切换会话即关闭轨迹", "离开轨迹所在 Session 即关闭视图；切回不静默重开，URL 也不写回 /trajectory。", async () => {
+      await page.getByRole("button", { name: "轨迹", exact: true }).click();
+      await expect(viewer).toBeVisible();
+      await expect(page).toHaveURL(/\/sessions\/[^/]+\/trajectory/);
+      const created = await page.request.post(`${apiBaseUrl()}/api/projects/${fixture!.project.id}/sessions`, { data: { title: "切走目标会话" }, headers: authorizationHeader() });
+      expect(created.ok()).toBe(true);
+      // The sidebar refetches its Session list on load; the trajectory restores from the URL.
+      await page.reload();
+      await expect(viewer).toBeVisible();
+      const target = page.locator("button.nav-item").filter({ hasText: "切走目标会话" });
+      await expect(target).toBeVisible();
+      await target.click();
+      await expect(page.getByRole("heading", { exact: true, name: "切走目标会话" })).toBeVisible();
+      await expect(viewer).toHaveCount(0);
+      await expect(page).not.toHaveURL(/\/trajectory/);
+      const back = page.locator("button.nav-item").filter({ hasText: fixture!.session.title });
+      await expect(back).toBeVisible();
+      await back.click();
+      await expect(page.getByRole("heading", { exact: true, name: fixture!.session.title })).toBeVisible();
+      await expect(viewer).toHaveCount(0);
+      await expect(page.locator(".messages")).toBeVisible();
+      await expect(page).not.toHaveURL(/\/trajectory/);
     });
   } finally { if (fixture) await cleanupJourney(page, fixture); await stub.stop(); }
 });
