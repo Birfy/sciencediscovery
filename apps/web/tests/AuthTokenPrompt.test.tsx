@@ -16,6 +16,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { ApiClient } from "../src/api.js";
+import { isAuthFailure } from "../src/api/auth.js";
 import { createAuthTokenPromptGate } from "../src/auth-token-prompt.js";
 import { addToastToQueue, type Toast } from "../src/Toasts.js";
 
@@ -108,8 +109,7 @@ test("a token that starts working never reopens the dialog", async () => {
 });
 
 /** The App wiring in miniature: every failed request reports through `setError`,
- *  which pushes a persistent error toast, and a 401 additionally arms the token
- *  dialog. Startup issues several independent calls, so one rejected token fails
+ *  which reserves 401 for the token dialog and toasts other errors. Startup issues several independent calls, so one rejected token fails
  *  all of them at once. */
 function recoveryHarness() {
   const gate = createAuthTokenPromptGate();
@@ -132,7 +132,7 @@ function recoveryHarness() {
       if (gate.shouldPrompt(token)) state.dialogOpens += 1;
     });
     await Promise.all(Array.from({ length: 5 }, async () => {
-      await client.listProjects().catch((reason: Error) => setError(reason.message));
+      await client.listProjects().catch((reason: Error) => { if (!isAuthFailure(reason)) setError(reason.message); });
     }));
   };
   return { attempt, state };
@@ -146,14 +146,13 @@ test("correcting a token after wrong attempts never needs the notifications clea
     await attempt("wrong-token-a", false); // user saves a wrong token
     await attempt("wrong-token-b", false); // and another one
 
-    // One notification for one condition, however many requests failed: the
-    // column cannot reach the dialog footer the user has to click.
-    assert.equal(state.toasts.length, 1);
+    // The Connection prompt is the only feedback for local authentication.
+    assert.equal(state.toasts.length, 0);
     assert.equal(state.dialogOpens, 3);
 
     await attempt("correct-token", true);
 
-    assert.equal(state.toasts.length, 1);
+    assert.equal(state.toasts.length, 0);
     assert.equal(state.dialogOpens, 3);
   } finally {
     globalThis.fetch = previousFetch;
@@ -176,7 +175,7 @@ test("an unrelated failure during recovery keeps its own notification", async ()
       });
     });
 
-    assert.deepEqual(state.toasts.map((toast) => toast.detail), ["Unauthorized", "Gateway is unavailable"]);
+    assert.deepEqual(state.toasts.map((toast) => toast.detail), ["Gateway is unavailable"]);
     assert.equal(state.dialogOpens, 1);
   } finally {
     globalThis.fetch = previousFetch;

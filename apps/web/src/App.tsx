@@ -116,6 +116,7 @@ import {
 const EVOLVE_CARD_POLL_MS = 3_000;
 
 import { ApiClient, ApiRequestError, isAbortError } from "./api.js";
+import { isAuthFailure } from "./api/auth.js";
 import { TrajectoryViewer } from "@sciencediscovery/trajectory/web";
 import { createSessionActivity } from "./run-stream/session-activity.js";
 import { groupArtifactsBySession, upsertArtifactSession } from "./artifact-session-groups.js";
@@ -998,12 +999,9 @@ function shouldRefreshUsageForEvent(workspaceView: "session" | "usage", event: R
   return workspaceView === "usage" && event.type === "run.status" && isTerminalRunStatus(event.status);
 }
 
-export function App() {
+export function App({ initialToken }: { initialToken?: string } = {}) {
   const { locale, setLocale, t } = useLocale();
-  // No built-in fallback token: the server generates one on its first start and
-  // prints it, so a browser that has never been given a token starts empty, is
-  // rejected with 401, and is handed the Connection settings dialog.
-  const [token, setToken] = useState(() => readRenamedStorageItem(localStorage, TOKEN_STORAGE_KEY) ?? "");
+  const [token, setToken] = useState(() => initialToken ?? readRenamedStorageItem(localStorage, TOKEN_STORAGE_KEY) ?? "");
   const [models, setModels] = useState<ModelProfile[]>([]);
   const [modelProviders, setModelProviders] = useState<ModelProvider[]>([]);
   const [modelProviderPresets, setModelProviderPresets] = useState<ModelProviderPreset[]>([]);
@@ -1141,8 +1139,8 @@ export function App() {
   const [globalSearchHasMore, setGlobalSearchHasMore] = useState(false);
   const [globalSearchTotal, setGlobalSearchTotal] = useState(0);
   const [globalSearchLoading, setGlobalSearchLoading] = useState(false);
-  const [showConfig, setShowConfig] = useState(() => initialView.settingsKind === "system");
-  const [systemSettingsGroup, setSystemSettingsGroup] = useState<SystemSettingsGroup>(() => isSystemSettingsGroup(initialView.settingsGroup) ? initialView.settingsGroup : "global");
+  const [showConfig, setShowConfig] = useState(() => !token || initialView.settingsKind === "system");
+  const [systemSettingsGroup, setSystemSettingsGroup] = useState<SystemSettingsGroup>(() => !token ? "connection" : isSystemSettingsGroup(initialView.settingsGroup) ? initialView.settingsGroup : "global");
   const [skillWorkspaceLaunch, setSkillWorkspaceLaunch] = useState<{ requestId: number; skillId?: string }>();
   const skillWorkspaceLaunchRevision = useRef(0);
   const [globalSettings, setGlobalSettings] = useState<RuntimeSettingsDetails>();
@@ -1271,8 +1269,11 @@ export function App() {
   // Survives token changes and re-renders, so the "one dialog per rejected
   // token" rule holds across the whole session rather than per client instance.
   const authPromptGate = useRef(createAuthTokenPromptGate());
+  const activeTokenRef = useRef(token);
+  activeTokenRef.current = token;
   const promptForToken = useCallback(() => {
-    setTokenRejected(true);
+    if (activeTokenRef.current !== token) return; // Ignore a late verdict on the previous credential.
+    setTokenRejected(Boolean(token));
     if (!authPromptGate.current.shouldPrompt(token)) return;
     setSystemSettingsGroup("connection");
     setShowConfig(true);
@@ -1357,7 +1358,9 @@ export function App() {
     });
   }, []);
   const { dismiss: dismissToast, push: pushToast, toasts } = useToasts();
-  const reportSystemSettingsError = useCallback((message?: string) => {
+  const reportSystemSettingsError = useCallback((reason?: string | Error) => {
+    if (isAuthFailure(reason)) return; // Connection owns authentication feedback.
+    const message = reason instanceof Error ? reason.message : reason;
     setSystemSettingsErrors((current) => updateInlineErrors(current, message));
   }, []);
   const reportScopedSettingsError = useCallback((message?: string) => {
@@ -1459,7 +1462,7 @@ export function App() {
         maxWorkspaceBytes: quotas.runnerMaxWorkspaceBytes,
       });
     }).catch((reason: Error) => {
-      if (active) reportSystemSettingsError(reason.message);
+      if (active) reportSystemSettingsError(reason);
     });
     return () => { active = false; };
   }, [client, reportSystemSettingsError, showConfig]);
@@ -1468,7 +1471,7 @@ export function App() {
     let active = true;
     void client.getReviewerSpecialistSettings()
       .then((settings) => { if (active) setReviewerSpecialistSettings(settings); })
-      .catch((reason: Error) => { if (active) setError(reason.message); });
+      .catch((reason: Error) => { if (active) setError(reason); });
     return () => { active = false; };
   }, [client, showConfig]);
 
@@ -1502,12 +1505,11 @@ export function App() {
   }
 
 
-  // Request errors surface as top-right notification toasts. The state is kept
-  // for the connection indicator. Identical concurrent failures — every startup
-  // call answering "Unauthorized" to a rejected token, say — collapse into one
-  // toast in the queue, so the notification column cannot grow past the dialog
-  // the user needs to fix the problem with.
-  const setError = useCallback((message?: string) => {
+  // Preserve the typed error until routing: a local 401 belongs only to the
+  // Connection prompt. Network faults and other HTTP errors still get a toast.
+  const setError = useCallback((reason?: string | Error) => {
+    if (isAuthFailure(reason)) return;
+    const message = reason instanceof Error ? reason.message : reason;
     setErrorState(message);
     if (message) pushToast("error", t("error.request"), message);
   }, [pushToast]);
@@ -1842,15 +1844,15 @@ export function App() {
       // A cold start directly into System settings is an explicit settings
       // load operation, so its failure belongs to that dialog. Other startup
       // failures remain global even if a dialog opens later.
-      if (initialView.settingsKind === "system") reportSystemSettingsError(reason.message);
-      else setError(reason.message);
+      if (initialView.settingsKind === "system") reportSystemSettingsError(reason);
+      else setError(reason);
     }).finally(() => setProjectsLoaded(true));
   }, [client, initialView.settingsKind, reportSystemSettingsError]);
 
   useEffect(() => {
-    void client.searchWorkbench().then((response) => setWorkbenchIndex(response.results)).catch((reason: Error) => setError(reason.message));
-    void client.listSpecialists().then(setSpecialists).catch((reason: Error) => setError(reason.message));
-    void client.listPermissionGrants().then(setPermissionGrants).catch((reason: Error) => setError(reason.message));
+    void client.searchWorkbench().then((response) => setWorkbenchIndex(response.results)).catch((reason: Error) => setError(reason));
+    void client.listSpecialists().then(setSpecialists).catch((reason: Error) => setError(reason));
+    void client.listPermissionGrants().then(setPermissionGrants).catch((reason: Error) => setError(reason));
   }, [client]);
 
   useEffect(() => {
@@ -1870,7 +1872,7 @@ export function App() {
       }).catch((reason: Error) => {
         if (globalSearchRequestId.current !== requestId) return;
         setGlobalSearchLoading(false);
-        setError(reason.message);
+        setError(reason);
       });
     }, globalSearchQuery.trim() ? GLOBAL_SEARCH_DEBOUNCE_MS : 0);
     return () => {
@@ -1930,7 +1932,7 @@ export function App() {
         if (target) void openScopedSettings(target);
       }
     }).catch((reason: Error) => {
-      if (!cancelled) setError(reason.message);
+      if (!cancelled) setError(reason);
     }).finally(() => {
       if (!cancelled) setSessionsLoaded(true);
     });
@@ -2136,7 +2138,7 @@ export function App() {
     setIsFollowingOutput(true);
     setMarkdownDocument(undefined);
     void refreshSession(visibleSessionId).catch((reason: Error) => {
-      if (shouldApplySessionScopedUpdate(visibleSessionId, activeSessionIdRef.current)) setError(reason.message);
+      if (shouldApplySessionScopedUpdate(visibleSessionId, activeSessionIdRef.current)) setError(reason);
     });
   }, [activeSessionId, client]);
 
@@ -2318,7 +2320,7 @@ export function App() {
       setSessionsExpanded(true);
       pushToast("success", t("app.projectCreated"), project.name);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : t("error.createProject"));
+      setError(reason instanceof Error ? reason : t("error.createProject"));
     }
   }
 
@@ -2412,7 +2414,7 @@ export function App() {
       setError(undefined);
       pushToast("success", target.kind === "project" ? t("app.projectRenamed") : t("app.sessionRenamed"), name);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : target.kind === "project" ? t("error.renameProject") : t("error.renameSession"));
+      setError(reason instanceof Error ? reason : target.kind === "project" ? t("error.renameProject") : t("error.renameSession"));
     } finally {
       renameSavesInFlight.current.delete(key);
       setRenameSavingKeys((current) => {
@@ -2433,7 +2435,7 @@ export function App() {
       setError(undefined);
       pushToast("success", t("app.proxyServerAdded"), input.name.trim());
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : t("error.addProxyServer"));
+      setError(reason instanceof Error ? reason : t("error.addProxyServer"));
       throw reason;
     }
   }
@@ -2447,7 +2449,7 @@ export function App() {
       setError(undefined);
       pushToast("success", t("app.proxyServerUpdated"), saved.name);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : t("error.updateProxyServer"));
+      setError(reason instanceof Error ? reason : t("error.updateProxyServer"));
       throw reason;
     }
   }
@@ -2463,7 +2465,7 @@ export function App() {
       setError(undefined);
       pushToast("success", t("app.proxyServerDeleted"), server.name);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : t("error.deleteProxyServer"));
+      setError(reason instanceof Error ? reason : t("error.deleteProxyServer"));
     }
   }
 
@@ -2473,7 +2475,7 @@ export function App() {
       setError(undefined);
       pushToast("success", t("app.proxyDefaultUpdated"));
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : t("error.updateProxyDefault"));
+      setError(reason instanceof Error ? reason : t("error.updateProxyDefault"));
     }
   }
 
@@ -2486,7 +2488,7 @@ export function App() {
       setError(undefined);
       pushToast("success", t("app.mcpProxyPolicyUpdated"), serverId);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : t("error.updateMcpProxyPolicy"));
+      setError(reason instanceof Error ? reason : t("error.updateMcpProxyPolicy"));
     }
   }
 
@@ -2518,7 +2520,7 @@ export function App() {
       setMemoryGraphSettings(saved);
       pushToast("success", t("app.memoryGraphSettingsUpdated"));
     } catch (reason) {
-      reportSystemSettingsError(reason instanceof Error ? reason.message : t("error.saveMemoryGraph"));
+      reportSystemSettingsError(reason instanceof Error ? reason : t("error.saveMemoryGraph"));
       throw reason;
     }
   }
@@ -2531,7 +2533,7 @@ export function App() {
       setIdeaTreeSettingsEdit(undefined);
       pushToast("success", t("ideaTree.saved"));
     } catch (reason) {
-      reportSystemSettingsError(reason instanceof Error ? reason.message : "Could not save Idea Tree settings");
+      reportSystemSettingsError(reason instanceof Error ? reason : "Could not save Idea Tree settings");
       throw reason;
     }
   }
@@ -2570,7 +2572,7 @@ export function App() {
     if (!showConfig) return;
     let disposed = false;
     void client.listRunners().then((items) => { if (!disposed) setSettingsRunners(items); })
-      .catch((error: Error) => { if (!disposed) reportSystemSettingsError(error.message); });
+      .catch((error: Error) => { if (!disposed) reportSystemSettingsError(error); });
     return () => { disposed = true; };
   }, [client, showConfig]);
 
@@ -2598,6 +2600,25 @@ export function App() {
     reportSystemSettingsError();
     setSystemSettingsSaving(true);
     try {
+      if (tokenEdit !== undefined) {
+        const candidate = tokenEdit.trim();
+        try {
+          // Validate before persisting or closing; retrying the same wrong
+          // value must still leave the user at the single recovery prompt.
+          await new ApiClient(candidate).listProjects();
+        } catch (reason) {
+          if (isAuthFailure(reason)) {
+            setTokenRejected(Boolean(candidate));
+            setSystemSettingsGroup("connection");
+          } else {
+            reportSystemSettingsError(reason instanceof Error ? reason : t("error.request"));
+          }
+          return;
+        }
+        localStorage.setItem(TOKEN_STORAGE_KEY, candidate);
+        setToken(candidate);
+        setTokenRejected(false);
+      }
       // The footer saves every edited section retained while navigating.
       // Persist every edited section, including drafts retained while the user
       // navigated elsewhere in the dialog. A failed request keeps the dialog
@@ -2614,7 +2635,6 @@ export function App() {
         if (!saved) return;
       }
       if (localeEdit) setLocale(localeEdit);
-      if (tokenEdit !== undefined) setToken(tokenEdit);
       clearSystemSettingsDrafts();
       if (closeAfterSave) {
         reportSystemSettingsError();
@@ -2646,7 +2666,7 @@ export function App() {
       }
       setError(undefined);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : t("error.updateSession"));
+      setError(reason instanceof Error ? reason : t("error.updateSession"));
     }
   }
 
@@ -2730,7 +2750,7 @@ export function App() {
         return;
       }
       if (request.sessionId) await refreshPermissionState(request.sessionId).catch(() => undefined);
-      setError(reason instanceof Error ? reason.message : t("error.permission"));
+      setError(reason instanceof Error ? reason : t("error.permission"));
     }
   }
 
@@ -2765,7 +2785,7 @@ export function App() {
       } : item));
       setError(undefined);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : t("error.updateReviewerSettings"));
+      setError(reason instanceof Error ? reason : t("error.updateReviewerSettings"));
     } finally {
       setReviewerSessionSettingsBusy(false);
     }
@@ -2853,7 +2873,7 @@ export function App() {
       setError(updated.error);
       if (!updated.error) pushToast(decision === "deny" ? "info" : "success", decision === "deny" ? t("app.remoteJobDeclined") : t("app.remoteJobApproved"));
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : t("error.decideRemoteJob"));
+      setError(reason instanceof Error ? reason : t("error.decideRemoteJob"));
     }
   }
 
@@ -2865,7 +2885,7 @@ export function App() {
       if (updated.outputRecords.some((output) => output.localPath)) setFiles(await client.listFiles(activeSessionId));
       setError(updated.error);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : t("error.refreshRemoteJob"));
+      setError(reason instanceof Error ? reason : t("error.refreshRemoteJob"));
     }
   }
 
@@ -2982,7 +3002,7 @@ export function App() {
       setError(undefined);
       pushToast("success", action === "archive" ? t("app.sessionArchivedToast") : t("app.sessionRestoredToast"));
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : action === "archive" ? t("error.archiveSession") : t("error.restoreSession"));
+      setError(reason instanceof Error ? reason : action === "archive" ? t("error.archiveSession") : t("error.restoreSession"));
     } finally {
       setLifecycleBusy(false);
     }
@@ -2998,7 +3018,7 @@ export function App() {
         : await client.getSessionDeletionImpact(target.id));
     } catch (reason) {
       setDeletionTarget(undefined);
-      setError(reason instanceof Error ? reason.message : t("error.previewDeletion"));
+      setError(reason instanceof Error ? reason : t("error.previewDeletion"));
     }
   }
 
@@ -3031,7 +3051,7 @@ export function App() {
       setError(undefined);
       pushToast("success", deletionTarget.kind === "project" ? t("app.projectDeleted") : t("app.sessionDeleted"), deletionTarget.label);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : t("error.deleteResource"));
+      setError(reason instanceof Error ? reason : t("error.deleteResource"));
     } finally {
       setLifecycleBusy(false);
     }
@@ -3139,7 +3159,7 @@ export function App() {
     });
     if (routing.toast) pushToast(routing.toast.tone, routing.toast.title, routing.toast.detail);
     if (shouldRefreshUsageForEvent(workspaceViewRef.current, streamEvent)) {
-      void refreshUsageData().catch((reason: Error) => setError(reason.message));
+      void refreshUsageData().catch((reason: Error) => setError(reason));
     }
     if (!routing.updatesSessionView) return;
     if (streamEvent.type === "run.status" && isTerminalRunStatus(streamEvent.status)) {
@@ -3275,7 +3295,7 @@ export function App() {
       if (shouldApplySessionScopedUpdate(sessionId, activeSessionIdRef.current)) await refreshSession(sessionId);
     }).catch((reason) => {
       if (!isAbortError(reason) && shouldApplySessionScopedUpdate(sessionId, activeSessionIdRef.current)) {
-        setError(reason instanceof Error ? reason.message : t("error.resumeRunEvents"));
+        setError(reason instanceof Error ? reason : t("error.resumeRunEvents"));
       }
     }).finally(() => {
       if (runAbortControllers.current.get(sessionId) === controller) {
@@ -3305,7 +3325,7 @@ export function App() {
         setMessage("");
         setError(undefined);
       } catch (reason) {
-        setError(reason instanceof Error ? reason.message : t("error.loadWebUsage"));
+        setError(reason instanceof Error ? reason : t("error.loadWebUsage"));
       }
       return;
     }
@@ -3386,7 +3406,7 @@ export function App() {
       if (shouldApplySessionScopedUpdate(submittedSessionId, activeSessionIdRef.current)) await refreshSession(submittedSessionId);
     } catch (reason) {
       if (!isAbortError(reason) && shouldApplySessionScopedUpdate(submittedSessionId, activeSessionIdRef.current)) {
-        setError(reason instanceof Error ? reason.message : t("error.runFailed"));
+        setError(reason instanceof Error ? reason : t("error.runFailed"));
         if (autoNameFirstMessage) {
           void refreshSession(submittedSessionId).catch(() => undefined);
         }
@@ -3420,12 +3440,12 @@ export function App() {
       pushToast(toast.tone, toast.title, toast.detail);
       if (shouldApplySessionScopedUpdate(run.sessionId, activeSessionIdRef.current)) {
         void refreshSession(run.sessionId).catch((reason: Error) => {
-          if (shouldApplySessionScopedUpdate(run.sessionId, activeSessionIdRef.current)) setError(reason.message);
+          if (shouldApplySessionScopedUpdate(run.sessionId, activeSessionIdRef.current)) setError(reason);
         });
       }
     } catch (reason) {
       if (shouldApplySessionScopedUpdate(run.sessionId, activeSessionIdRef.current)) {
-        setError(reason instanceof Error ? reason.message : t("error.cancelQueuedRun"));
+        setError(reason instanceof Error ? reason : t("error.cancelQueuedRun"));
       }
     } finally {
       setCancellingQueuedRunIds((current) => {
@@ -3490,7 +3510,7 @@ export function App() {
     try {
       await openWorkspacePath(file.path);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : t("error.openFile"));
+      setError(reason instanceof Error ? reason : t("error.openFile"));
     }
   }
 
@@ -3663,7 +3683,7 @@ export function App() {
     if (workspaceView !== "usage") return;
     let active = true;
     void refreshUsageData().catch((reason: Error) => {
-      if (active) setError(reason instanceof Error ? reason.message : t("error.loadModelUsage"));
+      if (active) setError(reason instanceof Error ? reason : t("error.loadModelUsage"));
     });
     return () => { active = false; };
   }, [refreshUsageData, setError, workspaceView]);
@@ -3690,7 +3710,7 @@ export function App() {
       setActiveSessionId(sessionId);
       await refreshSession(sessionId);
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : t("error.openSessionFromUsage"));
+      setError(reason instanceof Error ? reason : t("error.openSessionFromUsage"));
     }
   }
 
@@ -3712,7 +3732,7 @@ export function App() {
         setArtifactModalName(result.path);
       }
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : t("error.openSearchResult"));
+      setError(reason instanceof Error ? reason : t("error.openSearchResult"));
     }
   }
 
@@ -3794,7 +3814,7 @@ export function App() {
         syncSessionSummary(updated);
         setError(undefined);
       })
-      .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : t("error.updateSession")))
+      .catch((reason: unknown) => setError(reason instanceof Error ? reason : t("error.updateSession")))
       .finally(() => {
         if (thinkingNormalizationInFlight.current === key) thinkingNormalizationInFlight.current = undefined;
       });
@@ -3924,7 +3944,7 @@ export function App() {
   function renderConversationOutputs(slot: string, outputs: readonly SessionArtifactOutput[] = []): ReactNode {
     return <ConversationArtifactList outputs={outputs} onOpen={openArtifactVersion}
       currentFiles={currentFileSlot === slot ? currentPreviewFiles : []}
-      onOpenCurrentFile={(file) => void openWorkspacePath(file.path).catch((reason: Error) => setError(reason.message))} />;
+      onOpenCurrentFile={(file) => void openWorkspacePath(file.path).catch((reason: Error) => setError(reason))} />;
   }
   const sessionArchived = Boolean(session?.archivedAt);
   const sessionPending = Boolean(activeSessionId) && session?.id !== activeSessionId;
@@ -4264,7 +4284,7 @@ export function App() {
           <UsagePage
             analytics={usageAnalytics}
             filters={usageFilters}
-            onExport={(format, displayCurrency) => void exportUsageAnalytics(format, displayCurrency).catch((reason: Error) => setError(reason.message))}
+            onExport={(format, displayCurrency) => void exportUsageAnalytics(format, displayCurrency).catch((reason: Error) => setError(reason))}
             onFiltersChange={(filters) => {
               setUsageFilters(filters);
               setUsageAnalytics(undefined);
@@ -4611,11 +4631,11 @@ export function App() {
                 event.preventDefault();
                 setDragActive(false);
                 if (event.dataTransfer.files.length) {
-                  void upload(event.dataTransfer.files).catch((reason: Error) => setError(reason.message));
+                  void upload(event.dataTransfer.files).catch((reason: Error) => setError(reason));
                 }
               }}>
                 <input multiple type="file" onChange={(event) => {
-                  if (event.target.files?.length) void upload(event.target.files).catch((reason: Error) => setError(reason.message));
+                  if (event.target.files?.length) void upload(event.target.files).catch((reason: Error) => setError(reason));
                   event.target.value = "";
                 }} />
                 <span className="upload-icon"><UploadIcon size={19} /></span>
@@ -5022,9 +5042,11 @@ export function App() {
               /> : null}
               {systemSettingsGroup === "connection" ? <>
                 <div className="settings-detail-header"><span className="eyebrow">{t("settings.localAccess")}</span><h3>{t("settings.connection")}</h3><p>{t("settings.connectionHelp")}</p></div>
-                {tokenRejected ? <InlineErrorAlert detail={t("settings.tokenRejected")} title={t("settings.tokenRejectedTitle")} /> : null}
-                <label><span>{t("settings.localToken")}</span><input autoFocus={tokenRejected} value={tokenEdit ?? token} onChange={(event) => setTokenEdit(event.target.value)} /></label>
-                <div className="config-note">The token is stored in this browser and sent with local API requests. It must match the server's configured authentication token.</div>
+                {tokenRejected
+                  ? <InlineErrorAlert detail={t("settings.tokenHelp")} title={t("settings.tokenRejectedTitle")} />
+                  : <div className="config-note" role="status">{t("settings.tokenHelp")}</div>}
+                <label><span>{t("settings.localToken")}</span><input autoComplete="off" autoFocus={!token || tokenRejected} type="password" value={tokenEdit ?? token} onChange={(event) => setTokenEdit(event.target.value)} /></label>
+                <div className="config-note">{t("settings.tokenStorageHelp")}</div>
               </> : null}
             </SystemSettingsLayout>
             <SystemSettingsFooter
