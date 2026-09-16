@@ -132,7 +132,7 @@ export function SpecialistManager({
   client: ApiClient;
   connectors: ConnectorManifest[];
   onChanged: (specialists: Specialist[]) => void;
-  onError: (message: string) => void;
+  onError: (reason: string | Error) => void;
   skills: SkillDescriptor[];
 }) {
   const { t } = useLocale();
@@ -156,7 +156,7 @@ export function SpecialistManager({
     onChanged(items);
   }
 
-  useEffect(() => { void refresh().catch((error: Error) => onError(error.message)); }, [client]);
+  useEffect(() => { void refresh().catch((error: Error) => onError(error)); }, [client]);
 
   function applySpecialist(updated: Specialist): void {
     setSpecialists((current) => {
@@ -172,7 +172,7 @@ export function SpecialistManager({
       const updated = await client.updateSpecialist(id, { enabled: next });
       applySpecialist(updated);
     } catch (error) {
-      onError(error instanceof Error ? error.message : t("specialist.updateBuiltinFailed"));
+      onError(error instanceof Error ? error : t("specialist.updateBuiltinFailed"));
     } finally {
       setBuiltinBusy(false);
     }
@@ -184,7 +184,7 @@ export function SpecialistManager({
       await Promise.all(builtinSpecialists.map((specialist) => client.updateSpecialist(specialist.id, { enabled: next })));
       await refresh();
     } catch (error) {
-      onError(error instanceof Error ? error.message : t("specialist.updateAllBuiltinFailed"));
+      onError(error instanceof Error ? error : t("specialist.updateAllBuiltinFailed"));
     } finally {
       setBuiltinBusy(false);
     }
@@ -194,7 +194,7 @@ export function SpecialistManager({
       .then((settings) => {
         setReviewerEnabled(settings.enabled);
       })
-      .catch((error: Error) => onError(error.message))
+      .catch((error: Error) => onError(error))
       .finally(() => setReviewerBusy(false));
   }, [client]);
 
@@ -206,7 +206,7 @@ export function SpecialistManager({
       });
       setReviewerEnabled(settings.enabled);
     } catch (error) {
-      onError(error instanceof Error ? error.message : t("specialist.updateReviewerFailed"));
+      onError(error instanceof Error ? error : t("specialist.updateReviewerFailed"));
     } finally {
       setReviewerBusy(false);
     }
@@ -242,7 +242,7 @@ export function SpecialistManager({
       closeEditor();
       await refresh();
     } catch (error) {
-      onError(error instanceof Error ? error.message : t("specialist.saveFailed"));
+      onError(error instanceof Error ? error : t("specialist.saveFailed"));
     } finally {
       setBusy(false);
     }
@@ -256,7 +256,7 @@ export function SpecialistManager({
       closeEditor();
       await refresh();
     } catch (error) {
-      onError(error instanceof Error ? error.message : t("specialist.deleteFailed"));
+      onError(error instanceof Error ? error : t("specialist.deleteFailed"));
     } finally {
       setBusy(false);
     }

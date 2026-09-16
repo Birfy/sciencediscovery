@@ -970,7 +970,7 @@ export async function runSessionCreationOnce<T>({
   fallbackError: string;
   isInFlight: () => boolean;
   onCreated: (created: T) => Promise<void> | void;
-  onError: (message: string) => void;
+  onError: (reason: string | Error) => void;
   setInFlight: (value: boolean) => void;
   setPending: (value: boolean) => void;
 }): Promise<boolean> {
@@ -980,7 +980,7 @@ export async function runSessionCreationOnce<T>({
   try {
     await onCreated(await create());
   } catch (reason) {
-    onError(reason instanceof Error ? reason.message : fallbackError);
+    onError(reason instanceof Error ? reason : fallbackError);
   } finally {
     setInFlight(false);
     setPending(false);
@@ -1363,7 +1363,9 @@ export function App({ initialToken }: { initialToken?: string } = {}) {
     const message = reason instanceof Error ? reason.message : reason;
     setSystemSettingsErrors((current) => updateInlineErrors(current, message));
   }, []);
-  const reportScopedSettingsError = useCallback((message?: string) => {
+  const reportScopedSettingsError = useCallback((reason?: string | Error) => {
+    if (isAuthFailure(reason)) return;
+    const message = reason instanceof Error ? reason.message : reason;
     setScopedSettingsErrors((current) => updateInlineErrors(current, message));
   }, []);
   const settingsErrorRouter = useMemo(() => createSettingsErrorRouter({
@@ -1539,7 +1541,7 @@ export function App({ initialToken }: { initialToken?: string } = {}) {
 
   // Long-lived panels keep these in effect dependencies, so they must not be
   // re-created on every render of this component.
-  const reportError = useCallback((message: string) => setError(message || undefined), [setError]);
+  const reportError = useCallback((reason: string | Error) => setError(reason || undefined), [setError]);
 
   // One polled snapshot shared by the right-rail card and the full-screen
   // explorer (lifted from MemoryGraphView so opening the explorer doesn't
@@ -1572,7 +1574,7 @@ export function App({ initialToken }: { initialToken?: string } = {}) {
     if (!activeSessionId) return;
     let active = true;
     const refresh = () => refreshGovernedDownloads(activeSessionId).catch((reason: Error) => {
-      if (active) reportError(reason.message);
+      if (active) reportError(reason);
     });
     void refresh();
     const timer = window.setInterval(() => void refresh(), 2_000);
@@ -2507,8 +2509,7 @@ export function App({ initialToken }: { initialToken?: string } = {}) {
       setWebSettings(saved);
       pushToast("success", t("app.webSettingsUpdated"));
     } catch (reason) {
-      const message = reason instanceof Error ? reason.message : t("error.saveWeb");
-      reportSystemSettingsError(message);
+      reportSystemSettingsError(reason instanceof Error ? reason : t("error.saveWeb"));
       throw reason;
     }
   }
@@ -2820,6 +2821,12 @@ export function App({ initialToken }: { initialToken?: string } = {}) {
       setError(undefined);
       pushToast("info", t("app.reviewStarted"), t("app.reviewStartedDetail"));
     } catch (reason) {
+      if (isAuthFailure(reason)) {
+        setSession((current) => current?.id === targetSessionId
+          ? { ...current, messages: current.messages.filter((item) => item.id !== messageId) }
+          : current);
+        return;
+      }
       const detail = reason instanceof Error ? reason.message : t("error.runReviewer");
       if (shouldApplySessionScopedUpdate(targetSessionId, activeSessionIdRef.current)) {
         setSession((current) => current?.id === targetSessionId ? {
@@ -2852,6 +2859,7 @@ export function App({ initialToken }: { initialToken?: string } = {}) {
       setError(undefined);
       pushToast("info", t("app.reviewStopped"), t("app.reviewStoppedDetail"));
     } catch (reason) {
+      if (isAuthFailure(reason)) return;
       const detail = reason instanceof Error ? reason.message : t("error.stopReviewer");
       pushToast("error", t("error.stopReview"), detail);
     } finally {
@@ -3479,8 +3487,7 @@ export function App({ initialToken }: { initialToken?: string } = {}) {
       pushToast("info", t("app.skillProposalQueued"), t("app.skillProposalQueuedDetail", { id: run.id.slice(0, 8) }));
       await refreshSession(session.id);
     } catch (reason) {
-      const message = reason instanceof Error ? reason.message : t("error.queueSkillEvolution");
-      setError(message);
+      setError(reason instanceof Error ? reason : t("error.queueSkillEvolution"));
     } finally {
       setSkillEvolutionSourceRunIds((current) => {
         if (!current.has(run.id)) return current;
@@ -3618,6 +3625,7 @@ export function App({ initialToken }: { initialToken?: string } = {}) {
         if (!version) throw new Error(translateActive("error.artifactNoVersion"));
         return { artifact, name, version };
       }));
+      if (metadataResults.some((result) => result.status === "rejected" && isAuthFailure(result.reason))) return;
       const metadata = metadataResults.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
       let skipped = metadataResults.length - metadata.length;
       const archiveNames = new Set<string>();
@@ -3642,6 +3650,7 @@ export function App({ initialToken }: { initialToken?: string } = {}) {
         const blob = await client.readProjectArtifactVersion(activeProjectId, version.id);
         return { content: new Uint8Array(await blob.arrayBuffer()), name };
       }));
+      if (contentResults.some((result) => result.status === "rejected" && isAuthFailure(result.reason))) return;
       const entries = contentResults.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
       skipped += contentResults.length - entries.length;
       if (!entries.length) {
@@ -3662,7 +3671,7 @@ export function App({ initialToken }: { initialToken?: string } = {}) {
       if (skipped) pushToast("info", t("artifact.archiveReady"), t("artifact.archiveSkipped", { count: skipped }));
       else pushToast("success", t("artifact.archiveReady"), t("app.selectedArtifacts", { count: entries.length }));
     } catch (reason) {
-      pushToast("error", t("artifact.archiveFailed"), reason instanceof Error ? reason.message : undefined);
+      if (!isAuthFailure(reason)) pushToast("error", t("artifact.archiveFailed"), reason instanceof Error ? reason.message : undefined);
     } finally {
       setArtifactArchiveBusy(false);
     }
@@ -4045,7 +4054,7 @@ export function App({ initialToken }: { initialToken?: string } = {}) {
       });
       await refreshGovernedDownloads(session.id);
     } catch (error) {
-      reportError(error instanceof Error ? error.message : t("error.prepareDownload"));
+      reportError(error instanceof Error ? error : t("error.prepareDownload"));
     }
   }
 
@@ -4056,7 +4065,7 @@ export function App({ initialToken }: { initialToken?: string } = {}) {
       else await client.retryMcpArtifactJob(session.id, job.id);
       await refreshGovernedDownloads(session.id);
     } catch (error) {
-      reportError(error instanceof Error ? error.message : action === "cancel" ? t("error.cancelArtifactJob") : t("error.retryArtifactJob"));
+      reportError(error instanceof Error ? error : action === "cancel" ? t("error.cancelArtifactJob") : t("error.retryArtifactJob"));
     }
   }
 

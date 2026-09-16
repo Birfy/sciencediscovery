@@ -41,7 +41,7 @@ function LegacyIdeaTreeView({
   client: ApiClient;
   onOpenArtifact?: (id: string) => void;
   onOpenSubagent?: (id: string) => void;
-  onError: (message: string) => void;
+  onError: (reason: string | Error) => void;
   refreshKey: string;
   sessionId: string;
 }) {
@@ -76,7 +76,7 @@ function LegacyIdeaTreeView({
     } catch (error) {
       if (sequence === requestSequence.current) setLoadError(error instanceof Error ? error.message : "Could not load Idea Tree");
       if (sequence === requestSequence.current && reportFailure) {
-        onError(error instanceof Error ? error.message : "Could not load Idea Tree");
+        onError(error instanceof Error ? error : "Could not load Idea Tree");
       }
     } finally {
       if (showLoading && loadingSequence.current === sequence) setLoading(false);

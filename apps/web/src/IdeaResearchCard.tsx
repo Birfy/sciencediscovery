@@ -5,7 +5,7 @@ import { IdeaTreeExplorer } from "./IdeaTreeExplorer.js";
 import { useLocale } from "./i18n/index.js";
 import { ideaResearchActivityStatusLabel, ideaResearchPhaseLabel, ideaResearchStatusLabel } from "./IdeaResearchLabels.js";
 
-export function IdeaResearchCard({client, sessionId, onError, onResearchAvailability}: {client: ApiClient; sessionId: string; onError: (message: string) => void; onResearchAvailability?: (available: boolean) => void}) {
+export function IdeaResearchCard({client, sessionId, onError, onResearchAvailability}: {client: ApiClient; sessionId: string; onError: (reason: string | Error) => void; onResearchAvailability?: (available: boolean) => void}) {
   const { t } = useLocale();
   const element = useRef<HTMLElement>(null);
   const [items, setItems] = useState<IdeaResearchView[]>([]);
@@ -50,7 +50,7 @@ export function IdeaResearchCard({client, sessionId, onError, onResearchAvailabi
     try {
       await client.ideaResearchCommand(sessionId, {operation, researchId});
       setConfirmEnd(undefined); await load();
-    } catch (e) { onError(e instanceof Error ? e.message : String(e)); }
+    } catch (e) { onError(e instanceof Error ? e : String(e)); }
     finally {setBusy(false);}
   }
   const view = items.find(i => i.research.id === selected) ?? items[0];

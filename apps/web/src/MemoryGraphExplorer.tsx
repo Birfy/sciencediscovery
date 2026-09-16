@@ -754,7 +754,7 @@ export function MemoryGraphExplorer({
    * ``shouldFocusEntryNode``. */
   autoChain?: boolean;
   onClose: () => void;
-  onError: (message: string) => void;
+  onError: (reason: string | Error) => void;
   onPendingAnnotation?: (annotation: ArtifactAnnotation) => void;
   sessionId: string;
   subgraph: MemorySubgraph;
@@ -1279,7 +1279,7 @@ export function MemoryGraphExplorer({
           { shown: onScreen, total: result.hits.length })
         : t("memory.search.noMatches"));
     } catch (error) {
-      onError(error instanceof Error ? error.message : t("memory.search.failed"));
+      onError(error instanceof Error ? error : t("memory.search.failed"));
     } finally {
       setSearching(false);
     }
@@ -1337,7 +1337,7 @@ export function MemoryGraphExplorer({
       setActiveLabels(new Set());
       setActiveEdges(new Set());
     } catch (error) {
-      onError(error instanceof Error ? error.message : t("chain.loadFailed"));
+      onError(error instanceof Error ? error : t("chain.loadFailed"));
     } finally {
       setChainLoading(false);
     }

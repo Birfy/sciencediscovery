@@ -62,7 +62,7 @@ test("a failed Session creation restores pending state and blocks duplicate subm
     fallbackError: "Could not create session",
     isInFlight: () => inFlight,
     onCreated: () => undefined,
-    onError: (message: string) => errors.push(message),
+    onError: (reason: string | Error) => errors.push(reason instanceof Error ? reason.message : reason),
     setInFlight: (value: boolean) => { inFlight = value; },
     setPending: (value: boolean) => pendingStates.push(value),
   };
