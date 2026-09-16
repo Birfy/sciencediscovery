@@ -4071,7 +4071,6 @@ export function App() {
   return (
     <PluginWebHost client={client} projectId={activeProjectId} sessionId={activeSessionId}>
     <div className="app-shell">
-      {trajectorySession && session?.id === trajectorySession.id && activeSessionId === trajectorySession.id && <TrajectoryViewer key={trajectorySession.id} sessionId={trajectorySession.id} title={session.title} port={client.trajectory} locale={locale} onClose={() => setTrajectorySession(undefined)} />}
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-mark"><BrandIcon size={24} /></div>
@@ -4319,7 +4318,7 @@ export function App() {
                 ) : null}
               </div>
               <div className="session-bar-meta">
-                {session && <button className="secondary-button compact-button session-trajectory-button" type="button" aria-haspopup="dialog" onClick={() => setTrajectorySession({ id: session.id, title: session.title })}>{locale.startsWith("zh") ? "轨迹" : "Trajectory"}</button>}
+                {session && <button className="secondary-button compact-button session-trajectory-button" type="button" aria-pressed={trajectorySession?.id === session.id} onClick={() => setTrajectorySession(current => current?.id === session.id ? undefined : { id: session.id, title: session.title })}>{locale.startsWith("zh") ? (trajectorySession?.id === session.id ? "对话" : "轨迹") : (trajectorySession?.id === session.id ? "Conversation" : "Trajectory")}</button>}
                 {session ? <span className="session-runner-target" title={selectedRunnerIds.length
                   ? t("app.runnerSelectionTooltip", { hosts: selectedRunnerNames.join(", ") })
                   : t("app.runnerSelectionEmpty")}>
@@ -4348,6 +4347,14 @@ export function App() {
                   <li><span className="empty-step-icon"><UploadIcon size={16} /></span><div><strong>{t("empty.dropCsv")}</strong><small>{t("empty.dropCsvHelp")}</small></div></li>
                 </ol>
               </div>
+            ) : trajectorySession && session.id === trajectorySession.id ? (
+              <TrajectoryViewer key={trajectorySession.id} sessionId={trajectorySession.id} title={session.title} port={client.trajectory} locale={locale} onClose={() => {
+                setTrajectorySession(undefined);
+                // The inline view lives in the document flow, so on narrow stacked
+                // layouts the page may sit scrolled past the session bar; bring the
+                // conversation toggle back into view after the messages remount.
+                requestAnimationFrame(() => document.querySelector(".session-trajectory-button")?.scrollIntoView({ block: "nearest" }));
+              }} />
             ) : (
               <>
                 <div className="messages" ref={messagesViewport} onScroll={handleMessagesScroll}>

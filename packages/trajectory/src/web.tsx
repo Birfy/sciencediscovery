@@ -20,19 +20,18 @@ export function TrajectoryViewer({ sessionId, title, port, locale, onClose }: {
   const [filter, setFilter] = useState("all"), [agent, setAgent] = useState(""), [tab, setTab] = useState("event"), [zoom, setZoom] = useState(1);
   const [trackWidth, setTrackWidth] = useState(450);
   const timeline = useRef<HTMLDivElement>(null);
-  const dialog = useRef<HTMLDivElement>(null), list = useRef<HTMLDivElement>(null), exportController = useRef<AbortController>(undefined);
+  const view = useRef<HTMLDivElement>(null), list = useRef<HTMLDivElement>(null), exportController = useRef<AbortController>(undefined);
   const closeRef = useRef(onClose); closeRef.current = onClose;
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
-    dialog.current?.focus();
+    view.current?.focus();
     const keys = (event: KeyboardEvent) => {
       if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); closeRef.current(); }
-      if (event.key === "Tab" && !dialog.current?.contains(document.activeElement)) {
-        event.preventDefault(); dialog.current?.focus();
-      }
     };
     document.addEventListener("keydown", keys, true);
-    return () => { document.removeEventListener("keydown", keys, true); exportController.current?.abort(); previous?.focus(); };
+    // Defer the focus restore past the host's re-layout: closing the inline view
+    // remounts the conversation, and a synchronous focus scroll would be undone.
+    return () => { document.removeEventListener("keydown", keys, true); exportController.current?.abort(); requestAnimationFrame(() => previous?.focus()); };
   }, []);
   useEffect(() => {
     const controller = new AbortController(); setLoading(true); setError("");
@@ -85,19 +84,13 @@ export function TrajectoryViewer({ sessionId, title, port, locale, onClose }: {
     } catch (reason) { if (!controller.signal.aborted) setError(String(reason)); }
     finally { if (!controller.signal.aborted) setExporting(false); }
   };
-  return <div className="trajectory-backdrop"><div className="trajectory-dialog" role="dialog" aria-modal="true" aria-label={tr("Session 轨迹", "Session trajectory")} ref={dialog} tabIndex={-1} onKeyDown={event => {
+  return <div className="trajectory-view" role="region" aria-label={tr("Session 轨迹", "Session trajectory")} ref={view} tabIndex={-1} onKeyDown={event => {
     if (event.key === "Escape") { event.stopPropagation(); closeRef.current(); }
-    if (event.key === "Tab") {
-      const nodes = [...dialog.current!.querySelectorAll<HTMLElement>('button:not(:disabled), select, input, summary, [tabindex="0"]')].filter(n => n.getClientRects().length);
-      const first = nodes[0], last = nodes.at(-1);
-      if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog.current)) { event.preventDefault(); last?.focus(); }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
-    }
   }}>
     <header className="trajectory-header"><div><small>SESSION OBSERVATORY</small><h2>{tr("执行轨迹与模型上下文", "Trajectory & model context")}</h2><p title={title}>{title}</p></div><div className="trajectory-actions">
       <button onClick={() => setRevision(r => r + 1)} disabled={loading}>{tr("刷新", "Refresh")}</button>
       <button onClick={() => void download()} disabled={loading || exporting || !index}>{exporting ? tr("导出中…", "Exporting…") : tr("导出 NDJSON", "Export NDJSON")}</button>
-      <button onClick={onClose} aria-label={tr("关闭轨迹", "Close trajectory")}>×</button>
+      <button onClick={onClose} aria-label={tr("返回对话", "Back to conversation")}>×</button>
     </div></header>
     <p className="trajectory-notice">{tr("只显示已记录的数据。导出可能包含对话、工具结果和敏感业务内容，请妥善保管。", "Recorded data only. Exports may contain conversations, tool results and sensitive business content.")}</p>
     {error && <p role="alert" className="trajectory-error">{error}</p>}
@@ -124,5 +117,5 @@ export function TrajectoryViewer({ sessionId, title, port, locale, onClose }: {
       </> : <div className="trajectory-empty">{selected ? tr("读取节点…", "Loading entry…") : tr("Session 尚无轨迹。运行一次任务后在此查看。", "No trajectory yet. Run a task to inspect it here.")}</div>}
       </section></div>
     </>}
-  </div></div>;
+  </div>;
 }

@@ -38,7 +38,7 @@
  * - `filter`    `archived` | `all`: Session list filter (default `active` omitted)
  * - `panel`     `open` | `collapsed`: right-hand workspace panel
  * - `artifact`  workspace-relative path of the open artifact; `/` stays unescaped
- * - `trajectory` `open`: trajectory overlay for the Session in the path
+ * - `trajectory` `open`: the Session in the path shows its inline trajectory view
  */
 
 export type SettingsKind = "project" | "session" | "system";

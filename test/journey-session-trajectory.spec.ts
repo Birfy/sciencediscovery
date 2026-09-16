@@ -7,7 +7,7 @@ import { cleanupJourney, createProjectAndSession, openProjectSession, scriptedMo
 
 /**
  * E2E-META
- * Purpose: Inspect and export a Session's real multi-agent trajectory and frozen model contexts.
+ * Purpose: Inspect and export a Session's real multi-agent trajectory inline in the conversation area.
  * Steps:
  *   1. Run a main Agent and delegated child, then continue the Session with a second Run.
  *   2. Keep all time lanes visible while selecting one Agent's records and navigating its input.
@@ -59,126 +59,136 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       await entry.focus();
       await expect(entry).toBeFocused();
     });
-    const dialog = page.getByRole("dialog", { name: "Session 轨迹" });
+    const viewer = page.getByRole("region", { name: "Session 轨迹" });
     await journey.step("查看时间轴和上下文来源", "主子 Agent 共用时间坐标，输入展示实际贡献块，彩色导航可跳转。", async () => {
       await page.getByRole("button", { name: "轨迹", exact: true }).click();
-      await expect(dialog.getByRole("button", { name: "刷新", exact: true })).toHaveCSS("border-radius", "7px");
-      await expect(dialog.locator(".trajectory-lane")).toHaveCount(2);
-      await expect(dialog.locator(".trajectory-legend")).not.toContainText("生命周期");
-      await expect(dialog.getByLabel("事件类型", { exact: true }).locator('option[value="lifecycle"]')).toHaveCount(0);
-      await expect(dialog.locator('.trajectory-track[data-category="events"]')).toHaveCount(0);
-      for (const type of ["subagent.updated", "run.completed", "run.failed", "run.cancelled", "context_recovery"]) await expect(dialog.locator(`[data-event-type="${type}"]`)).toHaveCount(0);
+      // The trajectory is inline in the conversation area: no overlay, no modal.
+      await expect(page.locator(".trajectory-backdrop")).toHaveCount(0);
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+      await expect(viewer).toBeVisible();
+      await expect(page.locator(".messages")).toHaveCount(0);
+      await expect(page.locator(".composer")).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "对话", exact: true })).toHaveAttribute("aria-pressed", "true");
+      await expect(viewer.getByRole("button", { name: "刷新", exact: true })).toHaveCSS("border-radius", "7px");
+      await expect(viewer.locator(".trajectory-lane")).toHaveCount(2);
+      await expect(viewer.locator(".trajectory-legend")).not.toContainText("生命周期");
+      await expect(viewer.getByLabel("事件类型", { exact: true }).locator('option[value="lifecycle"]')).toHaveCount(0);
+      await expect(viewer.locator('.trajectory-track[data-category="events"]')).toHaveCount(0);
+      for (const type of ["subagent.updated", "run.completed", "run.failed", "run.cancelled", "context_recovery"]) await expect(viewer.locator(`[data-event-type="${type}"]`)).toHaveCount(0);
       await expect(page).toHaveURL(/trajectory=open/);
-      for (const type of ["run.started", "state_changed", "state.committed"]) await expect(dialog.locator(`.trajectory-event-list [data-event-type="${type}"]`)).toHaveCount(0);
-      await expect(dialog.getByText(/非过期|已过期/)).toHaveCount(0);
-      await expect(dialog.locator('.trajectory-track[data-category="model"]').first()).toBeVisible();
-      await expect(dialog.locator('.trajectory-track[data-category="tools"]').first()).toBeVisible();
-      await expect(dialog.locator(".trajectory-mark").first()).toHaveCSS("height", "10px");
+      for (const type of ["run.started", "state_changed", "state.committed"]) await expect(viewer.locator(`.trajectory-event-list [data-event-type="${type}"]`)).toHaveCount(0);
+      await expect(viewer.getByText(/非过期|已过期/)).toHaveCount(0);
+      await expect(viewer.locator('.trajectory-track[data-category="model"]').first()).toBeVisible();
+      await expect(viewer.locator('.trajectory-track[data-category="tools"]').first()).toBeVisible();
+      await expect(viewer.locator(".trajectory-mark").first()).toHaveCSS("height", "10px");
       // A visual hit target must never turn sequential events into concurrency.
-      const rowStructure = () => dialog.locator(".trajectory-lane").evaluateAll(lanes => lanes.map(lane => ({
+      const rowStructure = () => viewer.locator(".trajectory-lane").evaluateAll(lanes => lanes.map(lane => ({
         agent: lane.getAttribute("data-agent-id"), rows: [...lane.querySelectorAll(".trajectory-track")].map(row => ({
           category: row.getAttribute("data-category"), ids: [...row.querySelectorAll(".trajectory-mark")].map(mark => mark.getAttribute("data-entry-id")),
         })),
       })));
       const beforeZoom = await rowStructure();
-      const initialWidth = await dialog.locator(".trajectory-track").first().evaluate(node => node.clientWidth);
+      const initialWidth = await viewer.locator(".trajectory-track").first().evaluate(node => node.clientWidth);
       for (const zoom of ["2", "4", "8", "1"]) {
-        await dialog.getByLabel("时间轴缩放").selectOption(zoom);
+        await viewer.getByLabel("时间轴缩放").selectOption(zoom);
         expect(await rowStructure()).toEqual(beforeZoom);
       }
-      await expect.poll(() => dialog.locator(".trajectory-track").first().evaluate(node => node.clientWidth)).toBe(initialWidth);
+      await expect.poll(() => viewer.locator(".trajectory-track").first().evaluate(node => node.clientWidth)).toBe(initialWidth);
       const size = page.viewportSize()!;
       await page.setViewportSize({ width: 390, height: 844 });
       expect(await rowStructure()).toEqual(beforeZoom);
       await page.setViewportSize(size);
-      await expect.poll(() => dialog.locator(".trajectory-track").first().evaluate(node => node.clientWidth)).toBe(initialWidth);
-      const separations = await dialog.locator(".trajectory-track").evaluateAll(rows => rows.flatMap(row => {
+      // The inline view fills the conversation area, whose width follows app-level
+      // layout (the workspace panel keeps its narrow-screen clamp), so the exact
+      // pixel width is not an invariant here — structure and a sane width are.
+      await expect.poll(() => viewer.locator(".trajectory-track").first().evaluate(node => node.clientWidth)).toBeGreaterThan(200);
+      const separations = await viewer.locator(".trajectory-track").evaluateAll(rows => rows.flatMap(row => {
         const boxes = [...row.querySelectorAll(".trajectory-mark")].map(mark => mark.getBoundingClientRect());
         return boxes.slice(1).map((box, i) => box.left - boxes[i]!.right);
       }));
       expect(separations.length).toBeGreaterThan(0);
       expect(separations.every(gap => gap >= 1.9)).toBe(true);
-      await expect(dialog.getByRole("button", { name: "事件内容", exact: true })).toHaveAttribute("aria-pressed", "true");
-      await expect(dialog.locator(".trajectory-context-summary")).toContainText("系统提示");
-      await expect(dialog.getByRole("button", { name: "模型上下文", exact: true })).toHaveCount(0);
-      await expect(dialog.getByRole("button", { name: "组装证据", exact: true })).toHaveCount(0);
-      await expect(dialog.getByLabel("Agent", { exact: true }).locator('option[value="all"]')).toHaveCount(0);
-      await expect(dialog.locator(".trajectory-event-group > header")).not.toContainText(["独立核查"]);
-      await expect(dialog.locator('[data-event-type="turn_start"]')).toHaveCount(0);
-      await expect(dialog.getByRole("button", { name: "全部记录", exact: true })).toHaveCount(0);
-      const headings = await dialog.locator(".trajectory-event-group > header").evaluateAll(nodes => nodes.map(node => `${node.querySelector("strong")?.textContent}:${node.querySelector("small")?.getAttribute("title")}`));
+      await expect(viewer.getByRole("button", { name: "事件内容", exact: true })).toHaveAttribute("aria-pressed", "true");
+      await expect(viewer.locator(".trajectory-context-summary")).toContainText("系统提示");
+      await expect(viewer.getByRole("button", { name: "模型上下文", exact: true })).toHaveCount(0);
+      await expect(viewer.getByRole("button", { name: "组装证据", exact: true })).toHaveCount(0);
+      await expect(viewer.getByLabel("Agent", { exact: true }).locator('option[value="all"]')).toHaveCount(0);
+      await expect(viewer.locator(".trajectory-event-group > header")).not.toContainText(["独立核查"]);
+      await expect(viewer.locator('[data-event-type="turn_start"]')).toHaveCount(0);
+      await expect(viewer.getByRole("button", { name: "全部记录", exact: true })).toHaveCount(0);
+      const headings = await viewer.locator(".trajectory-event-group > header").evaluateAll(nodes => nodes.map(node => `${node.querySelector("strong")?.textContent}:${node.querySelector("small")?.getAttribute("title")}`));
       expect(headings.length).toBe(2);
       expect(new Set(headings).size).toBe(headings.length);
-      const invocationGroup = dialog.locator(".trajectory-event-group").filter({ has: page.locator('[data-event-type="context.captured"]') }).first();
+      const invocationGroup = viewer.locator(".trajectory-event-group").filter({ has: page.locator('[data-event-type="context.captured"]') }).first();
       await expect(invocationGroup.locator('[data-event-type="context.captured"]')).toHaveCount(2);
       await expect(invocationGroup.locator('[data-event-type="tool.started"]')).toHaveCount(1);
-      for (const type of ["session.updated", "run.queued", "run.status", "model_usage"]) await expect(dialog.locator(`[data-event-type="${type}"]`)).toHaveCount(0);
-      await expect(dialog.locator(".trajectory-context section").first()).toBeVisible();
-      expect(await dialog.locator(".trajectory-mark").count()).toBeGreaterThan(5);
-      expect(await dialog.locator(".trajectory-minimap button").count()).toBeGreaterThan(2);
-      await expect(dialog.locator(".trajectory-context section").first()).not.toContainText("来源未记录");
-      await expect(dialog.locator('.trajectory-context [id^="trajectory-tool-"]')).toHaveCount(0);
-      await expect(dialog.locator(".trajectory-tools > button")).toHaveAttribute("aria-expanded", "false");
-      await dialog.locator(".trajectory-tools > button").click();
-      await expect(dialog.locator(".trajectory-tool-list > details").first()).toBeVisible();
-      const definition = dialog.locator(".trajectory-tool-list > details").filter({ has: page.locator("summary", { hasText: /^task$/ }) });
+      for (const type of ["session.updated", "run.queued", "run.status", "model_usage"]) await expect(viewer.locator(`[data-event-type="${type}"]`)).toHaveCount(0);
+      await expect(viewer.locator(".trajectory-context section").first()).toBeVisible();
+      expect(await viewer.locator(".trajectory-mark").count()).toBeGreaterThan(5);
+      expect(await viewer.locator(".trajectory-minimap button").count()).toBeGreaterThan(2);
+      await expect(viewer.locator(".trajectory-context section").first()).not.toContainText("来源未记录");
+      await expect(viewer.locator('.trajectory-context [id^="trajectory-tool-"]')).toHaveCount(0);
+      await expect(viewer.locator(".trajectory-tools > button")).toHaveAttribute("aria-expanded", "false");
+      await viewer.locator(".trajectory-tools > button").click();
+      await expect(viewer.locator(".trajectory-tool-list > details").first()).toBeVisible();
+      const definition = viewer.locator(".trajectory-tool-list > details").filter({ has: page.locator("summary", { hasText: /^task$/ }) });
       await definition.locator("summary").click();
       await expect(definition.locator("pre")).toContainText("task");
-      await dialog.locator(".trajectory-tools > button").click();
-      await expect(dialog.locator(".trajectory-tool-list")).toBeHidden();
-      await expect(dialog.locator(".trajectory-minimap")).toContainText("用户");
-      expect(await dialog.locator(".trajectory-minimap").evaluate(node => node.clientWidth)).toBeGreaterThanOrEqual(100);
-      await expect(dialog.locator(".trajectory-axis")).toContainText(/\d{2}:\d{2}:\d{2}/);
-      await expect(dialog.locator(".trajectory-event-group header small").first()).toContainText(/Run .+/);
-      await expect(dialog.getByRole("button", { name: /^历史版本/ })).toHaveCount(0);
-      await dialog.locator('[data-event-type="context.captured"]').first().click();
-      await dialog.locator(".trajectory-minimap button").last().click();
-      expect(await dialog.locator(".trajectory-context").evaluate(el => el.scrollTop)).toBeGreaterThan(0);
-      await dialog.getByRole("button", { name: "Agent 状态", exact: true }).click();
-      await expect(dialog.locator(".trajectory-raw")).toContainText("checkpoint");
+      await viewer.locator(".trajectory-tools > button").click();
+      await expect(viewer.locator(".trajectory-tool-list")).toBeHidden();
+      await expect(viewer.locator(".trajectory-minimap")).toContainText("用户");
+      expect(await viewer.locator(".trajectory-minimap").evaluate(node => node.clientWidth)).toBeGreaterThanOrEqual(100);
+      await expect(viewer.locator(".trajectory-axis")).toContainText(/\d{2}:\d{2}:\d{2}/);
+      await expect(viewer.locator(".trajectory-event-group header small").first()).toContainText(/Run .+/);
+      await expect(viewer.getByRole("button", { name: /^历史版本/ })).toHaveCount(0);
+      await viewer.locator('[data-event-type="context.captured"]').first().click();
+      await viewer.locator(".trajectory-minimap button").last().click();
+      expect(await viewer.locator(".trajectory-context").evaluate(el => el.scrollTop)).toBeGreaterThan(0);
+      await viewer.getByRole("button", { name: "Agent 状态", exact: true }).click();
+      await expect(viewer.locator(".trajectory-raw")).toContainText("checkpoint");
     });
     await journey.step("切换单个 Agent 查看", "下方只展示选中 Agent；时间图保留全部 Agent，点击子任务时间标记自动切换并定位。", async () => {
-      const marks = await dialog.locator(".trajectory-mark").count();
-      await dialog.getByLabel("事件类型", { exact: true }).selectOption("output");
-      const childMark = dialog.locator('.trajectory-lane[data-agent-id^="subagent:"] .trajectory-mark[data-kind="input"]').first();
+      const marks = await viewer.locator(".trajectory-mark").count();
+      await viewer.getByLabel("事件类型", { exact: true }).selectOption("output");
+      const childMark = viewer.locator('.trajectory-lane[data-agent-id^="subagent:"] .trajectory-mark[data-kind="input"]').first();
       const childId = await childMark.getAttribute("data-entry-id");
-      const childAgent = await dialog.locator('.trajectory-lane[data-agent-id^="subagent:"]').getAttribute("data-agent-id");
+      const childAgent = await viewer.locator('.trajectory-lane[data-agent-id^="subagent:"]').getAttribute("data-agent-id");
       await childMark.click();
-      await expect(dialog.getByLabel("Agent", { exact: true })).toHaveValue(childAgent!);
-      await expect(dialog.getByLabel("事件类型", { exact: true })).toHaveValue("all");
-      await expect(dialog.locator(`.trajectory-event-list [data-entry-id="${childId}"]`)).toHaveAttribute("aria-current", "true");
-      const names = await dialog.locator(".trajectory-event-group > header strong").allTextContents();
+      await expect(viewer.getByLabel("Agent", { exact: true })).toHaveValue(childAgent!);
+      await expect(viewer.getByLabel("事件类型", { exact: true })).toHaveValue("all");
+      await expect(viewer.locator(`.trajectory-event-list [data-entry-id="${childId}"]`)).toHaveAttribute("aria-current", "true");
+      const names = await viewer.locator(".trajectory-event-group > header strong").allTextContents();
       expect(names.length).toBeGreaterThan(0);
       expect(names.every(name => name === "独立核查")).toBe(true);
-      await expect(dialog.locator(".trajectory-context-summary")).toBeVisible();
-      await expect(dialog.locator(".trajectory-mark")).toHaveCount(marks);
-      await expect(dialog.locator(".trajectory-lane")).toHaveCount(2);
+      await expect(viewer.locator(".trajectory-context-summary")).toBeVisible();
+      await expect(viewer.locator(".trajectory-mark")).toHaveCount(marks);
+      await expect(viewer.locator(".trajectory-lane")).toHaveCount(2);
     });
     await journey.step("放大时间轴核对并行结构", "放大到 8× 后事件仍处于原来的行，只有横向距离改变；点击时间标记仍定位同一节点。", async () => {
-      const rows = () => dialog.locator(".trajectory-track").evaluateAll(nodes => nodes.map(row => [...row.querySelectorAll(".trajectory-mark")].map(mark => mark.getAttribute("data-entry-id"))));
+      const rows = () => viewer.locator(".trajectory-track").evaluateAll(nodes => nodes.map(row => [...row.querySelectorAll(".trajectory-mark")].map(mark => mark.getAttribute("data-entry-id"))));
       const before = await rows();
-      const width = await dialog.locator(".trajectory-track").first().evaluate(node => node.clientWidth);
-      await dialog.getByLabel("时间轴缩放").selectOption("8");
-      await expect.poll(() => dialog.locator(".trajectory-track").first().evaluate(node => node.clientWidth)).toBeGreaterThan(width);
+      const width = await viewer.locator(".trajectory-track").first().evaluate(node => node.clientWidth);
+      await viewer.getByLabel("时间轴缩放").selectOption("8");
+      await expect.poll(() => viewer.locator(".trajectory-track").first().evaluate(node => node.clientWidth)).toBeGreaterThan(width);
       expect(await rows()).toEqual(before);
-      const mark = dialog.locator(".trajectory-mark").first();
+      const mark = viewer.locator(".trajectory-mark").first();
       const id = await mark.getAttribute("data-entry-id");
       await mark.click();
-      await expect(dialog.locator(`.trajectory-event-list [data-entry-id="${id}"]`)).toHaveAttribute("aria-current", "true");
-      await expect(dialog.locator(".trajectory-context-summary")).toBeVisible();
+      await expect(viewer.locator(`.trajectory-event-list [data-entry-id="${id}"]`)).toHaveAttribute("aria-current", "true");
+      await expect(viewer.locator(".trajectory-context-summary")).toBeVisible();
     });
-    await journey.step("刷新后继续核对后续请求", "URL 保留轨迹弹窗；后续输入包含上一轮结果和最新问题，默认定位最新消息。", async () => {
+    await journey.step("刷新后继续核对后续请求", "URL 保留内嵌轨迹视图；后续输入包含上一轮结果和最新问题，默认定位最新消息。", async () => {
       await page.reload();
-      await expect(dialog).toBeVisible();
-      await dialog.getByRole("button", { name: "关闭轨迹", exact: true }).click();
+      await expect(viewer).toBeVisible();
+      await viewer.getByRole("button", { name: "返回对话", exact: true }).click();
       await expect(page).not.toHaveURL(/trajectory=open/);
       await page.goBack();
-      await expect(dialog).toBeVisible();
+      await expect(viewer).toBeVisible();
       await page.goForward();
-      await expect(dialog).toBeHidden();
+      await expect(viewer).toBeHidden();
       await page.goBack();
-      await expect(dialog).toBeVisible();
-      await expect(dialog.locator('[data-event-type="context.captured"]').first()).toBeVisible();
+      await expect(viewer).toBeVisible();
+      await expect(viewer.locator('[data-event-type="context.captured"]').first()).toBeVisible();
       const indexResponse = await page.request.get(`${apiBaseUrl()}/api/sessions/${fixture!.session.id}/trajectory`, { headers: authorizationHeader() });
       const index = await indexResponse.json();
       const main = index.entries.filter((e: { agentId: string; kind: string }) => e.agentId.startsWith("main:") && e.kind === "input");
@@ -194,39 +204,39 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       }
       expect(target).toBeTruthy();
       expect(target!.contextId).not.toBe(main[0].contextId);
-      await dialog.locator(`.trajectory-event-list button[data-entry-id="${target!.id}"]`).click();
-      await expect(dialog.locator(".trajectory-context")).toContainText("请确认上一轮结论。");
-      await expect(dialog.locator(".trajectory-context")).toContainText("主任务核查完成。");
-      await expect(dialog.locator(".trajectory-context-summary")).toContainText("条消息");
-      await expect(dialog.locator(".trajectory-minimap")).toContainText("工具结果");
-      await expect(dialog.locator(".trajectory-minimap")).toContainText("task");
-      await expect(dialog.locator('.trajectory-context section[id^="trajectory-message-"] details').first()).not.toHaveAttribute("open", "");
-      await dialog.getByRole("button", { name: "最新消息", exact: true }).click();
-      expect(await dialog.locator(".trajectory-context").evaluate(el => el.scrollTop)).toBeGreaterThan(0);
-      const lastLabel = await dialog.locator(".trajectory-minimap button").last().textContent();
-      await expect(dialog.locator('.trajectory-minimap button[aria-current="true"]')).toHaveText(lastLabel!);
+      await viewer.locator(`.trajectory-event-list button[data-entry-id="${target!.id}"]`).click();
+      await expect(viewer.locator(".trajectory-context")).toContainText("请确认上一轮结论。");
+      await expect(viewer.locator(".trajectory-context")).toContainText("主任务核查完成。");
+      await expect(viewer.locator(".trajectory-context-summary")).toContainText("条消息");
+      await expect(viewer.locator(".trajectory-minimap")).toContainText("工具结果");
+      await expect(viewer.locator(".trajectory-minimap")).toContainText("task");
+      await expect(viewer.locator('.trajectory-context section[id^="trajectory-message-"] details').first()).not.toHaveAttribute("open", "");
+      await viewer.getByRole("button", { name: "最新消息", exact: true }).click();
+      expect(await viewer.locator(".trajectory-context").evaluate(el => el.scrollTop)).toBeGreaterThan(0);
+      const lastLabel = await viewer.locator(".trajectory-minimap button").last().textContent();
+      await expect(viewer.locator('.trajectory-minimap button[aria-current="true"]')).toHaveText(lastLabel!);
     });
     await journey.step("展开独立工具定义", "工具定义属于独立 tools 字段，按名称折叠展示；消息中的工具结果仍留在消息原位置。", async () => {
-      await dialog.locator(".trajectory-tools > button").click();
-      const definition = dialog.locator(".trajectory-tool-list > details").filter({ has: page.locator("summary", { hasText: /^task$/ }) });
+      await viewer.locator(".trajectory-tools > button").click();
+      const definition = viewer.locator(".trajectory-tool-list > details").filter({ has: page.locator("summary", { hasText: /^task$/ }) });
       await definition.locator("summary").click();
       await expect(definition.locator("pre")).toContainText("task");
       await definition.locator("summary").scrollIntoViewIfNeeded();
-      expect(await dialog.locator(".trajectory-context").evaluate(el => el.clientHeight)).toBeGreaterThan(30);
-      await expect(dialog.locator('.trajectory-minimap button[aria-current="true"]')).toBeInViewport({ ratio: 0.9 });
-      await expect(dialog.locator('.trajectory-context [id^="trajectory-tool-"]')).toHaveCount(0);
+      expect(await viewer.locator(".trajectory-context").evaluate(el => el.clientHeight)).toBeGreaterThan(30);
+      await expect(viewer.locator('.trajectory-minimap button[aria-current="true"]')).toBeInViewport({ ratio: 0.9 });
+      await expect(viewer.locator('.trajectory-context [id^="trajectory-tool-"]')).toHaveCount(0);
     });
     await journey.step("选择思考节点并导出", "已记录思考对应固定上下文，导出含完整结束标记，未授权和其他 Session 无法读取。", async () => {
-      await dialog.getByLabel("事件类型", { exact: true }).selectOption("thinking");
-      await dialog.locator(".trajectory-event-list button").filter({ hasText: "思考内容" }).first().click();
-      await expect(dialog.locator(".trajectory-readable")).toContainText("先委派独立核查。");
-      await expect(dialog.locator(".trajectory-raw")).toHaveCount(0);
-      await dialog.getByRole("button", { name: "原始 JSON", exact: true }).click();
-      await expect(dialog.locator(".trajectory-raw")).toContainText("contextRef");
-      await dialog.getByRole("button", { name: "查看本次输入", exact: true }).click();
-      await expect(dialog.locator(".trajectory-context section").first()).toBeVisible();
+      await viewer.getByLabel("事件类型", { exact: true }).selectOption("thinking");
+      await viewer.locator(".trajectory-event-list button").filter({ hasText: "思考内容" }).first().click();
+      await expect(viewer.locator(".trajectory-readable")).toContainText("先委派独立核查。");
+      await expect(viewer.locator(".trajectory-raw")).toHaveCount(0);
+      await viewer.getByRole("button", { name: "原始 JSON", exact: true }).click();
+      await expect(viewer.locator(".trajectory-raw")).toContainText("contextRef");
+      await viewer.getByRole("button", { name: "查看本次输入", exact: true }).click();
+      await expect(viewer.locator(".trajectory-context section").first()).toBeVisible();
       const downloadPromise = page.waitForEvent("download");
-      await dialog.getByRole("button", { name: "导出 NDJSON", exact: true }).click();
+      await viewer.getByRole("button", { name: "导出 NDJSON", exact: true }).click();
       const download = await downloadPromise, stream = await download.createReadStream();
       const chunks: Buffer[] = []; for await (const chunk of stream!) chunks.push(Buffer.from(chunk));
       const records = Buffer.concat(chunks).toString().trim().split("\n").map(line => JSON.parse(line));
@@ -253,22 +263,22 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       expect(foreign.status()).toBe(404);
     });
     await journey.step("阅读工具参数", "工具卡片展示实际输入，原始 JSON 可切换。", async () => {
-      await dialog.getByLabel("事件类型", { exact: true }).selectOption("tool");
-      await dialog.getByLabel("Agent", { exact: true }).selectOption({ label: "独立核查" });
-      await dialog.locator('[data-event-type="tool.started"]').first().click();
-      await expect(dialog.locator(".trajectory-readable")).toContainText("输入参数");
-      await expect(dialog.locator(".trajectory-readable")).toContainText("printf TRAJECTORY_CHILD");
-      await dialog.getByRole("button", { name: "原始 JSON", exact: true }).click();
-      await expect(dialog.locator(".trajectory-raw")).toContainText("run_shell");
-      await dialog.getByRole("button", { name: "解析内容", exact: true }).click();
-      await dialog.locator(".trajectory-readable dt").filter({ hasText: "command" }).scrollIntoViewIfNeeded();
-      await expect(dialog.locator(".trajectory-readable dt").filter({ hasText: "command" })).toBeInViewport();
+      await viewer.getByLabel("事件类型", { exact: true }).selectOption("tool");
+      await viewer.getByLabel("Agent", { exact: true }).selectOption({ label: "独立核查" });
+      await viewer.locator('[data-event-type="tool.started"]').first().click();
+      await expect(viewer.locator(".trajectory-readable")).toContainText("输入参数");
+      await expect(viewer.locator(".trajectory-readable")).toContainText("printf TRAJECTORY_CHILD");
+      await viewer.getByRole("button", { name: "原始 JSON", exact: true }).click();
+      await expect(viewer.locator(".trajectory-raw")).toContainText("run_shell");
+      await viewer.getByRole("button", { name: "解析内容", exact: true }).click();
+      await viewer.locator(".trajectory-readable dt").filter({ hasText: "command" }).scrollIntoViewIfNeeded();
+      await expect(viewer.locator(".trajectory-readable dt").filter({ hasText: "command" })).toBeInViewport();
     });
     await journey.step("核对单次模型用量", "主子 Agent 每次请求只显示一个最终返回，带本次 Token 用量，不重复展示流式正文。", async () => {
-      await dialog.getByLabel("Agent", { exact: true }).selectOption({ index: 0 });
-      await dialog.getByLabel("事件类型", { exact: true }).selectOption("output");
+      await viewer.getByLabel("Agent", { exact: true }).selectOption({ index: 0 });
+      await viewer.getByLabel("事件类型", { exact: true }).selectOption("output");
       const responsePromise = page.waitForResponse(response => response.url().endsWith(`/api/sessions/${fixture!.session.id}/trajectory`) && response.request().method() === "GET");
-      await dialog.getByRole("button", { name: "刷新", exact: true }).click();
+      await viewer.getByRole("button", { name: "刷新", exact: true }).click();
       const finalResponse = await responsePromise;
       const finalIndex = await finalResponse.json();
       const outputs = finalIndex.entries.filter((e: { eventType?: string }) => e.eventType === "model.completed") as Array<{ id: string; agentId: string; runId: string; contextId: string; turn: number }>;
@@ -276,20 +286,20 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       expect(outputs.length).toBeGreaterThanOrEqual(5);
       expect(new Set(outputs.map(e => `${e.agentId}:${e.runId}:${e.contextId}`)).size).toBe(outputs.length);
       for (const output of outputs) expect(finalIndex.entries.some((e: { kind: string; contextId: string }) => e.kind === "input" && e.contextId === output.contextId)).toBe(true);
-      await expect(dialog.locator(".trajectory-event-list button")).toHaveCount(outputs.filter(e => e.agentId.startsWith("main:")).length);
-      await expect(dialog.locator('.trajectory-event-list button:not([data-event-type="model.completed"])')).toHaveCount(0);
-      await expect(dialog.locator('.trajectory-mark[data-kind="output"]')).toHaveCount(outputs.length);
-      await dialog.getByLabel("Agent", { exact: true }).selectOption({ label: "独立核查" });
+      await expect(viewer.locator(".trajectory-event-list button")).toHaveCount(outputs.filter(e => e.agentId.startsWith("main:")).length);
+      await expect(viewer.locator('.trajectory-event-list button:not([data-event-type="model.completed"])')).toHaveCount(0);
+      await expect(viewer.locator('.trajectory-mark[data-kind="output"]')).toHaveCount(outputs.length);
+      await viewer.getByLabel("Agent", { exact: true }).selectOption({ label: "独立核查" });
       const children = outputs.filter(e => e.agentId.startsWith("subagent:"));
-      await expect(dialog.locator(".trajectory-event-list button")).toHaveCount(children.length);
+      await expect(viewer.locator(".trajectory-event-list button")).toHaveCount(children.length);
       const childAnswer = children.find(e => e.turn === 1)!;
       expect(childAnswer).toBeTruthy();
-      await dialog.locator(`.trajectory-event-list [data-entry-id="${childAnswer.id}"]`).click();
-      await expect(dialog.locator(".trajectory-readable")).toContainText("TRAJECTORY_CHILD 已核验。");
-      await expect(dialog.locator(".trajectory-readable")).toContainText("本次请求用量");
-      await dialog.getByLabel("Agent", { exact: true }).selectOption({ index: 0 });
-      await dialog.locator('[data-event-type="model.completed"]').first().click();
-      const usage = dialog.locator(".trajectory-readable section").filter({ has: page.getByRole("heading", { name: "本次请求用量", exact: true }) });
+      await viewer.locator(`.trajectory-event-list [data-entry-id="${childAnswer.id}"]`).click();
+      await expect(viewer.locator(".trajectory-readable")).toContainText("TRAJECTORY_CHILD 已核验。");
+      await expect(viewer.locator(".trajectory-readable")).toContainText("本次请求用量");
+      await viewer.getByLabel("Agent", { exact: true }).selectOption({ index: 0 });
+      await viewer.locator('[data-event-type="model.completed"]').first().click();
+      const usage = viewer.locator(".trajectory-readable section").filter({ has: page.getByRole("heading", { name: "本次请求用量", exact: true }) });
       await expect(usage).toContainText("输入 Token20");
       await expect(usage).toContainText("输出 Token8");
       await expect(usage).toContainText("总 Token28");
@@ -297,45 +307,53 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
     });
     await journey.step("窄屏阅读", "查看器不超出视口，选中事件、Run 标签和模型用量可见。", async () => {
       await page.setViewportSize({ width: 390, height: 844 });
-      expect(await dialog.evaluate(el => el.getBoundingClientRect().right <= window.innerWidth + 1)).toBe(true);
-      await expect(dialog.getByRole("button", { name: "关闭轨迹" })).toBeVisible();
-      await expect(dialog.getByRole("button", { name: "全部记录", exact: true })).toHaveCount(0);
-      await expect(dialog.locator(".trajectory-detail-heading .trajectory-run")).toBeVisible();
-      await expect(dialog.locator('.trajectory-event-list button[aria-current="true"]')).toBeInViewport({ ratio: 0.95 });
-      await dialog.locator(".trajectory-readable dt").filter({ hasText: "总 Token" }).scrollIntoViewIfNeeded();
-      await expect(dialog.locator(".trajectory-readable dt").filter({ hasText: "总 Token" })).toBeInViewport();
-      const listHeight = await dialog.locator(".trajectory-event-list").evaluate(el => el.clientHeight);
-      expect(await dialog.locator(".trajectory-event-list button").first().evaluate(el => el.clientHeight)).toBeLessThanOrEqual(listHeight);
+      expect(await viewer.evaluate(el => el.getBoundingClientRect().right <= window.innerWidth + 1)).toBe(true);
+      await expect(viewer.getByRole("button", { name: "返回对话" })).toBeVisible();
+      await expect(viewer.getByRole("button", { name: "全部记录", exact: true })).toHaveCount(0);
+      await expect(viewer.locator(".trajectory-detail-heading .trajectory-run")).toBeVisible();
+      await expect(viewer.locator('.trajectory-event-list button[aria-current="true"]')).toBeInViewport({ ratio: 0.95 });
+      await viewer.locator(".trajectory-readable dt").filter({ hasText: "总 Token" }).scrollIntoViewIfNeeded();
+      await expect(viewer.locator(".trajectory-readable dt").filter({ hasText: "总 Token" })).toBeInViewport();
+      const listHeight = await viewer.locator(".trajectory-event-list").evaluate(el => el.clientHeight);
+      expect(await viewer.locator(".trajectory-event-list button").first().evaluate(el => el.clientHeight)).toBeLessThanOrEqual(listHeight);
     });
     await journey.step("窄屏查看输入分区", "消息和工具定义独立显示；带文字的彩色导航可定位，工具列表可折叠且不越出视口。", async () => {
-      await dialog.getByLabel("事件类型", { exact: true }).selectOption("input");
-      await dialog.locator(".trajectory-event-list button").last().click();
-      await expect(dialog.locator(".trajectory-context-summary")).toBeVisible();
-      await expect(dialog.locator(".trajectory-minimap")).toContainText("用户");
-      const pane = dialog.locator(".trajectory-context");
+      await viewer.getByLabel("事件类型", { exact: true }).selectOption("input");
+      await viewer.locator(".trajectory-event-list button").last().click();
+      await expect(viewer.locator(".trajectory-context-summary")).toBeVisible();
+      await expect(viewer.locator(".trajectory-minimap")).toContainText("用户");
+      const pane = viewer.locator(".trajectory-context");
       expect(await pane.evaluate(el => el.clientHeight)).toBeGreaterThan(35);
-      await dialog.locator(".trajectory-minimap button").last().click();
-      await expect(dialog.locator(".trajectory-minimap button").last()).toHaveAttribute("aria-current", "true");
-      await dialog.locator(".trajectory-tools > button").click();
-      await expect(dialog.locator(".trajectory-tool-list")).toBeInViewport();
+      await viewer.locator(".trajectory-minimap button").last().click();
+      await expect(viewer.locator(".trajectory-minimap button").last()).toHaveAttribute("aria-current", "true");
+      await viewer.locator(".trajectory-tools > button").click();
+      await expect(viewer.locator(".trajectory-tool-list")).toBeInViewport();
       expect(await pane.evaluate(el => el.clientHeight)).toBeGreaterThan(0);
-      expect(await dialog.locator(".trajectory-input").evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
-      await dialog.locator(".trajectory-tool-list > details").first().locator("summary").click();
-      await expect(dialog.locator(".trajectory-tool-list > details").first().locator("pre")).toBeVisible();
-      await dialog.locator(".trajectory-tools > button").click();
-      await dialog.getByRole("button", { name: "原始 JSON", exact: true }).click();
-      await expect(dialog.locator(".trajectory-raw")).toContainText('"systemPrompt"');
-      await expect(dialog.locator(".trajectory-raw")).toContainText('"tools"');
-      await dialog.getByRole("button", { name: "解析内容", exact: true }).click();
-      await expect(dialog.locator(".trajectory-tools > button")).toHaveAttribute("aria-expanded", "false");
-      await expect(dialog.locator('.trajectory-minimap button[aria-current="true"]')).toBeInViewport({ ratio: 0.9 });
+      expect(await viewer.locator(".trajectory-input").evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+      await viewer.locator(".trajectory-tool-list > details").first().locator("summary").click();
+      await expect(viewer.locator(".trajectory-tool-list > details").first().locator("pre")).toBeVisible();
+      await viewer.locator(".trajectory-tools > button").click();
+      await viewer.getByRole("button", { name: "原始 JSON", exact: true }).click();
+      await expect(viewer.locator(".trajectory-raw")).toContainText('"systemPrompt"');
+      await expect(viewer.locator(".trajectory-raw")).toContainText('"tools"');
+      await viewer.getByRole("button", { name: "解析内容", exact: true }).click();
+      await expect(viewer.locator(".trajectory-tools > button")).toHaveAttribute("aria-expanded", "false");
+      await expect(viewer.locator('.trajectory-minimap button[aria-current="true"]')).toBeInViewport({ ratio: 0.9 });
     });
     await journey.step("返回会话", "键盘 Escape 返回 Session，轨迹入口保持单行可见。", async () => {
       await page.keyboard.press("Escape");
-      await expect(dialog).toBeHidden();
+      await expect(viewer).toBeHidden();
       await expect(page).not.toHaveURL(/trajectory=open/);
+      await expect(page.locator(".messages")).toBeVisible();
+      await expect(page.locator(".composer")).toBeVisible();
       await expect(page.getByRole("button", { name: "轨迹", exact: true })).toBeInViewport();
       await expect(page.getByRole("button", { name: "轨迹", exact: true })).toHaveCSS("height", "34px");
+      // The session-bar button toggles back into the inline trajectory view.
+      await page.getByRole("button", { name: "轨迹", exact: true }).click();
+      await expect(viewer).toBeVisible();
+      await page.getByRole("button", { name: "对话", exact: true }).click();
+      await expect(viewer).toBeHidden();
+      await expect(page.locator(".messages")).toBeVisible();
     });
   } finally { if (fixture) await cleanupJourney(page, fixture); await stub.stop(); }
 });

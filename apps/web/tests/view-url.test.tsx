@@ -22,7 +22,7 @@ function assertRoundTrip(view: ViewState): void {
   assert.deepEqual(parseViewState(pathname, search), view, `${pathname}${search}`);
 }
 
-test("trajectory overlay round-trips only for a Session and participates in back/forward", () => {
+test("inline trajectory view round-trips only for a Session and participates in back/forward", () => {
   const base: ViewState = { projectId: "p1", sessionId: "s1", workspaceOpen: false };
   assertRoundTrip({ ...base, trajectory: true });
   assert.equal(isPrimaryViewChange(base, { ...base, trajectory: true }), true);
