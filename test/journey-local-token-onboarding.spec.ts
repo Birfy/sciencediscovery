@@ -86,7 +86,9 @@ for (const locale of ["en", "zh-CN"] as const) {
           await dialog.getByRole("button", { name: zh ? "添加 Provider" : "Add provider", exact: true }).click();
         }
         await dialog.getByRole("combobox", { name: zh ? "添加 Provider" : "Add provider" }).selectOption("openai");
-        await expect(dialog.getByLabel(zh ? "外部模型 API Key" : "External model API Key", { exact: true })).toBeVisible();
+        const modelKey = dialog.getByLabel(zh ? "外部模型 API Key" : "External model API Key", { exact: true });
+        await modelKey.scrollIntoViewIfNeeded();
+        await expect(modelKey).toBeInViewport();
       });
     });
 
