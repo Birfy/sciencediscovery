@@ -20,6 +20,7 @@ import { test } from "./helpers/e2e.ts";
 
 for (const locale of ["en", "zh-CN"] as const) {
   test.describe(locale, () => {
+    test.setTimeout(60_000);
     test.use({ storageState: { cookies: [], origins: [{ origin: new URL(apiBaseUrl()).origin, localStorage: [
       { name: "sciencediscovery-locale", value: locale },
     ] }] } });
@@ -46,7 +47,7 @@ for (const locale of ["en", "zh-CN"] as const) {
      * Credentials: E2E_API_TOKEN for the isolated local service only.
      * CostSideEffects: Browser-local token storage only; no model calls or records created.
      */
-    test("首次连接可理解且错误令牌可恢复", { tag: "@mocked" }, async ({ page, journey }) => {
+    test(`首次连接可理解且错误令牌可恢复 ${locale}`, { tag: "@mocked" }, async ({ page, journey }) => {
       journey.scenario({ goal: "首次使用时按一处引导完成连接，并知道模型 Key 应填在哪里。", preconditions: ["独立本机栈", `界面语言 ${locale}`, "浏览器未保存令牌"] });
       const dialog = page.getByRole("dialog");
       await journey.step("打开应用查看引导", "只有一处启动日志与保存说明，没有 Unauthorized 红字、Toast 或设置警示条。", async () => {
@@ -81,7 +82,9 @@ for (const locale of ["en", "zh-CN"] as const) {
       await journey.step("查看模型凭据名称", "模型注册表明确显示外部模型 API Key，与本地服务访问令牌区分。", async () => {
         await page.goto("/settings/models");
         await expect(dialog).toBeVisible();
-        await dialog.getByRole("button", { name: zh ? "添加 Provider" : "Add provider", exact: true }).click();
+        if (!await dialog.locator(".provider-add-panel").isVisible()) {
+          await dialog.getByRole("button", { name: zh ? "添加 Provider" : "Add provider", exact: true }).click();
+        }
         await dialog.getByRole("combobox", { name: zh ? "添加 Provider" : "Add provider" }).selectOption("openai");
         await expect(dialog.getByLabel(zh ? "外部模型 API Key" : "External model API Key", { exact: true })).toBeVisible();
       });
@@ -104,7 +107,7 @@ for (const locale of ["en", "zh-CN"] as const) {
      * Credentials: E2E_API_TOKEN for the isolated local service only.
      * CostSideEffects: Browser-local token storage only; no model calls or records created.
      */
-    test("启动链接自动登录并持久保存", { tag: "@mocked" }, async ({ page, journey }) => {
+    test(`启动链接自动登录并持久保存 ${locale}`, { tag: "@mocked" }, async ({ page, journey }) => {
       journey.scenario({ goal: "打开启动日志链接即可使用产品，刷新时无须再次复制令牌。", preconditions: ["独立本机栈", `界面语言 ${locale}`, "空浏览器"] });
       const url = process.env.E2E_STARTUP_LOG
         ? readFileSync(process.env.E2E_STARTUP_LOG, "utf8").match(/Open to sign in: (http[^\s]+)/)?.[1]
@@ -136,6 +139,19 @@ for (const locale of ["en", "zh-CN"] as const) {
         await response;
         await expect(page.getByRole("dialog")).toHaveCount(0);
         expect(unauthorized).toEqual([]);
+      });
+      await journey.step("打开无效令牌链接", "错误令牌只显示一处恢复提示，没有额外 Toast 或设置警示条。", async () => {
+        await page.goto(`${apiBaseUrl()}/#token=invalid-link-token`);
+        await expect(page.getByRole("alert")).toHaveCount(1);
+        await expect(page.getByRole("alert")).toContainText(rejected);
+        expect(new URL(page.url()).hash).toBe("");
+      });
+      await journey.step("用有效链接恢复连接", "再次打开正确启动链接立即恢复，刷新后仍然登录。", async () => {
+        const response = page.waitForResponse((r) => r.url().endsWith("/api/projects") && r.status() === 200);
+        await page.goto(url!);
+        await response;
+        await expect(page.getByRole("dialog")).toHaveCount(0);
+        await expect(page.getByRole("alert")).toHaveCount(0);
       });
     });
   });
