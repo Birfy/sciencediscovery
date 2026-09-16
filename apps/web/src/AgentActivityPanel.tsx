@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0 (the "License");
 import { useEffect, useState } from "react";
 import type { ApiClient } from "./api.js";
+import { isAuthFailure } from "./api/auth.js";
 import type { AgentActivity } from "./api/runs.js";
 import { ProcessRecord } from "./ProcessRecord.js";
 import { useLocale } from "./i18n/index.js";
@@ -21,7 +22,7 @@ export function AgentActivityPanel({ client, sessionId }: { client: ApiClient; s
       if (pending) return;
       pending = true;
       try { const next = await client.getAgentActivity(sessionId); if (!disposed) { setActivity(next); setError(""); } }
-      catch (reason) { if (!disposed) setError(reason instanceof Error ? reason.message : t("activity.loadFailed")); }
+      catch (reason) { if (!disposed && !isAuthFailure(reason)) setError(reason instanceof Error ? reason.message : t("activity.loadFailed")); }
       finally { pending = false; }
     };
     void refresh(); const timer = setInterval(() => void refresh(), 2000);
@@ -30,7 +31,7 @@ export function AgentActivityPanel({ client, sessionId }: { client: ApiClient; s
   async function action(operation: () => Promise<unknown>) {
     setBusy(true); setError("");
     try { await operation(); setActivity(await client.getAgentActivity(sessionId)); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : t("activity.actionFailed")); }
+    catch (reason) { if (!isAuthFailure(reason)) setError(reason instanceof Error ? reason.message : t("activity.actionFailed")); }
     finally { setBusy(false); }
   }
   return <div className="agent-activity" aria-label={t("activity.sectionAria")}>

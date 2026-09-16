@@ -37,3 +37,32 @@ test("activity API uses Session-scoped control routes", async (t) => {
   assert.deepEqual(paths, ["/api/sessions/a%2Fb/agent-activity", "/api/sessions/a%2Fb/agent-activity/executions/c%2Fd/logs",
     "/api/sessions/a%2Fb/agent-activity/timers/t/cancel", "/api/sessions/a%2Fb/subagents/child/resume"]);
 });
+
+for (const status of [401, 500] as const) {
+  test(`activity polling and actions reserve HTTP ${status} for the appropriate feedback`, async (context) => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+    context.mock.timers.enable({ apis: ["setInterval"] });
+    let rejected = false;
+    let authFailures = 0;
+    const activity = { executions: [{ id: "job", agentId: "main", runnerId: "local", workspaceId: "ws", state: "running", provenance: "pending" }], transfers: [], timers: [], agents: [] };
+    context.mock.method(globalThis, "fetch", async () => rejected
+      ? Response.json({ error: "request rejected" }, { status })
+      : Response.json(activity));
+    const client = new ApiClient("token", () => { authFailures += 1; });
+    let view: ReactTestRenderer;
+    await act(async () => { view = create(createElement(AgentActivityPanel, { client, sessionId: "session" })); });
+    try {
+      rejected = true;
+      await act(async () => { context.mock.timers.tick(2_000); });
+      const alerts = () => view.root.findAllByProps({ role: "alert" });
+      assert.equal(alerts().length, status === 401 ? 0 : 1);
+      await act(async () => { view.root.findAllByType("button").find((button) => button.children.join("") === "Cancel execution")!.props.onClick(); });
+      assert.equal(alerts().length, status === 401 ? 0 : 1);
+      if (status === 500) assert.deepEqual(alerts()[0].children, ["request rejected"]);
+      assert.equal(authFailures, status === 401 ? 2 : 0);
+    } finally {
+      await act(async () => view!.unmount());
+      context.mock.timers.reset();
+    }
+  });
+}
