@@ -210,13 +210,22 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
     });
     await journey.step("固定 Agent 列并用 Ctrl+滚轮缩放", "时间轴横滚时 Agent 名固定并对齐所属行，Ctrl+滚轮横向缩放且页面不跟着滚。", async () => {
       const timeline = viewer.locator(".trajectory-timeline");
-      await timeline.evaluate(el => { el.scrollLeft = 600; });
+      const scroller = viewer.locator(".trajectory-scroll");
+      const labelsCol = viewer.locator(".trajectory-labels");
+      // The label column is a separate pane: track content structurally cannot
+      // slide under the agent names.
+      const labelsBox = (await labelsCol.boundingBox())!;
+      const scrollBox = (await scroller.boundingBox())!;
+      expect(scrollBox.x).toBeGreaterThanOrEqual(labelsBox.x + labelsBox.width - 1);
+      await scroller.evaluate(el => { el.scrollLeft = 600; });
       const timelineBox = (await timeline.boundingBox())!;
-      for (const lane of await viewer.locator(".trajectory-lane").all()) {
-        const label = lane.locator("strong");
+      const lanes = await viewer.locator(".trajectory-scroll .trajectory-lane").all();
+      const laneLabels = await viewer.locator(".trajectory-lane-label").all();
+      expect(laneLabels.length).toBe(lanes.length);
+      for (const [i, label] of laneLabels.entries()) {
         await expect(label).toBeInViewport();
         const labelBox = (await label.boundingBox())!;
-        const laneBox = (await lane.boundingBox())!;
+        const laneBox = (await lanes[i]!.boundingBox())!;
         expect(Math.abs(labelBox.x - timelineBox.x)).toBeLessThanOrEqual(2);
         expect(labelBox.y).toBeGreaterThanOrEqual(laneBox.y - 1);
         expect(labelBox.y).toBeLessThanOrEqual(laneBox.y + laneBox.height);
