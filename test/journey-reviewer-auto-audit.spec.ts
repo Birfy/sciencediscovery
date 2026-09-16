@@ -27,7 +27,7 @@ import { cleanupJourney, createProjectAndSession, openProjectSession, scriptedMo
  * CostSideEffects: Creates and deletes one isolated Project/Session; no external calls.
  */
 test("研究员交付报告后可看到独立完成的自动审核", { tag: "@mocked" }, async ({ journey, page }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(180_000);
   journey.scenario({
     goal: "研究员交付一份报告后，主任务立即完成；Reviewer Specialist 在后台完成只读 Quick 审核并显示结果。",
     preconditions: ["隔离 API 与 Runner 已启动", "本地模型 stub 不访问网络", "Reviewer Specialist 已启用"],
@@ -67,11 +67,15 @@ test("研究员交付报告后可看到独立完成的自动审核", { tag: "@mo
       await expect(page.locator(".artifact-catalog-section")).toContainText("report.md");
     });
     await journey.step("查看自动审核的只读结果", "后台审核任务完成，时间线显示 Reviewer Specialist 的只读审核记录。", async () => {
+      // An automatic Quick audit deliberately stays queued for
+      // QUICK_BATCH_QUIET_MS (60 s, audit-coordinator.ts) so a burst of
+      // artifacts becomes one audit. The wait must outlast that window: the
+      // default 10 s poll expires while the product is behaving correctly.
       await expect.poll(async () => {
         const response = await page.request.get(`${apiBaseUrl()}/api/sessions/${fixture.session.id}/reviewer-audit-tasks`, { headers: authorizationHeader() });
         const tasks = await response.json() as Array<{ status: string }>;
         return tasks.at(-1)?.status;
-      }).toBe("completed");
+      }, { timeout: 90_000 }).toBe("completed");
       const feedback = await page.request.get(`${apiBaseUrl()}/api/sessions/${fixture.session.id}/review-feedback`, { headers: authorizationHeader() });
       expect(feedback.ok()).toBeTruthy();
       expect((await feedback.json() as Array<{ content: string }>).at(-1)?.content).toContain("Reviewer Specialist feedback");
