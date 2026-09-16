@@ -14,6 +14,7 @@
 
 import type { ChatMessage, RemoteWorkspaceSyncRecord } from "@sciencediscovery/schema";
 
+import { ApiRequestError } from "./auth.js";
 import { WebApiClient } from "./web.js";
 import type { TrajectoryPort } from "@sciencediscovery/trajectory";
 
@@ -37,7 +38,7 @@ export class ApiClient extends WebApiClient {
     export: async (id, signal) => {
       const response = await fetch(`/api/sessions/${encodeURIComponent(id)}/trajectory/export`, { signal, headers: { authorization: `Bearer ${this.token}` } });
       this.reportAuthStatus(response.status);
-      if (!response.ok) throw new Error(`Export failed (${response.status})`);
+      if (!response.ok) throw new ApiRequestError(`Export failed (${response.status})`, response.status);
       return response.blob();
     },
   };
