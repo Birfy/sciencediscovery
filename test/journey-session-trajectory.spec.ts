@@ -108,7 +108,7 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       await expect(viewer.locator(".trajectory-zoom-hint")).toContainText("Ctrl");
       await expect(viewer.locator('.trajectory-track[data-category="events"]')).toHaveCount(0);
       for (const type of ["subagent.updated", "run.completed", "run.failed", "run.cancelled", "context_recovery"]) await expect(viewer.locator(`[data-event-type="${type}"]`)).toHaveCount(0);
-      await expect(page).toHaveURL(/trajectory=open/);
+      await expect(page).toHaveURL(/\/sessions\/[^/]+\/trajectory/);
       for (const type of ["run.started", "state_changed", "state.committed"]) await expect(viewer.locator(`.trajectory-event-list [data-event-type="${type}"]`)).toHaveCount(0);
       await expect(viewer.getByText(/非过期|已过期/)).toHaveCount(0);
       await expect(viewer.locator('.trajectory-track[data-category="model"]').first()).toBeVisible();
@@ -311,7 +311,7 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       await page.reload();
       await expect(viewer).toBeVisible();
       await viewer.getByRole("button", { name: "返回对话", exact: true }).click();
-      await expect(page).not.toHaveURL(/trajectory=open/);
+      await expect(page).not.toHaveURL(/\/trajectory/);
       await page.goBack();
       await expect(viewer).toBeVisible();
       await page.goForward();
@@ -483,7 +483,7 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
     await journey.step("返回会话", "键盘 Escape 返回 Session，轨迹入口保持单行可见。", async () => {
       await page.keyboard.press("Escape");
       await expect(viewer).toBeHidden();
-      await expect(page).not.toHaveURL(/trajectory=open/);
+      await expect(page).not.toHaveURL(/\/trajectory/);
       await expect(page.locator(".messages")).toBeVisible();
       await expect(page.locator(".composer")).toBeVisible();
       await expect(page.getByRole("button", { name: "轨迹", exact: true })).toBeInViewport();
