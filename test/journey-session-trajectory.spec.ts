@@ -100,6 +100,9 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       // The horizontal scrollbar is always on; the zoom menu and the dense-spacing notice are gone.
       await expect(viewer.locator(".trajectory-scroll")).toHaveCSS("overflow-x", "scroll");
       await expect(viewer.locator(".trajectory-scroll")).toHaveCSS("scrollbar-gutter", "stable");
+      // The pane is vertically flipped so the scrollbar renders at the top of the timeline.
+      await expect(viewer.locator(".trajectory-scroll")).toHaveCSS("transform", "matrix(1, 0, 0, -1, 0, 0)");
+      await expect(viewer.locator(".trajectory-scroll > div").first()).toHaveCSS("transform", "matrix(1, 0, 0, -1, 0, 0)");
       await expect(viewer.getByLabel("时间轴缩放")).toHaveCount(0);
       await expect(viewer.getByText(/密集时间点已横向展开/)).toHaveCount(0);
       await expect(viewer.locator(".trajectory-zoom-hint")).toContainText("Ctrl");

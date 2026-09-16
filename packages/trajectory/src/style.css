@@ -14,7 +14,8 @@
 .trajectory-axis-corner{box-sizing:border-box;display:flex;align-items:center;font-size:10px;color:#64748b;padding:0 10px}
 .trajectory-lane-label{box-sizing:border-box;display:flex;align-items:center;min-height:24px;padding:4px 10px;border-top:1px solid #e2e8f0}
 .trajectory-lane-label strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;min-width:0}
-.trajectory-scroll{flex:1;min-width:0;overflow-x:scroll;overflow-y:hidden;scrollbar-gutter:stable}
+.trajectory-scroll{flex:1;min-width:0;overflow-x:scroll;overflow-y:hidden;scrollbar-gutter:stable;transform:scaleY(-1)}
+.trajectory-scroll>div{transform:scaleY(-1)}
 .trajectory-axis{font-size:10px;color:#64748b;padding:10px 10px 8px 0}.trajectory-axis>div{display:flex;justify-content:space-between}.trajectory-lane{height:auto;min-height:24px;padding:4px 10px 4px 0;border-top:1px solid #e2e8f0}.trajectory-track{height:14px;flex-shrink:0;background:repeating-linear-gradient(90deg,#94a3b815 0,#94a3b815 calc(25% - 1px),#94a3b855 25%);position:relative;border-radius:4px}.trajectory-view .trajectory-mark{position:absolute;top:2px;width:8px;height:10px;padding:0;border:0;border-radius:3px;min-width:0}.trajectory-mark.selected{outline:2px solid #0f172a;outline-offset:2px;z-index:1}.trajectory-warnings{font-size:12px;color:#946216}.trajectory-warnings p{margin:4px 0}
 .trajectory-body{display:grid;grid-template-columns:290px 5px minmax(0,1fr);min-height:0;flex:1;border:1px solid #dbe3ee;border-radius:8px;overflow:hidden}.trajectory-events{display:flex;flex-direction:column;min-height:0;border-right:1px solid #dbe3ee}.trajectory-filters{display:flex;gap:6px;padding:8px;border-bottom:1px solid #dbe3ee}.trajectory-filters select{min-width:0;flex:1}
 .trajectory-kinds{position:relative;min-width:0;flex:1}
