@@ -60,7 +60,11 @@ test("研究员交付报告后可看到独立完成的自动审核", { tag: "@mo
     await journey.step("交付报告而不中断主任务", "主任务正常完成，报告出现在产物区。", async () => {
       const run = await sendUserMessage(page, fixture.session.id, "Deliver a short Markdown report.");
       expect((await waitForRunTerminal(page, fixture.session.id, run.id)).status).toBe("completed");
-      await expect(page.locator(".artifact-tree")).toContainText("report.md");
+      // `.artifact-tree` is the recursive tree container, so `results/report.md`
+      // alone produces one per level, and the Workspace-files tree renders more
+      // of them. Assert on the Artifacts fold: that is the 产物区 this step is
+      // about, and it is a single element.
+      await expect(page.locator(".artifact-catalog-section")).toContainText("report.md");
     });
     await journey.step("查看自动审核的只读结果", "后台审核任务完成，时间线显示 Reviewer Specialist 的只读审核记录。", async () => {
       await expect.poll(async () => {
