@@ -11,9 +11,9 @@ function time(value: string | null) { return value ? new Date(value).toLocaleTim
 
 const ZOOM_PRESETS = [1, 2, 4, 8];
 const ZOOM_MIN = 0.5, ZOOM_MAX = 16;
-const HEADER_MIN = 72, HEADER_MAX = 320;
+const TIMELINE_MIN = 90, TIMELINE_MAX = 480;
 const LIST_W_MIN = 200, LIST_W_MAX = 640, LIST_H_MIN = 96, LIST_H_MAX = 480;
-const DEFAULT_LIST_WIDTH = 290, DEFAULT_LIST_HEIGHT = 130;
+const DEFAULT_LIST_WIDTH = 290, DEFAULT_LIST_HEIGHT = 130, DEFAULT_TIMELINE_HEIGHT = 160;
 
 /** A draggable/keyboard-adjustable divider, modeled on the workspace resizer in the host app. */
 function ResizeHandle({ orientation, label, value, min, max, onResize }: {
@@ -67,13 +67,13 @@ export function TrajectoryViewer({ sessionId, title, port, locale, onClose }: {
   const [filter, setFilter] = useState("all"), [agent, setAgent] = useState(""), [tab, setTab] = useState("event"), [zoom, setZoom] = useState(1);
   const [trackWidth, setTrackWidth] = useState(450);
   // Section sizes the user drags to change. Undefined until first drag so the
-  // CSS defaults stay authoritative; `measuredHeader` keeps the header handle's
-  // drag base aligned with the real content height.
-  const [headerHeight, setHeaderHeight] = useState<number>(), [listSize, setListSize] = useState<number>();
-  const [measuredHeader, setMeasuredHeader] = useState(88);
+  // CSS defaults stay authoritative; the measured fallback keeps the timeline
+  // handle's drag base aligned with the real rendered height.
+  const [timelineHeight, setTimelineHeight] = useState<number>(), [listSize, setListSize] = useState<number>();
+  const [measuredTimeline, setMeasuredTimeline] = useState(DEFAULT_TIMELINE_HEIGHT);
   const [narrow, setNarrow] = useState(() => window.matchMedia("(max-width: 720px)").matches);
   const timeline = useRef<HTMLDivElement>(null);
-  const view = useRef<HTMLDivElement>(null), header = useRef<HTMLElement>(null), list = useRef<HTMLDivElement>(null), exportController = useRef<AbortController>(undefined);
+  const view = useRef<HTMLDivElement>(null), list = useRef<HTMLDivElement>(null), exportController = useRef<AbortController>(undefined);
   const zoomRef = useRef(zoom); zoomRef.current = zoom;
   const zoomAnchor = useRef<{ factor: number; clientX: number }>(undefined);
   const closeRef = useRef(onClose); closeRef.current = onClose;
@@ -95,12 +95,12 @@ export function TrajectoryViewer({ sessionId, title, port, locale, onClose }: {
     return () => media.removeEventListener("change", update);
   }, []);
   useEffect(() => {
-    if (headerHeight !== undefined || !header.current) return;
-    const measure = () => setMeasuredHeader(Math.round(header.current!.getBoundingClientRect().height));
+    if (timelineHeight !== undefined || !timeline.current) return;
+    const measure = () => setMeasuredTimeline(Math.round(timeline.current!.getBoundingClientRect().height));
     measure(); const observer = new ResizeObserver(measure);
-    observer.observe(header.current);
+    observer.observe(timeline.current);
     return () => observer.disconnect();
-  }, [headerHeight]);
+  }, [timelineHeight, index]);
   useEffect(() => {
     // React delegates wheel listeners as passive, so the Ctrl+wheel zoom needs
     // its own non-passive listener to keep the page itself from scrolling.
@@ -188,24 +188,24 @@ export function TrajectoryViewer({ sessionId, title, port, locale, onClose }: {
   return <div className="trajectory-view" role="region" aria-label={tr("Session 轨迹", "Session trajectory")} ref={view} tabIndex={-1} onKeyDown={event => {
     if (event.key === "Escape") { event.stopPropagation(); closeRef.current(); }
   }}>
-    <header className="trajectory-header" ref={header} style={headerHeight ? { height: headerHeight } : undefined}><div><small>SESSION OBSERVATORY</small><h2>{tr("执行轨迹与模型上下文", "Trajectory & model context")}</h2><p title={title}>{title}</p></div><div className="trajectory-actions">
+    <header className="trajectory-header"><div className="trajectory-title"><small>SESSION OBSERVATORY</small><h2>{tr("执行轨迹与模型上下文", "Trajectory & model context")}</h2><p title={title}>{title}</p></div><div className="trajectory-actions">
       <button onClick={() => setRevision(r => r + 1)} disabled={loading}>{tr("刷新", "Refresh")}</button>
       <button onClick={() => void download()} disabled={loading || exporting || !index}>{exporting ? tr("导出中…", "Exporting…") : tr("导出 NDJSON", "Export NDJSON")}</button>
       <button onClick={onClose} aria-label={tr("返回对话", "Back to conversation")}>×</button>
     </div></header>
-    <ResizeHandle orientation="horizontal" label={tr("调整顶栏高度", "Resize header")} value={headerHeight ?? measuredHeader} min={HEADER_MIN} max={HEADER_MAX} onResize={setHeaderHeight} />
     <p className="trajectory-notice">{tr("只显示已记录的数据。导出可能包含对话、工具结果和敏感业务内容，请妥善保管。", "Recorded data only. Exports may contain conversations, tool results and sensitive business content.")}</p>
     {error && <p role="alert" className="trajectory-error">{error}</p>}
     {loading && <p role="status">{tr("正在读取轨迹…", "Loading trajectory…")}</p>}
     {index && <>
       <div className="trajectory-toolbar"><div className="trajectory-legend">{visibleKinds.map(kind => <span key={kind}><i style={{ background: colors[kind] }} />{labels[kind]}</span>)}</div><label>{tr("时间轴缩放", "Timeline zoom")} <select value={zoom} onChange={e => setZoom(Number(e.target.value))}>{zoomOptions.map(n => <option key={n} value={n}>{Math.round(n * 100) / 100}×</option>)}</select></label><span className="trajectory-zoom-hint">{tr("按住 Ctrl 滚动可缩放", "Ctrl + scroll to zoom")}</span></div>
       {scale.expanded && <p className="trajectory-notice">{tr("密集时间点已横向展开以保留分隔；分行仅表示真实时间重叠，悬停可查看精确时间。", "Dense timestamps are spaced apart; rows reflect real time overlaps only. Hover for exact times.")}</p>}
-      <div className="trajectory-timeline" ref={timeline} aria-label={tr("真实时间多 Agent 时间轴", "Multi-agent wall-clock timeline")}><div style={{ width: `calc(var(--trajectory-label-width, 160px) + ${scale.width + 20}px)` }}>
+      <div className="trajectory-timeline" ref={timeline} style={timelineHeight ? { height: timelineHeight, maxHeight: "none" } : undefined} aria-label={tr("真实时间多 Agent 时间轴", "Multi-agent wall-clock timeline")}><div style={{ width: `calc(var(--trajectory-label-width, 160px) + ${scale.width + 20}px)` }}>
         <div className="trajectory-axis"><span>{timelineEntries.length ? new Date(scale.start).toLocaleDateString() : "—"}</span><div>{[0, .25, .5, .75, 1].map(f => <time key={f}>{time(timelineEntries.length ? new Date(scale.time((scale.width - 8) * f)).toISOString() : null)}</time>)}</div></div>
         {index.agents.map(a => <div className="trajectory-lane" data-agent-id={a.id} key={a.id}><strong title={a.id}>{a.parentId ? "↳ " : ""}{a.label}</strong><div className="trajectory-tracks">{timelineRows(timelineEntries.filter(e => e.agentId === a.id)).map((row, i) => <div className="trajectory-track" data-category={row.category} key={i} aria-label={`${a.label} · ${row.category}`}>
           {row.entries.map(e => <button key={e.id} data-entry-id={e.id} data-kind={e.kind} className={selected === e.id ? "trajectory-mark selected" : "trajectory-mark"} style={{ left: scale.x(Date.parse(e.timestamp!)), background: colors[e.kind], width: Math.max(8, scale.x(timelineEnd(e)) - scale.x(Date.parse(e.timestamp!)) - 2) }} title={`${time(e.timestamp)} · ${labels[e.kind]} · ${entryTitle(e, zh)} · Run ${e.runId ?? "—"}`} aria-label={`${a.label} ${time(e.timestamp)} ${labels[e.kind]} ${entryTitle(e, zh)}`} onClick={() => choose(e)} />)}
         </div>)}</div></div>)}
       </div></div>
+      <ResizeHandle orientation="horizontal" label={tr("调整时间轴高度", "Resize timeline")} value={timelineHeight ?? measuredTimeline} min={TIMELINE_MIN} max={TIMELINE_MAX} onResize={setTimelineHeight} />
       {index.warnings.length > 0 && <details className="trajectory-warnings"><summary>{tr("记录完整性说明", "Recording completeness")} ({index.warnings.length})</summary>{index.warnings.map(w => <p key={w}>{w}</p>)}</details>}
       <div className="trajectory-body" style={bodyStyle}><aside className="trajectory-events"><div className="trajectory-filters"><select aria-label={tr("事件类型", "Event type")} value={filter} onChange={e => setFilter(e.target.value)}><option value="all">{tr("所有类型", "All types")}</option>{visibleKinds.map(k => <option key={k} value={k}>{labels[k]}</option>)}</select><select aria-label="Agent" value={selectedAgent} onChange={e => setAgent(e.target.value)}>{index.agents.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}</select></div>
       <div className="trajectory-event-list" ref={list}>{groups.length ? groups.map(group => <section className="trajectory-event-group" key={group.id}><header><strong>{index.agents.find(a => a.id === group.agentId)?.label}</strong><small title={group.runId}>Run {group.runId?.slice(0, 8) ?? "—"}</small></header>{group.entries.map(e => <button key={e.id} data-entry-id={e.id} data-event-type={e.eventType ?? e.label} aria-current={selected === e.id ? "true" : undefined} onClick={() => choose(e)} style={{ "--event-color": colors[e.kind] } as CSSProperties}><span><i />{labels[e.kind]}<time>{e.timestamp ? time(e.timestamp) : tr("时间未记录", "Time not recorded")}</time></span><strong>{entryTitle(e, zh)}</strong><small className="trajectory-run" title={e.runId}>{e.turn !== undefined ? `turn ${e.turn}` : ""}{e.sequence !== undefined ? ` · #${e.sequence}` : ""}{!e.timestamp ? tr(" · 调用记录", " · Invocation record") : ""}</small></button>)}</section>) : <p>{tr("暂无匹配的记录", "No matching records")}</p>}</div></aside>

@@ -15,7 +15,7 @@ import { cleanupJourney, createProjectAndSession, openProjectSession, scriptedMo
  *   4. Read tool arguments and results, with an optional raw JSON view.
  *   5. Inspect one final output per request with its token usage, without duplicate streaming text.
  *   6. Inspect tools as a separate collapsible field and labeled context navigation.
- *   7. Resize the header and the event list with drag handles and the keyboard.
+ *   7. Resize the timeline area and the event list with drag handles and the keyboard.
  *   8. Keep Agent labels pinned during horizontal scroll, zoom with Ctrl+wheel.
  *   9. Reload the trajectory URL and inspect later request messages and narrow-screen layout.
  *  10. Close the viewer with the keyboard and return to the Session.
@@ -179,21 +179,24 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       await expect(viewer.locator(`.trajectory-event-list [data-entry-id="${id}"]`)).toHaveAttribute("aria-current", "true");
       await expect(viewer.locator(".trajectory-context-summary")).toBeVisible();
     });
-    await journey.step("拖动调整分区尺寸", "顶栏高度与列表宽度可拖动也可用键盘调整。", async () => {
-      const header = viewer.locator(".trajectory-header");
-      const headerHandle = viewer.getByRole("separator", { name: "调整顶栏高度" });
-      await expect(headerHandle).toHaveAttribute("aria-orientation", "horizontal");
-      const headerBefore = await header.evaluate(el => el.clientHeight);
-      const headerBox = (await headerHandle.boundingBox())!;
-      await page.mouse.move(headerBox.x + headerBox.width / 2, headerBox.y + headerBox.height / 2);
+    await journey.step("拖动调整分区尺寸", "时间轴高度与列表宽度可拖动也可用键盘调整；标题栏保持紧凑单行。", async () => {
+      // The title header stays a compact single line and has no resize handle.
+      expect(await viewer.locator(".trajectory-header").evaluate(el => el.clientHeight)).toBeLessThanOrEqual(48);
+      await expect(viewer.getByRole("separator", { name: "调整顶栏高度" })).toHaveCount(0);
+      const timelineBlock = viewer.locator(".trajectory-timeline");
+      const timelineHandle = viewer.getByRole("separator", { name: "调整时间轴高度" });
+      await expect(timelineHandle).toHaveAttribute("aria-orientation", "horizontal");
+      const timelineBefore = await timelineBlock.evaluate(el => el.clientHeight);
+      const timelineHandleBox = (await timelineHandle.boundingBox())!;
+      await page.mouse.move(timelineHandleBox.x + timelineHandleBox.width / 2, timelineHandleBox.y + timelineHandleBox.height / 2);
       await page.mouse.down();
-      await page.mouse.move(headerBox.x + headerBox.width / 2, headerBox.y + 48, { steps: 4 });
+      await page.mouse.move(timelineHandleBox.x + timelineHandleBox.width / 2, timelineHandleBox.y + 48, { steps: 4 });
       await page.mouse.up();
-      expect(await header.evaluate(el => el.clientHeight)).toBeGreaterThan(headerBefore + 20);
-      const grownHeader = await header.evaluate(el => el.clientHeight);
-      await headerHandle.focus();
+      expect(await timelineBlock.evaluate(el => el.clientHeight)).toBeGreaterThan(timelineBefore + 20);
+      const grownTimeline = await timelineBlock.evaluate(el => el.clientHeight);
+      await timelineHandle.focus();
       await page.keyboard.press("ArrowUp");
-      await expect.poll(() => header.evaluate(el => el.clientHeight)).toBeLessThanOrEqual(grownHeader - 20);
+      await expect.poll(() => timelineBlock.evaluate(el => el.clientHeight)).toBeLessThanOrEqual(grownTimeline - 20);
       const events = viewer.locator(".trajectory-events");
       const listHandle = viewer.locator(".trajectory-body > .trajectory-resizer");
       await expect(listHandle).toHaveAttribute("aria-orientation", "vertical");
