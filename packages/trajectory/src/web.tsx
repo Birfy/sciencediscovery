@@ -1,6 +1,6 @@
 // Copyright (C) 2026-2026 Huawei Technologies Co., Ltd
 // Licensed under the Apache License, Version 2.0 (the "License");
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { text, type TrajectoryDetail, type TrajectoryEntry, type TrajectoryIndex, type TrajectoryKind, type TrajectoryPort } from "./index.js";
 import { entryTitle, internalEntry, recordGroups, timelineEnd, timelineRows, timelineScale, visibleKinds } from "./presentation.js";
 import { EventContent } from "./content-view.js";
@@ -9,6 +9,8 @@ import { InputContent } from "./input-view.js";
 const colors: Record<TrajectoryKind, string> = { state: "#d97706", input: "#2563eb", output: "#059669", thinking: "#9333ea", tool: "#db2777", mcp: "#0891b2", lifecycle: "#64748b" };
 function time(value: string | null) { return value ? new Date(value).toLocaleTimeString(undefined, { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit", fractionalSecondDigits: 3 }) : "—"; }
 
+const ZOOM_PRESETS = [1, 2, 4, 8];
+const ZOOM_MIN = 0.5, ZOOM_MAX = 16;
 const HEADER_MIN = 72, HEADER_MAX = 320;
 const LIST_W_MIN = 200, LIST_W_MAX = 640, LIST_H_MIN = 96, LIST_H_MAX = 480;
 const DEFAULT_LIST_WIDTH = 290, DEFAULT_LIST_HEIGHT = 130;
@@ -72,6 +74,8 @@ export function TrajectoryViewer({ sessionId, title, port, locale, onClose }: {
   const [narrow, setNarrow] = useState(() => window.matchMedia("(max-width: 720px)").matches);
   const timeline = useRef<HTMLDivElement>(null);
   const view = useRef<HTMLDivElement>(null), header = useRef<HTMLElement>(null), list = useRef<HTMLDivElement>(null), exportController = useRef<AbortController>(undefined);
+  const zoomRef = useRef(zoom); zoomRef.current = zoom;
+  const zoomAnchor = useRef<{ factor: number; clientX: number }>(undefined);
   const closeRef = useRef(onClose); closeRef.current = onClose;
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
@@ -97,6 +101,34 @@ export function TrajectoryViewer({ sessionId, title, port, locale, onClose }: {
     observer.observe(header.current);
     return () => observer.disconnect();
   }, [headerHeight]);
+  useEffect(() => {
+    // React delegates wheel listeners as passive, so the Ctrl+wheel zoom needs
+    // its own non-passive listener to keep the page itself from scrolling.
+    const node = timeline.current;
+    if (!node) return;
+    const wheel = (event: WheelEvent) => {
+      if (!event.ctrlKey) return;
+      event.preventDefault();
+      const current = zoomRef.current;
+      const next = Math.round(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, current * Math.exp(-event.deltaY * 0.002))) * 1000) / 1000;
+      if (next === current) return;
+      zoomAnchor.current = { factor: next / current, clientX: event.clientX };
+      setZoom(next);
+    };
+    node.addEventListener("wheel", wheel, { passive: false });
+    return () => node.removeEventListener("wheel", wheel);
+  }, [index]);
+  useLayoutEffect(() => {
+    // Keep the time under the cursor stationary across a zoom: marker offsets
+    // scale linearly with the track width, so the scroll position scales too.
+    const anchor = zoomAnchor.current, node = timeline.current;
+    if (!anchor || !node) return;
+    zoomAnchor.current = undefined;
+    const labelWidth = node.querySelector(".trajectory-lane>strong")?.getBoundingClientRect().width ?? 160;
+    const cursor = anchor.clientX - node.getBoundingClientRect().left;
+    const track = node.scrollLeft + cursor - labelWidth;
+    node.scrollLeft = Math.max(0, track * anchor.factor - cursor + labelWidth);
+  }, [zoom]);
   useEffect(() => {
     const controller = new AbortController(); setLoading(true); setError("");
     port.index(sessionId, controller.signal).then(value => {
@@ -148,6 +180,8 @@ export function TrajectoryViewer({ sessionId, title, port, locale, onClose }: {
     } catch (reason) { if (!controller.signal.aborted) setError(String(reason)); }
     finally { if (!controller.signal.aborted) setExporting(false); }
   };
+  // The exact zoom stays an option so the select never blanks after a Ctrl+wheel zoom.
+  const zoomOptions = ZOOM_PRESETS.includes(zoom) ? ZOOM_PRESETS : [...ZOOM_PRESETS, zoom].sort((a, b) => a - b);
   const bodyStyle: CSSProperties = narrow
     ? { gridTemplateRows: `${listSize ?? DEFAULT_LIST_HEIGHT}px 5px minmax(0, 1fr)` }
     : { gridTemplateColumns: `${listSize ?? DEFAULT_LIST_WIDTH}px 5px minmax(0, 1fr)` };
@@ -164,7 +198,7 @@ export function TrajectoryViewer({ sessionId, title, port, locale, onClose }: {
     {error && <p role="alert" className="trajectory-error">{error}</p>}
     {loading && <p role="status">{tr("正在读取轨迹…", "Loading trajectory…")}</p>}
     {index && <>
-      <div className="trajectory-toolbar"><div className="trajectory-legend">{visibleKinds.map(kind => <span key={kind}><i style={{ background: colors[kind] }} />{labels[kind]}</span>)}</div><label>{tr("时间轴缩放", "Timeline zoom")} <select value={zoom} onChange={e => setZoom(Number(e.target.value))}>{[1, 2, 4, 8].map(n => <option key={n} value={n}>{n}×</option>)}</select></label></div>
+      <div className="trajectory-toolbar"><div className="trajectory-legend">{visibleKinds.map(kind => <span key={kind}><i style={{ background: colors[kind] }} />{labels[kind]}</span>)}</div><label>{tr("时间轴缩放", "Timeline zoom")} <select value={zoom} onChange={e => setZoom(Number(e.target.value))}>{zoomOptions.map(n => <option key={n} value={n}>{Math.round(n * 100) / 100}×</option>)}</select></label><span className="trajectory-zoom-hint">{tr("按住 Ctrl 滚动可缩放", "Ctrl + scroll to zoom")}</span></div>
       {scale.expanded && <p className="trajectory-notice">{tr("密集时间点已横向展开以保留分隔；分行仅表示真实时间重叠，悬停可查看精确时间。", "Dense timestamps are spaced apart; rows reflect real time overlaps only. Hover for exact times.")}</p>}
       <div className="trajectory-timeline" ref={timeline} aria-label={tr("真实时间多 Agent 时间轴", "Multi-agent wall-clock timeline")}><div style={{ width: `calc(var(--trajectory-label-width, 160px) + ${scale.width + 20}px)` }}>
         <div className="trajectory-axis"><span>{timelineEntries.length ? new Date(scale.start).toLocaleDateString() : "—"}</span><div>{[0, .25, .5, .75, 1].map(f => <time key={f}>{time(timelineEntries.length ? new Date(scale.time((scale.width - 8) * f)).toISOString() : null)}</time>)}</div></div>

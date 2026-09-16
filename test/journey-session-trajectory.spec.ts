@@ -16,8 +16,9 @@ import { cleanupJourney, createProjectAndSession, openProjectSession, scriptedMo
  *   5. Inspect one final output per request with its token usage, without duplicate streaming text.
  *   6. Inspect tools as a separate collapsible field and labeled context navigation.
  *   7. Resize the header and the event list with drag handles and the keyboard.
- *   8. Reload the trajectory URL and inspect later request messages and narrow-screen layout.
- *   9. Close the viewer with the keyboard and return to the Session.
+ *   8. Keep Agent labels pinned during horizontal scroll, zoom with Ctrl+wheel.
+ *   9. Reload the trajectory URL and inspect later request messages and narrow-screen layout.
+ *  10. Close the viewer with the keyboard and return to the Session.
  * Environment: Isolated current-worktree API/Web and Runner at E2E_BASE_URL.
  * Type: mocked
  * LLM: journey-owned deterministic HTTP model with main/subagent scripts.
@@ -203,6 +204,32 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       await page.mouse.move(listBox.x + 64, listBox.y + 40, { steps: 4 });
       await page.mouse.up();
       expect(await events.evaluate(el => el.clientWidth)).toBeGreaterThan(listBefore + 30);
+    });
+    await journey.step("固定 Agent 列并用 Ctrl+滚轮缩放", "时间轴横滚时 Agent 名固定并对齐所属行，Ctrl+滚轮横向缩放且页面不跟着滚。", async () => {
+      const timeline = viewer.locator(".trajectory-timeline");
+      await timeline.evaluate(el => { el.scrollLeft = 600; });
+      const timelineBox = (await timeline.boundingBox())!;
+      for (const lane of await viewer.locator(".trajectory-lane").all()) {
+        const label = lane.locator("strong");
+        await expect(label).toBeInViewport();
+        const labelBox = (await label.boundingBox())!;
+        const laneBox = (await lane.boundingBox())!;
+        expect(Math.abs(labelBox.x - timelineBox.x)).toBeLessThanOrEqual(2);
+        expect(labelBox.y).toBeGreaterThanOrEqual(laneBox.y - 1);
+        expect(labelBox.y).toBeLessThanOrEqual(laneBox.y + laneBox.height);
+      }
+      const widthBefore = await viewer.locator(".trajectory-track").first().evaluate(el => el.clientWidth);
+      await page.mouse.move(timelineBox.x + timelineBox.width * 0.6, timelineBox.y + timelineBox.height / 2);
+      await page.keyboard.down("Control");
+      await page.mouse.wheel(0, -240);
+      await page.keyboard.up("Control");
+      await expect.poll(() => viewer.locator(".trajectory-track").first().evaluate(el => el.clientWidth)).toBeGreaterThan(widthBefore);
+      const grownWidth = await viewer.locator(".trajectory-track").first().evaluate(el => el.clientWidth);
+      await page.keyboard.down("Control");
+      await page.mouse.wheel(0, 240);
+      await page.keyboard.up("Control");
+      await expect.poll(() => viewer.locator(".trajectory-track").first().evaluate(el => el.clientWidth)).toBeLessThan(grownWidth);
+      await viewer.getByLabel("时间轴缩放").selectOption("1");
     });
     await journey.step("刷新后继续核对后续请求", "URL 保留内嵌轨迹视图；后续输入包含上一轮结果和最新问题，默认定位最新消息。", async () => {
       await page.reload();
