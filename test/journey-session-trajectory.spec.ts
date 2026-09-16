@@ -1,6 +1,6 @@
 // Copyright (C) 2026-2026 Huawei Technologies Co., Ltd
 // Licensed under the Apache License, Version 2.0 (the "License");
-import { expect } from "@playwright/test";
+import { expect, type Page, type Locator } from "@playwright/test";
 import { test } from "./helpers/e2e.ts";
 import { apiBaseUrl, authorizationHeader } from "./e2e-auth.js";
 import { cleanupJourney, createProjectAndSession, openProjectSession, scriptedModel, sendUserMessage, waitForRunTerminal, type JourneyFixture } from "./helpers/journeys.ts";
@@ -29,6 +29,15 @@ import { cleanupJourney, createProjectAndSession, openProjectSession, scriptedMo
  * Credentials: E2E_API_TOKEN for the isolated local stack only.
  * CostSideEffects: Temporary model, Project and Session removed in finally; no external cost.
  */
+/** Ctrl+wheel over the timeline zooms around the pointer; deltaY maps to exp(-deltaY * 0.002). */
+async function ctrlWheelZoom(page: Page, viewer: Locator, deltaY: number): Promise<void> {
+  const box = (await viewer.locator(".trajectory-timeline").boundingBox())!;
+  await page.mouse.move(box.x + box.width * 0.6, box.y + box.height / 2);
+  await page.keyboard.down("Control");
+  await page.mouse.wheel(0, deltaY);
+  await page.keyboard.up("Control");
+}
+
 test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, async ({ page, journey }) => {
   test.setTimeout(180_000);
   await page.addInitScript(() => localStorage.setItem("sciencediscovery-locale", "zh-CN"));
@@ -75,6 +84,12 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       await expect(viewer.locator(".trajectory-lane")).toHaveCount(2);
       await expect(viewer.locator(".trajectory-legend")).not.toContainText("生命周期");
       await expect(viewer.getByLabel("事件类型", { exact: true }).locator('option[value="lifecycle"]')).toHaveCount(0);
+      // The horizontal scrollbar is always on; the zoom menu and the dense-spacing notice are gone.
+      await expect(viewer.locator(".trajectory-scroll")).toHaveCSS("overflow-x", "scroll");
+      await expect(viewer.locator(".trajectory-scroll")).toHaveCSS("scrollbar-gutter", "stable");
+      await expect(viewer.getByLabel("时间轴缩放")).toHaveCount(0);
+      await expect(viewer.getByText(/密集时间点已横向展开/)).toHaveCount(0);
+      await expect(viewer.locator(".trajectory-zoom-hint")).toContainText("Ctrl");
       await expect(viewer.locator('.trajectory-track[data-category="events"]')).toHaveCount(0);
       for (const type of ["subagent.updated", "run.completed", "run.failed", "run.cancelled", "context_recovery"]) await expect(viewer.locator(`[data-event-type="${type}"]`)).toHaveCount(0);
       await expect(page).toHaveURL(/trajectory=open/);
@@ -91,11 +106,12 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       })));
       const beforeZoom = await rowStructure();
       const initialWidth = await viewer.locator(".trajectory-track").first().evaluate(node => node.clientWidth);
-      for (const zoom of ["2", "4", "8", "1"]) {
-        await viewer.getByLabel("时间轴缩放").selectOption(zoom);
+      for (const deltaY of [-347, -347, -347, 1040]) {
+        await ctrlWheelZoom(page, viewer, deltaY);
         expect(await rowStructure()).toEqual(beforeZoom);
       }
-      await expect.poll(() => viewer.locator(".trajectory-track").first().evaluate(node => node.clientWidth)).toBe(initialWidth);
+      // Continuous wheel zoom does not guarantee an exact 1.000 on the way back.
+      await expect.poll(() => viewer.locator(".trajectory-track").first().evaluate(node => node.clientWidth)).toBeCloseTo(initialWidth, -1);
       const size = page.viewportSize()!;
       await page.setViewportSize({ width: 390, height: 844 });
       expect(await rowStructure()).toEqual(beforeZoom);
@@ -170,7 +186,7 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       const rows = () => viewer.locator(".trajectory-track").evaluateAll(nodes => nodes.map(row => [...row.querySelectorAll(".trajectory-mark")].map(mark => mark.getAttribute("data-entry-id"))));
       const before = await rows();
       const width = await viewer.locator(".trajectory-track").first().evaluate(node => node.clientWidth);
-      await viewer.getByLabel("时间轴缩放").selectOption("8");
+      await ctrlWheelZoom(page, viewer, -1040);
       await expect.poll(() => viewer.locator(".trajectory-track").first().evaluate(node => node.clientWidth)).toBeGreaterThan(width);
       expect(await rows()).toEqual(before);
       const mark = viewer.locator(".trajectory-mark").first();
@@ -187,16 +203,33 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       const timelineHandle = viewer.getByRole("separator", { name: "调整时间轴高度" });
       await expect(timelineHandle).toHaveAttribute("aria-orientation", "horizontal");
       const timelineBefore = await timelineBlock.evaluate(el => el.clientHeight);
-      const timelineHandleBox = (await timelineHandle.boundingBox())!;
-      await page.mouse.move(timelineHandleBox.x + timelineHandleBox.width / 2, timelineHandleBox.y + timelineHandleBox.height / 2);
+      // Dragging up shrinks the area.
+      let handleBox = (await timelineHandle.boundingBox())!;
+      await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
       await page.mouse.down();
-      await page.mouse.move(timelineHandleBox.x + timelineHandleBox.width / 2, timelineHandleBox.y + 48, { steps: 4 });
+      await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y - 40, { steps: 4 });
       await page.mouse.up();
-      expect(await timelineBlock.evaluate(el => el.clientHeight)).toBeGreaterThan(timelineBefore + 20);
-      const grownTimeline = await timelineBlock.evaluate(el => el.clientHeight);
+      expect(await timelineBlock.evaluate(el => el.clientHeight)).toBeLessThan(timelineBefore);
+      // Dragging far past the content stops at the height that shows every lane;
+      // dragging further does not grow it any more.
+      handleBox = (await timelineHandle.boundingBox())!;
+      await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + 600, { steps: 6 });
+      await page.mouse.up();
+      const capped = await timelineBlock.evaluate(el => el.clientHeight);
+      handleBox = (await timelineHandle.boundingBox())!;
+      await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + 200, { steps: 4 });
+      await page.mouse.up();
+      expect(await timelineBlock.evaluate(el => el.clientHeight)).toBe(capped);
+      expect(Number(await timelineHandle.getAttribute("aria-valuenow"))).toBeLessThanOrEqual(Number(await timelineHandle.getAttribute("aria-valuemax")));
+      const lastLaneBottom = await viewer.locator(".trajectory-scroll .trajectory-lane").last().evaluate(el => el.getBoundingClientRect().bottom);
+      expect(lastLaneBottom).toBeLessThanOrEqual(await timelineBlock.evaluate(el => el.getBoundingClientRect().bottom) + 1);
       await timelineHandle.focus();
       await page.keyboard.press("ArrowUp");
-      await expect.poll(() => timelineBlock.evaluate(el => el.clientHeight)).toBeLessThanOrEqual(grownTimeline - 20);
+      await expect.poll(() => timelineBlock.evaluate(el => el.clientHeight)).toBeLessThan(capped);
       const events = viewer.locator(".trajectory-events");
       const listHandle = viewer.locator(".trajectory-body > .trajectory-resizer");
       await expect(listHandle).toHaveAttribute("aria-orientation", "vertical");
@@ -241,7 +274,20 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       await page.mouse.wheel(0, 240);
       await page.keyboard.up("Control");
       await expect.poll(() => viewer.locator(".trajectory-track").first().evaluate(el => el.clientWidth)).toBeLessThan(grownWidth);
-      await viewer.getByLabel("时间轴缩放").selectOption("1");
+      // The zoom is anchored at the pointer: the mark under it must not move.
+      await scroller.evaluate(el => { el.scrollLeft = 0; });
+      const anchorMark = viewer.locator(".trajectory-mark").first();
+      const beforeBox = (await anchorMark.boundingBox())!;
+      const anchorPoint = { x: beforeBox.x + beforeBox.width / 2, y: beforeBox.y + beforeBox.height / 2 };
+      await page.mouse.move(anchorPoint.x, anchorPoint.y);
+      await page.keyboard.down("Control");
+      await page.mouse.wheel(0, -240);
+      await page.keyboard.up("Control");
+      await expect.poll(async () => Math.abs(((await anchorMark.boundingBox())!).x - beforeBox.x)).toBeLessThanOrEqual(2);
+      await page.keyboard.down("Control");
+      await page.mouse.wheel(0, 240);
+      await page.keyboard.up("Control");
+      await expect.poll(async () => Math.abs(((await anchorMark.boundingBox())!).x - beforeBox.x)).toBeLessThanOrEqual(2);
     });
     await journey.step("刷新后继续核对后续请求", "URL 保留内嵌轨迹视图；后续输入包含上一轮结果和最新问题，默认定位最新消息。", async () => {
       await page.reload();

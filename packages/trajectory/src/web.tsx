@@ -9,7 +9,6 @@ import { InputContent } from "./input-view.js";
 const colors: Record<TrajectoryKind, string> = { state: "#d97706", input: "#2563eb", output: "#059669", thinking: "#9333ea", tool: "#db2777", mcp: "#0891b2", lifecycle: "#64748b" };
 function time(value: string | null) { return value ? new Date(value).toLocaleTimeString(undefined, { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit", fractionalSecondDigits: 3 }) : "—"; }
 
-const ZOOM_PRESETS = [1, 2, 4, 8];
 const ZOOM_MIN = 0.5, ZOOM_MAX = 16;
 const TIMELINE_MIN = 90, TIMELINE_MAX = 480;
 const LIST_W_MIN = 200, LIST_W_MAX = 640, LIST_H_MIN = 96, LIST_H_MAX = 480;
@@ -71,11 +70,15 @@ export function TrajectoryViewer({ sessionId, title, port, locale, onClose }: {
   // handle's drag base aligned with the real rendered height.
   const [timelineHeight, setTimelineHeight] = useState<number>(), [listSize, setListSize] = useState<number>();
   const [measuredTimeline, setMeasuredTimeline] = useState(DEFAULT_TIMELINE_HEIGHT);
+  // The timeline handle may never grow the area past what shows all lanes;
+  // `contentMax` only feeds the handle's ARIA range, the drag clamps live.
+  const [contentMax, setContentMax] = useState(TIMELINE_MAX);
   const [narrow, setNarrow] = useState(() => window.matchMedia("(max-width: 720px)").matches);
   const timeline = useRef<HTMLDivElement>(null), scrollPane = useRef<HTMLDivElement>(null), labelsCol = useRef<HTMLDivElement>(null);
   const view = useRef<HTMLDivElement>(null), list = useRef<HTMLDivElement>(null), exportController = useRef<AbortController>(undefined);
   const zoomRef = useRef(zoom); zoomRef.current = zoom;
-  const zoomAnchor = useRef<{ factor: number; clientX: number }>(undefined);
+  const scaleRef = useRef<ReturnType<typeof timelineScale>>(undefined);
+  const zoomAnchor = useRef<{ time: number; clientX: number }>(undefined);
   const closeRef = useRef(onClose); closeRef.current = onClose;
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
@@ -109,23 +112,24 @@ export function TrajectoryViewer({ sessionId, title, port, locale, onClose }: {
     const wheel = (event: WheelEvent) => {
       if (!event.ctrlKey) return;
       event.preventDefault();
-      const current = zoomRef.current;
+      const pane = scrollPane.current, current = zoomRef.current;
       const next = Math.round(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, current * Math.exp(-event.deltaY * 0.002))) * 1000) / 1000;
-      if (next === current) return;
-      zoomAnchor.current = { factor: next / current, clientX: event.clientX };
+      if (!pane || next === current) return;
+      const x = pane.scrollLeft + (event.clientX - pane.getBoundingClientRect().left);
+      zoomAnchor.current = { time: scaleRef.current?.time(Math.max(0, x)) ?? 0, clientX: event.clientX };
       setZoom(next);
     };
     node.addEventListener("wheel", wheel, { passive: false });
     return () => node.removeEventListener("wheel", wheel);
   }, [index]);
   useLayoutEffect(() => {
-    // Keep the time under the cursor stationary across a zoom: marker offsets
-    // scale linearly with the track width, so the scroll position scales too.
+    // Zoom is anchored at the pointer: the timestamp under it is resolved
+    // against the new scale and put back exactly where the cursor is.
     const anchor = zoomAnchor.current, node = scrollPane.current;
     if (!anchor || !node) return;
     zoomAnchor.current = undefined;
     const cursor = anchor.clientX - node.getBoundingClientRect().left;
-    node.scrollLeft = Math.max(0, (node.scrollLeft + cursor) * anchor.factor - cursor);
+    node.scrollLeft = Math.max(0, scale.x(anchor.time) - cursor);
   }, [zoom]);
   useEffect(() => {
     const controller = new AbortController(); setLoading(true); setError("");
@@ -157,6 +161,7 @@ export function TrajectoryViewer({ sessionId, title, port, locale, onClose }: {
   const timelineEntries = index?.entries.filter(e => e.timestamp && !internalEntry(e)) ?? [];
   useEffect(() => { if (!entries.some(e => e.id === selected)) setSelected(entries[0]?.id); }, [entries, selected]);
   const scale = useMemo(() => timelineScale(index?.entries.filter(e => !internalEntry(e)) ?? [], trackWidth * zoom), [index, trackWidth, zoom]);
+  scaleRef.current = scale;
   const choose = (entry: TrajectoryEntry) => { setAgent(entry.agentId); if (filter !== "all" && filter !== entry.kind) setFilter("all"); setSelected(entry.id); setTab("event"); setError(""); };
   const associatedInput = index && [...index.entries, ...(index.untimedEntries ?? index.historicalEntries ?? [])].find(e => e.kind === "input" && e.agentId === detail?.entry.agentId && e.runId === detail?.entry.runId && !!e.contextId && e.contextId === detail?.entry.contextId);
   useEffect(() => {
@@ -187,6 +192,30 @@ export function TrajectoryViewer({ sessionId, title, port, locale, onClose }: {
     pane.querySelectorAll(".trajectory-lane, .trajectory-axis").forEach(lane => observer.observe(lane));
     return () => observer.disconnect();
   }, [index]);
+  useEffect(() => {
+    // Cap the timeline handle at exactly the height that shows every lane:
+    // content height plus the always-visible horizontal scrollbar.
+    const pane = scrollPane.current;
+    if (!pane) return;
+    const measure = () => {
+      const inner = pane.firstElementChild as HTMLElement | null;
+      if (!inner) return;
+      const scrollbar = pane.offsetHeight - pane.clientHeight;
+      setContentMax(Math.max(TIMELINE_MIN, Math.min(TIMELINE_MAX, Math.ceil(inner.getBoundingClientRect().height + scrollbar))));
+    };
+    measure(); const observer = new ResizeObserver(measure);
+    if (pane.firstElementChild) observer.observe(pane.firstElementChild);
+    return () => observer.disconnect();
+  }, [index]);
+  useEffect(() => {
+    if (timelineHeight !== undefined && timelineHeight > contentMax) setTimelineHeight(contentMax);
+  }, [contentMax, timelineHeight]);
+  const capTimeline = (value: number) => {
+    const pane = scrollPane.current, inner = pane?.firstElementChild as HTMLElement | null | undefined;
+    if (!pane || !inner) return Math.min(value, TIMELINE_MAX);
+    const cap = Math.ceil(inner.getBoundingClientRect().height + (pane.offsetHeight - pane.clientHeight));
+    return Math.max(TIMELINE_MIN, Math.min(TIMELINE_MAX, value, cap));
+  };
   const download = async () => {
     const controller = new AbortController(); exportController.current = controller; setExporting(true); setError("");
     try {
@@ -197,8 +226,6 @@ export function TrajectoryViewer({ sessionId, title, port, locale, onClose }: {
     } catch (reason) { if (!controller.signal.aborted) setError(String(reason)); }
     finally { if (!controller.signal.aborted) setExporting(false); }
   };
-  // The exact zoom stays an option so the select never blanks after a Ctrl+wheel zoom.
-  const zoomOptions = ZOOM_PRESETS.includes(zoom) ? ZOOM_PRESETS : [...ZOOM_PRESETS, zoom].sort((a, b) => a - b);
   const bodyStyle: CSSProperties = narrow
     ? { gridTemplateRows: `${listSize ?? DEFAULT_LIST_HEIGHT}px 5px minmax(0, 1fr)` }
     : { gridTemplateColumns: `${listSize ?? DEFAULT_LIST_WIDTH}px 5px minmax(0, 1fr)` };
@@ -214,8 +241,7 @@ export function TrajectoryViewer({ sessionId, title, port, locale, onClose }: {
     {error && <p role="alert" className="trajectory-error">{error}</p>}
     {loading && <p role="status">{tr("正在读取轨迹…", "Loading trajectory…")}</p>}
     {index && <>
-      <div className="trajectory-toolbar"><div className="trajectory-legend">{visibleKinds.map(kind => <span key={kind}><i style={{ background: colors[kind] }} />{labels[kind]}</span>)}</div><label>{tr("时间轴缩放", "Timeline zoom")} <select value={zoom} onChange={e => setZoom(Number(e.target.value))}>{zoomOptions.map(n => <option key={n} value={n}>{Math.round(n * 100) / 100}×</option>)}</select></label><span className="trajectory-zoom-hint">{tr("按住 Ctrl 滚动可缩放", "Ctrl + scroll to zoom")}</span></div>
-      {scale.expanded && <p className="trajectory-notice">{tr("密集时间点已横向展开以保留分隔；分行仅表示真实时间重叠，悬停可查看精确时间。", "Dense timestamps are spaced apart; rows reflect real time overlaps only. Hover for exact times.")}</p>}
+      <div className="trajectory-toolbar"><div className="trajectory-legend">{visibleKinds.map(kind => <span key={kind}><i style={{ background: colors[kind] }} />{labels[kind]}</span>)}</div><span className="trajectory-zoom-hint">{Math.round(zoom * 100) / 100}× · {tr("按住 Ctrl 滚动可缩放", "Ctrl + scroll to zoom")}</span></div>
       <div className="trajectory-timeline" ref={timeline} style={timelineHeight ? { height: timelineHeight, maxHeight: "none" } : undefined} aria-label={tr("真实时间多 Agent 时间轴", "Multi-agent wall-clock timeline")}>
         <div className="trajectory-labels" ref={labelsCol}>
           <div className="trajectory-axis-corner"><span>{timelineEntries.length ? new Date(scale.start).toLocaleDateString() : "—"}</span></div>
@@ -227,7 +253,7 @@ export function TrajectoryViewer({ sessionId, title, port, locale, onClose }: {
           {row.entries.map(e => <button key={e.id} data-entry-id={e.id} data-kind={e.kind} className={selected === e.id ? "trajectory-mark selected" : "trajectory-mark"} style={{ left: scale.x(Date.parse(e.timestamp!)), background: colors[e.kind], width: Math.max(8, scale.x(timelineEnd(e)) - scale.x(Date.parse(e.timestamp!)) - 2) }} title={`${time(e.timestamp)} · ${labels[e.kind]} · ${entryTitle(e, zh)} · Run ${e.runId ?? "—"}`} aria-label={`${a.label} ${time(e.timestamp)} ${labels[e.kind]} ${entryTitle(e, zh)}`} onClick={() => choose(e)} />)}
         </div>)}</div></div>)}
       </div></div></div>
-      <ResizeHandle orientation="horizontal" label={tr("调整时间轴高度", "Resize timeline")} value={timelineHeight ?? measuredTimeline} min={TIMELINE_MIN} max={TIMELINE_MAX} onResize={setTimelineHeight} />
+      <ResizeHandle orientation="horizontal" label={tr("调整时间轴高度", "Resize timeline")} value={timelineHeight ?? measuredTimeline} min={TIMELINE_MIN} max={contentMax} onResize={v => setTimelineHeight(capTimeline(v))} />
       {index.warnings.length > 0 && <details className="trajectory-warnings"><summary>{tr("记录完整性说明", "Recording completeness")} ({index.warnings.length})</summary>{index.warnings.map(w => <p key={w}>{w}</p>)}</details>}
       <div className="trajectory-body" style={bodyStyle}><aside className="trajectory-events"><div className="trajectory-filters"><select aria-label={tr("事件类型", "Event type")} value={filter} onChange={e => setFilter(e.target.value)}><option value="all">{tr("所有类型", "All types")}</option>{visibleKinds.map(k => <option key={k} value={k}>{labels[k]}</option>)}</select><select aria-label="Agent" value={selectedAgent} onChange={e => setAgent(e.target.value)}>{index.agents.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}</select></div>
       <div className="trajectory-event-list" ref={list}>{groups.length ? groups.map(group => <section className="trajectory-event-group" key={group.id}><header><strong>{index.agents.find(a => a.id === group.agentId)?.label}</strong><small title={group.runId}>Run {group.runId?.slice(0, 8) ?? "—"}</small></header>{group.entries.map(e => <button key={e.id} data-entry-id={e.id} data-event-type={e.eventType ?? e.label} aria-current={selected === e.id ? "true" : undefined} onClick={() => choose(e)} style={{ "--event-color": colors[e.kind] } as CSSProperties}><span><i />{labels[e.kind]}<time>{e.timestamp ? time(e.timestamp) : tr("时间未记录", "Time not recorded")}</time></span><strong>{entryTitle(e, zh)}</strong><small className="trajectory-run" title={e.runId}>{e.turn !== undefined ? `turn ${e.turn}` : ""}{e.sequence !== undefined ? ` · #${e.sequence}` : ""}{!e.timestamp ? tr(" · 调用记录", " · Invocation record") : ""}</small></button>)}</section>) : <p>{tr("暂无匹配的记录", "No matching records")}</p>}</div></aside>
