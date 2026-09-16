@@ -9,6 +9,51 @@ import { InputContent } from "./input-view.js";
 const colors: Record<TrajectoryKind, string> = { state: "#d97706", input: "#2563eb", output: "#059669", thinking: "#9333ea", tool: "#db2777", mcp: "#0891b2", lifecycle: "#64748b" };
 function time(value: string | null) { return value ? new Date(value).toLocaleTimeString(undefined, { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit", fractionalSecondDigits: 3 }) : "—"; }
 
+const HEADER_MIN = 72, HEADER_MAX = 320;
+const LIST_W_MIN = 200, LIST_W_MAX = 640, LIST_H_MIN = 96, LIST_H_MAX = 480;
+const DEFAULT_LIST_WIDTH = 290, DEFAULT_LIST_HEIGHT = 130;
+
+/** A draggable/keyboard-adjustable divider, modeled on the workspace resizer in the host app. */
+function ResizeHandle({ orientation, label, value, min, max, onResize }: {
+  /** `vertical` is an upright bar adjusting a width; `horizontal` a flat bar adjusting a height. */
+  orientation: "vertical" | "horizontal"; label: string; value: number; min: number; max: number; onResize(value: number): void;
+}) {
+  const drag = useRef<{ start: number; value: number }>(undefined);
+  const [resizing, setResizing] = useState(false);
+  const axis = orientation === "vertical" ? "clientX" : "clientY";
+  return <div
+    aria-label={label}
+    aria-orientation={orientation}
+    aria-valuemax={max}
+    aria-valuemin={min}
+    aria-valuenow={Math.round(value)}
+    className={`trajectory-resizer trajectory-resizer-${orientation}${resizing ? " resizing" : ""}`}
+    onKeyDown={event => {
+      const delta = { ArrowLeft: -24, ArrowUp: -24, ArrowRight: 24, ArrowDown: 24 }[event.key];
+      if (delta === undefined && event.key !== "Home" && event.key !== "End") return;
+      event.preventDefault();
+      onResize(event.key === "Home" ? min : event.key === "End" ? max : Math.min(max, Math.max(min, value + delta!)));
+    }}
+    onPointerCancel={() => { drag.current = undefined; setResizing(false); }}
+    onPointerDown={event => {
+      if (event.button !== 0) return;
+      event.currentTarget.setPointerCapture(event.pointerId);
+      drag.current = { start: event[axis], value };
+      setResizing(true);
+    }}
+    onPointerMove={event => {
+      if (!drag.current || !event.currentTarget.hasPointerCapture(event.pointerId)) return;
+      onResize(Math.min(max, Math.max(min, Math.round(drag.current.value + event[axis] - drag.current.start))));
+    }}
+    onPointerUp={event => {
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+      drag.current = undefined; setResizing(false);
+    }}
+    role="separator"
+    tabIndex={0}
+  />;
+}
+
 /** The viewer owns presentation only. Its host supplies the authenticated read-only port. */
 export function TrajectoryViewer({ sessionId, title, port, locale, onClose }: {
   sessionId: string; title: string; port: TrajectoryPort; locale: string; onClose(): void;
@@ -19,8 +64,14 @@ export function TrajectoryViewer({ sessionId, title, port, locale, onClose }: {
   const [error, setError] = useState(""), [loading, setLoading] = useState(true), [revision, setRevision] = useState(0), [exporting, setExporting] = useState(false);
   const [filter, setFilter] = useState("all"), [agent, setAgent] = useState(""), [tab, setTab] = useState("event"), [zoom, setZoom] = useState(1);
   const [trackWidth, setTrackWidth] = useState(450);
+  // Section sizes the user drags to change. Undefined until first drag so the
+  // CSS defaults stay authoritative; `measuredHeader` keeps the header handle's
+  // drag base aligned with the real content height.
+  const [headerHeight, setHeaderHeight] = useState<number>(), [listSize, setListSize] = useState<number>();
+  const [measuredHeader, setMeasuredHeader] = useState(88);
+  const [narrow, setNarrow] = useState(() => window.matchMedia("(max-width: 720px)").matches);
   const timeline = useRef<HTMLDivElement>(null);
-  const view = useRef<HTMLDivElement>(null), list = useRef<HTMLDivElement>(null), exportController = useRef<AbortController>(undefined);
+  const view = useRef<HTMLDivElement>(null), header = useRef<HTMLElement>(null), list = useRef<HTMLDivElement>(null), exportController = useRef<AbortController>(undefined);
   const closeRef = useRef(onClose); closeRef.current = onClose;
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
@@ -33,6 +84,19 @@ export function TrajectoryViewer({ sessionId, title, port, locale, onClose }: {
     // remounts the conversation, and a synchronous focus scroll would be undone.
     return () => { document.removeEventListener("keydown", keys, true); exportController.current?.abort(); requestAnimationFrame(() => previous?.focus()); };
   }, []);
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 720px)");
+    const update = () => setNarrow(media.matches);
+    update(); media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  useEffect(() => {
+    if (headerHeight !== undefined || !header.current) return;
+    const measure = () => setMeasuredHeader(Math.round(header.current!.getBoundingClientRect().height));
+    measure(); const observer = new ResizeObserver(measure);
+    observer.observe(header.current);
+    return () => observer.disconnect();
+  }, [headerHeight]);
   useEffect(() => {
     const controller = new AbortController(); setLoading(true); setError("");
     port.index(sessionId, controller.signal).then(value => {
@@ -84,14 +148,18 @@ export function TrajectoryViewer({ sessionId, title, port, locale, onClose }: {
     } catch (reason) { if (!controller.signal.aborted) setError(String(reason)); }
     finally { if (!controller.signal.aborted) setExporting(false); }
   };
+  const bodyStyle: CSSProperties = narrow
+    ? { gridTemplateRows: `${listSize ?? DEFAULT_LIST_HEIGHT}px 5px minmax(0, 1fr)` }
+    : { gridTemplateColumns: `${listSize ?? DEFAULT_LIST_WIDTH}px 5px minmax(0, 1fr)` };
   return <div className="trajectory-view" role="region" aria-label={tr("Session 轨迹", "Session trajectory")} ref={view} tabIndex={-1} onKeyDown={event => {
     if (event.key === "Escape") { event.stopPropagation(); closeRef.current(); }
   }}>
-    <header className="trajectory-header"><div><small>SESSION OBSERVATORY</small><h2>{tr("执行轨迹与模型上下文", "Trajectory & model context")}</h2><p title={title}>{title}</p></div><div className="trajectory-actions">
+    <header className="trajectory-header" ref={header} style={headerHeight ? { height: headerHeight } : undefined}><div><small>SESSION OBSERVATORY</small><h2>{tr("执行轨迹与模型上下文", "Trajectory & model context")}</h2><p title={title}>{title}</p></div><div className="trajectory-actions">
       <button onClick={() => setRevision(r => r + 1)} disabled={loading}>{tr("刷新", "Refresh")}</button>
       <button onClick={() => void download()} disabled={loading || exporting || !index}>{exporting ? tr("导出中…", "Exporting…") : tr("导出 NDJSON", "Export NDJSON")}</button>
       <button onClick={onClose} aria-label={tr("返回对话", "Back to conversation")}>×</button>
     </div></header>
+    <ResizeHandle orientation="horizontal" label={tr("调整顶栏高度", "Resize header")} value={headerHeight ?? measuredHeader} min={HEADER_MIN} max={HEADER_MAX} onResize={setHeaderHeight} />
     <p className="trajectory-notice">{tr("只显示已记录的数据。导出可能包含对话、工具结果和敏感业务内容，请妥善保管。", "Recorded data only. Exports may contain conversations, tool results and sensitive business content.")}</p>
     {error && <p role="alert" className="trajectory-error">{error}</p>}
     {loading && <p role="status">{tr("正在读取轨迹…", "Loading trajectory…")}</p>}
@@ -105,8 +173,9 @@ export function TrajectoryViewer({ sessionId, title, port, locale, onClose }: {
         </div>)}</div></div>)}
       </div></div>
       {index.warnings.length > 0 && <details className="trajectory-warnings"><summary>{tr("记录完整性说明", "Recording completeness")} ({index.warnings.length})</summary>{index.warnings.map(w => <p key={w}>{w}</p>)}</details>}
-      <div className="trajectory-body"><aside className="trajectory-events"><div className="trajectory-filters"><select aria-label={tr("事件类型", "Event type")} value={filter} onChange={e => setFilter(e.target.value)}><option value="all">{tr("所有类型", "All types")}</option>{visibleKinds.map(k => <option key={k} value={k}>{labels[k]}</option>)}</select><select aria-label="Agent" value={selectedAgent} onChange={e => setAgent(e.target.value)}>{index.agents.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}</select></div>
+      <div className="trajectory-body" style={bodyStyle}><aside className="trajectory-events"><div className="trajectory-filters"><select aria-label={tr("事件类型", "Event type")} value={filter} onChange={e => setFilter(e.target.value)}><option value="all">{tr("所有类型", "All types")}</option>{visibleKinds.map(k => <option key={k} value={k}>{labels[k]}</option>)}</select><select aria-label="Agent" value={selectedAgent} onChange={e => setAgent(e.target.value)}>{index.agents.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}</select></div>
       <div className="trajectory-event-list" ref={list}>{groups.length ? groups.map(group => <section className="trajectory-event-group" key={group.id}><header><strong>{index.agents.find(a => a.id === group.agentId)?.label}</strong><small title={group.runId}>Run {group.runId?.slice(0, 8) ?? "—"}</small></header>{group.entries.map(e => <button key={e.id} data-entry-id={e.id} data-event-type={e.eventType ?? e.label} aria-current={selected === e.id ? "true" : undefined} onClick={() => choose(e)} style={{ "--event-color": colors[e.kind] } as CSSProperties}><span><i />{labels[e.kind]}<time>{e.timestamp ? time(e.timestamp) : tr("时间未记录", "Time not recorded")}</time></span><strong>{entryTitle(e, zh)}</strong><small className="trajectory-run" title={e.runId}>{e.turn !== undefined ? `turn ${e.turn}` : ""}{e.sequence !== undefined ? ` · #${e.sequence}` : ""}{!e.timestamp ? tr(" · 调用记录", " · Invocation record") : ""}</small></button>)}</section>) : <p>{tr("暂无匹配的记录", "No matching records")}</p>}</div></aside>
+      <ResizeHandle orientation={narrow ? "horizontal" : "vertical"} label={narrow ? tr("调整列表高度", "Resize event list") : tr("调整列表宽度", "Resize event list")} value={listSize ?? (narrow ? DEFAULT_LIST_HEIGHT : DEFAULT_LIST_WIDTH)} min={narrow ? LIST_H_MIN : LIST_W_MIN} max={narrow ? LIST_H_MAX : LIST_W_MAX} onResize={setListSize} />
       <section className="trajectory-detail"><nav aria-label={tr("详情类型", "Detail type")}>{[["event", tr("事件内容", "Event content")], ["state", tr("Agent 状态", "Agent state")]].map(([id, label]) => <button key={id} aria-pressed={tab === id} onClick={() => setTab(id!)}>{label}</button>)}{detail && detail.entry.id === selected && detail.entry.kind !== "input" && associatedInput && <button className="trajectory-input-link" onClick={() => choose(associatedInput)}>{tr("查看本次输入", "View request input")}</button>}</nav>
       {detail && detail.entry.id === selected ? <><div className="trajectory-detail-heading"><strong>{labels[detail.entry.kind]} · {entryTitle(detail.entry, zh)}</strong><time>{detail.entry.timestamp ?? tr("时间未记录", "Time not recorded")}</time><small className="trajectory-run" title={`Run ${detail.entry.runId ?? "—"} · turn ${detail.entry.turn ?? "—"} · #${detail.entry.sequence ?? "—"}`}>Run {detail.entry.runId ?? "—"}{detail.entry.turn !== undefined ? ` · turn ${detail.entry.turn}` : ""}{detail.entry.sequence !== undefined ? ` · #${detail.entry.sequence}` : ""}</small></div>
         {tab === "event" && detail.entry.kind === "input" && detail.context ? <InputContent key={detail.entry.id} context={detail.context} zh={zh} />

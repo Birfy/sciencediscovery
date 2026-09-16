@@ -15,8 +15,9 @@ import { cleanupJourney, createProjectAndSession, openProjectSession, scriptedMo
  *   4. Read tool arguments and results, with an optional raw JSON view.
  *   5. Inspect one final output per request with its token usage, without duplicate streaming text.
  *   6. Inspect tools as a separate collapsible field and labeled context navigation.
- *   7. Reload the trajectory URL and inspect later request messages and narrow-screen layout.
- *   8. Close the viewer with the keyboard and return to the Session.
+ *   7. Resize the header and the event list with drag handles and the keyboard.
+ *   8. Reload the trajectory URL and inspect later request messages and narrow-screen layout.
+ *   9. Close the viewer with the keyboard and return to the Session.
  * Environment: Isolated current-worktree API/Web and Runner at E2E_BASE_URL.
  * Type: mocked
  * LLM: journey-owned deterministic HTTP model with main/subagent scripts.
@@ -177,6 +178,32 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       await expect(viewer.locator(`.trajectory-event-list [data-entry-id="${id}"]`)).toHaveAttribute("aria-current", "true");
       await expect(viewer.locator(".trajectory-context-summary")).toBeVisible();
     });
+    await journey.step("拖动调整分区尺寸", "顶栏高度与列表宽度可拖动也可用键盘调整。", async () => {
+      const header = viewer.locator(".trajectory-header");
+      const headerHandle = viewer.getByRole("separator", { name: "调整顶栏高度" });
+      await expect(headerHandle).toHaveAttribute("aria-orientation", "horizontal");
+      const headerBefore = await header.evaluate(el => el.clientHeight);
+      const headerBox = (await headerHandle.boundingBox())!;
+      await page.mouse.move(headerBox.x + headerBox.width / 2, headerBox.y + headerBox.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(headerBox.x + headerBox.width / 2, headerBox.y + 48, { steps: 4 });
+      await page.mouse.up();
+      expect(await header.evaluate(el => el.clientHeight)).toBeGreaterThan(headerBefore + 20);
+      const grownHeader = await header.evaluate(el => el.clientHeight);
+      await headerHandle.focus();
+      await page.keyboard.press("ArrowUp");
+      await expect.poll(() => header.evaluate(el => el.clientHeight)).toBeLessThanOrEqual(grownHeader - 20);
+      const events = viewer.locator(".trajectory-events");
+      const listHandle = viewer.locator(".trajectory-body > .trajectory-resizer");
+      await expect(listHandle).toHaveAttribute("aria-orientation", "vertical");
+      const listBefore = await events.evaluate(el => el.clientWidth);
+      const listBox = (await listHandle.boundingBox())!;
+      await page.mouse.move(listBox.x + 2, listBox.y + 40);
+      await page.mouse.down();
+      await page.mouse.move(listBox.x + 64, listBox.y + 40, { steps: 4 });
+      await page.mouse.up();
+      expect(await events.evaluate(el => el.clientWidth)).toBeGreaterThan(listBefore + 30);
+    });
     await journey.step("刷新后继续核对后续请求", "URL 保留内嵌轨迹视图；后续输入包含上一轮结果和最新问题，默认定位最新消息。", async () => {
       await page.reload();
       await expect(viewer).toBeVisible();
@@ -316,6 +343,16 @@ test("查看多 Agent 轨迹、精确上下文并导出", { tag: "@mocked" }, as
       await expect(viewer.locator(".trajectory-readable dt").filter({ hasText: "总 Token" })).toBeInViewport();
       const listHeight = await viewer.locator(".trajectory-event-list").evaluate(el => el.clientHeight);
       expect(await viewer.locator(".trajectory-event-list button").first().evaluate(el => el.clientHeight)).toBeLessThanOrEqual(listHeight);
+      const narrowHandle = viewer.locator(".trajectory-body > .trajectory-resizer");
+      await expect(narrowHandle).toHaveAttribute("aria-orientation", "horizontal");
+      const eventsBefore = await viewer.locator(".trajectory-events").evaluate(el => el.clientHeight);
+      await narrowHandle.scrollIntoViewIfNeeded();
+      const handleBox = (await narrowHandle.boundingBox())!;
+      await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + 2);
+      await page.mouse.down();
+      await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + 42, { steps: 3 });
+      await page.mouse.up();
+      expect(await viewer.locator(".trajectory-events").evaluate(el => el.clientHeight)).toBeGreaterThan(eventsBefore + 20);
     });
     await journey.step("窄屏查看输入分区", "消息和工具定义独立显示；带文字的彩色导航可定位，工具列表可折叠且不越出视口。", async () => {
       await viewer.getByLabel("事件类型", { exact: true }).selectOption("input");
