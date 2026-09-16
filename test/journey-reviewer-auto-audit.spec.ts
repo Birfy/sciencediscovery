@@ -50,7 +50,12 @@ test("研究员交付报告后可看到独立完成的自动审核", { tag: "@mo
       });
       expect(response.ok()).toBeTruthy();
       await openProjectSession(page, fixture);
-      await expect(page.locator(".reviewer-control-card")).toBeVisible();
+      // The controls live in a workspace fold, collapsed like its neighbours,
+      // so a user opens the disclosure before reading them. Asserting the card
+      // straight after entering the Session finds it in the DOM but hidden.
+      const fold = page.locator("details.workspace-fold").filter({ hasText: "Reviewer Specialist" });
+      await fold.locator("summary").click();
+      await expect(fold.locator(".reviewer-control-card")).toBeVisible();
     });
     await journey.step("交付报告而不中断主任务", "主任务正常完成，报告出现在产物区。", async () => {
       const run = await sendUserMessage(page, fixture.session.id, "Deliver a short Markdown report.");
