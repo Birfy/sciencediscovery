@@ -17,6 +17,7 @@ import { expect } from "@playwright/test";
 
 import { apiBaseUrl, BROWSER_TOKEN_STORAGE_KEY, requireApiToken } from "./e2e-auth.js";
 import { test } from "./helpers/e2e.ts";
+import { cleanupJourney, createProjectAndSession, openProjectSession, type JourneyFixture } from "./helpers/journeys.ts";
 
 for (const locale of ["en", "zh-CN"] as const) {
   test.describe(locale, () => {
@@ -155,6 +156,80 @@ for (const locale of ["en", "zh-CN"] as const) {
         await expect(page.getByRole("dialog")).toHaveCount(0);
         await expect(page.getByRole("alert")).toHaveCount(0);
       });
+    });
+
+    /**
+     * E2E-META
+     * Purpose: A user whose token expires inside an existing Session gets one Connection prompt despite repeated background polling.
+     * Steps:
+     *   1. Sign in and open a prepared Project and Session; wait for successful background requests.
+     *   2. Send an expired bearer credential from the browser and wait for two memory and governed-download polls to return real HTTP 401.
+     *   3. Verify Connection is the only authentication feedback, then save the valid token and continue the same Session.
+     * Environment: Isolated stack at E2E_BASE_URL; browser request routing injects an expired credential without mocking responses.
+     * Type: mocked
+     * LLM: none
+     * WebSearch: none
+     * PaperSources: none
+     * MCP: none; governed-download polling only.
+     * OtherExternal: none
+     * Credentials: E2E_API_TOKEN for the isolated local service only.
+     * CostSideEffects: Temporary Project and Session removed in finally; no model calls.
+     */
+    test(`会话内令牌失效后只显示连接引导 ${locale}`, { tag: "@mocked" }, async ({ page, journey }) => {
+      journey.scenario({ goal: "使用已有会话时令牌失效，只需按 Connection 引导恢复连接，不会不断叠加错误提示。", preconditions: ["独立本机栈", `界面语言 ${locale}`, "会话已创建，无模型调用"] });
+      let fixture: JourneyFixture | undefined;
+      const successful = { memory: 0, governed: 0 };
+      const rejectedPolls = { memory: 0, governed: 0 };
+      page.on("response", (response) => {
+        const path = new URL(response.url()).pathname;
+        const kind = path === "/api/memory/subgraph" ? "memory" : path.endsWith("/mcp/artifact-candidates") ? "governed" : undefined;
+        if (!kind) return;
+        if (response.status() === 200) successful[kind] += 1;
+        if (response.status() === 401) rejectedPolls[kind] += 1;
+      });
+      let expired = false;
+      await page.route("**/api/**", async (route) => {
+        // Exercise the real API's token rejection, including its auth callback.
+        if (expired) await route.continue({ headers: { ...route.request().headers(), authorization: "Bearer expired-session-token" } });
+        else await route.continue();
+      });
+      try {
+        fixture = await createProjectAndSession(page, { projectName: `Token recovery ${locale} ${Date.now()}`, sessionTitle: `Session token recovery ${locale}` });
+        await journey.step("登录并打开已有会话", "会话可见，内存与下载轮询均成功，没有错误提示。", async () => {
+          await page.goto(`/#token=${encodeURIComponent(requireApiToken())}`);
+          await openProjectSession(page, fixture!);
+          await expect.poll(() => successful.memory).toBeGreaterThan(0);
+          await expect.poll(() => successful.governed).toBeGreaterThan(0);
+          await expect(page.getByRole("dialog")).toHaveCount(0);
+          await expect(page.locator(".toast.error, .connection.bad")).toHaveCount(0);
+        });
+        await journey.step("令牌失效后等待多轮后台请求", "两类轮询都重复返回 401；只有 Connection 的一处恢复引导，无错误 Toast、设置警示条或连接错误标记。", async () => {
+          expired = true;
+          await expect.poll(() => rejectedPolls.memory, { timeout: 25_000 }).toBeGreaterThanOrEqual(2);
+          await expect.poll(() => rejectedPolls.governed).toBeGreaterThanOrEqual(2);
+          const dialog = page.getByRole("dialog");
+          await expect(dialog.getByLabel(tokenLabel, { exact: true })).toBeVisible();
+          await expect(page.getByRole("alert")).toHaveCount(1);
+          await expect(page.getByRole("alert")).toContainText(rejected);
+          await expect(page.locator(".toast.error, .connection.bad")).toHaveCount(0);
+          await expect(page.getByText("Unauthorized", { exact: false })).toHaveCount(0);
+        });
+        await journey.step("保存有效令牌继续原会话", "连接引导关闭，原会话保留，后台请求恢复成功，无残留错误提示。", async () => {
+          expired = false;
+          const count = successful.governed;
+          const dialog = page.getByRole("dialog");
+          await dialog.getByLabel(tokenLabel, { exact: true }).fill(requireApiToken());
+          await dialog.getByRole("button", { name: saveClose, exact: true }).click();
+          await expect(dialog).toHaveCount(0);
+          await expect.poll(() => successful.governed).toBeGreaterThan(count);
+          await expect(page.getByRole("heading", { name: fixture!.session.title, exact: true })).toBeVisible();
+          await expect(page.getByRole("alert")).toHaveCount(0);
+          await expect(page.locator(".toast.error, .connection.bad")).toHaveCount(0);
+        });
+      } finally {
+        expired = false;
+        if (fixture) await cleanupJourney(page, fixture);
+      }
     });
   });
 }
