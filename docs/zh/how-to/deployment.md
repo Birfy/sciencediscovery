@@ -46,7 +46,7 @@ artifact="dist/binary-release-local/ScienceDiscovery-local-linux-$arch"
 "$artifact" serve
 ```
 
-`serve` 依次启动 bubblewrap runner 和带 Web UI 的控制 API，顺序与健康检查同[本地模式](#本地模式宿主进程)一致，然后打印 UI 地址。常驻的就是这两个进程：agent 循环、模型调用与 web provider 都在 API 进程内，随包的 Python MCP server 由 API 按需拉起，不受 supervisor 托管。默认监听 <http://127.0.0.1:4310>，用 `SCIENCE_AGENT_AUTH_TOKEN` 登录；未设置时，`serve` 会打印首次启动生成的 token。Ctrl-C 会按启动的反序停止全部服务。
+`serve` 依次启动 bubblewrap runner 和带 Web UI 的控制 API，顺序与健康检查同[本地模式](#本地模式宿主进程)一致，然后打印 `Open to sign in` 链接与本地服务访问令牌。常驻的就是这两个进程：agent 循环、模型调用与 web provider 都在 API 进程内，随包的 Python MCP server 由 API 按需拉起，不受 supervisor 托管。默认监听 <http://127.0.0.1:4310>。打开启动日志中的 `Open to sign in` 链接，浏览器会自动保存本地服务访问令牌并登录；若直接打开 <http://127.0.0.1:4310>，也可在连接引导中粘贴日志里的本地服务访问令牌并保存。请勿分享该登录链接。设置了 `SCIENCE_AGENT_AUTH_TOKEN` 时使用该指定令牌。Ctrl-C 会按启动的反序停止全部服务。
 
 首次 `serve` 会把内嵌运行时解包到 `~/.cache/science-discovery/payload/<payload-id>`（可用 `XDG_CACHE_HOME` 或 `SCIENCE_DISCOVERY_PAYLOAD_CACHE_DIR` 改位置），之后启动直接复用。目录名带 payload 摘要，因此升级到新版本不会覆盖旧解包结果。如果仅存在旧的 `~/.cache/science-agent` 缓存，launcher 会把它一次性改名导入新位置并打印兼容提示；如果新位置已经存在，则保留新位置且打印跳过导入的原因。
 
@@ -107,7 +107,7 @@ ScienceDiscovery help                显示帮助
 
 ### run 子命令（CLI 客户端）
 
-日常交互推荐使用 Web UI（浏览器访问 `http://127.0.0.1:4310`，使用 `serve` 启动时打印的 token 登录）。`run` 是同一 `serve` 的命令行前端，与 Web UI 行为一致，适用于在终端中直接执行或将任务接入管道与脚本。`run` 自动加载与 `serve` 相同的 token（来自 `.env` 或 `--data-dir`），无需显式指定。agent 产出的文件存放于 `--data-dir` 的 `projects/<id>/sessions/<id>/workspace/` 下，不在当前工作目录，可通过该路径直接访问或在 Web UI 产物栏查看。
+日常交互推荐使用 Web UI（通过 `serve` 启动时打印的 `Open to sign in` 链接打开并自动保存本地服务访问令牌，或在连接设置中粘贴保存）。`run` 是同一 `serve` 的命令行前端，与 Web UI 行为一致，适用于在终端中直接执行或将任务接入管道与脚本。`run` 自动加载与 `serve` 相同的 token（来自 `.env` 或 `--data-dir`），无需显式指定。agent 产出的文件存放于 `--data-dir` 的 `projects/<id>/sessions/<id>/workspace/` 下，不在当前工作目录，可通过该路径直接访问或在 Web UI 产物栏查看。
 
 先起 `serve`，再开一个终端跑 `run`：
 
@@ -176,7 +176,7 @@ SSH 自动部署使用自带 Node runtime 的 Runner SEA 单文件，不要求�
 | `services/runner` | 127.0.0.1:4311 | 无 root 的 Bubblewrap（Linux）或 Seatbelt（macOS）执行器（后台） |
 | `services/api` | 127.0.0.1:4310 | 控制 API + Web UI（前台） |
 
-启动成功后，终端会打印 Web 地址与首次生成的访问 token。另开终端执行 `curl -fsS http://127.0.0.1:4310/health`，然后在浏览器打开 <http://127.0.0.1:4310>。停止脚本（Ctrl-C）会一并停止其启动的后台服务。原有 `./scripts/run-local.sh [--no-build]` 命令仍受支持，它只是转调本地模式的薄包装；`pnpm start` 与 `pnpm server` 继续使用这一兼容入口。无人值守部署时可把脚本交给进程管理器（如 Linux 的 systemd user unit，或 Linux/macOS 均可用的 tmux），也可以在 Linux 上改用 [Docker 部署](#docker-部署)；runner 设计上始终只监听回环。
+启动成功后，终端会打印 `Open to sign in` 链接与本地服务访问令牌。另开终端执行 `curl -fsS http://127.0.0.1:4310/health`，然后在浏览器打开启动日志中的 `Open to sign in` 链接（浏览器会自动保存本地服务访问令牌并登录）。停止脚本（Ctrl-C）会一并停止其启动的后台服务。原有 `./scripts/run-local.sh [--no-build]` 命令仍受支持，它只是转调本地模式的薄包装；`pnpm start` 与 `pnpm server` 继续使用这一兼容入口。无人值守部署时可把脚本交给进程管理器（如 Linux 的 systemd user unit，或 Linux/macOS 均可用的 tmux），也可以在 Linux 上改用 [Docker 部署](#docker-部署)；runner 设计上始终只监听回环。
 
 首次启动会在 `.sciencediscovery-data/envs/gateway` 下准备 Python 3.12 环境，它提供随包的 Python MCP server（biomed、UniProt）所用的解释器；同时会按宿主平台和架构准备固定版本的 micromamba，因此首次启动需要访问依赖源。本仓已无 submodule。
 
@@ -208,7 +208,7 @@ docker compose up -d
 curl -fsS http://127.0.0.1:4310/health
 ```
 
-打开 <http://127.0.0.1:4310>，使用 `SCIENCE_AGENT_AUTH_TOKEN` 登录；未设置时，容器日志会打印首次启动生成的 token。首次构建会编译 Web UI、解析两个服务 Python 环境并下载 micromamba，耗时较长且需要外网；之后启动镜像内服务和取得 micromamba 不再需要联网。托管 starter Python 的软件包网络边界见下方“限制”。
+通过容器日志（`docker compose logs`）查看启动输出的 `Open to sign in` 链接与本地服务访问令牌，在浏览器中打开该链接即可自动认证并保存令牌；若直接打开 <http://127.0.0.1:4310>，可在连接引导中粘贴本地服务访问令牌保存。设置了 `SCIENCE_AGENT_AUTH_TOKEN` 时使用该指定令牌。首次构建会编译 Web UI、解析两个服务 Python 环境并下载 micromamba，耗时较长且需要外网；之后启动镜像内服务和取得 micromamba 不再需要联网。托管 starter Python 的软件包网络边界见下方“限制”。
 
 Docker 构建会根据 BuildKit 的 `TARGETARCH` 选择 `linux/amd64` 或 `linux/arm64` 对应的 micromamba，并用 Runner 共用的发布清单校验 SHA256。二进制保存在镜像的 `/opt/sciencediscovery/provisioner/micromamba`；容器首次面对空的 `/app/data` bind mount 时，会把它复制到默认托管路径，Runner 随后再次按同一清单校验。这个流程不需要在**运行时**访问 GitHub。
 

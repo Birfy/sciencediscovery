@@ -60,7 +60,7 @@ set -a && source .env && set +a
 
 Ascend NPU Broker 面向需要访问宿主 Ascend 设备的部署，且需要管理员明确开启。没有 Ascend NPU、未安装 CANN/MindSpore，或不希望 Agent 调用宿主 NPU 时，请保持 `SCIENCE_AGENT_NPU_BROKER=0`；此时工具表不会包含 `run_npu_job`。本地模式启用后仍使用正常启动入口。启用 Broker 前，应先创建并验证至少一个可导入所需 CANN/MindSpore 栈的 ScienceDiscovery 包含 Python 的托管科学环境。内置 NPU workload（包括 `npu.smoke_test`）用 `environment_list` 返回的 `environment_id` 选择环境；省略时由 API 解析 Session 所选环境。API 选择该环境最新版 Revision，供 Broker 内部执行与审计；Agent 不能选择历史版本，`environment_revision_id` 会被拒绝。`SCIENCE_AGENT_NPU_WORKLOAD_CONFIG` 留空时使用仓内默认白名单，当前包含 `npu.smoke_test` 与 `antibody.protenix.v1`；如需新增模型，提供自定义 JSON 白名单并固定 entrypoint，而不是让 Agent 传任意命令。`SCIENCE_AGENT_NPU_PYTHON` 仅保留给显式使用 `${python}` 的自定义白名单；仓内默认白名单使用 `${managedPython}`，不会读取它。修改白名单 JSON 等价于修改可执行代码入口，应作为部署变更审查；模型权重、数据库、HMMER、CANN、MindScience checkout 等站点资产不进入仓库，通常通过上面的环境变量或 workload 配置引用。
 
-浏览器仅将 API token 保存在 local storage。模型凭证只存在于后端存储。
+浏览器仅将本地服务访问令牌保存在 local storage。模型凭证只存在于后端存储。
 
 ### 配额层级
 
@@ -124,7 +124,7 @@ API 在容器内监听 `0.0.0.0:4310`，runner `4311` 保持在容器回环，�
 | `.sciencediscovery-data/skills/` | 本地托管技能包与 revision |
 | `.sciencediscovery-data/envs/paper/`、`.sciencediscovery-data/envs/gateway/` | uv 管理的 PDF worker 与 agent gateway Python 环境（可由运行脚本重建；非业务状态） |
 | `.sciencediscovery-data/logs/{api,run,gateway,runner,memory-graph}.log` | 分级、按类别和大小滚动的运行日志；memory-graph 文件仅在功能启用时使用 |
-| 浏览器 local storage | 仅 API bearer token——模型凭证从不离开后端 |
+| 浏览器 local storage | 仅本地服务访问令牌——模型凭证从不离开后端 |
 
 数据目录是唯一运行时根：通过设置 `SCIENCE_DISCOVERY_DATA_DIR` 可同时迁移状态与服务环境（例如 `SCIENCE_DISCOVERY_DATA_DIR=/srv/science-discovery ./scripts/run-local.sh`）。原 `SCIENCE_AGENT_DATA_DIR` 仍作为兼容回退读取并打印日志；新旧同时设置时 `SCIENCE_DISCOVERY_DATA_DIR` 优先，且会记录该选择。对于仓库启动器，已有默认 `data` 目录会一次性移动到 `.sciencediscovery-data`。对于单文件 launcher，已有默认 `./science-discovery-data` 或更早的 `./science-agent-data` 会按由新到旧的顺序一次性导入 `./.sciencediscovery-data`；目标已存在时绝不覆盖并打印跳过原因。删除当前生效的数据目录会清除所有项目、会话、凭证与审计记录。在 [Docker 部署](../how-to/deployment.md#docker-部署)中，同一目录就是宿主上的 bind mount `./data`，区别只在于 `envs/` 位于镜像内。`services/paper/.venv` 与 `services/gateway/.venv` 仅在独立开发或 smoke 命令中出现；应用本身使用 `.sciencediscovery-data/envs/` 下的环境。
 

@@ -8,7 +8,7 @@
 - Docker 默认发布地址：`http://127.0.0.1:4310`。
 - `GET /health` 与 `GET /api/health` 无需认证。
 - MCP OAuth 浏览器回调 `GET /api/mcp/oauth/callback` 不使用本地 bearer token，而是校验待处理的一次性 OAuth state，并通过 PKCE 交换授权码。
-- 其他 `/api/*` 请求必须携带 `Authorization: Bearer <SCIENCE_AGENT_AUTH_TOKEN>`。没有默认 token：该变量未设置时，服务端在首次启动生成并打印一个随机 token，并保存在 `<数据目录>/secrets/auth-token`。
+- 其他 `/api/*` 请求必须携带 `Authorization: Bearer <SCIENCE_AGENT_AUTH_TOKEN>`。没有默认 token：该变量未设置时，服务端在首次启动生成本地服务访问令牌，打印 `Open to sign in` 链接与令牌，并保存在 `<数据目录>/secrets/auth-token`。
 - JSON 客户端应发送 `Content-Type: application/json`；服务端对通用 JSON body 设置 1,500,000 bytes 上限。工作区上传使用 multipart 及独立配额。
 - JSON 错误至少包含 `{"error":"..."}`；部分业务错误还可包含 `code` 或 `details`。
 
@@ -112,7 +112,7 @@ curl -X POST http://127.0.0.1:4310/api/projects \
 
 ## 自定义 MCP 服务器与 Inspector
 
-界面操作见[配置自定义 MCP](../how-to/configure-custom-mcp.md)。路由位于 `services/api/src/http/custom-mcp.ts`，请求和响应类型位于 `packages/schema/src/custom-mcp.ts`。下表接口均需本地 API bearer token。
+界面操作见[配置自定义 MCP](../how-to/configure-custom-mcp.md)。路由位于 `services/api/src/http/custom-mcp.ts`，请求和响应类型位于 `packages/schema/src/custom-mcp.ts`。下表接口均需本地服务访问令牌（Bearer token）。
 
 | 方法与路径 | 请求 | 响应 |
 |---|---|---|
