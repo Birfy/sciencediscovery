@@ -4335,7 +4335,7 @@ export function App() {
                 ) : null}
               </div>
               <div className="session-bar-meta">
-                {session && <button className="secondary-button compact-button session-trajectory-button" type="button" aria-pressed={trajectorySession?.id === session.id} onClick={() => setTrajectorySession(current => current?.id === session.id ? undefined : { id: session.id, title: session.title })}>{locale.startsWith("zh") ? (trajectorySession?.id === session.id ? "对话" : "轨迹") : (trajectorySession?.id === session.id ? "Conversation" : "Trajectory")}</button>}
+                {session && <button className="secondary-button compact-button session-trajectory-button" type="button" aria-pressed={trajectorySession?.id === session.id} onClick={() => setTrajectorySession(current => current?.id === session.id ? undefined : { id: session.id, title: session.title })}>{t(trajectorySession?.id === session.id ? "app.showConversation" : "app.showTrajectory")}</button>}
                 {session ? <span className="session-runner-target" title={selectedRunnerIds.length
                   ? t("app.runnerSelectionTooltip", { hosts: selectedRunnerNames.join(", ") })
                   : t("app.runnerSelectionEmpty")}>

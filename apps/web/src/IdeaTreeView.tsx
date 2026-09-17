@@ -9,6 +9,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { IdeaTreeGraph } from "@sciencediscovery/schema";
 
 import type { ApiClient } from "./api.js";
+import { useLocale } from "./i18n/index.js";
 import { StructureIcon } from "./icons.js";
 import { IdeaTreeExplorer } from "./IdeaTreeExplorer.js";
 
@@ -44,6 +45,7 @@ function LegacyIdeaTreeView({
   refreshKey: string;
   sessionId: string;
 }) {
+  const { t } = useLocale();
   const [loadError, setLoadError] = useState<string | null>(null);
   const [graph, setGraph] = useState<IdeaTreeGraph | null>(null);
   const [hasIdeaTreeRun, setHasIdeaTreeRun] = useState<boolean>();
@@ -120,7 +122,7 @@ function LegacyIdeaTreeView({
         {graph.nodes.length} nodes · {graph.edges.length} branches · {completed} done
         {running ? <i>{running} running</i> : null}
       </span>
-      <span className="idea-tree-view-action">查看旧树（只读） →</span>
+      <span className="idea-tree-view-action">{t("ideaTree.viewArchived")}</span>
     </button>
     {open ? <IdeaTreeExplorer
       graph={graph}
