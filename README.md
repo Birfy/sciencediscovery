@@ -39,7 +39,7 @@ For arm64, use [`ScienceDiscovery-0.2.0-linux-aarch64`](https://github.com/openJ
 
 ## Configure a model
 
-No model ships with the product; you bring your own API. Open **System configuration** (top right):
+No model ships with the product; you bring your own API. Open **System configuration** at the bottom of the left sidebar:
 
 1. **Model registry** — add your provider (pick a preset, or enter a Base URL by hand), paste its API key, then add the model you want.
 2. **Global defaults** — set that model as the task model.
