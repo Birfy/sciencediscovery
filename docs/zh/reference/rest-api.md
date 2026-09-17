@@ -99,6 +99,17 @@ curl -X POST http://127.0.0.1:4310/api/projects \
 
 `SendMessageRequest` 还可包含 `annotationIds`、`references` 和 `webForceRefresh`。`SessionRun.status` 当前可能为 `queued`、`running`、`blocked`、`completed`、`failed`、`cancelled` 或 `interrupted`。
 
+## 演进搜索
+
+`/evolve` 运行的只读视图，以及停止一次运行。搜索由 Agent 通过 `create_evolve_run` 工具发起，不经由本 API。参见[程序演进](../explanation/evolve.md)。
+
+| 方法与路径 | 请求/查询 | 成功 |
+|---|---|---|
+| `GET /api/evolve/runs` | 无 | `200`，演进运行数组 |
+| `GET /api/evolve/runs/:runId/events?after=0` | `after` 为非负游标 | `200`，事件数组或 SSE；用最后看到的游标续传 |
+| `GET /api/evolve/runs/:runId/candidates/:codeHash` | 无 | `200`，候选源码及其分数 |
+| `POST /api/evolve/runs/:runId/stop` | 无 | `200`，停止结果 |
+
 ## 自定义 MCP 服务器与 Inspector
 
 界面操作见[配置自定义 MCP](../how-to/configure-custom-mcp.md)。路由位于 `services/api/src/http/custom-mcp.ts`，请求和响应类型位于 `packages/schema/src/custom-mcp.ts`。下表接口均需本地 API bearer token。
