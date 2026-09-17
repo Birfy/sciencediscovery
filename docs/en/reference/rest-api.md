@@ -95,6 +95,19 @@ A minimal Run requires only `content`:
 
 `SendMessageRequest` may also contain `annotationIds`, `references`, and `webForceRefresh`. `SessionRun.status` can be `queued`, `running`, `blocked`, `completed`, `failed`, `cancelled`, or `interrupted`.
 
+## Evolution searches
+
+Read-only views of `/evolve` runs, plus stopping one. Searches are started by the agent through
+the `create_evolve_run` tool, not by this API. See
+[Program evolution](../explanation/evolve.md).
+
+| Method and path | Request/query | Success |
+|---|---|---|
+| `GET /api/evolve/runs` | none | `200`, evolution run array |
+| `GET /api/evolve/runs/:runId/events?after=0` | `after` is a non-negative cursor | `200`, event array or SSE; resume with the last cursor seen |
+| `GET /api/evolve/runs/:runId/candidates/:codeHash` | none | `200`, candidate source and its scores |
+| `POST /api/evolve/runs/:runId/stop` | none | `200`, stop result |
+
 ## Custom MCP servers and Inspector
 
 See [Configure custom MCP servers](../how-to/configure-custom-mcp.md) for the UI workflow. Routes are implemented in `services/api/src/http/custom-mcp.ts`; request/response types are in `packages/schema/src/custom-mcp.ts`. All routes in this table require the local API bearer token.
