@@ -206,7 +206,7 @@ docker compose up -d --build  # rebuild and restart after updating source
 
 The host `./data` bind mount maps to `/app/data` and is the only persistent location. Its layout matches [Storage layout](../reference/configuration.md#storage-layout). There are **no Docker named volumes**: projects, sessions, workspaces, credentials, and audit records are ordinary host files that can be inspected, backed up, and removed, and survive `docker compose down` and image rebuilds.
 
-To separate container state from an existing local `data/`, change the host side of the bind mount in `docker-compose.yml`, for example to `- ./docker-data:/app/data`.
+To separate container state from an existing local `data/`, set `SCIENCE_AGENT_DATA_HOST_DIR` in `.env`, for example `SCIENCE_AGENT_DATA_HOST_DIR=./docker-data`. Editing `docker-compose.yml` is not needed.
 
 The container runs as uid/gid `1000:1000`. If the account IDs differ, set `SCIENCE_AGENT_UID` and `SCIENCE_AGENT_GID` (`id -u`, `id -g`) in `.env` and rebuild. Otherwise, the entry point exits immediately with an explicit unwritable-directory error.
 
@@ -214,6 +214,36 @@ Two locations differ from a host installation:
 
 - uv-managed environments are baked into `/opt/sciencediscovery/envs/{gateway,paper}`, not the data directory. A fresh `compose up` therefore needs no network access for them.
 - Fixed micromamba is baked into `/opt/sciencediscovery/provisioner/micromamba` and seeded, for an empty data directory, to `scientific-envs/bin/micromamba` inside the data directory — `/app/data/scientific-envs/bin/micromamba` in the container, `./data/scientific-envs/bin/micromamba` on the host. When `SCIENCE_AGENT_PROVISIONER_PATH` is explicitly set, seeding is skipped and the runner uses that administrator override.
+
+### Several instances on one host
+
+A single instance needs nothing extra: `docker compose up -d` uses the current directory name as the Compose project name and publishes on `127.0.0.1:4310`.
+
+To run a second instance on the same host, give it its own **Compose project name**, **published port**, and **data directory**. The service sets no `container_name`, so the container and default network names are derived from the project name and changing it is enough to keep two instances apart:
+
+```bash
+COMPOSE_PROJECT_NAME=sciencediscovery-b \
+SCIENCE_AGENT_PUBLISH_PORT=4320 \
+SCIENCE_AGENT_DATA_HOST_DIR=./data-b \
+  docker compose up -d
+```
+
+Putting those three in their own env file is easier to live with; pass it to every later command:
+
+```bash
+docker compose --env-file .env.b up -d
+docker compose --env-file .env.b ps
+docker compose --env-file .env.b down
+```
+
+Notes:
+
+- The project name determines the container name (`<project>-sciencediscovery-1`) and the default network name; `docker compose -p <project> ...` is equivalent to `COMPOSE_PROJECT_NAME`.
+- Every instance needs its own `SCIENCE_AGENT_DATA_HOST_DIR`. The data directory holds all state, and sharing one makes two instances overwrite each other.
+- Every instance needs its own `SCIENCE_AGENT_PUBLISH_PORT`; host ports cannot repeat.
+- When two instances are built from different checkouts, give each its own `SCIENCE_AGENT_IMAGE` so the later build does not overwrite a shared tag.
+- Every later management command needs the same project name or env file, or `docker compose ps` / `down` acts on the other instance.
+- Running several instances neither needs nor justifies weakening security settings: keep the three `security_opt` entries below and do not switch to `privileged`.
 
 ### Sandbox and host requirements
 

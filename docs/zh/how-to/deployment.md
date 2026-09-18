@@ -228,7 +228,7 @@ docker compose up -d --build  # 拉取新代码后重建并重启
 
 宿主目录 `./data` 以 bind mount 挂载到 `/app/data`，是唯一的持久化位置，布局与宿主机安装的[存储布局](../reference/configuration.md#存储布局)一致。**不使用任何 Docker 命名卷**：每个 project、session、工作区、凭证与审计记录都是宿主上的普通文件，可直接查看、备份与删除，并且在 `docker compose down` 和镜像重建后依然存在。
 
-如果宿主机上已有用于本地安装的 `data/`，想让容器状态与之分开，修改 `docker-compose.yml` 中 bind mount 的宿主侧路径即可，例如 `- ./docker-data:/app/data`。
+如果宿主机上已有用于本地安装的 `data/`，想让容器状态与之分开，在 `.env` 中设置 `SCIENCE_AGENT_DATA_HOST_DIR` 即可，例如 `SCIENCE_AGENT_DATA_HOST_DIR=./docker-data`，不需要改 `docker-compose.yml`。
 
 容器默认以 uid/gid `1000:1000` 运行。如果你的账号 id 不同，请在 `.env` 中设置 `SCIENCE_AGENT_UID` / `SCIENCE_AGENT_GID`（`id -u`、`id -g`）并重建容器；否则入口脚本会立即以明确的「目录不可写」提示退出，而不是在更深处失败。
 
@@ -236,6 +236,36 @@ docker compose up -d --build  # 拉取新代码后重建并重启
 
 - uv 管理的 Python 环境**不**写入数据目录，而是烘焙在镜像的 `/opt/sciencediscovery/envs/{gateway,paper}` 中。这样 bind mount 只保存应用状态，全新的 `compose up` 也无需联网。
 - 固定版本 micromamba 烘焙在 `/opt/sciencediscovery/provisioner/micromamba`，空数据目录首次启动时播种到数据目录下的 `scientific-envs/bin/micromamba`，即容器内 `/app/data/scientific-envs/bin/micromamba`、宿主侧 `./data/scientific-envs/bin/micromamba`。显式设置 `SCIENCE_AGENT_PROVISIONER_PATH` 时不播种，Runner 继续使用该管理员覆盖路径。
+
+### 同机运行多个实例
+
+默认单实例不需要任何额外设置：`docker compose up -d` 用当前目录名作为 Compose 项目名，发布在 `127.0.0.1:4310`。
+
+要在同一台机器上再跑一个实例，给它自己的 **Compose 项目名**、**发布端口**和**数据目录**即可。服务没有写死 `container_name`，容器名与默认网络名都由项目名派生，所以改项目名就能把两个实例隔开：
+
+```bash
+COMPOSE_PROJECT_NAME=sciencediscovery-b \
+SCIENCE_AGENT_PUBLISH_PORT=4320 \
+SCIENCE_AGENT_DATA_HOST_DIR=./data-b \
+  docker compose up -d
+```
+
+把这三个变量写进一个独立的 env 文件更省事，之后每条命令都带上它：
+
+```bash
+docker compose --env-file .env.b up -d
+docker compose --env-file .env.b ps
+docker compose --env-file .env.b down
+```
+
+注意：
+
+- 项目名决定容器名（`<项目名>-sciencediscovery-1`）和默认网络名；`docker compose -p <项目名> ...` 与 `COMPOSE_PROJECT_NAME` 等价。
+- 每个实例必须有自己的 `SCIENCE_AGENT_DATA_HOST_DIR`。数据目录承载全部状态，两个实例共用会互相覆盖。
+- 每个实例必须有自己的 `SCIENCE_AGENT_PUBLISH_PORT`，宿主端口不能重复。
+- 两个实例从不同代码树构建时，分别设置 `SCIENCE_AGENT_IMAGE`，避免后构建的镜像覆盖同一个 tag。
+- 后续所有管理命令都要带同一个项目名或同一个 env 文件，否则 `docker compose ps` / `down` 操作的是另一个实例。
+- 多实例不需要、也不应该放宽任何安全配置：`security_opt` 保持下表三项，不要改用 `privileged`。
 
 ### 沙箱与宿主要求
 

@@ -125,9 +125,20 @@ fixes are **for the user to run**, quoted as such:
   the pinned pnpm, and the official uv installer script (installs to
   `~/.local/bin`). Missing bubblewrap has no user-level path — it is a distro
   package the user must install.
-- `kernel.apparmor_restrict_unprivileged_userns` is `1` → the documented fix is
-  `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`. Quote it,
-  explain it needs root and is not persistent, and stop.
+- Sandbox probe **passed** → the environment is fine. Do not read
+  `kernel.apparmor_restrict_unprivileged_userns`, do not report it, and never
+  ask for `sudo sysctl -w ...=0`. That restriction is configured per AppArmor
+  profile, so the value is routinely `1` on Ubuntu 24.04+ hosts where the probe
+  passes; quoting a root command there is wrong advice.
+- Sandbox probe **failed** → report it and work through the causes in order:
+  the container's `security_opt` (Docker mode needs `seccomp`, `apparmor` and
+  `systempaths` all unconfined); then the host AppArmor configuration, where
+  `/etc/apparmor.d/` can grant `userns create` per program; and only then
+  `sysctl kernel.unprivileged_userns_clone` and
+  `sysctl kernel.apparmor_restrict_unprivileged_userns`. If the last one is the
+  confirmed cause, quote `sudo sysctl -w
+  kernel.apparmor_restrict_unprivileged_userns=0`, say it needs root and does
+  not persist, and stop for the user's decision.
 - Port already in use → offer `SCIENCE_AGENT_PORT` (host mode) or
   `SCIENCE_AGENT_PUBLISH_PORT` (Docker) instead of killing the other process.
   When moving the runner port, also update the explicit
@@ -180,6 +191,18 @@ curl -fsS http://127.0.0.1:4310/health
 - A uid/gid mismatch is the most common first-run failure: the entry point exits
   with an explicit "not writable" message. Fix it via `SCIENCE_AGENT_UID` /
   `SCIENCE_AGENT_GID` and recreate the container.
+- Several instances on one host: give each its own Compose project name, port
+  and data directory. The service sets no `container_name`, so the project name
+  alone separates container and network names.
+
+  ```bash
+  COMPOSE_PROJECT_NAME=sciencediscovery-b SCIENCE_AGENT_PUBLISH_PORT=4320 \
+    SCIENCE_AGENT_DATA_HOST_DIR=./data-b docker compose up -d
+  ```
+
+  Every later `ps` / `logs` / `down` needs the same project name, or it acts on
+  the other instance. Add `SCIENCE_AGENT_IMAGE` when the instances are built
+  from different checkouts.
 - The service already sets `seccomp=unconfined`, `apparmor=unconfined` and
   `systempaths=unconfined` for bubblewrap. Do not add capabilities or
   `privileged: true`. Dropping `systempaths=unconfined` still works, but the
@@ -292,7 +315,7 @@ as a session id, so it silently prints nothing and the group looks empty.
 | Symptom | Cause / next step |
 |---|---|
 | `data ... is not writable by uid ...` | Docker uid/gid mismatch → set `SCIENCE_AGENT_UID` / `_GID`, recreate |
-| `WARNING: bubblewrap cannot create a sandbox` in logs | Host restricts user namespaces → quote the `sysctl` fix, let the user run it |
+| `WARNING: bubblewrap cannot create a sandbox` in logs | The probe failed → work Step 3's order: `security_opt`, then host AppArmor profiles, then the sysctl. Never open with the `sysctl` fix |
 | `.sciencediscovery-data/envs/gateway is missing` | Started with `--no-build` before a build → run once without it (that venv holds the interpreter for the bundled Python MCP servers) |
 | API up but every run fails | Usually the sandbox warning above, or no model profile configured |
 | Port already bound | Change `SCIENCE_AGENT_PORT` / `SCIENCE_AGENT_PUBLISH_PORT` |
