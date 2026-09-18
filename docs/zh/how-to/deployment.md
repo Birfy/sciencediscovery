@@ -191,12 +191,17 @@ SSH 自动部署使用自带 Node runtime 的 Runner SEA 单文件，不要求�
 ### 前置条件
 
 - Linux x86_64 或 aarch64 宿主机，安装 Docker Engine 24+ 与 Compose v2 插件；runner 需要宿主内核提供可用的用户命名空间。
-- 容器可用的无特权用户命名空间——bubblewrap 沙箱依赖它：
+- 容器内可用的无特权用户命名空间——bubblewrap 沙箱依赖它。**判据是产品实际跑的 bwrap 探针，不是某个 sysctl 的取值**：容器入口和 runner 启动时都会真正构建一次最小沙箱，据此决定沙箱能否工作。起栈之后按这条命令正面复核：
 
   ```bash
-  sysctl kernel.unprivileged_userns_clone            # 暴露该开关的内核上应为 1
-  sysctl kernel.apparmor_restrict_unprivileged_userns # Ubuntu 24.04+ 上必须为 0
+  docker compose exec sciencediscovery sh -c '
+    bwrap --unshare-all --unshare-user --die-with-parent \
+      --ro-bind /usr /usr --symlink usr/bin /bin --symlink usr/lib /lib \
+      --symlink usr/lib64 /lib64 --proc /proc /usr/bin/true' \
+    && echo "沙箱探针通过"
   ```
+
+  这就是 `packages/sandbox-capability` 探测时使用的参数组合。请保留外层 `sh -c`：`docker compose exec` 直接把 `bwrap` 作为会话首进程时无法建立回环网络，会给出与沙箱能力无关的误报。探针失败后的排查项见[沙箱与宿主要求](#沙箱与宿主要求)。
 
 ### 构建与启动
 
@@ -230,7 +235,7 @@ docker compose up -d --build  # 拉取新代码后重建并重启
 有两处与宿主机安装不同：
 
 - uv 管理的 Python 环境**不**写入数据目录，而是烘焙在镜像的 `/opt/sciencediscovery/envs/{gateway,paper}` 中。这样 bind mount 只保存应用状态，全新的 `compose up` 也无需联网。
-- 固定版本 micromamba 烘焙在 `/opt/sciencediscovery/provisioner/micromamba`，空数据目录首次启动时播种到 `.sciencediscovery-data/scientific-envs/bin/micromamba`。显式设置 `SCIENCE_AGENT_PROVISIONER_PATH` 时不播种，Runner 继续使用该管理员覆盖路径。
+- 固定版本 micromamba 烘焙在 `/opt/sciencediscovery/provisioner/micromamba`，空数据目录首次启动时播种到数据目录下的 `scientific-envs/bin/micromamba`，即容器内 `/app/data/scientific-envs/bin/micromamba`、宿主侧 `./data/scientific-envs/bin/micromamba`。显式设置 `SCIENCE_AGENT_PROVISIONER_PATH` 时不播种，Runner 继续使用该管理员覆盖路径。
 
 ### 沙箱与宿主要求
 
@@ -246,11 +251,19 @@ docker compose up -d --build  # 拉取新代码后重建并重启
 
 **若未放开 `systempaths`（例如沿用旧版 Compose、裸 `docker run` 或 K8s 默认配置）**：产品会自动回退为 `--ro-bind /proc /proc`，执行仍可进行，但沙箱内看到的是**容器的进程列表**，而不是只有自己的进程。回退时 runner 启动日志与预检都会打印明确 warning，说明原因与影响。要恢复更强的隔离，请加回 `systempaths=unconfined`，不要改用 `privileged`。
 
-如果宿主仍然限制用户命名空间，API 与 UI 仍可正常启动、`GET /health` 会反映 runner 状态，但每次 `run_shell` 都会失败。入口脚本在启动时会做一次 bubblewrap 预检，因此 `docker compose logs` 中会出现带上述检查命令的明确告警。Ubuntu 24.04+ 上通常的修复方式是：
+探针失败时，API 与 UI 仍可正常启动、`GET /health` 仍会反映 runner 状态，但每次 `run_shell` 都会失败。入口脚本与 runner 都会在 `docker compose logs` 中打印明确告警，并附上 bubblewrap 自己的失败行——先读那一行，它指明了被拒绝的是哪一步。
 
-```bash
-sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-```
+按以下顺序排查，不要跳过前两项直接改内核参数：
+
+1. **Compose 的 `security_opt` 是否被删改。** 上表三项缺一都会让探针失败：缺 `seccomp` / `apparmor` 表现为无法创建命名空间，缺 `systempaths` 表现为 `Can't mount proc on /newroot/proc`。
+2. **宿主的 AppArmor 配置。** Ubuntu 24.04+ 默认限制无特权用户命名空间，但这项限制是**按 profile 配置**的：`/etc/apparmor.d/` 下可以为具体程序授予 `userns create`，容器运行时也可以带自己的 profile。因此 `kernel.apparmor_restrict_unprivileged_userns` 为 1 并不等于沙箱不可用——本项目在该值为 1 的 Ubuntu 24.04 宿主上探针照常通过。**只要探针通过，就不需要改这个值。**
+3. **内核开关，仅在前两项排除后作为最后手段。** 它需要 root，并且不持久：
+
+   ```bash
+   sysctl kernel.unprivileged_userns_clone             # 暴露该开关的内核上应为 1
+   sysctl kernel.apparmor_restrict_unprivileged_userns # 为 1 时结合上一条判断，不要仅凭它下结论
+   sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0   # 确认探针确实因它失败后再执行
+   ```
 
 ### 限制
 

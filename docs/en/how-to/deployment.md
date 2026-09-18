@@ -169,12 +169,17 @@ One image contains the complete stack. `docker-entrypoint.sh` wraps `scripts/sta
 ### Prerequisites
 
 - A Linux x86_64 or aarch64 host with Docker Engine 24+ and the Compose v2 plugin. The runner needs usable host-kernel user namespaces.
-- Unprivileged user namespaces available to the container:
+- Unprivileged user namespaces available to the container, which the Bubblewrap sandbox depends on. **The gate is the probe the product actually runs, not the value of any sysctl**: both the container entry point and the runner build a minimal sandbox at startup and decide from the result. Confirm it positively once the stack is up:
 
   ```bash
-  sysctl kernel.unprivileged_userns_clone            # should be 1 where exposed
-  sysctl kernel.apparmor_restrict_unprivileged_userns # must be 0 on Ubuntu 24.04+
+  docker compose exec sciencediscovery sh -c '
+    bwrap --unshare-all --unshare-user --die-with-parent \
+      --ro-bind /usr /usr --symlink usr/bin /bin --symlink usr/lib /lib \
+      --symlink usr/lib64 /lib64 --proc /proc /usr/bin/true' \
+    && echo "sandbox probe passed"
   ```
+
+  These are the arguments `packages/sandbox-capability` probes with. Keep the outer `sh -c`: when `docker compose exec` makes `bwrap` the session's first process it cannot bring up loopback, which fails for reasons unrelated to sandbox capability. If the probe fails, see [Sandbox and host requirements](#sandbox-and-host-requirements).
 
 ### Build and start
 
@@ -208,7 +213,7 @@ The container runs as uid/gid `1000:1000`. If the account IDs differ, set `SCIEN
 Two locations differ from a host installation:
 
 - uv-managed environments are baked into `/opt/sciencediscovery/envs/{gateway,paper}`, not the data directory. A fresh `compose up` therefore needs no network access for them.
-- Fixed micromamba is baked into `/opt/sciencediscovery/provisioner/micromamba` and seeded to `.sciencediscovery-data/scientific-envs/bin/micromamba` for an empty data directory. When `SCIENCE_AGENT_PROVISIONER_PATH` is explicitly set, seeding is skipped and the runner uses that administrator override.
+- Fixed micromamba is baked into `/opt/sciencediscovery/provisioner/micromamba` and seeded, for an empty data directory, to `scientific-envs/bin/micromamba` inside the data directory — `/app/data/scientific-envs/bin/micromamba` in the container, `./data/scientific-envs/bin/micromamba` on the host. When `SCIENCE_AGENT_PROVISIONER_PATH` is explicitly set, seeding is skipped and the runner uses that administrator override.
 
 ### Sandbox and host requirements
 
@@ -224,11 +229,19 @@ No capability is added, `privileged: true` is not used, and the Docker socket is
 
 **If `systempaths` is not relaxed** (an older Compose file, a bare `docker run`, or Kubernetes defaults), the product automatically falls back to `--ro-bind /proc /proc`. Executions still run, but the sandbox sees the **container's process list** instead of only its own processes. The fallback is never silent: both the runner startup log and the preflight print a warning naming the cause and the consequence. Restore the stronger profile by adding `systempaths=unconfined` — do not switch to `privileged`.
 
-If the host still restricts user namespaces, the API and UI start and `GET /health` reports runner state, but every `run_shell` fails. Startup runs a Bubblewrap preflight and prints a warning with the checks above. On Ubuntu 24.04+, the usual fix is:
+When the probe fails, the API and UI still start and `GET /health` still reports runner state, but every `run_shell` fails. Both the entry point and the runner print an explicit warning to `docker compose logs`, carrying Bubblewrap's own failure line — read that line first, it names the step that was refused.
 
-```bash
-sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-```
+Work through these in order; do not skip the first two and change a kernel switch:
+
+1. **Whether Compose's `security_opt` was edited away.** Missing any of the three above fails the probe: without `seccomp`/`apparmor` no namespace can be created, and without `systempaths` the failure is `Can't mount proc on /newroot/proc`.
+2. **The host's AppArmor configuration.** Ubuntu 24.04+ restricts unprivileged user namespaces by default, but the restriction is configured **per profile**: `/etc/apparmor.d/` can grant `userns create` to a specific program, and a container runtime can carry its own profile. So `kernel.apparmor_restrict_unprivileged_userns` being 1 does not mean the sandbox is unusable — this project's probe passes on Ubuntu 24.04 hosts where that value is 1. **If the probe passes, leave this value alone.**
+3. **The kernel switches, only after ruling out the first two.** They need root and do not persist:
+
+   ```bash
+   sysctl kernel.unprivileged_userns_clone             # should be 1 where the knob exists
+   sysctl kernel.apparmor_restrict_unprivileged_userns # read it together with the point above, never on its own
+   sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0   # only once the probe is known to fail because of it
+   ```
 
 ### Limitations
 

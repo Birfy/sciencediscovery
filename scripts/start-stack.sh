@@ -492,11 +492,14 @@ EOF
         /usr/bin/true >/dev/null 2>&1; then
     cat >&2 <<'EOF'
 WARNING: bubblewrap cannot create a sandbox in this container. run_python /
-run_shell will fail; the API and UI are unaffected. Check that the Compose
-service keeps security_opt seccomp=unconfined and apparmor=unconfined, and that
-the host allows unprivileged user namespaces:
-  sysctl kernel.unprivileged_userns_clone            # 1 where the knob exists
-  sysctl kernel.apparmor_restrict_unprivileged_userns # 0 on Ubuntu 24.04+
+run_shell will fail; the API and UI are unaffected. Check, in this order:
+  1. The Compose service still sets all three security_opt entries:
+     seccomp=unconfined, apparmor=unconfined, systempaths=unconfined.
+  2. The host AppArmor configuration. Ubuntu 24.04+ restricts unprivileged user
+     namespaces per profile, so a host can allow them without changing a sysctl.
+  3. Only then the kernel switches, which need root and do not persist:
+       sysctl kernel.unprivileged_userns_clone             # 1 where the knob exists
+       sysctl kernel.apparmor_restrict_unprivileged_userns # read with step 2, not alone
 EOF
   fi
   runner_command=(node services/runner/dist/server.js)

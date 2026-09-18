@@ -62,9 +62,12 @@ Run from the repository root. Report each check as pass/fail with the value seen
 ```bash
 uname -s -m                              # expect: Linux x86_64 or aarch64
 ss -ltn | grep -E ':(4310|4311)' || echo "ports free"
-sysctl kernel.unprivileged_userns_clone             2>/dev/null   # 1, where the knob exists
-sysctl kernel.apparmor_restrict_unprivileged_userns 2>/dev/null   # 0, required on Ubuntu 24.04+
 ```
+
+Sandbox availability is decided by **running the product's probe**, never by
+reading a sysctl. Use the probe below for host-process mode, and the
+in-container probe under *Docker mode* for Compose. A sysctl value is a
+diagnostic to reach for after a probe fails — see Step 3.
 
 **Host-process mode** (mirrors `README.md` → Quick start → Requirements)
 
@@ -77,13 +80,13 @@ bwrap --version   # 0.6+; 0.8+ recommended (adds --disable-userns where the envi
 curl --version | head -1
 ```
 
-Sandbox preflight — the same probe `scripts/start-stack.sh` runs, harmless and
-read-only:
+Sandbox preflight — the same probe `scripts/start-stack.sh` and
+`packages/sandbox-capability` run, harmless and read-only:
 
 ```bash
 bwrap --unshare-all --unshare-user --die-with-parent \
   --ro-bind /usr /usr --symlink usr/bin /bin --symlink usr/lib /lib \
-  --symlink usr/lib64 /lib64 /usr/bin/true && echo "sandbox ok"
+  --symlink usr/lib64 /lib64 --proc /proc /usr/bin/true && echo "sandbox ok"
 ```
 
 **Docker mode**
@@ -94,6 +97,21 @@ docker compose version                          # v2.x
 docker info >/dev/null && echo "daemon reachable"
 id -u; id -g                                    # → SCIENCE_AGENT_UID / _GID
 ```
+
+The container's sandbox can only be probed once the image exists, and the entry
+point already probes it at startup: a failure is printed to
+`docker compose logs`. To confirm it positively after `up -d`:
+
+```bash
+docker compose exec sciencediscovery sh -c '
+  bwrap --unshare-all --unshare-user --die-with-parent \
+    --ro-bind /usr /usr --symlink usr/bin /bin --symlink usr/lib /lib \
+    --symlink usr/lib64 /lib64 --proc /proc /usr/bin/true' && echo "sandbox ok"
+```
+
+Keep the outer `sh -c`. With `bwrap` as the exec session's first process the
+loopback setup fails for reasons unrelated to sandbox capability, which reads
+as a false negative.
 
 ## Step 3 — Report gaps, do not close them yourself
 
@@ -121,7 +139,7 @@ fixes are **for the user to run**, quoted as such:
   `start-stack.sh`'s install commands and never touch user or global
   npm/uv config.
 
-If user namespaces stay restricted, the API and UI still start and `/health`
+If the sandbox probe keeps failing, the API and UI still start and `/health`
 still reports the runner, but every `run_python` / `run_shell` fails. Say this
 plainly and let the user choose whether to continue.
 
