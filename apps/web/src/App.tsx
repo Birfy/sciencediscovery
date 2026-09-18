@@ -3388,6 +3388,11 @@ export function App({ initialToken }: { initialToken?: string } = {}) {
     );
     if (!queuedBehindActiveRun) runAbortControllers.current.set(submittedSessionId, controller);
 
+    const savedContent = content;
+    const savedReferences = composerReferences;
+    const savedAnnotations = pendingAnnotations;
+    const optimisticMessageId = `optimistic-${Date.now()}`;
+
     setMessage("");
     setComposerReferences([]);
     setPendingAnnotations([]);
@@ -3410,7 +3415,7 @@ export function App({ initialToken }: { initialToken?: string } = {}) {
         messages: [...current.messages, {
           content,
           createdAt: new Date().toISOString(),
-          id: `optimistic-${Date.now()}`,
+          id: optimisticMessageId,
           ...(references.length ? { references } : {}),
           ...(annotations.length ? { annotations } : {}),
           role: "user",
@@ -3434,10 +3439,25 @@ export function App({ initialToken }: { initialToken?: string } = {}) {
         }
         applySessionRunEvent(submittedSessionId, runSessionTitle, streamRunId, streamEvent, sequence);
       }, controller.signal);
-      if (shouldApplySessionScopedUpdate(submittedSessionId, activeSessionIdRef.current)) await refreshSession(submittedSessionId);
+      if (shouldApplySessionScopedUpdate(submittedSessionId, activeSessionIdRef.current)) {
+        try {
+          await refreshSession(submittedSessionId);
+        } catch (refreshReason) {
+          if (!isAbortError(refreshReason) && shouldApplySessionScopedUpdate(submittedSessionId, activeSessionIdRef.current)) {
+            setError(refreshReason instanceof Error ? refreshReason : t("error.runFailed"));
+          }
+        }
+      }
     } catch (reason) {
       if (!isAbortError(reason) && shouldApplySessionScopedUpdate(submittedSessionId, activeSessionIdRef.current)) {
         setError(reason instanceof Error ? reason : t("error.runFailed"));
+        setMessage(savedContent);
+        setComposerReferences(savedReferences);
+        setPendingAnnotations(savedAnnotations);
+        setSession((current) => current ? {
+          ...current,
+          messages: current.messages.filter((item) => item.role !== "user" || item.id !== optimisticMessageId),
+        } : current);
         if (autoNameFirstMessage) {
           void refreshSession(submittedSessionId).catch(() => undefined);
         }
