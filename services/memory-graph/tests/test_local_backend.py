@@ -139,3 +139,36 @@ def test_health_is_healthy_without_any_credentials(monkeypatch: pytest.MonkeyPat
     assert switched.json()["status"] == "needs-password"
     back = client.post("/internal/backend", json={"backend": "local"}, headers=headers)
     assert back.json() == {"status": "healthy", "backend": "local"}
+
+
+def test_variable_length_bounds_follow_opencypher(tmp_path: Path) -> None:
+    """``*0..`` starts at the node itself, ``*..n`` and ``*`` start at one hop."""
+    from sciencediscovery_memory_graph._cypher import Parser
+
+    def bounds(spec: str) -> tuple[int, int | None]:
+        branches, _ = Parser(f"MATCH (a)-[:x{spec}]->(b) RETURN b").parse()
+        rel = branches[0][0][1][0].rels[0]
+        return rel.lo, rel.hi
+
+    assert bounds("*0..") == (0, None)
+    assert bounds("*..3") == (1, 3)
+    assert bounds("*1..3") == (1, 3)
+    assert bounds("*2") == (2, 2)
+    assert bounds("*") == (1, None)
+
+
+def test_division_by_zero_is_a_cypher_error(tmp_path: Path) -> None:
+    from sciencediscovery_memory_graph._cypher import CypherError
+
+    h = _handle(tmp_path)
+    for expr in ("1 / 0", "1.5 / 0.0", "5 % 0"):
+        with pytest.raises(CypherError):
+            h.session().run(f"RETURN {expr} AS x")
+
+
+def test_call_subquery_union_removes_duplicates(tmp_path: Path) -> None:
+    h = _handle(tmp_path)
+    rows = list(h.session().run(
+        "CALL { RETURN 1 AS x UNION RETURN 1 AS x UNION RETURN 2 AS x } RETURN x ORDER BY x"
+    ))
+    assert [r["x"] for r in rows] == [1, 2]

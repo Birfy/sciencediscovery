@@ -128,7 +128,7 @@ Back in the session workspace, expand Memory > ScienceMemory in the right rail. 
 | Status | Meaning | Action |
 |---|---|---|
 | `healthy` | Neo4j reachable, password configured | Working; reads/writes the graph |
-| `needs-password` | Only with `SCIENCE_AGENT_MEMORY_GRAPH_BACKEND=neo4j`: no password pushed yet | Enter the password and save, or unset the variable to use the local store |
+| `needs-password` | The backend is Neo4j and the sidecar has not received a password yet | Enter the password and save, or switch Storage backend back to Local files |
 | `degraded` | Password set but Neo4j unreachable | Check Neo4j is running, port 7474 is open, address/password are correct |
 | `disabled` | Toggle is off | Turn the toggle on |
 
@@ -153,7 +153,8 @@ On first open the graph shows only the research spine by default: research goal 
 
 - Double-click a Task node (subagent scope) to unfold the tool-call chain it contains.
 - Double-click any other node (tool call, code, paper, evidence, claim, or artifact) to unfold one layer of its direct produces, one layer at a time. Double-click again to collapse, which cascades to orphan descendants.
-- Hovering a node shows a "Double-click to expand / Double-click to collapse" tooltip.
+- Hovering a node shows a "Double-click to expand / Double-click to collapse" tooltip. The `+N` chip on a node's top-right means N nodes are folded behind it; it becomes `−N` once they are open.
+- "Expand all" at the canvas's top-right opens every folded node at once, and "Collapse all" returns to the research spine. The visible / total counts in the header follow.
 
 ### 3.4 Chain buttons (per node type)
 

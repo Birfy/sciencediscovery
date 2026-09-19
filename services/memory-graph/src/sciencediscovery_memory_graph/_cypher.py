@@ -145,10 +145,6 @@ class Proj:
 
 # --- Parser ------------------------------------------------------------------
 
-_CLAUSE_WORDS = {"MATCH", "OPTIONAL", "WITH", "UNWIND", "MERGE", "CREATE", "SET", "DELETE",
-                 "DETACH", "RETURN", "CALL", "FOREACH", "UNION", "REMOVE"}
-
-
 class Parser:
     def __init__(self, src: str) -> None:
         self.src = src
@@ -847,7 +843,7 @@ class Executor:
             kind = c[0]
             if kind == "return":
                 proj: Proj = c[1]
-                rows, columns = self._project(rows, proj, final=True)
+                rows, columns = self._project(rows, proj)
                 out = [[r[n] for n in columns] for r in rows]
                 returned = True
             else:
@@ -861,7 +857,7 @@ class Executor:
         if kind == "match":
             return self._match(c, rows)
         if kind == "with":
-            return self._project(rows, c[1], final=False)[0]
+            return self._project(rows, c[1])[0]
         if kind == "unwind":
             return self._unwind(c, rows)
         if kind == "merge":
@@ -1018,10 +1014,10 @@ class Executor:
             return a - b
         if op == "*":
             return a * b
+        if op in ("/", "%") and b == 0:
+            raise CypherError("/ by zero")
         if op == "/":
             if isinstance(a, int) and isinstance(b, int):
-                if b == 0:
-                    raise CypherError("/ by zero")
                 q = abs(a) // abs(b)
                 return q if (a >= 0) == (b >= 0) else -q
             return a / b
@@ -1125,7 +1121,7 @@ class Executor:
 
     # -- projection ---------------------------------------------------------
 
-    def _project(self, rows: list[Row], proj: Proj, final: bool) -> tuple[list[Row], list[str]]:
+    def _project(self, rows: list[Row], proj: Proj) -> tuple[list[Row], list[str]]:
         items = proj.items
         columns = [i.name for i in items]
         pairs: list[tuple[Row, Row]] = []  # (source row for ORDER BY, projected row)
@@ -1347,6 +1343,9 @@ class Executor:
             c, r = self._run_clauses(b, [dict(x) for x in rows])
             cols = cols or c
             acc.extend(r)
+        if len(branches) > 1 and not union_all:
+            seen: set[Any] = set()
+            acc = [r for r in acc if not (_key(r) in seen or seen.add(_key(r)))]
         return cols, acc
 
     def _run_clauses_rows(self, clauses: list[Any], rows: list[Row]) -> list[Row]:

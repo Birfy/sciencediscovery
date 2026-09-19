@@ -40,6 +40,8 @@ set -a && source .env && set +a
 | `SCIENCE_AGENT_MEMORY_GRAPH_URL` | `http://127.0.0.1:17674` | memory-graph 端点（API 客户端） |
 | `SCIENCE_AGENT_MEMORY_GRAPH_INTERNAL_TOKEN` | `sciencediscovery-memory-graph-local` | API→memory-graph token |
 | `SCIENCE_AGENT_MEMORY_GRAPH_LOG_LEVEL` | `INFO` | memory-graph 日志级别 |
+| `SCIENCE_AGENT_MEMORY_GRAPH_BACKEND` | `local` | memory-graph 启动时的存储后端（`local` 或 `neo4j`）；API 会按“系统配置 → 记忆”里的设置覆盖它 |
+| `SCIENCE_AGENT_MEMORY_GRAPH_DATA_DIR` | `~/.science-agent/memory-graph` | 本地后端存放 `nodes.jsonl` 和 `edges.jsonl` 的目录 |
 | `SCIENCE_AGENT_EXEC_TIMEOUT_MS` | `0` | 初始单次沙箱执行墙钟上限（`0` = 无限） |
 | `SCIENCE_AGENT_MAX_WORKSPACE_BYTES` | `10737418240`（10 GiB） | Runner 工作区总量上限（`0` = 无限）；亦播种系统设置 |
 | `SCIENCE_AGENT_MAX_OUTPUT_BYTES` | `1073741824`（1 GiB） | 单次执行 stdout+stderr 保留上限（超限截断；`0` = 不截断） |

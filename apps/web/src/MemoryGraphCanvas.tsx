@@ -1927,27 +1927,32 @@ export function MemoryGraphCanvas({
           .attr("y", (_line: string, i: number) => yPos0 + i * captionFontSize)
           .text((line: string) => line);
       });
+    // "+N": N nodes are folded behind this one (double-click reveals them);
+    // "−N" once they are open. A small white chip with a coloured rim sits on
+    // the node's top-right edge, so it reads as a count, not as a control.
     const badgeLabel = (node: SimNode): string => {
-      if (node.isAggregate) return `${node.aggregateExpanded ? "▾" : "▸"} ${node.aggregateCount ?? 0}`;
-      if (node.isScope) return node.childCount ? `${node.folded ? "▸" : "▾"} ${node.childCount}` : "";
+      if (node.isAggregate) return `${node.aggregateExpanded ? "−" : "+"}${node.aggregateCount ?? 0}`;
+      if (node.isScope) return node.childCount ? `${node.folded ? "+" : "−"}${node.childCount}` : "";
       const folded = foldedProducesCountsRef.current?.get(node.id) ?? 0;
-      return folded > 0 ? `▸ ${folded}` : "";
+      return folded > 0 ? `+${folded}` : "";
     };
-    const badgeFont = Math.max(13, nodeSize * 1.05);
-    const badgeCentre = (node: SimNode) => ({ x: nodeSize * 0.95, y: -nodeSize * 0.95, label: badgeLabel(node) });
+    const badgeColour = (node: SimNode): string => node.isAggregate ? "#d97706" : node.isScope ? "#2563eb" : "#334155";
+    const badgeFont = Math.max(10, nodeSize * 0.5);
+    const badgeCentre = (node: SimNode) => ({ x: nodeSize * 0.75, y: -nodeSize * 0.75, label: badgeLabel(node) });
     nodeSel.select("text.memory-canvas-scope-badge")
       .attr("font-size", badgeFont)
+      .attr("fill", (node: SimNode) => badgeColour(node))
       .attr("x", (node: SimNode) => badgeCentre(node).x)
-      .attr("y", (node: SimNode) => badgeCentre(node).y + badgeFont * 0.35)
+      .attr("y", (node: SimNode) => badgeCentre(node).y + badgeFont * 0.36)
       .text((node: SimNode) => badgeLabel(node));
     nodeSel.select("rect.memory-canvas-scope-badge-bg")
-      .attr("fill", (node: SimNode) => node.isAggregate ? "#d97706" : node.isScope ? "#2563eb" : "#0f766e")
-      .attr("stroke", "#ffffff")
-      .attr("stroke-width", 1.5)
+      .attr("fill", "#ffffff")
+      .attr("stroke", (node: SimNode) => badgeColour(node))
+      .attr("stroke-width", 1.4)
       .each(function (node: SimNode) {
         const { x, y, label } = badgeCentre(node);
-        const w = label.length * badgeFont * 0.62 + badgeFont * 0.9;
-        const h = badgeFont * 1.5;
+        const h = badgeFont * 1.45;
+        const w = Math.max(h, label.length * badgeFont * 0.6 + badgeFont * 0.7);
         select(this)
           .attr("x", x - w / 2)
           .attr("y", y - h / 2)
