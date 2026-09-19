@@ -672,7 +672,9 @@ function applyNodeLabelVisibility(
   // (tiny graph), the threshold is the same *relative* zoom-in.
   const visible = scale >= baselineScale * LABEL_SHOW_ZOOM_RATIO ? 1 : 0;
   nodeSel.select("text.memory-canvas-node-label").attr("opacity", visible);
-  nodeSel.select("text.memory-canvas-scope-badge").attr("opacity", visible);
+  // The ▸N badge is not a caption: it is the only cue that a node has folded
+  // children, so it stays visible at the fit zoom where captions are hidden.
+  nodeSel.select("text.memory-canvas-scope-badge").attr("opacity", 1);
 }
 
 /**
@@ -1832,9 +1834,11 @@ export function MemoryGraphCanvas({
             // 文案在下面的 update 块按节点类型 + 折叠态重绑。
             g.append("title")
               .attr("class", "memory-canvas-scope-title");
-            // The ▸N badge is aggregate-only now (a scope's folded state is
-            // shown by the stack discs, not a numeric badge).
-            g.filter((node: SimNode) => node.isAggregate === true).append("text")
+            // Every node carries a badge slot: "▸ N" is the number of folded
+            // child nodes a double-click would reveal (aggregate stacks, scopes
+            // and ordinary nodes alike); it stays empty when there is nothing
+            // left to expand.
+            g.append("text")
               .attr("class", "memory-canvas-scope-badge")
               .attr("text-anchor", "start")
               .attr("x", nodeSize * 0.7)
@@ -1919,9 +1923,13 @@ export function MemoryGraphCanvas({
           .text((line: string) => line);
       });
     nodeSel.select("text.memory-canvas-scope-badge")
-      .text((node: SimNode) => node.isAggregate
-        ? `${node.aggregateExpanded ? "▾" : "▸"} ${node.aggregateCount ?? 0}`
-        : "");
+      .attr("fill", (node: SimNode) => node.isAggregate ? "#d97706" : node.isScope ? "#3b82f6" : "#475569")
+      .text((node: SimNode) => {
+        if (node.isAggregate) return `${node.aggregateExpanded ? "▾" : "▸"} ${node.aggregateCount ?? 0}`;
+        if (node.isScope) return node.childCount ? `${node.folded ? "▸" : "▾"} ${node.childCount}` : "";
+        const folded = foldedProducesCountsRef.current?.get(node.id) ?? 0;
+        return folded > 0 ? `▸ ${folded}` : "";
+      });
     // The aggregate's amber ring solidifies when expanded. A scope no longer
     // has a ring (its folded state is shown by the stack discs).
     nodeSel.select("circle.memory-canvas-scope-ring")

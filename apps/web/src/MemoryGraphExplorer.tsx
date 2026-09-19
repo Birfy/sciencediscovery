@@ -678,6 +678,27 @@ export function countScopeChildren(
 }
 
 /**
+ * Visible-versus-total node and edge counts for the explorer header. Both sides
+ * skip the synthetic pieces (aggregate stacks, surrogate edges) so a fully
+ * expanded graph reads ``N / N``.
+ */
+export function countVisibleAndTotal(
+  visible: { nodes: readonly MemoryGraphNode[]; edges: readonly MemorySubgraph["edges"][number][] },
+  total: { nodes: readonly MemoryGraphNode[]; edges: readonly MemorySubgraph["edges"][number][] },
+): { visibleNodes: number; totalNodes: number; visibleEdges: number; totalEdges: number } {
+  const real = (nodes: readonly MemoryGraphNode[]) => nodes.filter((n) => !isAggregateNode(n));
+  const realEdges = (edges: readonly MemorySubgraph["edges"][number][]) => edges.filter((e) => !isSurrogateEdge(e));
+  const totalNodes = real(total.nodes).length;
+  const totalEdges = realEdges(total.edges).length;
+  return {
+    visibleNodes: Math.min(real(visible.nodes).length, totalNodes),
+    totalNodes,
+    visibleEdges: Math.min(realEdges(visible.edges).length, totalEdges),
+    totalEdges,
+  };
+}
+
+/**
  * Build the scope→child-count map once per raw folded read, so the canvas
  * badge reads the true child total regardless of which scopes are expanded.
  * Pure over the node set; called with the pre-merge folded subgraph.
@@ -1021,6 +1042,11 @@ export function MemoryGraphExplorer({
     }
     return counts;
   }, [graph, subgraph]);
+
+  // Header counts: what is drawn now versus everything the session holds.
+  // Virtual aggregate stacks and scope surrogate edges are view hints, not
+  // stored nodes/edges, so they count on neither side.
+  const graphCounts = useMemo(() => countVisibleAndTotal(graph, subgraph), [graph, subgraph]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
@@ -1611,8 +1637,8 @@ export function MemoryGraphExplorer({
             {matchIds ? <button onClick={clearSearch} type="button">{t("memory.search.clear")}</button> : null}
           </form>
           {searchNote ? <span className="memory-search-note">{searchNote}</span> : null}
-          <span>{graph.nodes.length} {t("memory.stats.nodes")}</span>
-          <span>{graph.edges.length} {t("memory.stats.edges")}</span>
+          <span>{t("memory.stats.visibleOfTotal", { visible: graphCounts.visibleNodes, total: graphCounts.totalNodes })} {t("memory.stats.nodes")}</span>
+          <span>{t("memory.stats.visibleOfTotal", { visible: graphCounts.visibleEdges, total: graphCounts.totalEdges })} {t("memory.stats.edges")}</span>
           {graph.truncated ? <span className="memory-truncated" title={t("memory.truncated.title")}>{t("memory.truncated.badge")}</span> : null}
           <button aria-label={t("memory.explorer.close")} className="icon-button" onClick={onClose} title={t("memory.explorer.close")} type="button"><CloseIcon size={20} /></button>
         </div>
@@ -1793,7 +1819,7 @@ export function MemoryGraphExplorer({
             <p className="memory-explorer-hint">
               {selected
                 ? t("memory.hint.selected", { name: displayNames.get(selected.id) ?? graphNodeName(selected) })
-                : t("memory.hint.inspect")} · {t("memory.hint.panZoom")}
+                : t("memory.hint.inspect")} · {t("memory.hint.expand")} · {t("memory.hint.panZoom")}
             </p>
           </div>
 

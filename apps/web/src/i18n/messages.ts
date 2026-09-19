@@ -1173,6 +1173,8 @@ export const en = {
   "memory.hint.selected": "Selected: {name}",
   "memory.hint.inspect": "Click a node to inspect its product",
   "memory.hint.panZoom": "drag to pan · scroll to zoom",
+  "memory.hint.expand": "double-click a node to expand or fold what it produced · ▸N = N folded child nodes",
+  "memory.stats.visibleOfTotal": "{visible} / {total}",
 
   "csv.importDuplicateIds": "Found {count} duplicate identifiers; source row numbers were appended to disambiguate them.",
   "csv.parseHeaderRequired": "CSV must contain a header and at least one data row",
@@ -3753,6 +3755,8 @@ export const zhCN: Partial<Record<MessageKey, string>> = {
   "memory.hint.selected": "已选中：{name}",
   "memory.hint.inspect": "点击节点查看其产物",
   "memory.hint.panZoom": "拖拽平移 · 滚轮缩放",
+  "memory.hint.expand": "双击节点展开/折叠其产出 · ▸N 表示有 N 个已折叠的子节点",
+  "memory.stats.visibleOfTotal": "{visible} / {total}",
 
   "csv.importDuplicateIds": "发现 {count} 个重复标识符，已追加原始行号以区分。",
   "csv.parseHeaderRequired": "CSV 必须包含表头和至少一行数据",
