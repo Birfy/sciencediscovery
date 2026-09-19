@@ -19,7 +19,7 @@
     "d3-selection": "^3.0.0",
     "d3-transition": "^3.0.1",
     "d3-zoom": "^3.0.0",
-    "fflate": "0.8.2",
+    "fflate": "0.8.3",
     "katex": "^0.16.47",
     "lucide-react": "1.26.0",
     "molstar": "^5.11.0",
