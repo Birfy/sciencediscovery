@@ -25,7 +25,7 @@ import { StateTransforms } from "molstar/lib/mol-plugin-state/transforms";
 import { Color } from "molstar/lib/mol-util/color";
 
 import { useLocale } from "./i18n/index.js";
-import type { StructureFormat } from "./molecular.js";
+import { cifTrajectoryFormat, type StructureFormat } from "./molecular.js";
 
 const MOLSTAR_FORMAT: Record<StructureFormat, string> = {
   cif: "mmcif",
@@ -82,7 +82,9 @@ export default function MolstarWindow({ structures, onClose }: {
         pluginRef.current = plugin;
         for (const structure of structures) {
           const data = await plugin.builders.data.rawData({ data: structure.content });
-          const trajectory = await plugin.builders.structure.parseTrajectory(data, MOLSTAR_FORMAT[structure.format]);
+          // A .cif is either mmCIF or crystallographic CIF core; each needs its own parser.
+          const format = structure.format === "cif" ? cifTrajectoryFormat(structure.content) : MOLSTAR_FORMAT[structure.format];
+          const trajectory = await plugin.builders.structure.parseTrajectory(data, format);
           await plugin.builders.structure.hierarchy.applyPreset(trajectory, "default");
           if (disposed) return;
         }
