@@ -1510,12 +1510,14 @@ export function App({ initialToken }: { initialToken?: string } = {}) {
 
   // Preserve the typed error until routing: a local 401 belongs only to the
   // Connection prompt. Network faults and other HTTP errors still get a toast.
+  // `t` is a dependency so a locale switch re-binds the toast title instead of
+  // replaying the previous language on the next failure.
   const setError = useCallback((reason?: string | Error) => {
     if (isAuthFailure(reason)) return;
     const message = reason instanceof Error ? reason.message : reason;
     setErrorState(message);
     if (message) pushToast("error", t("error.request"), message);
-  }, [pushToast]);
+  }, [pushToast, t]);
 
   const refreshUsageData = useCallback(async (): Promise<void> => {
     const filters = usageAnalyticsFilters(usageFilters);
@@ -2545,7 +2547,7 @@ export function App({ initialToken }: { initialToken?: string } = {}) {
       setIdeaTreeSettingsEdit(undefined);
       pushToast("success", t("ideaTree.saved"));
     } catch (reason) {
-      reportSystemSettingsError(reason instanceof Error ? reason : "Could not save Idea Tree settings");
+      reportSystemSettingsError(reason instanceof Error ? reason : t("error.saveIdeaTree"));
       throw reason;
     }
   }
@@ -5030,7 +5032,7 @@ export function App({ initialToken }: { initialToken?: string } = {}) {
                       settings={proxySettings}
                       webProxyPolicy={(webSettingsEdit?.values ?? webSettings)?.proxyPolicy ?? "inherit"}
                     />
-                  : <p className="muted">Loading proxy settings…</p>
+                   : <p className="muted">{t("settings.loadingProxies")}</p>
               ) : null}
               {systemSettingsGroup === "web" ? (
                 webSettings && proxySettings
