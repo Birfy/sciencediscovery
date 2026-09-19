@@ -85,7 +85,17 @@ export default function MolstarWindow({ structures, onClose }: {
           // A .cif is either mmCIF or crystallographic CIF core; each needs its own parser.
           const format = structure.format === "cif" ? cifTrajectoryFormat(structure.content) : MOLSTAR_FORMAT[structure.format];
           const trajectory = await plugin.builders.structure.parseTrajectory(data, format);
-          await plugin.builders.structure.hierarchy.applyPreset(trajectory, "default");
+          // A crystal is only readable as its unit cell: the default preset draws the
+          // asymmetric unit alone (two atoms for rock salt) and hides the cell box.
+          // Mol*'s "unitcell" preset expands the symmetry and draws the cell; when the
+          // file has no usable symmetry it declines, and we still show the cell box.
+          // Mol*'s typings only expose the two-argument form of applyPreset here, so go
+          // through a minimal structural type to pass preset params.
+          const hierarchy = plugin.builders.structure.hierarchy as unknown as {
+            applyPreset(parent: unknown, preset: string, params?: unknown): Promise<unknown> | undefined;
+          };
+          const applied = format === "cifCore" ? await hierarchy.applyPreset(trajectory, "unitcell") : undefined;
+          if (!applied) await hierarchy.applyPreset(trajectory, "default", format === "cifCore" ? { showUnitcell: true } : undefined);
           if (disposed) return;
         }
         if (structures.length > 1) await superpose(plugin, setRmsd);
