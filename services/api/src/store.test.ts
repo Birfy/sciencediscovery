@@ -1848,11 +1848,21 @@ test("SessionStore seeds, validates, and persists memory-graph settings + passwo
   await store.load();
   assert.deepEqual(store.getMemoryGraphSettings(), {
     enabled: false,
+    backend: "local",
     neo4jHttp: "http://127.0.0.1:7474",
     neo4jUser: "neo4j",
     hasNeo4jPassword: false,
   });
   assert.equal(store.getMemoryGraphNeo4jPassword(), undefined);
+
+  // The backend defaults to the local store and only moves when asked to.
+  assert.equal((await store.updateMemoryGraphSettings({ backend: "neo4j" })).backend, "neo4j");
+  assert.equal((await store.updateMemoryGraphSettings({ neo4jUser: "neo4j" })).backend, "neo4j");
+  assert.equal((await store.updateMemoryGraphSettings({ backend: "local" })).backend, "local");
+  await assert.rejects(
+    store.updateMemoryGraphSettings({ backend: "sqlite" } as never),
+    /backend must be/,
+  );
 
   // 2B: saving the password alone does NOT flip enabled.
   const initialPassword = `pw-${randomUUID()}`;
@@ -1869,6 +1879,7 @@ test("SessionStore seeds, validates, and persists memory-graph settings + passwo
   });
   assert.deepEqual(updated, {
     enabled: true,
+    backend: "local",
     neo4jHttp: "http://neo4j.local:7474",
     neo4jUser: "graph",
     hasNeo4jPassword: true,
@@ -1898,6 +1909,7 @@ test("SessionStore seeds, validates, and persists memory-graph settings + passwo
   await reopened.load();
   assert.deepEqual(reopened.getMemoryGraphSettings(), {
     enabled: true,
+    backend: "local",
     neo4jHttp: "http://neo4j.local:7474",
     neo4jUser: "graph",
     hasNeo4jPassword: false,

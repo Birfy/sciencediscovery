@@ -1083,7 +1083,17 @@ export function createApiServer(config = loadServerConfig(), dependencies: ApiSe
         let health = details.enabled
           ? await memoryGraphClient.health().catch(() => "degraded")
           : "disabled";
-        if (details.enabled && details.hasNeo4jPassword && health !== "healthy") {
+        if (details.enabled && details.backend === "neo4j") {
+          // A sidecar that restarted after the API is back on its `local`
+          // default and reports healthy: put it on the chosen backend again.
+          const info = await memoryGraphClient.healthInfo();
+          if (info.backend !== undefined && info.backend !== details.backend) {
+            mgLog.info("GET /api/memory/settings: sidecar runs %s, re-pushing backend %s", info.backend, details.backend);
+            await memoryGraphClient.pushBackend(details.backend).catch(() => undefined);
+            health = await memoryGraphClient.health().catch(() => "degraded");
+          }
+        }
+        if (details.enabled && details.backend === "neo4j" && details.hasNeo4jPassword && health !== "healthy") {
           const password = store.getMemoryGraphNeo4jPassword();
           if (password) {
             mgLog.info("GET /api/memory/settings: auto-repushing stored password (health=%s)", health);
@@ -1105,6 +1115,12 @@ export function createApiServer(config = loadServerConfig(), dependencies: ApiSe
         // HTTP/user connection changed — either rebuilds the driver. The store
         // is the source of truth; send the stored http/user so the sidecar's
         // env-only http/user is overridden. Best-effort, non-fatal.
+        if (body.backend !== undefined) {
+          await memoryGraphClient.pushBackend(details.backend).catch((error: unknown) => {
+            mgLog.warn("PUT /api/memory/settings: backend push failed (non-fatal): %s",
+              error instanceof Error ? error.message : String(error));
+          });
+        }
         const passwordChanged = body.neo4jPassword !== undefined;
         const connectionChanged = body.neo4jHttp !== undefined || body.neo4jUser !== undefined;
         if (passwordChanged || connectionChanged) {
