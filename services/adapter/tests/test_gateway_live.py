@@ -21,6 +21,11 @@ started for it (its script is consumed one turn per request):
 
     plain  no STUB_LLM_SCRIPT; the stub answers "hello from stub"
     bash   STUB_LLM_SCRIPT=tests/fixtures/stub_script_bash.json
+    approval  STUB_LLM_SCRIPT=tests/fixtures/stub_script_approval.json
+
+The instance must run with `permissions.enabled: true` and `tools.bash: ask`
+(the approval scenario runs `touch`, which the engine does not auto-allow; the
+bash scenario runs `echo`/`pwd`, which it does).
 """
 
 import os
@@ -29,7 +34,7 @@ import uuid
 import pytest
 
 from sciencediscovery_adapter.events import RunEventMapper
-from sciencediscovery_adapter.gateway import chat
+from sciencediscovery_adapter.gateway import ChatRun, chat
 
 URL = os.environ.get("JIUWENSWARM_GATEWAY_URL")
 SCENARIO = os.environ.get("JIUWENSWARM_LIVE_SCENARIO", "plain")
@@ -68,3 +73,25 @@ async def test_real_gateway_tool_round_maps_to_tool_events():
     assert completed["status"] == "completed" and "J-MARK-1" in completed["output"]
     assert mapper.final_text == "tool finished ok"
     assert mapper.unmapped == []
+
+
+@pytest.mark.skipif(SCENARIO != "approval", reason="scenario is not approval")
+@pytest.mark.parametrize("decision", ["allow_once"])
+async def test_real_gateway_approval_round_trip(decision):
+    session = f"live-{uuid.uuid4().hex[:8]}"
+    mapper = RunEventMapper(session_id=session)
+    events = []
+    async with ChatRun(URL, params(session, "run it"), idle_timeout=60) as run:
+        async for frame in run:
+            new = mapper.feed(frame)
+            events.extend(new)
+            if any(e["type"] == "permission.required" for e in new):
+                request_id = next(e["request"]["id"] for e in new if e["type"] == "permission.required")
+                answer, resolved = mapper.decide(request_id, decision)
+                events.append(resolved)
+                await run.answer(request_id, "permission_interrupt", answer)
+    kinds = [e["type"] for e in events]
+    assert kinds.index("permission.required") < kinds.index("permission.resolved") < kinds.index("tool.started")
+    assert next(e for e in events if e["type"] == "tool.completed")["trace"]["status"] == "completed"
+    assert mapper.final_text == "approved and done"
+    assert mapper.finished and mapper.unmapped == []

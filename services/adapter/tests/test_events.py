@@ -143,3 +143,78 @@ def test_failed_tool_result_carries_the_error_text():
 
 def test_unparseable_tool_result_is_passed_through_not_lost():
     assert parse_tool_result("something else") == (True, "something else")
+
+
+def test_a_run_is_finished_by_the_completion_status_not_by_chat_final():
+    mapper = RunEventMapper()
+    mapper.feed({"type": "event", "event": "chat.final", "payload": {"content": "partial"}})
+    assert not mapper.finished
+    mapper.feed({"type": "event", "event": "chat.processing_status", "payload": {"is_processing": False, "is_complete": True}})
+    assert mapper.finished
+
+
+def test_an_empty_final_does_not_erase_the_reply():
+    mapper = RunEventMapper()
+    mapper.feed({"type": "event", "event": "chat.final", "payload": {"content": "answer"}})
+    mapper.feed({"type": "event", "event": "chat.final", "payload": {"content": ""}})
+    assert mapper.final_text == "answer"
+
+
+def test_approval_pause_becomes_one_permission_request_and_no_failed_tool():
+    mapper, events = run("jw_chat_approval.raw")
+    kinds = [e["type"] for e in events]
+    assert kinds.count("permission.required") == 1
+    required = next(e for e in events if e["type"] == "permission.required")["request"]
+    assert required["state"] == "pending" and required["action"] == "code"
+    assert required["id"] == required["toolCallId"] and required["resource"] == "write /tmp/j-mark-2"
+    # The gateway's empty-error tool_result that precedes the question is the
+    # pause marker, not a failed tool call.
+    assert not any(e["type"] == "tool.completed" and e["trace"]["status"] == "failed" for e in events)
+    # After the (recorded) answer the call starts and completes exactly once.
+    assert kinds.count("tool.started") == 1 and kinds.count("tool.completed") == 1
+    assert mapper.final_text == "approved and done"
+    assert mapper.finished and mapper.unmapped == []
+
+
+def test_decide_picks_the_gateway_option_by_position():
+    mapper = RunEventMapper(session_id="s1")
+    mapper.feed({"type": "event", "event": "chat.ask_user_question", "payload": {
+        "request_id": "call_1", "source": "permission_interrupt",
+        "questions": [{"question": "write /x", "header": "权限审批: bash", "options": [
+            {"label": "本次允许"}, {"label": "会话内记住"}, {"label": "永久记住"}, {"label": "拒绝"}]}]}})
+    assert mapper.awaiting_permission
+    answer, resolved = mapper.decide("call_1", "allow_once")
+    assert answer == {"selected_options": ["本次允许"], "custom_input": "本次允许"}
+    assert resolved["type"] == "permission.resolved"
+    assert resolved["request"]["state"] == "allowed" and resolved["request"]["sessionId"] == "s1"
+    assert not mapper.awaiting_permission
+
+
+def test_decide_deny_and_allow_matching():
+    def ask():
+        mapper = RunEventMapper()
+        mapper.feed({"type": "event", "event": "chat.ask_user_question", "payload": {
+            "request_id": "c", "source": "permission_interrupt",
+            "questions": [{"question": "q", "options": [{"label": "A"}, {"label": "B"}, {"label": "C"}, {"label": "D"}]}]}})
+        return mapper
+
+    answer, resolved = ask().decide("c", "deny")
+    assert answer["selected_options"] == ["D"] and resolved["request"]["decision"] == "denied"
+    answer, resolved = ask().decide("c", "allow_matching")
+    assert answer["selected_options"] == ["B"] and resolved["request"]["decision"] == "allowed"
+
+
+def test_other_question_sources_are_reported_as_unmapped():
+    mapper = RunEventMapper()
+    assert mapper.feed({"type": "event", "event": "chat.ask_user_question",
+                        "payload": {"request_id": "r", "source": "ask_user_interrupt"}}) == []
+    assert mapper.unmapped == ["chat.ask_user_question:ask_user_interrupt"]
+
+
+def test_tool_result_without_the_trailing_fields_is_still_parsed():
+    assert parse_tool_result("success=False data=None error=''") == (False, "")
+
+
+def test_output_containing_error_equals_is_not_split():
+    result = "success=True data={'content': 'log: retry error=5 done'} error=None extracted_content=None x=1"
+    assert parse_tool_result(result) == (True, "log: retry error=5 done")

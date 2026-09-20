@@ -25,6 +25,7 @@ import json
 import re
 import uuid
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any
 
 # Frames that carry no run-visible state. Listed so that "ignored on purpose"
@@ -40,7 +41,11 @@ _ERROR_CODES: tuple[tuple[re.Pattern[str], str], ...] = (
 )
 
 
-_TOOL_RESULT = re.compile(r"^success=(True|False) data=(.*) error=(.*?) extracted_content=", re.S)
+# Full form first, anchored on the trailing field so that tool output which
+# itself contains " error=" is not split early; the short form is what the
+# gateway sends for an approval pause.
+_TOOL_RESULT_FULL = re.compile(r"^success=(True|False) data=(.*) error=(.*?) extracted_content=", re.S)
+_TOOL_RESULT_SHORT = re.compile(r"^success=(True|False) data=(.*?) error=(.*)$", re.S)
 
 
 def parse_tool_result(result: Any) -> tuple[bool, str]:
@@ -52,7 +57,7 @@ def parse_tool_result(result: Any) -> tuple[bool, str]:
     """
     if not isinstance(result, str):
         return True, json.dumps(result, ensure_ascii=False)
-    match = _TOOL_RESULT.match(result)
+    match = _TOOL_RESULT_FULL.match(result) or _TOOL_RESULT_SHORT.match(result)
     if match is None:
         return True, result
     ok = match.group(1) == "True"
@@ -92,7 +97,10 @@ class RunEventMapper:
     final_text: str | None = None
     finished: bool = False
     unmapped: list[str] = field(default_factory=list)
+    session_id: str = ""
     _response_id: str | None = None
+    _permissions: dict[str, list[str]] = field(default_factory=dict)
+    _pending_requests: dict[str, dict[str, Any]] = field(default_factory=dict)
     _tools: dict[str, dict[str, Any]] = field(default_factory=dict)
     _announced_thinking: bool = False
 
@@ -138,6 +146,11 @@ class RunEventMapper:
     # -- gateway events ----------------------------------------------------
 
     def _on_chat_processing_status(self, payload: dict[str, Any]) -> list[dict[str, Any]]:
+        # The gateway's real end of a run. `chat.final` is not: a run that paused
+        # for approval emits an empty one, then continues.
+        if payload.get("is_complete") and not payload.get("is_processing"):
+            self.finished = True
+            return self._settle_response()
         if payload.get("is_processing") and not payload.get("is_complete") and self.turn == 0:
             self.turn = 1
             return [{"type": "agent.phase", "phase": "thinking", "turn": self.turn}]
@@ -182,10 +195,16 @@ class RunEventMapper:
 
     def _on_chat_tool_result(self, payload: dict[str, Any]) -> list[dict[str, Any]]:
         tool_id = str(payload.get("tool_call_id") or "")
+        started = tool_id in self._tools
         trace = self._tools.pop(tool_id, None) or {
             "id": tool_id, "name": str(payload.get("tool_name") or "tool"), "input": "{}", "args": {},
         }
         ok, text = parse_tool_result(payload.get("result"))
+        if not ok and text == "" and not started:
+            # Approval pause: the gateway reports the gated call as an empty
+            # failure with no preceding tool_call. The call really starts (and
+            # is announced) only after the user answers.
+            return []
         trace.update({"status": "completed" if ok else "failed", "output": text, "outputChars": len(text)})
         self.turn += 1
         return [
@@ -194,9 +213,53 @@ class RunEventMapper:
         ]
 
     def _on_chat_final(self, payload: dict[str, Any]) -> list[dict[str, Any]]:
-        self.final_text = payload.get("content") or ""
-        self.finished = True
+        if payload.get("content"):
+            self.final_text = payload["content"]
         return self._settle_response()
+
+    def _on_chat_ask_user_question(self, payload: dict[str, Any]) -> list[dict[str, Any]]:
+        request_id = str(payload.get("request_id") or "")
+        question = (payload.get("questions") or [{}])[0]
+        if payload.get("source") != "permission_interrupt" or not request_id:
+            self.unmapped.append(f"chat.ask_user_question:{payload.get('source')}")
+            return []
+        self._permissions[request_id] = [str(o.get("label")) for o in question.get("options") or []]
+        tool = str(question.get("header") or "").split(":")[-1].strip() or "tool"
+        request = {
+            "id": request_id,
+            "sessionId": self.session_id or str(payload.get("session_id") or ""),
+            "toolCallId": request_id,
+            "action": "code",
+            "resource": str(question.get("question") or tool),
+            "summary": str(question.get("question") or tool),
+            "state": "pending",
+            "createdAt": datetime.now(timezone.utc).isoformat(),
+        }
+        self._pending_requests[request_id] = request
+        return [*self._settle_response(), {"type": "permission.required", "request": dict(request)}]
+
+    @property
+    def awaiting_permission(self) -> bool:
+        return bool(self._pending_requests)
+
+    def decide(self, request_id: str, decision: str) -> tuple[dict[str, Any], dict[str, Any]]:
+        """Turn a UI decision into (gateway answer, permission.resolved event).
+
+        `decision` is the UI's PermissionDecision. The gateway's options are
+        positional (once, session, forever, deny) and their labels follow the
+        UI language, so they are picked by position, not matched by text.
+        """
+        labels = self._permissions.pop(request_id)
+        request = self._pending_requests.pop(request_id)
+        index = {"allow_once": 0, "allow_matching": 1, "deny": len(labels) - 1}[decision]
+        label = labels[index]
+        allowed = decision != "deny"
+        resolved = {
+            **request, "state": "allowed" if allowed else "denied",
+            "decision": "allowed" if allowed else "denied",
+            "decidedAt": datetime.now(timezone.utc).isoformat(),
+        }
+        return {"selected_options": [label], "custom_input": label}, {"type": "permission.resolved", "request": resolved}
 
     def _on_chat_error(self, payload: dict[str, Any]) -> list[dict[str, Any]]:
         return self._fail(str(payload.get("error") or "unknown error"))

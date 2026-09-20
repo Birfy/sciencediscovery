@@ -17,7 +17,10 @@ import json
 import pytest
 import websockets
 
-from sciencediscovery_adapter.gateway import GatewayError, chat
+from sciencediscovery_adapter.gateway import ChatRun, GatewayError, chat
+
+
+DONE = {"type": "event", "event": "chat.processing_status", "payload": {"is_processing": False, "is_complete": True}}
 
 
 def serve(script):
@@ -42,6 +45,7 @@ async def test_sends_chat_send_and_yields_frames_until_final():
         yield {"type": "res", "id": request["id"], "ok": True, "payload": {"accepted": True}}
         yield {"type": "event", "event": "chat.delta", "payload": {"content": "hi"}}
         yield {"type": "event", "event": "chat.final", "payload": {"content": "hi"}}
+        yield DONE
         yield {"type": "event", "event": "chat.delta", "payload": {"content": "after the end"}}
 
     async with serve(script) as server:
@@ -49,7 +53,7 @@ async def test_sends_chat_send_and_yields_frames_until_final():
         frames = await collect(f"ws://127.0.0.1:{port}/tui", {"session_id": "s1", "content": "yo"})
     assert seen["method"] == "chat.send" and seen["is_stream"] is True
     assert seen["params"] == {"session_id": "s1", "content": "yo"}
-    assert [f.get("event", f["type"]) for f in frames] == ["res", "chat.delta", "chat.final"]
+    assert [f.get("event", f["type"]) for f in frames] == ["res", "chat.delta", "chat.final", "chat.processing_status"]
 
 
 async def test_stops_after_a_refused_request():
@@ -75,3 +79,45 @@ async def test_connection_dropped_mid_run_is_a_gateway_error():
         port = server.sockets[0].getsockname()[1]
         with pytest.raises(GatewayError, match="closed"):
             await collect(f"ws://127.0.0.1:{port}/tui", {})
+
+
+async def test_a_chat_final_alone_does_not_end_the_run():
+    """A run paused for approval emits an empty chat.final, then carries on."""
+    def script(request):
+        yield {"type": "event", "event": "chat.final", "payload": {"content": ""}}
+        yield {"type": "event", "event": "chat.delta", "payload": {"content": "later"}}
+        yield DONE
+
+    async with serve(script) as server:
+        port = server.sockets[0].getsockname()[1]
+        frames = await collect(f"ws://127.0.0.1:{port}/tui", {})
+    assert [f["event"] for f in frames] == ["chat.final", "chat.delta", "chat.processing_status"]
+
+
+async def test_answer_resumes_the_paused_run_on_the_same_connection():
+    answers = []
+
+    async def handler(connection):
+        await connection.send(json.dumps({"type": "event", "event": "connection.ack", "payload": {}}))
+        json.loads(await connection.recv())
+        await connection.send(json.dumps({"type": "event", "event": "chat.ask_user_question",
+                                          "payload": {"request_id": "call_1", "source": "permission_interrupt"}}))
+        answers.append(json.loads(await connection.recv()))
+        await connection.send(json.dumps({"type": "event", "event": "chat.final", "payload": {"content": "ok"}}))
+        await connection.send(json.dumps(DONE))
+
+    async with websockets.serve(handler, "127.0.0.1", 0) as server:
+        port = server.sockets[0].getsockname()[1]
+        seen = []
+        async with ChatRun(f"ws://127.0.0.1:{port}/tui", {"session_id": "s1", "mode": "agent.work.normal"}) as run:
+            async for frame in run:
+                seen.append(frame["event"])
+                if frame["event"] == "chat.ask_user_question":
+                    await run.answer("call_1", "permission_interrupt", {"selected_options": ["once"], "custom_input": "once"})
+    assert seen == ["chat.ask_user_question", "chat.final", "chat.processing_status"]
+    assert answers[0]["method"] == "chat.send"
+    assert answers[0]["params"] == {
+        "session_id": "s1", "query": "", "request_id": "call_1", "source": "permission_interrupt",
+        "answers": [{"selected_options": ["once"], "custom_input": "once"}],
+        "mode": "agent.work.normal", "supports_user_interaction": True,
+    }
