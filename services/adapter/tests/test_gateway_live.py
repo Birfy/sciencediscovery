@@ -21,7 +21,8 @@ started for it (its script is consumed one turn per request):
 
     plain  no STUB_LLM_SCRIPT; the stub answers "hello from stub"
     bash   STUB_LLM_SCRIPT=tests/fixtures/stub_script_bash.json
-    approval  STUB_LLM_SCRIPT=tests/fixtures/stub_script_approval.json (allow and deny)
+    approval  STUB_LLM_SCRIPT=tests/fixtures/stub_script_approval.json (user allows)
+    deny      the same script (user denies)
     cancel    STUB_LLM_SCRIPT=tests/fixtures/stub_script_slow.json
 
 The instance must run with `permissions.enabled: true` and `tools.bash: ask`
@@ -77,9 +78,9 @@ async def test_real_gateway_tool_round_maps_to_tool_events():
     assert mapper.unmapped == []
 
 
-@pytest.mark.skipif(SCENARIO != "approval", reason="scenario is not approval")
-@pytest.mark.parametrize("decision", ["allow_once", "deny"])
-async def test_real_gateway_approval_round_trip(decision):
+@pytest.mark.skipif(SCENARIO not in ("approval", "deny"), reason="scenario is not approval or deny")
+async def test_real_gateway_approval_round_trip():
+    decision = "deny" if SCENARIO == "deny" else "allow_once"
     session = f"live-{uuid.uuid4().hex[:8]}"
     mapper = RunEventMapper(session_id=session)
     events = []
