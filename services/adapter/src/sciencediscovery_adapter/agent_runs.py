@@ -28,7 +28,9 @@ answer `{"text": "...", "isError": false}` goes back to JiuwenSwarm.
 from __future__ import annotations
 
 import json
+import os
 import re
+import sys
 import uuid
 from collections.abc import AsyncIterator, Callable
 from typing import Any
@@ -45,6 +47,8 @@ from .llm_proxy import LlmRoute, LlmRoutes
 from .mcp_server import Toolset, ToolsetRegistry
 from .models import ModelProfile, ModelSync
 
+# SCIENCE_AGENT_ADAPTER_DEBUG=1 prints every tool event of every run to stderr.
+_DEBUG = os.environ.get("SCIENCE_AGENT_ADAPTER_DEBUG") == "1"
 _SAFE_NAME = re.compile(r"[^a-z0-9]")
 
 
@@ -148,6 +152,9 @@ class AgentRunner:
                 try:
                     async for frame in run:
                         for event in mapper.feed(frame):
+                            if _DEBUG and event["type"].startswith("tool."):
+                                print(f"[adapter-debug] {request.sessionId[:8]} {json.dumps(event, ensure_ascii=False)[:500]}",
+                                      file=sys.stderr, flush=True)
                             yield json.dumps({"event": event}, ensure_ascii=False) + "\n"
                 except BaseException:
                     # The caller went away (or the task was cancelled): stop the run.
