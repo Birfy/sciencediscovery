@@ -256,3 +256,28 @@ def test_cancel_ends_the_run_as_cancelled_without_an_interrupt_result_frame():
 def test_completion_without_a_cancel_request_is_not_cancelled():
     _, events = run("jw_chat_plain.raw")
     assert "run.cancelled" not in [e["type"] for e in events]
+
+
+def test_mcp_tool_is_shown_once_by_its_own_name_not_as_a_tool_call_wrapper():
+    mapper = RunEventMapper(mcp_prefixes=("mcp_sci_",))
+    events = []
+    for frame in frames("jw_chat_mcp.raw"):
+        events.extend(mapper.feed(frame))
+    started = [e["trace"] for e in events if e["type"] == "tool.started"]
+    assert [t["name"] for t in started] == ["tool_search", "run_shell"]
+    assert started[1]["args"] == {"command": "echo J-MCP-1"}
+    assert not any(t["id"].endswith(":target") for t in started)
+    completed = {e["trace"]["name"]: e["trace"] for e in events if e["type"] == "tool.completed"}
+    assert completed["run_shell"]["output"] == "SPIKE-OUT: echo J-MCP-1"
+    assert completed["run_shell"]["status"] == "completed"
+    assert len([e for e in events if e["type"] == "tool.completed"]) == 2
+    assert mapper.final_text == "mcp done"
+    assert mapper.unmapped == []
+
+
+def test_without_a_prefix_the_mcp_tool_keeps_the_gateway_name():
+    mapper = RunEventMapper()
+    events = []
+    for frame in frames("jw_chat_mcp.raw"):
+        events.extend(mapper.feed(frame))
+    assert [e["trace"]["name"] for e in events if e["type"] == "tool.started"] == ["tool_search", "mcp_sci_run_shell"]

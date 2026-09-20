@@ -69,6 +69,17 @@ def parse_tool_result(result: Any) -> tuple[bool, str]:
     return True, data if isinstance(data, str) else json.dumps(data, ensure_ascii=False)
 
 
+def _mcp_result_text(payload: dict[str, Any]) -> str:
+    """The text of an MCP tool's result. `raw_output` is the structured twin of
+    `result`, which is only a Python repr of it."""
+    raw = payload.get("raw_output")
+    if isinstance(raw, dict) and set(raw) == {"result"} and isinstance(raw["result"], str):
+        return f"success=True data={{'content': {raw['result']!r}}} error=None"
+    if raw is not None:
+        return f"success=True data={{'content': {json.dumps(raw, ensure_ascii=False)!r}}} error=None"
+    return str(payload.get("result") or "")
+
+
 def _literal(text: str) -> Any:
     try:
         return ast.literal_eval(text)
@@ -94,6 +105,9 @@ class RunEventMapper:
     """Stateful per-run translator. Feed frames in arrival order."""
 
     turn: int = 0
+    # Name prefixes JiuwenSwarm puts on MCP tools ("mcp_<server>_"). Stripped so
+    # the UI sees the tool by the name the toolset defined.
+    mcp_prefixes: tuple[str, ...] = ()
     final_text: str | None = None
     finished: bool = False
     unmapped: list[str] = field(default_factory=list)
@@ -104,6 +118,7 @@ class RunEventMapper:
     _denied: set[str] = field(default_factory=set)
     _cancel_requested: bool = False
     _tools: dict[str, dict[str, Any]] = field(default_factory=dict)
+    _wrappers: set[str] = field(default_factory=set)
     _announced_thinking: bool = False
 
     def feed(self, frame: dict[str, Any]) -> list[dict[str, Any]]:
@@ -182,9 +197,23 @@ class RunEventMapper:
         })
         return events
 
+    def _display_name(self, name: str) -> str:
+        for prefix in self.mcp_prefixes:
+            if name.startswith(prefix):
+                return name[len(prefix):]
+        return name
+
     def _on_chat_tool_call(self, payload: dict[str, Any]) -> list[dict[str, Any]]:
         call = payload.get("tool_call") or {}
         tool_id = str(call.get("tool_call_id") or uuid.uuid4().hex)
+        if call.get("name") == "tool_call":
+            # JiuwenSwarm reaches a deferred (MCP) tool through a `tool_call`
+            # wrapper and then announces the real call as "<id>:target". Only
+            # the real call is shown.
+            self._wrappers.add(tool_id)
+            return []
+        if tool_id.endswith(":target") and tool_id.removesuffix(":target") in self._wrappers:
+            tool_id = tool_id.removesuffix(":target")
         raw_arguments = call.get("arguments")
         input_text = raw_arguments if isinstance(raw_arguments, str) else json.dumps(raw_arguments or {}, ensure_ascii=False)
         try:
@@ -192,7 +221,7 @@ class RunEventMapper:
         except ValueError:
             args = {}
         trace: dict[str, Any] = {
-            "id": tool_id, "name": str(call.get("name") or "tool"), "input": input_text,
+            "id": tool_id, "name": self._display_name(str(call.get("name") or "tool")), "input": input_text,
             "args": args if isinstance(args, dict) else {}, "status": "running",
         }
         if call.get("display_name"):
@@ -202,6 +231,12 @@ class RunEventMapper:
 
     def _on_chat_tool_result(self, payload: dict[str, Any]) -> list[dict[str, Any]]:
         tool_id = str(payload.get("tool_call_id") or "")
+        if tool_id in self._wrappers and payload.get("tool_name") == "tool_call":
+            self._wrappers.discard(tool_id)  # the wrapper's own result repeats the inner one
+            return []
+        if tool_id.removesuffix(":target") in self._wrappers and tool_id.endswith(":target"):
+            tool_id = tool_id.removesuffix(":target")
+            payload = {**payload, "result": _mcp_result_text(payload)}
         started = tool_id in self._tools
         trace = self._tools.pop(tool_id, None) or {
             "id": tool_id, "name": str(payload.get("tool_name") or "tool"), "input": "{}", "args": {},
