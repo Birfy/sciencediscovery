@@ -23,6 +23,7 @@ import type { ContextContributorFactory } from "@sciencediscovery/context";
 import type { WorkspaceAgentOptions } from "@sciencediscovery/workspace";
 import type { PlanStore } from "@sciencediscovery/plan";
 
+import { createJiuwenSwarmAgentFactory, jiuwenSwarmConfigFromEnv } from "./jiuwenswarm-agent.js";
 import {
   createNativeAgent,
   type NativeAgentHandle,
@@ -49,13 +50,19 @@ export interface AgentRunHandle {
   execute(): Promise<AgentRunResult>;
 }
 
+/** The native loop, unless the deployment selected the JiuwenSwarm executor. */
+function defaultAgentFactory(): (options: NativeAgentOptions) => NativeAgentHandle {
+  const jiuwenswarm = jiuwenSwarmConfigFromEnv();
+  return jiuwenswarm ? createJiuwenSwarmAgentFactory(jiuwenswarm) : createNativeAgent;
+}
+
 export function createAgentRun(
   profile: AgentProfile,
   bindings: AgentRunBindings,
   input: AgentRunInput,
 ): AgentRunHandle {
   const gatewayHistory = structuredClone(input.history);
-  const agent = (bindings.createAgent ?? createNativeAgent)({
+  const agent = (bindings.createAgent ?? defaultAgentFactory())({
     ...bindings.workspace,
     ...(bindings.pluginSettings ? { pluginSettings: structuredClone(bindings.pluginSettings) } : {}),
     ...(bindings.disabledPlugins ? { disabledPlugins: bindings.disabledPlugins } : {}),

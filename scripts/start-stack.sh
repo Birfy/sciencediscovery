@@ -568,7 +568,9 @@ start_stack() {
     SCIENCE_AGENT_LEGACY_PORT="$legacy_port" \
     "$adapter_python" -m sciencediscovery_adapter.server &
     pids+=("$!")
-    # The legacy API binds the legacy port; the adapter owns the public one.
+    # The legacy API binds the legacy port; the adapter owns the public one. The
+    # API reaches the adapter here when SCIENCE_AGENT_EXECUTOR=jiuwenswarm.
+    export SCIENCE_AGENT_ADAPTER_URL="${SCIENCE_AGENT_ADAPTER_URL:-http://127.0.0.1:$public_port}"
     api_command=(env "SCIENCE_AGENT_PORT=$legacy_port" "${api_command[@]}")
   fi
 

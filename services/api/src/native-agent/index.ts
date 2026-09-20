@@ -773,7 +773,8 @@ class NativeAgent implements NativeAgentHandle {
  *  Exported for tests: every option here is forwarded by hand, so an option
  *  added at both ends but missed in the middle leaves its tool absent from the
  *  model's list with nothing failing anywhere. */
-function buildTools(options: NativeAgentOptions): AgentTool[] {
+/** The execution tools one run gets; also what another executor must expose. */
+export function buildTools(options: NativeAgentOptions): AgentTool[] {
   return createWorkspaceTools(options.workspaceRoot, {
     enabledConnectorIds: options.enabledConnectorIds,
     ...(options.extraTools?.length ? { extraTools: options.extraTools } : {}),
