@@ -46,6 +46,7 @@ from .events import RunEventMapper
 from .llm_proxy import LlmRoute, LlmRoutes
 from .mcp_server import Toolset, ToolsetRegistry
 from .models import ModelProfile, ModelSync
+from .schema import relax_schema
 
 # SCIENCE_AGENT_ADAPTER_DEBUG=1 prints every tool event of every run to stderr.
 _DEBUG = os.environ.get("SCIENCE_AGENT_ADAPTER_DEBUG") == "1"
@@ -130,6 +131,7 @@ class AgentRunner:
                 llm_token = self.routes.add(LlmRoute(
                     base_url=request.model.baseUrl.rstrip("/"), api_key=request.model.apiKey, model=request.model.model,
                     tool_prefix=f"mcp_{name}_", tool_names=frozenset(t.name for t in request.tools),
+                    tool_specs={t.name: {"description": t.description, "parameters": t.inputSchema} for t in request.tools},
                     system_prompt=request.systemPrompt,
                 ))
                 model_alias = f"sd-{llm_token[:12]}"
@@ -139,7 +141,8 @@ class AgentRunner:
                 if request.bridge is None:
                     raise ValueError("tools were given without a bridge to run them")
                 token = self.registry.add(Toolset(
-                    tools=[t.model_dump() for t in request.tools], call=bridge_caller(request.bridge, self.client()),
+                    # JiuwenSwarm validates strictly; the model still sees the originals (see LlmRoute).
+                    tools=[{**t.model_dump(), "inputSchema": relax_schema(t.inputSchema)} for t in request.tools], call=bridge_caller(request.bridge, self.client()),
                     server_name=name,
                 ))
                 await self.rpc(self.settings.mgmt_url, "mcp.register_custom", {

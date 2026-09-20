@@ -49,6 +49,9 @@ class LlmRoute:
     tool_prefix: str  # "mcp_<server>_"
     tool_names: frozenset[str]  # the run's tools, unprefixed
     system_prompt: str | None = None
+    # The tools as the caller defined them. JiuwenSwarm holds a relaxed copy of the schema
+    # (see schema.relax_schema); the model gets the original back, constraints included.
+    tool_specs: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 @dataclass
@@ -71,12 +74,20 @@ def _unprefixed(name: str, route: LlmRoute) -> str:
     return name.removeprefix(route.tool_prefix) if name.startswith(route.tool_prefix) else name
 
 
+def _original(function: dict[str, Any], route: LlmRoute) -> dict[str, Any]:
+    name = _unprefixed(function["name"], route)
+    spec = route.tool_specs.get(name)
+    if spec is None:
+        return {**function, "name": name}
+    return {**function, "name": name, "description": spec["description"], "parameters": spec["parameters"]}
+
+
 def rewrite_request(body: dict[str, Any], route: LlmRoute) -> dict[str, Any]:
     out = dict(body)
     out["model"] = route.model
     if body.get("tools"):
         out["tools"] = [
-            {**tool, "function": {**tool["function"], "name": _unprefixed(tool["function"]["name"], route)}}
+            {**tool, "function": _original(tool["function"], route)}
             for tool in body["tools"]
             if _unprefixed(tool.get("function", {}).get("name", ""), route) in route.tool_names
         ]
