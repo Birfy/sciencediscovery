@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from sciencediscovery_adapter.llm_proxy import LlmRoute, rewrite_request
-from sciencediscovery_adapter.schema import relax_schema
+from sciencediscovery_adapter.schema import relax_schema, restore_dropped_empties
 
 TASK = {
     "type": "object", "additionalProperties": False, "required": ["prompt"],
@@ -58,3 +58,32 @@ def test_the_model_gets_the_original_schema_and_description_back():
     function = rewrite_request(body, route)["tools"][0]["function"]
     assert function["name"] == "task" and function["description"] == "Run a subagent."
     assert function["parameters"]["properties"]["timeout_seconds"]["minimum"] == 7200
+
+
+PLAN = {"type": "object", "required": ["plan"], "properties": {
+    "plan": {"type": "array"}, "explanation": {"type": "string"}, "paths": {"type": "array"}, "meta": {"type": "object"}}}
+
+
+def test_a_dropped_required_empty_array_is_restored():
+    assert restore_dropped_empties(PLAN, {}) == {"plan": []}
+
+
+def test_a_dropped_required_empty_object_is_restored():
+    schema = {"type": "object", "required": ["meta"], "properties": {"meta": {"type": "object"}}}
+    assert restore_dropped_empties(schema, {}) == {"meta": {}}
+
+
+def test_optional_arguments_and_present_ones_are_left_alone():
+    assert restore_dropped_empties(PLAN, {"plan": [{"step": "x"}]}) == {"plan": [{"step": "x"}]}
+    assert "paths" not in restore_dropped_empties(PLAN, {})
+
+
+def test_a_required_scalar_is_never_invented():
+    schema = {"type": "object", "required": ["command"], "properties": {"command": {"type": "string"}}}
+    assert restore_dropped_empties(schema, {}) == {}
+
+
+def test_the_input_is_not_mutated():
+    arguments = {}
+    restore_dropped_empties(PLAN, arguments)
+    assert arguments == {}

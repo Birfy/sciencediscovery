@@ -47,3 +47,24 @@ def relax_schema(schema: Any) -> Any:
             continue
         relaxed[key] = relax_schema(value)
     return relaxed
+
+
+_EMPTY_BY_TYPE = {"array": list, "object": dict}
+
+
+def restore_dropped_empties(schema: dict[str, Any], arguments: dict[str, Any]) -> dict[str, Any]:
+    """Put back required array/object arguments that JiuwenSwarm dropped for being empty.
+
+    Measured on 0.2.6: a call made with `{"plan": []}` reaches the MCP server as `{}`
+    (empty strings, 0 and false survive; empty lists and objects do not). `update_plan`
+    clears a plan with exactly that empty list. A *required* array or object cannot be
+    missing for any other reason than that drop, so it is restored as empty; optional
+    ones are left alone, where "missing" and "empty" mean the same thing.
+    """
+    properties = schema.get("properties") or {}
+    restored = dict(arguments)
+    for name in schema.get("required") or []:
+        empty = _EMPTY_BY_TYPE.get((properties.get(name) or {}).get("type"))
+        if name not in restored and empty is not None:
+            restored[name] = empty()
+    return restored

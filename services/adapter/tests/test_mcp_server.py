@@ -102,3 +102,11 @@ async def test_removed_toolsets_stop_answering(setup):
     client, token, _, registry = setup
     registry.remove(token)
     assert (await rpc(client, token, "tools/list")).status_code == 404
+
+
+async def test_a_required_empty_list_dropped_upstream_is_restored_before_the_call(setup):
+    client, token, calls, registry = setup
+    registry.get(token).tools.append({"name": "update_plan", "description": "d",
+                                      "inputSchema": {"type": "object", "required": ["plan"], "properties": {"plan": {"type": "array"}}}})
+    await rpc(client, token, "tools/call", {"name": "update_plan", "arguments": {}})
+    assert calls[-1] == ("update_plan", {"plan": []})

@@ -30,6 +30,8 @@ from typing import Any
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import JSONResponse
 
+from .schema import restore_dropped_empties
+
 PROTOCOL_VERSION = "2025-03-26"
 
 # (tool name, arguments) -> (text, is_error)
@@ -88,10 +90,12 @@ async def handle_rpc(toolset: Toolset, message: dict[str, Any]) -> dict[str, Any
         return _result(request_id, {"tools": toolset.tools})
     if method == "tools/call":
         name = params.get("name")
-        if not any(tool["name"] == name for tool in toolset.tools):
+        tool = next((t for t in toolset.tools if t["name"] == name), None)
+        if tool is None:
             return _error(request_id, -32602, f"unknown tool: {name}")
+        arguments = restore_dropped_empties(tool.get("inputSchema") or {}, params.get("arguments") or {})
         try:
-            text, is_error = await toolset.call(str(name), params.get("arguments") or {})
+            text, is_error = await toolset.call(str(name), arguments)
         except Exception as error:  # the callback is another process; surface, don't crash the run
             text, is_error = f"tool bridge failed: {type(error).__name__}: {error}", True
         return _result(request_id, {"content": [{"type": "text", "text": text}], "isError": is_error})
