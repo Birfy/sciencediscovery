@@ -561,6 +561,26 @@ start_stack() {
     wait_healthy "evolve" "http://127.0.0.1:${SCIENCE_AGENT_EVOLVE_PORT:-4313}/health"
   fi
 
+  if [[ "${SCIENCE_AGENT_EXECUTOR:-}" == "jiuwenswarm" ]]; then
+    if [[ -z "$adapter_python" ]]; then
+      echo "SCIENCE_AGENT_EXECUTOR=jiuwenswarm needs the adapter: also set SCIENCE_AGENT_ADAPTER=1." >&2
+      exit 1
+    fi
+    # Where the JiuwenSwarm instance listens; scripts/jiuwenswarm.sh knows its ports.
+    if [[ -z "${JIUWENSWARM_GATEWAY_URL:-}" || -z "${JIUWENSWARM_MGMT_URL:-}" ]]; then
+      eval "$("$script_dir/jiuwenswarm.sh" env)" || {
+        echo "Could not read the JiuwenSwarm instance; run scripts/jiuwenswarm.sh setup and start." >&2
+        exit 1
+      }
+    fi
+    local gateway_port="${JIUWENSWARM_GATEWAY_URL##*:}"; gateway_port="${gateway_port%%/*}"
+    if ! (exec 3<>"/dev/tcp/127.0.0.1/$gateway_port") 2>/dev/null; then
+      echo "JiuwenSwarm is not reachable at $JIUWENSWARM_GATEWAY_URL; start it with scripts/jiuwenswarm.sh start." >&2
+      exit 1
+    fi
+    export JIUWENSWARM_GATEWAY_URL JIUWENSWARM_MGMT_URL
+  fi
+
   if [[ -n "$adapter_python" ]]; then
     local public_port="${SCIENCE_AGENT_PORT:-4310}"
     local legacy_port="${SCIENCE_AGENT_LEGACY_PORT:-$((public_port + 100))}"
