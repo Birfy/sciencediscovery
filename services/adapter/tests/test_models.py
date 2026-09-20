@@ -74,3 +74,15 @@ async def test_concurrent_runs_do_not_lose_each_others_models():
     sync = ModelSync(gateway.rpc, URL)
     await asyncio.gather(*(sync.ensure(ModelProfile(f"m{i}", f"http://h{i}/v1", "k")) for i in range(1, 6)))
     assert sorted(m["model_name"] for m in gateway.models) == [f"m{i}" for i in range(6)]
+
+
+async def test_remove_drops_a_private_entry_and_keeps_a_default():
+    gateway = FakeGateway([entry("m1", default=True), entry("sd-x")])
+    await ModelSync(gateway.rpc, URL).remove("sd-x")
+    assert [m["model_name"] for m in gateway.models] == ["m1"] and gateway.models[0]["is_default"]
+
+
+async def test_removing_an_absent_entry_changes_nothing():
+    gateway = FakeGateway([entry("m1", default=True)])
+    await ModelSync(gateway.rpc, URL).remove("nope")
+    assert gateway.replacements == []

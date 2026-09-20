@@ -89,6 +89,8 @@ test("sends the prompt, model and the run's tools to the adapter and returns the
     assert.equal(body.sessionId, "session-1");
     assert.equal(body.prompt, "hello");
     assert.equal(body.cwd, "/workspace");
+    assert.equal(typeof body.systemPrompt, "string");
+    assert.ok(body.systemPrompt.length > 200, "the run gets the workspace system prompt, not an empty one");
     assert.deepEqual(body.model, { model: "gpt-x", baseUrl: "http://llm.test/v1", apiKey: "sk-test", provider: "OpenAI" });
     const echo = body.tools.find((tool: { name: string }) => tool.name === "echo");
     assert.equal(echo.description, "Echo a word.");

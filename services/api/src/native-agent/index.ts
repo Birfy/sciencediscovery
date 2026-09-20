@@ -204,6 +204,40 @@ function formatRunContract(contract: string): string {
   ].join("\n");
 }
 
+/**
+ * The system prompt an agent for these options gets, and its parts. Shared by every
+ * executor so the model is told the same thing wherever the loop runs.
+ */
+export function composeSystemPrompt(
+  options: NativeAgentOptions,
+  toolNames: ReadonlySet<string>,
+  promptSkills: RuntimeSkill[],
+  toolPromptSections: readonly string[] = [],
+): { parts: WorkspacePromptPart[]; systemPrompt: string } {
+  const governance = {
+    localRunnerAllowed: options.localRunnerAllowed,
+    ...(options.approvalMode ? { approvalMode: options.approvalMode } : {}),
+    ...(options.memoryGraphEnabled ? { memoryGraphEnabled: options.memoryGraphEnabled } : {}),
+    ...(options.remoteRunners?.length ? { remoteRunners: options.remoteRunners.map((runner) => `${runner.runnerId}: ${runner.description || runner.hostAlias}`) } : {}),
+    ...(options.specialist ? { specialist: options.specialist } : {}),
+    ...(options.workflowInstructions ? { workflowInstructions: options.workflowInstructions } : {}),
+    ...(options.specialists?.filter((specialist) => specialist.builtIn).length
+      ? { builtinSpecialists: options.specialists!.filter((specialist) => specialist.builtIn).map((specialist) => ({ description: specialist.description, name: specialist.name })) }
+      : {}),
+    ...(options.subagent ? { subagent: options.subagent } : {}),
+    ...(toolNames.has("task") && !options.subagent ? { subagentOrchestration: true } : {}),
+  };
+  const baseSystemPrompt = buildWorkspaceSystemPrompt(promptSkills, Boolean(options.environments), governance);
+  return {
+    parts: buildWorkspacePromptParts(promptSkills, Boolean(options.environments), governance),
+    systemPrompt: [
+      baseSystemPrompt,
+      options.runContract ? formatRunContract(options.runContract) : "",
+      ...toolPromptSections,
+    ].filter(Boolean).join("\n\n"),
+  };
+}
+
 class NativeAgent implements NativeAgentHandle {
   private readonly listeners = new Set<Listener>();
   private toolRegistry!: ToolRegistry<WireMessage>;
@@ -290,30 +324,9 @@ class NativeAgent implements NativeAgentHandle {
     this.promptSkills = toolNames.has("read_skill")
       ? (options.skills ?? [])
       : [];
-    const governance = {
-      localRunnerAllowed: options.localRunnerAllowed,
-      ...(options.approvalMode ? { approvalMode: options.approvalMode } : {}),
-      ...(options.memoryGraphEnabled ? { memoryGraphEnabled: options.memoryGraphEnabled } : {}),
-      ...(options.remoteRunners?.length ? { remoteRunners: options.remoteRunners.map((runner) => `${runner.runnerId}: ${runner.description || runner.hostAlias}`) } : {}),
-      ...(options.specialist ? { specialist: options.specialist } : {}),
-      ...(options.workflowInstructions ? { workflowInstructions: options.workflowInstructions } : {}),
-      ...(options.specialists?.filter((specialist) => specialist.builtIn).length
-        ? { builtinSpecialists: options.specialists!.filter((specialist) => specialist.builtIn).map((specialist) => ({ description: specialist.description, name: specialist.name })) }
-        : {}),
-      ...(options.subagent ? { subagent: options.subagent } : {}),
-      ...(toolNames.has("task") && !options.subagent ? { subagentOrchestration: true } : {}),
-    };
-    const baseSystemPrompt = buildWorkspaceSystemPrompt(
-      this.promptSkills,
-      Boolean(options.environments),
-      governance,
-    );
-    this.promptParts = buildWorkspacePromptParts(this.promptSkills, Boolean(options.environments), governance);
-    this.systemPrompt = [
-      baseSystemPrompt,
-      options.runContract ? formatRunContract(options.runContract) : "",
-      ...this.toolRegistry.promptSections(),
-    ].filter(Boolean).join("\n\n");
+    const composed = composeSystemPrompt(options, toolNames, this.promptSkills, this.toolRegistry.promptSections());
+    this.promptParts = composed.parts;
+    this.systemPrompt = composed.systemPrompt;
     this.history = (options.gatewayHistory ?? options.history ?? []).map(normalizeHistoryMessage);
     // Reasoning models bill hidden thought against the same `max_tokens` as
     // the answer, and on some endpoints the agent loop spends a whole turn on

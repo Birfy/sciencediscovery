@@ -70,3 +70,14 @@ class ModelSync:
             entry["is_default"] = bool((existing or {}).get("is_default")) or not any(m.get("is_default") for m in kept)
             await self._rpc(self._url, "models.replace_all", {"models": [*kept, entry]})
             return profile.model
+
+    async def remove(self, model_name: str) -> None:
+        """Drop a private per-run entry once its run is over."""
+        async with self._lock:
+            current = (await self._rpc(self._url, "models.list")).get("models", [])
+            kept = [{k: v for k, v in m.items() if k not in _DERIVED} for m in current if m.get("model_name") != model_name]
+            if len(kept) == len(current):
+                return
+            if kept and not any(m.get("is_default") for m in kept):
+                kept[0]["is_default"] = True
+            await self._rpc(self._url, "models.replace_all", {"models": kept})

@@ -21,6 +21,7 @@ import type { AgentTool, AgentToolResult } from "@sciencediscovery/tools";
 
 import {
   buildTools,
+  composeSystemPrompt,
   type NativeAgentHandle,
   type NativeAgentOptions,
 } from "../native-agent/index.js";
@@ -127,6 +128,9 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
   private async stream(text: string, tools: Map<string, AgentTool>, bridgeUrl: string, bridgeToken: string): Promise<string> {
     const { config: model } = this.options;
     const provider = model.apiProtocol ? PROVIDERS[model.apiProtocol] : undefined;
+    const toolNames = new Set(tools.keys());
+    // The same system prompt the native loop would send: the model is tuned to it.
+    const { systemPrompt } = composeSystemPrompt(this.options, toolNames, toolNames.has("read_skill") ? this.options.skills ?? [] : []);
     const response = await (this.config.fetch ?? fetch)(`${this.config.adapterUrl}/agent/runs`, {
       method: "POST",
       headers: {
@@ -136,6 +140,7 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
       body: JSON.stringify({
         sessionId: this.options.sessionId,
         prompt: text,
+        systemPrompt,
         cwd: this.options.workspaceRoot,
         model: { model: model.model, baseUrl: model.baseUrl, apiKey: model.apiToken ?? "", ...(provider ? { provider } : {}) },
         tools: [...tools.values()].map((tool) => ({

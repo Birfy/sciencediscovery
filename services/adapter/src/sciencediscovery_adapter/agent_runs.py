@@ -41,6 +41,7 @@ from pydantic import BaseModel, Field
 from . import gateway
 from .config import Settings
 from .events import RunEventMapper
+from .llm_proxy import LlmRoute, LlmRoutes
 from .mcp_server import Toolset, ToolsetRegistry
 from .models import ModelProfile, ModelSync
 
@@ -73,6 +74,8 @@ class AgentRunRequest(BaseModel):
     tools: list[ToolSpec] = Field(default_factory=list)
     bridge: Bridge | None = None
     model: ModelSpec | None = None
+    # Replaces JiuwenSwarm's own system prompt for this run (needs `model`).
+    systemPrompt: str | None = None
 
 
 def bridge_caller(bridge: Bridge, client: httpx.AsyncClient):
@@ -90,9 +93,13 @@ def bridge_caller(bridge: Bridge, client: httpx.AsyncClient):
 class AgentRunner:
     """Runs agent turns. The gateway calls are attributes so tests can replace them."""
 
-    def __init__(self, settings: Settings, registry: ToolsetRegistry, client: Callable[[], httpx.AsyncClient]) -> None:
+    def __init__(
+        self, settings: Settings, registry: ToolsetRegistry, client: Callable[[], httpx.AsyncClient],
+        routes: LlmRoutes | None = None,
+    ) -> None:
         self.settings = settings
         self.registry = registry
+        self.routes = routes or LlmRoutes()
         self.client = client  # a getter: the HTTP client exists only while the app runs
         self.chat_run = gateway.ChatRun
         self.rpc = gateway.rpc
@@ -101,6 +108,8 @@ class AgentRunner:
     async def stream(self, request: AgentRunRequest) -> AsyncIterator[str]:
         name = "sci" + _SAFE_NAME.sub("", uuid.uuid4().hex)[:10]
         token = None
+        llm_token = None
+        model_alias = None
         registered = False
         mapper = RunEventMapper(session_id=request.sessionId, mcp_prefixes=(f"mcp_{name}_",))
         params: dict[str, Any] = {
@@ -110,8 +119,18 @@ class AgentRunner:
         }
         try:
             if request.model:
+                if request.model.provider != "OpenAI":
+                    raise ValueError(f"the {request.model.provider} protocol is not supported by this executor yet")
+                # JiuwenSwarm talks to a private alias that points at this run's proxy route, which
+                # forwards to the real endpoint with the real id, tool names and system prompt.
+                llm_token = self.routes.add(LlmRoute(
+                    base_url=request.model.baseUrl.rstrip("/"), api_key=request.model.apiKey, model=request.model.model,
+                    tool_prefix=f"mcp_{name}_", tool_names=frozenset(t.name for t in request.tools),
+                    system_prompt=request.systemPrompt,
+                ))
+                model_alias = f"sd-{llm_token[:12]}"
                 params["model_name"] = await self.models.ensure(ModelProfile(
-                    request.model.model, request.model.baseUrl, request.model.apiKey, request.model.provider))
+                    model_alias, f"{self.settings.public_url}/llm/{llm_token}/v1", llm_token, "OpenAI"))
             if request.tools:
                 if request.bridge is None:
                     raise ValueError("tools were given without a bridge to run them")
@@ -148,6 +167,13 @@ class AgentRunner:
             yield json.dumps({"event": failure}, ensure_ascii=False) + "\n"
             yield json.dumps({"done": {"finalText": "", "unmapped": mapper.unmapped, "cancelled": False}}) + "\n"
         finally:
+            if llm_token:
+                self.routes.remove(llm_token)
+            if model_alias:
+                try:
+                    await self.models.remove(model_alias)
+                except Exception:
+                    pass
             if token:
                 self.registry.remove(token)
             if registered:

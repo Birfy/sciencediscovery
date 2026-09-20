@@ -188,20 +188,48 @@ async def test_closing_the_stream_cancels_the_gateway_run(harness):
     assert FakeRun.instances[0].cancelled is True
 
 
-async def test_the_requested_model_is_put_in_the_gateways_list_and_chosen(harness):
+async def test_the_run_talks_to_a_private_alias_that_routes_to_the_real_model(harness):
     app, runner, rpcs = harness
     listed = {"models": []}
 
     async def rpc(url, method, params=None, **kwargs):
         rpcs.append((url, method, params))
-        return listed if method == "models.list" else {}
+        if method == "models.list":
+            return {"models": [dict(m) for m in listed["models"]]}
+        if method == "models.replace_all":
+            listed["models"] = params["models"]
+        return {}
 
     runner.rpc = rpc
-    await post(app, {"sessionId": "s1", "prompt": "hi",
-                     "model": {"model": "gpt-x", "baseUrl": "http://llm/v1", "apiKey": "sk"}})
-    assert [m for _, m, _ in rpcs] == ["models.list", "models.replace_all"]
-    assert rpcs[1][2]["models"][0]["api_base"] == "http://llm/v1"
-    assert FakeRun.instances[0].params["model_name"] == "gpt-x"
+    seen = {}
+    original = runner.chat_run
+
+    class Spy(original):
+        def __init__(self, url, params, **kwargs):
+            super().__init__(url, params, **kwargs)
+            seen["alias"] = params["model_name"]
+            seen["entry"] = next(m for m in listed["models"] if m["model_name"] == params["model_name"])
+            seen["route"] = runner.routes.get(seen["entry"]["api_key"])
+
+    runner.chat_run = Spy
+    await post(app, {"sessionId": "s1", "prompt": "hi", "systemPrompt": "Be a scientist.",
+                     "tools": [{"name": "run_shell"}], "bridge": {"url": "http://legacy.test/b"},
+                     "model": {"model": "gpt-x", "baseUrl": "http://llm/v1/", "apiKey": "sk"}})
+    entry, route = seen["entry"], seen["route"]
+    assert seen["alias"].startswith("sd-") and seen["alias"] != "gpt-x"
+    assert entry["api_base"] == f"http://adapter.test/llm/{entry['api_key']}/v1"
+    assert (route.base_url, route.api_key, route.model, route.system_prompt) == ("http://llm/v1", "sk", "gpt-x", "Be a scientist.")
+    assert route.tool_names == frozenset({"run_shell"}) and route.tool_prefix.startswith("mcp_sci")
+    # after the run: the alias is gone from the list and the route is closed
+    assert listed["models"] == [] and runner.routes.get(entry["api_key"]) is None
+
+
+async def test_a_protocol_other_than_openai_chat_is_refused_clearly(harness):
+    app, *_ = harness
+    _, lines = await post(app, {"sessionId": "s1", "prompt": "hi",
+                                "model": {"model": "claude-x", "baseUrl": "http://a/v1", "provider": "Anthropic"}})
+    failed = next(line["event"] for line in lines if line.get("event", {}).get("type") == "run.failed")
+    assert "Anthropic protocol is not supported" in failed["error"]
 
 
 async def test_no_model_leaves_the_gateways_default_in_charge(harness):
