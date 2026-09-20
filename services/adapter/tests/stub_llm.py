@@ -14,7 +14,7 @@
 
 """Minimal OpenAI-compatible streaming stub.
 
-Replies "hello from stub" unless STUB_LLM_SCRIPT names a JSON file holding a
+Replies "hello from stub" (also to tool-less probe requests) unless STUB_LLM_SCRIPT names a JSON file holding a
 list of turns, consumed one per chat request:
 
     [{"tool": "bash", "arguments": {"command": "echo hi"}}, {"text": "done", "delay": 5}]
@@ -47,7 +47,9 @@ class H(BaseHTTPRequestHandler):
     def do_POST(self):
         n = int(self.headers.get("content-length", 0)); body = json.loads(self.rfile.read(n) or b"{}")
         if LOG: open(LOG, "a").write(json.dumps(body, ensure_ascii=False) + "\n")
-        turn = next_turn()
+        # JiuwenSwarm probes a newly added model (image modality) with a tool-less request;
+        # those must not consume a scripted turn meant for the run.
+        turn = next_turn() if body.get("tools") else {"text": "hello from stub"}
         time.sleep(turn.get("delay", 0))
 
         def chunk(delta, finish=None):
