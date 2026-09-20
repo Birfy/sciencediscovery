@@ -235,7 +235,7 @@ async def test_agent_runs_endpoint_drives_a_real_run_through_its_own_toolset():
             server.should_exit = True
             await task
     events = [line["event"] for line in lines if "event" in line]
-    assert bridge_calls == [{"name": "run_shell", "arguments": {"command": "echo J-LIVE-1"}}]
+    assert bridge_calls == [{"name": "run_shell", "arguments": {"command": "echo J-LIVE-1"}}], lines
     completed = next(e for e in events if e["type"] == "tool.completed")["trace"]
     assert completed["name"] == "run_shell" and "bridge ran: echo J-LIVE-1" in completed["output"]
     assert lines[-1]["done"]["finalText"] == "live mcp done"
