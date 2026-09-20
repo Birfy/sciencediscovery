@@ -19,9 +19,13 @@ import type { AddressInfo } from "node:net";
 import type { AgentEvent } from "@sciencediscovery/orchestration";
 import type { AgentTool, AgentToolResult } from "@sciencediscovery/tools";
 
+import { DurableContextStore } from "@sciencediscovery/context";
+
 import {
   buildTools,
   composeSystemPrompt,
+  pluginTools,
+  startPluginScope,
   type NativeAgentHandle,
   type NativeAgentOptions,
 } from "../native-agent/index.js";
@@ -104,7 +108,12 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
   async execute(text: string): Promise<{ finalMessages: Awaited<ReturnType<NativeAgentHandle["execute"]>>["finalMessages"] }> {
     if (this.executed) throw new Error("Agent handle has already been executed");
     this.executed = true;
-    const tools = new Map(buildTools(this.options).map((tool) => [tool.name, tool]));
+    const durable = new DurableContextStore({
+      history: this.options.gatewayHistory,
+      ...(this.options.runContract ? { runContract: this.options.runContract } : {}),
+    });
+    const plugins = await startPluginScope(this.options, durable, this.controller.signal);
+    const tools = new Map([...buildTools(this.options), ...pluginTools(plugins)].map((tool) => [tool.name, tool]));
     const bridgeToken = randomUUID();
     const bridge = await startBridge(tools, bridgeToken, this.controller.signal, (event) => this.emit(event));
     const timeout = this.options.runTimeoutMs ? setTimeout(() => this.controller.abort(), this.options.runTimeoutMs) : undefined;
@@ -122,6 +131,7 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
     } finally {
       if (timeout) clearTimeout(timeout);
       await bridge.close();
+      await plugins.dispose();
     }
   }
 

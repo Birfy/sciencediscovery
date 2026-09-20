@@ -205,6 +205,33 @@ function formatRunContract(contract: string): string {
 }
 
 /**
+ * Start the plugin scope for a run: the plugin-contributed tools (plan, subagent
+ * dispatch, evolve, ...) live here, not in buildTools. Shared by every executor.
+ * `runSubagent` lets the caller observe delegated children.
+ */
+export async function startPluginScope(
+  options: NativeAgentOptions,
+  durable: DurableContextStore,
+  signal: AbortSignal,
+  runSubagent?: WorkspaceAgentOptions["runSubagent"],
+) {
+  const plugins = await createRuntimePluginScope<WireMessage>({
+    scope: options.contextScope ?? (options.subagent?.name === "Reviewer Specialist" ? "reviewer" : options.subagent ? "subagent" : "main"),
+    planStore: options.planStore,
+    evolve: options.evolve,
+    workspace: { ...options, ...(runSubagent ?? options.runSubagent ? { runSubagent: runSubagent ?? options.runSubagent } : {}) },
+    durable,
+  }, options.disabledPlugins, options.pluginSettings);
+  await plugins.start(signal);
+  return plugins;
+}
+
+/** Every execution tool one run gets: the workspace tools plus what plugins contribute. */
+export function pluginTools(plugins: Awaited<ReturnType<typeof startPluginScope>>): AgentTool[] {
+  return plugins.contributions.flatMap((item) => item.tools);
+}
+
+/**
  * The system prompt an agent for these options gets, and its parts. Shared by every
  * executor so the model is told the same thing wherever the loop runs.
  */
@@ -272,21 +299,11 @@ class NativeAgent implements NativeAgentHandle {
 
   private async initialize(signal: AbortSignal): Promise<void> {
     const options = this.options;
-    const pluginWorkspace = { ...options, ...(options.runSubagent ? {
-      runSubagent: async (...args: Parameters<NonNullable<WorkspaceAgentOptions["runSubagent"]>>) => {
-        const result = await options.runSubagent!(...args);
-        this.versionRecorder?.childCompleted(`subagent:${result.id}`);
-        return result;
-      },
-    } : {}) };
-    this.plugins = await createRuntimePluginScope<WireMessage>({
-      scope: options.contextScope ?? (options.subagent?.name === "Reviewer Specialist" ? "reviewer" : options.subagent ? "subagent" : "main"),
-      planStore: options.planStore,
-      evolve: options.evolve,
-      workspace: pluginWorkspace,
-      durable: this.durableContext,
-    }, options.disabledPlugins, options.pluginSettings);
-    await this.plugins.start(signal);
+    this.plugins = await startPluginScope(options, this.durableContext, signal, options.runSubagent ? async (...args) => {
+      const result = await options.runSubagent!(...args);
+      this.versionRecorder?.childCompleted(`subagent:${result.id}`);
+      return result;
+    } : undefined);
     const executionTools = buildTools(options);
     // Retained per Session, not per AgentRun: a bounded result stays in the
     // replayed history of later runs, so its ref has to keep resolving for as

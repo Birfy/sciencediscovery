@@ -132,6 +132,38 @@ test("translates the adapter's run events into agent events", async () => {
   }
 });
 
+test("plugin-contributed tools (update_plan) are offered to the adapter and run here", async () => {
+  const updates: unknown[] = [];
+  const planStore = {
+    latest: async () => undefined,
+    update: async (input: unknown) => { updates.push(input); return { id: "p1", steps: [] } as never; },
+  };
+  let offered: string[] = [];
+  let reply: any;
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    offered = body.tools.map((tool: { name: string }) => tool.name);
+    const call = await fetch(body.bridge.url, {
+      method: "POST", headers: { authorization: `Bearer ${body.bridge.token}` },
+      body: JSON.stringify({ name: "update_plan", arguments: { plan: [{ step: "Do it", status: "in_progress" }] } }),
+    });
+    reply = await call.json();
+    response.writeHead(200);
+    response.end(line({ done: { finalText: "planned" } }));
+  });
+  try {
+    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ planStore: planStore as never }));
+    const events = collect(agent);
+    await agent.execute("plan it");
+    assert.ok(offered.includes("update_plan"), `offered: ${offered.join(", ")}`);
+    assert.ok(offered.includes("echo"), "the workspace tools are still offered");
+    assert.equal(events.filter((event) => event.type === "tool_execution_end").length, 1);
+    assert.equal(reply.isError, false, reply.text);
+    assert.deepEqual(updates, [{ plan: [{ status: "in_progress", step: "Do it" }] }]);
+  } finally {
+    await adapter.close();
+  }
+});
+
 test("reported token usage becomes a model_usage event the run can record", async () => {
   const adapter = await fakeAdapter((_request, response) => {
     response.writeHead(200);
