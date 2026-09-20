@@ -17,7 +17,7 @@ import json
 import pytest
 import websockets
 
-from sciencediscovery_adapter.gateway import ChatRun, GatewayError, chat
+from sciencediscovery_adapter.gateway import ChatRun, GatewayError, chat, rpc
 
 
 DONE = {"type": "event", "event": "chat.processing_status", "payload": {"is_processing": False, "is_complete": True}}
@@ -140,3 +140,32 @@ async def test_cancel_sends_chat_interrupt_with_the_cancel_intent():
                 pass
     assert seen[0]["method"] == "chat.interrupt" and seen[0]["is_stream"] is False
     assert seen[0]["params"] == {"session_id": "s1", "intent": "cancel", "mode": "agent.work.normal"}
+
+
+async def test_rpc_returns_the_payload_of_the_matching_response():
+    seen = []
+
+    async def handler(connection):
+        await connection.send(json.dumps({"type": "event", "event": "connection.ack", "payload": {}}))
+        request = json.loads(await connection.recv())
+        seen.append(request)
+        await connection.send(json.dumps({"type": "event", "event": "noise", "payload": {}}))
+        await connection.send(json.dumps({"type": "res", "id": request["id"], "ok": True, "payload": {"type": "connected"}}))
+
+    async with websockets.serve(handler, "127.0.0.1", 0) as server:
+        port = server.sockets[0].getsockname()[1]
+        payload = await rpc(f"ws://127.0.0.1:{port}/ws", "mcp.connect", {"name": "sci"})
+    assert payload == {"type": "connected"}
+    assert seen[0]["method"] == "mcp.connect" and seen[0]["is_stream"] is False and seen[0]["params"] == {"name": "sci"}
+
+
+async def test_rpc_refusal_raises():
+    async def handler(connection):
+        await connection.send(json.dumps({"type": "event", "event": "connection.ack", "payload": {}}))
+        request = json.loads(await connection.recv())
+        await connection.send(json.dumps({"type": "res", "id": request["id"], "ok": False, "error": "unknown method: x"}))
+
+    async with websockets.serve(handler, "127.0.0.1", 0) as server:
+        port = server.sockets[0].getsockname()[1]
+        with pytest.raises(GatewayError, match="unknown method"):
+            await rpc(f"ws://127.0.0.1:{port}/ws", "x")

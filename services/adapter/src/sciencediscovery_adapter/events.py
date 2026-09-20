@@ -241,6 +241,9 @@ class RunEventMapper:
         trace = self._tools.pop(tool_id, None) or {
             "id": tool_id, "name": str(payload.get("tool_name") or "tool"), "input": "{}", "args": {},
         }
+        if payload.get("raw_output") is not None and not tool_id.endswith(":target"):
+            # An MCP tool called directly: `result` is only a repr of `raw_output`.
+            payload = {**payload, "result": _mcp_result_text(payload)}
         ok, text = parse_tool_result(payload.get("result"))
         if tool_id in self._denied:
             # After a denial the gateway reports the bare option label ("拒绝")

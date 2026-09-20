@@ -281,3 +281,15 @@ def test_without_a_prefix_the_mcp_tool_keeps_the_gateway_name():
     for frame in frames("jw_chat_mcp.raw"):
         events.extend(mapper.feed(frame))
     assert [e["trace"]["name"] for e in events if e["type"] == "tool.started"] == ["tool_search", "mcp_sci_run_shell"]
+
+
+def test_a_directly_exposed_mcp_tool_maps_without_any_wrapper():
+    mapper = RunEventMapper(mcp_prefixes=("mcp_sci_",))
+    events = []
+    for frame in frames("jw_chat_mcp_direct.raw"):
+        events.extend(mapper.feed(frame))
+    started = [e["trace"] for e in events if e["type"] == "tool.started"]
+    assert [t["name"] for t in started] == ["run_shell"]
+    completed = next(e for e in events if e["type"] == "tool.completed")["trace"]
+    assert completed["output"] == "SPIKE-OUT: echo J-DIRECT" and completed["status"] == "completed"
+    assert mapper.final_text == "direct done" and mapper.finished and mapper.unmapped == []

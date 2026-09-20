@@ -118,3 +118,29 @@ async def chat(url: str, params: dict[str, Any], *, idle_timeout: float | None =
     async with ChatRun(url, params, idle_timeout=idle_timeout) as run:
         async for frame in run:
             yield frame
+
+
+async def rpc(url: str, method: str, params: dict[str, Any] | None = None, *, timeout: float = 30) -> dict[str, Any]:
+    """One non-streaming management call (`mcp.*`, `permissions.*`, ...).
+
+    Returns the response payload; a refusal raises GatewayError. Management
+    methods are served on the web channel (`ws://<host>:<web port>/ws`), not on
+    the `/tui` route chats use.
+    """
+    try:
+        connection = await websockets.connect(url, max_size=None)
+    except OSError as error:
+        raise GatewayError(f"gateway unreachable at {url}: {error}") from error
+    async with connection:
+        await asyncio.wait_for(connection.recv(), timeout)  # connection.ack
+        request_id = f"rpc-{uuid.uuid4().hex[:12]}"
+        await connection.send(json.dumps({
+            "type": "req", "id": request_id, "method": method, "is_stream": False, "params": params or {},
+        }, ensure_ascii=False))
+        while True:
+            frame = json.loads(await asyncio.wait_for(connection.recv(), timeout))
+            if frame.get("type") == "res" and frame.get("id") == request_id:
+                break
+    if not frame.get("ok"):
+        raise GatewayError(f"{method} refused: {frame.get('error') or frame.get('payload')}")
+    return frame.get("payload") or {}

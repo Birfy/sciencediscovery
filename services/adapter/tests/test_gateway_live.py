@@ -24,6 +24,9 @@ started for it (its script is consumed one turn per request):
     approval  STUB_LLM_SCRIPT=tests/fixtures/stub_script_approval.json (user allows)
     deny      the same script (user denies)
     cancel    STUB_LLM_SCRIPT=tests/fixtures/stub_script_slow.json
+    mcp       STUB_LLM_SCRIPT=tests/fixtures/stub_script_mcp_live.json, plus
+              JIUWENSWARM_MGMT_URL=ws://127.0.0.1:<web port>/ws and an instance with
+              `progressive_tool_enabled: false` (MCP tools are then direct tools)
 
 The instance must run with `permissions.enabled: true` and `tools.bash: ask`
 (the approval scenario runs `touch`, which the engine does not auto-allow; the
@@ -37,7 +40,8 @@ import uuid
 import pytest
 
 from sciencediscovery_adapter.events import RunEventMapper
-from sciencediscovery_adapter.gateway import ChatRun, chat
+from sciencediscovery_adapter.gateway import ChatRun, chat, rpc
+from sciencediscovery_adapter.mcp_server import Toolset, ToolsetRegistry, mcp_router
 
 URL = os.environ.get("JIUWENSWARM_GATEWAY_URL")
 SCENARIO = os.environ.get("JIUWENSWARM_LIVE_SCENARIO", "plain")
@@ -115,3 +119,57 @@ async def test_real_gateway_cancel_ends_the_run_as_cancelled():
                 await run.cancel()
     assert events[-1]["type"] == "run.cancelled"
     assert mapper.finished and mapper.unmapped == []
+
+
+@pytest.mark.skipif(SCENARIO != "mcp", reason="scenario is not mcp")
+async def test_real_gateway_calls_a_tool_hosted_by_the_adapter():
+    import socket
+
+    import uvicorn
+    from fastapi import FastAPI
+
+    mgmt = os.environ["JIUWENSWARM_MGMT_URL"]
+    calls = []
+
+    async def call(name, arguments):
+        calls.append((name, arguments))
+        return f"bridge ran: {arguments['command']}", False
+
+    registry = ToolsetRegistry()
+    token = registry.add(Toolset(call=call, tools=[{
+        "name": "run_shell", "description": "Run a shell command in the session workspace.",
+        "inputSchema": {"type": "object", "properties": {"command": {"type": "string"}}, "required": ["command"]},
+    }]))
+    app = FastAPI()
+    app.include_router(mcp_router(registry))
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
+    serving = asyncio.create_task(server.serve())
+    while not server.started:
+        await asyncio.sleep(0.05)
+    name = "scilive"
+    try:
+        await rpc(mgmt, "mcp.register_custom", {"name": name, "transport": "streamable-http", "url": f"http://127.0.0.1:{port}/mcp/{token}"})
+        await rpc(mgmt, "mcp.connect", {"name": name})
+        session = f"live-{uuid.uuid4().hex[:8]}"
+        mapper = RunEventMapper(session_id=session, mcp_prefixes=(f"mcp_{name}_",))
+        events = []
+        async with ChatRun(URL, {**params(session, "use the tool"), "mcp": [name]}, idle_timeout=60) as run:
+            async for frame in run:
+                events.extend(mapper.feed(frame))
+    finally:
+        for method in ("mcp.disconnect", "mcp.delete_custom"):
+            try:
+                await rpc(mgmt, method, {"name": name})
+            except Exception:
+                pass
+        server.should_exit = True
+        await serving
+    assert calls == [("run_shell", {"command": "echo J-LIVE-1"})]
+    started = next(e for e in events if e["type"] == "tool.started")["trace"]
+    assert started["name"] == "run_shell"
+    completed = next(e for e in events if e["type"] == "tool.completed")["trace"]
+    assert completed["status"] == "completed" and "bridge ran: echo J-LIVE-1" in completed["output"]
+    assert mapper.final_text == "live mcp done" and mapper.finished
