@@ -297,6 +297,9 @@ async function startBridge(
     const isError = result.isError === true;
     // Tool failures reach the model as text; without this line they are invisible to the operator.
     if (isError) console.warn(`[jiuwenswarm-bridge] tool ${tool.name} failed: ${resultText(result).slice(0, 300)}`);
+    if (process.env.SCIENCE_AGENT_JIUWENSWARM_DEBUG === "1") {
+      console.warn(`[jiuwenswarm-bridge] ${tool.name}(${JSON.stringify(args).slice(0, 160)}) -> ${isError ? "ERROR " : ""}${resultText(result).slice(0, 300)}`);
+    }
     emit({ type: "tool_execution_end", toolCallId, toolName: tool.name, isError, result });
     reply(200, { text: resultText(result), isError });
   });
