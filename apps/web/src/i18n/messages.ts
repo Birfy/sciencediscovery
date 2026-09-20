@@ -1983,6 +1983,16 @@ export const en = {
   "skillLibrary.versionCount": "{id} · {count} version(s)",
   "skillLibrary.versionedLibrary": "Versioned library",
 
+  "skillFolder.archiveTooLarge": "Compressed Skill folder exceeds the {size} MiB upload limit.",
+  "skillFolder.duplicatePath": "Skill folder contains a duplicate file path: {path}",
+  "skillFolder.extractedTooLarge": "Skill folder exceeds the {size} MiB extracted-size limit.",
+  "skillFolder.missingSkillMd": "The selected folder must contain SKILL.md at its root.",
+  "skillFolder.pathsNotPreserved": "The browser did not preserve the selected folder paths.",
+  "skillFolder.selectFolder": "Select a Skill folder to import.",
+  "skillFolder.singleFolder": "Select exactly one Skill folder.",
+  "skillFolder.tooManyFiles": "Skill folders may contain at most {count} files.",
+  "skillFolder.unsafePath": "Skill folder contains an unsafe file path.",
+
   "skillManager.addOtherFile": "Other file",
   "skillManager.addReference": "Reference",
   "skillManager.addScript": "Script",
@@ -4632,6 +4642,16 @@ export const zhCN: Partial<Record<MessageKey, string>> = {
   "skillLibrary.title": "Skill 库",
   "skillLibrary.versionCount": "{id} · {count} 个版本",
   "skillLibrary.versionedLibrary": "版本化库",
+
+  "skillFolder.archiveTooLarge": "压缩后的 Skill 文件夹超过 {size} MiB 的上传上限。",
+  "skillFolder.duplicatePath": "Skill 文件夹中有重复的文件路径：{path}",
+  "skillFolder.extractedTooLarge": "Skill 文件夹解压后超过 {size} MiB 的上限。",
+  "skillFolder.missingSkillMd": "所选文件夹的根目录下必须有 SKILL.md。",
+  "skillFolder.pathsNotPreserved": "浏览器没有保留所选文件夹的目录结构。",
+  "skillFolder.selectFolder": "请选择要导入的 Skill 文件夹。",
+  "skillFolder.singleFolder": "请只选择一个 Skill 文件夹。",
+  "skillFolder.tooManyFiles": "Skill 文件夹最多包含 {count} 个文件。",
+  "skillFolder.unsafePath": "Skill 文件夹中有不安全的文件路径。",
 
   "skillManager.addOtherFile": "其他文件",
   "skillManager.addReference": "参考文档",
