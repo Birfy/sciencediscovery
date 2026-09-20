@@ -186,3 +186,25 @@ async def test_closing_the_stream_cancels_the_gateway_run(harness):
     assert json.loads(first)["event"]["type"] == "agent.phase"
     await stream.aclose()  # what the HTTP layer does when the client disconnects
     assert FakeRun.instances[0].cancelled is True
+
+
+async def test_the_requested_model_is_put_in_the_gateways_list_and_chosen(harness):
+    app, runner, rpcs = harness
+    listed = {"models": []}
+
+    async def rpc(url, method, params=None, **kwargs):
+        rpcs.append((url, method, params))
+        return listed if method == "models.list" else {}
+
+    runner.rpc = rpc
+    await post(app, {"sessionId": "s1", "prompt": "hi",
+                     "model": {"model": "gpt-x", "baseUrl": "http://llm/v1", "apiKey": "sk"}})
+    assert [m for _, m, _ in rpcs] == ["models.list", "models.replace_all"]
+    assert rpcs[1][2]["models"][0]["api_base"] == "http://llm/v1"
+    assert FakeRun.instances[0].params["model_name"] == "gpt-x"
+
+
+async def test_no_model_leaves_the_gateways_default_in_charge(harness):
+    app, *_ = harness
+    await post(app, {"sessionId": "s1", "prompt": "hi"})
+    assert "model_name" not in FakeRun.instances[0].params

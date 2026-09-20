@@ -24,8 +24,9 @@ started for it (its script is consumed one turn per request):
     approval  STUB_LLM_SCRIPT=tests/fixtures/stub_script_approval.json (user allows)
     deny      the same script (user denies)
     cancel    STUB_LLM_SCRIPT=tests/fixtures/stub_script_slow.json
-    agent_run STUB_LLM_SCRIPT=tests/fixtures/stub_script_agent_run.json, same env as mcp (the
-              server name is generated per run, so the script names the tool as ~run_shell)
+    agent_run STUB_LLM_SCRIPT=tests/fixtures/stub_script_agent_run.json, same env as mcp, plus
+              STUB_LLM_LOG and STUB_LLM_BASE_URL (http://127.0.0.1:<stub>/v1) to also check the
+              model reaches the provider (the server name is generated per run, so the script names the tool as ~run_shell)
     mcp       STUB_LLM_SCRIPT=tests/fixtures/stub_script_mcp_live.json, plus
               JIUWENSWARM_MGMT_URL=ws://127.0.0.1:<web port>/ws and an instance with
               `progressive_tool_enabled: false` (MCP tools are then direct tools)
@@ -223,6 +224,9 @@ async def test_agent_runs_endpoint_drives_a_real_run_through_its_own_toolset():
                        "inputSchema": {"type": "object", "properties": {"command": {"type": "string"}}, "required": ["command"]}}],
             "bridge": {"url": f"http://127.0.0.1:{bridge_port}/bridge", "token": "t"},
         }
+        stub_log, stub_base = os.environ.get("STUB_LLM_LOG"), os.environ.get("STUB_LLM_BASE_URL")
+        if stub_log and stub_base:  # also prove the requested model reaches the provider
+            body["model"] = {"model": "live-model-x", "baseUrl": stub_base, "apiKey": "live-key"}
         lines = []
         async with httpx.AsyncClient(timeout=90) as client:
             async with client.stream("POST", f"http://127.0.0.1:{adapter_port}/agent/runs", json=body) as response:
@@ -241,3 +245,6 @@ async def test_agent_runs_endpoint_drives_a_real_run_through_its_own_toolset():
     assert completed["name"] == "run_shell" and "bridge ran: echo J-LIVE-1" in completed["output"]
     assert lines[-1]["done"]["finalText"] == "live mcp done"
     assert lines[-1]["done"]["unmapped"] == []
+    if stub_log and stub_base:
+        with open(stub_log) as log:
+            assert {json.loads(row).get("model") for row in log if row.strip()} == {"live-model-x"}

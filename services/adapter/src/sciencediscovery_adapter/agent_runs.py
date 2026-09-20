@@ -42,6 +42,7 @@ from . import gateway
 from .config import Settings
 from .events import RunEventMapper
 from .mcp_server import Toolset, ToolsetRegistry
+from .models import ModelProfile, ModelSync
 
 _SAFE_NAME = re.compile(r"[^a-z0-9]")
 
@@ -57,6 +58,13 @@ class Bridge(BaseModel):
     token: str = ""
 
 
+class ModelSpec(BaseModel):
+    model: str
+    baseUrl: str
+    apiKey: str = ""
+    provider: str = "OpenAI"
+
+
 class AgentRunRequest(BaseModel):
     sessionId: str
     prompt: str
@@ -64,6 +72,7 @@ class AgentRunRequest(BaseModel):
     cwd: str = "/tmp"
     tools: list[ToolSpec] = Field(default_factory=list)
     bridge: Bridge | None = None
+    model: ModelSpec | None = None
 
 
 def bridge_caller(bridge: Bridge, client: httpx.AsyncClient):
@@ -87,6 +96,7 @@ class AgentRunner:
         self.client = client  # a getter: the HTTP client exists only while the app runs
         self.chat_run = gateway.ChatRun
         self.rpc = gateway.rpc
+        self.models = ModelSync(lambda *a, **k: self.rpc(*a, **k), settings.mgmt_url)
 
     async def stream(self, request: AgentRunRequest) -> AsyncIterator[str]:
         name = "sci" + _SAFE_NAME.sub("", uuid.uuid4().hex)[:10]
@@ -99,6 +109,9 @@ class AgentRunner:
             "supports_user_interaction": True, "agent_ref": {"mode": request.mode, "id": "default"},
         }
         try:
+            if request.model:
+                params["model_name"] = await self.models.ensure(ModelProfile(
+                    request.model.model, request.model.baseUrl, request.model.apiKey, request.model.provider))
             if request.tools:
                 if request.bridge is None:
                     raise ValueError("tools were given without a bridge to run them")
