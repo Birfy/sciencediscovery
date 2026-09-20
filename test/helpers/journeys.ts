@@ -521,7 +521,8 @@ export async function readRunActivity(page: Page, options: { expandTools?: boole
     tools.push({
       details: (await card.locator(".timeline-content").textContent())?.trim() ?? "",
       status: (await card.locator(".timeline-status").textContent())?.trim() ?? "",
-      summary: (await card.locator("summary").textContent())?.trim() ?? "",
+      // Only the card's own summary: an expanded card can hold nested disclosures.
+      summary: (await card.locator(":scope > summary").textContent())?.trim() ?? "",
     });
   }
   return { text: await views.timelines.allInnerTexts(), tools };
