@@ -55,7 +55,7 @@ import { resolveExecutionNpu, type SandboxNpu } from "./npu-devices.js";
 import { ensureSeccompFilter, type SeccompVariant } from "./seccomp.js";
 import { profileKeyAllowed, sedimentableCwd, type SessionEnvProfile } from "./session-env-profile.js";
 import type { EnvironmentStore } from "./environment-store.js";
-import { buildSeatbeltProfile, seatbeltWorkspaceMapping } from "./seatbelt.js";
+import { buildSeatbeltProfile, canonicalPath, seatbeltPwdShim, seatbeltWorkspaceMapping } from "./seatbelt.js";
 import { RunnerSkillPackages } from "./skill-packages.js";
 
 import { RUNNER_VERSION } from "./version.js";
@@ -631,6 +631,8 @@ export interface SandboxLaunch {
   commandPrefix: string[];
   env: Record<string, string>;
   sandbox?: SandboxKind;
+  /** Bash text run before user code so `pwd` reports `/workspace` under a native sandbox. */
+  shellPrelude?: string;
   /** Translate a host cwd observed by a native sandbox back to `/workspace`. */
   toLogicalPath?: (hostPath: string) => string;
   /** Release per-launch resources such as a private temp directory. */
@@ -888,6 +890,7 @@ async function buildSeatbeltLaunch(
     executable: config.seatbeltPath ?? "/usr/bin/sandbox-exec",
     hostCwd: mapping.hostCwd,
     sandbox: "seatbelt",
+    shellPrelude: seatbeltPwdShim(await canonicalPath(mapping.toHostPath("/workspace"))),
     toLogicalPath: mapping.toLogicalPath,
   };
 }
@@ -1205,7 +1208,7 @@ export async function executeShell(
     config,
     launch,
     commandArguments,
-    request.code,
+    `${launch.shellPrelude ?? ""}${request.code}`,
     executionTimeoutMs(request.executionTimeoutMs, config.execTimeoutMs),
     workspaceRoot,
     signal,

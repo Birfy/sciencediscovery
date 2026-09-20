@@ -7,7 +7,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { buildSeatbeltProfile, seatbeltString, seatbeltWorkspaceMapping } from "./seatbelt.js";
+import { spawnSync } from "node:child_process";
+
+import { buildSeatbeltProfile, canonicalPath, seatbeltPwdShim, seatbeltString, seatbeltWorkspaceMapping } from "./seatbelt.js";
 
 test("Seatbelt strings escape profile metacharacters", () => {
   assert.equal(seatbeltString('a\\b"c'), '"a\\\\b\\"c"');
@@ -46,4 +48,13 @@ test("workspace mapping preserves the logical provenance path", async () => {
   assert.equal(mapping.hostCwd, child);
   assert.equal(mapping.toHostPath("/workspace/agent/work"), child);
   assert.equal(mapping.toLogicalPath(child), "/workspace/agent/work");
+});
+
+test("Seatbelt pwd shim reports the host workspace as /workspace", async () => {
+  const root = await canonicalPath(await mkdtemp(join(tmpdir(), "seatbelt-pwd-it's-")));
+  const nested = join(root, "a b");
+  await mkdir(nested);
+  const script = `${seatbeltPwdShim(root)}pwd -P; cd "a b"; pwd; cd /; pwd`;
+  const result = spawnSync("/bin/bash", ["--noprofile", "--norc", "-c", script], { cwd: root, encoding: "utf8" });
+  assert.equal(result.stdout, "/workspace\n/workspace/a b\n/\n");
 });
