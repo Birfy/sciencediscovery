@@ -171,7 +171,7 @@ export interface RuntimeSkillSnapshot {
   hash: string;
   id: string;
   readPackageFiles: () => SkillPackageFileBytes[];
-  metadata: Record<string, string>;
+  metadata: Record<string, unknown>;
   readResource: (path: string) => SkillResourceContent;
   resources: SkillResource[];
   revision: number;
