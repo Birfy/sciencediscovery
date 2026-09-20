@@ -20,6 +20,8 @@ Frame shapes here were captured from a real JiuwenSwarm 0.2.6 gateway
 
 from __future__ import annotations
 
+import ast
+import json
 import re
 import uuid
 from dataclasses import dataclass, field
@@ -27,7 +29,7 @@ from typing import Any
 
 # Frames that carry no run-visible state. Listed so that "ignored on purpose"
 # stays distinguishable from "not mapped yet" in `RunEventMapper.unmapped`.
-_IGNORED_EVENTS = frozenset({"connection.ack", "context.usage"})
+_IGNORED_EVENTS = frozenset({"connection.ack", "context.usage", "chat.tool_update"})
 
 _ERROR_CODES: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"\b(401|403)\b|unauthori[sz]ed|invalid.{0,10}api.?key", re.I), "unauthorized"),
@@ -36,6 +38,42 @@ _ERROR_CODES: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"APIConnectionError|connection (error|refused|reset)|ConnectError", re.I), "transport-error"),
     (re.compile(r"\b5\d\d\b|server error|overloaded", re.I), "server-error"),
 )
+
+
+_TOOL_RESULT = re.compile(r"^success=(True|False) data=(.*) error=(.*?) extracted_content=", re.S)
+
+
+def parse_tool_result(result: Any) -> tuple[bool, str]:
+    """Split JiuwenSwarm's `chat.tool_result.result` into (ok, text).
+
+    The gateway sends the Python repr of its result object, e.g.
+    "success=True data={'content': '...'} error=None extracted_content=None ...",
+    not JSON, so it is unpicked here rather than left to the UI.
+    """
+    if not isinstance(result, str):
+        return True, json.dumps(result, ensure_ascii=False)
+    match = _TOOL_RESULT.match(result)
+    if match is None:
+        return True, result
+    ok = match.group(1) == "True"
+    if not ok:
+        return False, _literal_text(match.group(3))
+    data = _literal(match.group(2))
+    if isinstance(data, dict) and isinstance(data.get("content"), str):
+        return True, data["content"]
+    return True, data if isinstance(data, str) else json.dumps(data, ensure_ascii=False)
+
+
+def _literal(text: str) -> Any:
+    try:
+        return ast.literal_eval(text)
+    except (ValueError, SyntaxError):
+        return text
+
+
+def _literal_text(text: str) -> str:
+    value = _literal(text)
+    return value if isinstance(value, str) else str(value)
 
 
 def classify_failure(message: str) -> str:
@@ -55,6 +93,7 @@ class RunEventMapper:
     finished: bool = False
     unmapped: list[str] = field(default_factory=list)
     _response_id: str | None = None
+    _tools: dict[str, dict[str, Any]] = field(default_factory=dict)
     _announced_thinking: bool = False
 
     def feed(self, frame: dict[str, Any]) -> list[dict[str, Any]]:
@@ -122,6 +161,37 @@ class RunEventMapper:
             "responseId": self._response_id, "turn": self.turn,
         })
         return events
+
+    def _on_chat_tool_call(self, payload: dict[str, Any]) -> list[dict[str, Any]]:
+        call = payload.get("tool_call") or {}
+        tool_id = str(call.get("tool_call_id") or uuid.uuid4().hex)
+        raw_arguments = call.get("arguments")
+        input_text = raw_arguments if isinstance(raw_arguments, str) else json.dumps(raw_arguments or {}, ensure_ascii=False)
+        try:
+            args = json.loads(input_text)
+        except ValueError:
+            args = {}
+        trace: dict[str, Any] = {
+            "id": tool_id, "name": str(call.get("name") or "tool"), "input": input_text,
+            "args": args if isinstance(args, dict) else {}, "status": "running",
+        }
+        if call.get("display_name"):
+            trace["summary"] = str(call["display_name"])
+        self._tools[tool_id] = trace
+        return [*self._settle_response(), {"type": "tool.started", "trace": dict(trace)}]
+
+    def _on_chat_tool_result(self, payload: dict[str, Any]) -> list[dict[str, Any]]:
+        tool_id = str(payload.get("tool_call_id") or "")
+        trace = self._tools.pop(tool_id, None) or {
+            "id": tool_id, "name": str(payload.get("tool_name") or "tool"), "input": "{}", "args": {},
+        }
+        ok, text = parse_tool_result(payload.get("result"))
+        trace.update({"status": "completed" if ok else "failed", "output": text, "outputChars": len(text)})
+        self.turn += 1
+        return [
+            {"type": "tool.output", "toolCallId": tool_id, "chunk": text},
+            {"type": "tool.completed", "trace": trace},
+        ]
 
     def _on_chat_final(self, payload: dict[str, Any]) -> list[dict[str, Any]]:
         self.final_text = payload.get("content") or ""

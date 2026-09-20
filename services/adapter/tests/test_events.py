@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from sciencediscovery_adapter.events import RunEventMapper, classify_failure
+from sciencediscovery_adapter.events import RunEventMapper, classify_failure, parse_tool_result
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -107,3 +107,39 @@ def test_reasoning_streams_as_thinking_deltas():
 ])
 def test_failure_classification(text, code):
     assert classify_failure(text) == code
+
+
+def test_tool_round_maps_to_started_output_completed_then_a_new_response():
+    mapper, events = run("jw_chat_bash.raw")
+    kinds = [e["type"] for e in events]
+    assert kinds[:4] == ["agent.phase", "tool.started", "tool.output", "tool.completed"]
+    assert kinds[4] == "assistant.response.started" and kinds[-1] == "assistant.response.settled"
+    started, completed = events[1]["trace"], events[3]["trace"]
+    assert started["name"] == "bash" and started["status"] == "running"
+    assert started["args"] == {"command": "echo J-MARK-1 && pwd"}
+    assert started["summary"].startswith("执行 ")
+    assert completed["id"] == started["id"] and completed["status"] == "completed"
+    assert "J-MARK-1" in completed["output"] and "Exit Code: 0" in completed["output"]
+    assert events[2] == {"type": "tool.output", "toolCallId": started["id"], "chunk": completed["output"]}
+    assert mapper.final_text == "tool finished ok"
+    assert mapper.unmapped == []
+
+
+def test_the_reply_after_a_tool_is_a_new_response_in_a_later_turn():
+    _, events = run("jw_chat_bash.raw")
+    after = next(e for e in events if e["type"] == "assistant.response.started")
+    assert after["turn"] == 2
+
+
+def test_tool_result_repr_is_parsed():
+    ok, text = parse_tool_result("success=True data={'content': 'a\\nb'} error=None extracted_content=None x=1")
+    assert (ok, text) == (True, "a\nb")
+
+
+def test_failed_tool_result_carries_the_error_text():
+    ok, text = parse_tool_result("success=False data=None error='boom: no such file' extracted_content=None x=1")
+    assert (ok, text) == (False, "boom: no such file")
+
+
+def test_unparseable_tool_result_is_passed_through_not_lost():
+    assert parse_tool_result("something else") == (True, "something else")
