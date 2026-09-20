@@ -121,3 +121,22 @@ async def test_answer_resumes_the_paused_run_on_the_same_connection():
         "answers": [{"selected_options": ["once"], "custom_input": "once"}],
         "mode": "agent.work.normal", "supports_user_interaction": True,
     }
+
+
+async def test_cancel_sends_chat_interrupt_with_the_cancel_intent():
+    seen = []
+
+    async def handler(connection):
+        await connection.send(json.dumps({"type": "event", "event": "connection.ack", "payload": {}}))
+        json.loads(await connection.recv())
+        seen.append(json.loads(await connection.recv()))
+        await connection.send(json.dumps(DONE))
+
+    async with websockets.serve(handler, "127.0.0.1", 0) as server:
+        port = server.sockets[0].getsockname()[1]
+        async with ChatRun(f"ws://127.0.0.1:{port}/tui", {"session_id": "s1", "mode": "agent.work.normal"}) as run:
+            await run.cancel()
+            async for _ in run:
+                pass
+    assert seen[0]["method"] == "chat.interrupt" and seen[0]["is_stream"] is False
+    assert seen[0]["params"] == {"session_id": "s1", "intent": "cancel", "mode": "agent.work.normal"}

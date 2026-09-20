@@ -17,7 +17,9 @@
 Replies "hello from stub" unless STUB_LLM_SCRIPT names a JSON file holding a
 list of turns, consumed one per chat request:
 
-    [{"tool": "bash", "arguments": {"command": "echo hi"}}, {"text": "done"}]
+    [{"tool": "bash", "arguments": {"command": "echo hi"}}, {"text": "done", "delay": 5}]
+
+"delay" (seconds) holds the reply back, for cancellation scenarios.
 """
 import json, os, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -44,6 +46,7 @@ class H(BaseHTTPRequestHandler):
         n = int(self.headers.get("content-length", 0)); body = json.loads(self.rfile.read(n) or b"{}")
         if LOG: open(LOG, "a").write(json.dumps(body, ensure_ascii=False) + "\n")
         turn = next_turn()
+        time.sleep(turn.get("delay", 0))
 
         def chunk(delta, finish=None):
             return "data: " + json.dumps({"id": "c1", "object": "chat.completion.chunk", "created": int(time.time()), "model": "stub-model", "choices": [{"index": 0, "delta": delta, "finish_reason": finish}]}) + "\n\n"

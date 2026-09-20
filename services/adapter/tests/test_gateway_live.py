@@ -21,13 +21,15 @@ started for it (its script is consumed one turn per request):
 
     plain  no STUB_LLM_SCRIPT; the stub answers "hello from stub"
     bash   STUB_LLM_SCRIPT=tests/fixtures/stub_script_bash.json
-    approval  STUB_LLM_SCRIPT=tests/fixtures/stub_script_approval.json
+    approval  STUB_LLM_SCRIPT=tests/fixtures/stub_script_approval.json (allow and deny)
+    cancel    STUB_LLM_SCRIPT=tests/fixtures/stub_script_slow.json
 
 The instance must run with `permissions.enabled: true` and `tools.bash: ask`
 (the approval scenario runs `touch`, which the engine does not auto-allow; the
 bash scenario runs `echo`/`pwd`, which it does).
 """
 
+import asyncio
 import os
 import uuid
 
@@ -76,7 +78,7 @@ async def test_real_gateway_tool_round_maps_to_tool_events():
 
 
 @pytest.mark.skipif(SCENARIO != "approval", reason="scenario is not approval")
-@pytest.mark.parametrize("decision", ["allow_once"])
+@pytest.mark.parametrize("decision", ["allow_once", "deny"])
 async def test_real_gateway_approval_round_trip(decision):
     session = f"live-{uuid.uuid4().hex[:8]}"
     mapper = RunEventMapper(session_id=session)
@@ -92,6 +94,23 @@ async def test_real_gateway_approval_round_trip(decision):
                 await run.answer(request_id, "permission_interrupt", answer)
     kinds = [e["type"] for e in events]
     assert kinds.index("permission.required") < kinds.index("permission.resolved") < kinds.index("tool.started")
-    assert next(e for e in events if e["type"] == "tool.completed")["trace"]["status"] == "completed"
+    status = next(e for e in events if e["type"] == "tool.completed")["trace"]["status"]
+    assert status == ("failed" if decision == "deny" else "completed")
     assert mapper.final_text == "approved and done"
+    assert mapper.finished and mapper.unmapped == []
+
+
+@pytest.mark.skipif(SCENARIO != "cancel", reason="scenario is not cancel")
+async def test_real_gateway_cancel_ends_the_run_as_cancelled():
+    session = f"live-{uuid.uuid4().hex[:8]}"
+    mapper = RunEventMapper(session_id=session)
+    events = []
+    async with ChatRun(URL, params(session, "go"), idle_timeout=30) as run:
+        async for frame in run:
+            events.extend(mapper.feed(frame))
+            if mapper.turn == 1 and not mapper._cancel_requested:
+                await asyncio.sleep(2)  # let the model call start
+                mapper.request_cancel()
+                await run.cancel()
+    assert events[-1]["type"] == "run.cancelled"
     assert mapper.finished and mapper.unmapped == []

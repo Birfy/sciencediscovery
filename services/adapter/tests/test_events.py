@@ -218,3 +218,41 @@ def test_tool_result_without_the_trailing_fields_is_still_parsed():
 def test_output_containing_error_equals_is_not_split():
     result = "success=True data={'content': 'log: retry error=5 done'} error=None extracted_content=None x=1"
     assert parse_tool_result(result) == (True, "log: retry error=5 done")
+
+
+def decide_in_recording(name, decision):
+    """Replay a recorded approval run, deciding when the question arrives."""
+    mapper = RunEventMapper(session_id="s")
+    events = []
+    for frame in frames(name):
+        new = mapper.feed(frame)
+        events.extend(new)
+        for event in new:
+            if event["type"] == "permission.required":
+                events.append(mapper.decide(event["request"]["id"], decision)[1])
+    return mapper, events
+
+
+def test_a_denied_call_is_a_failed_tool_not_a_successful_one():
+    mapper, events = decide_in_recording("jw_chat_deny.raw", "deny")
+    resolved = next(e for e in events if e["type"] == "permission.resolved")["request"]
+    assert resolved["state"] == "denied"
+    completed = next(e for e in events if e["type"] == "tool.completed")["trace"]
+    assert completed["status"] == "failed" and completed["output"] == "Denied by the user."
+    assert mapper.finished and mapper.unmapped == []
+
+
+def test_cancel_ends_the_run_as_cancelled_without_an_interrupt_result_frame():
+    mapper = RunEventMapper()
+    events = []
+    for index, frame in enumerate(frames("jw_chat_cancel.raw")):
+        if index == 2:  # the user presses stop after the run has started
+            mapper.request_cancel()
+        events.extend(mapper.feed(frame))
+    assert [e["type"] for e in events][-1] == "run.cancelled"
+    assert mapper.finished and mapper.unmapped == []
+
+
+def test_completion_without_a_cancel_request_is_not_cancelled():
+    _, events = run("jw_chat_plain.raw")
+    assert "run.cancelled" not in [e["type"] for e in events]

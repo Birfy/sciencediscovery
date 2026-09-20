@@ -89,6 +89,15 @@ class ChatRun:
             "supports_user_interaction": True,
         })
 
+    async def cancel(self) -> None:
+        """Ask the gateway to stop the run. It answers with a `res` and then ends
+        the run with the usual completion status."""
+        await self._connection.send(json.dumps({
+            "type": "req", "id": f"interrupt-{uuid.uuid4().hex[:12]}", "method": "chat.interrupt",
+            "is_stream": False,
+            "params": {"session_id": self._params["session_id"], "intent": "cancel", "mode": self._params.get("mode")},
+        }))
+
     def __aiter__(self) -> AsyncIterator[dict[str, Any]]:
         return self._frames()
 

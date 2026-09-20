@@ -101,6 +101,8 @@ class RunEventMapper:
     _response_id: str | None = None
     _permissions: dict[str, list[str]] = field(default_factory=dict)
     _pending_requests: dict[str, dict[str, Any]] = field(default_factory=dict)
+    _denied: set[str] = field(default_factory=set)
+    _cancel_requested: bool = False
     _tools: dict[str, dict[str, Any]] = field(default_factory=dict)
     _announced_thinking: bool = False
 
@@ -150,7 +152,12 @@ class RunEventMapper:
         # for approval emits an empty one, then continues.
         if payload.get("is_complete") and not payload.get("is_processing"):
             self.finished = True
-            return self._settle_response()
+            events = self._settle_response()
+            if self._cancel_requested:
+                # The gateway sends no interrupt_result on the run's own stream;
+                # the cancelled run just ends, so the request is what says why.
+                events.append({"type": "run.cancelled", "reason": "Cancelled by the user."})
+            return events
         if payload.get("is_processing") and not payload.get("is_complete") and self.turn == 0:
             self.turn = 1
             return [{"type": "agent.phase", "phase": "thinking", "turn": self.turn}]
@@ -200,6 +207,11 @@ class RunEventMapper:
             "id": tool_id, "name": str(payload.get("tool_name") or "tool"), "input": "{}", "args": {},
         }
         ok, text = parse_tool_result(payload.get("result"))
+        if tool_id in self._denied:
+            # After a denial the gateway reports the bare option label ("拒绝")
+            # as the result, with none of the usual success/error fields.
+            self._denied.discard(tool_id)
+            ok, text = False, "Denied by the user."
         if not ok and text == "" and not started:
             # Approval pause: the gateway reports the gated call as an empty
             # failure with no preceding tool_call. The call really starts (and
@@ -238,6 +250,10 @@ class RunEventMapper:
         self._pending_requests[request_id] = request
         return [*self._settle_response(), {"type": "permission.required", "request": dict(request)}]
 
+    def request_cancel(self) -> None:
+        """Record that the user asked to stop, so the run's end reads as cancelled."""
+        self._cancel_requested = True
+
     @property
     def awaiting_permission(self) -> bool:
         return bool(self._pending_requests)
@@ -254,6 +270,8 @@ class RunEventMapper:
         index = {"allow_once": 0, "allow_matching": 1, "deny": len(labels) - 1}[decision]
         label = labels[index]
         allowed = decision != "deny"
+        if not allowed:
+            self._denied.add(request_id)
         resolved = {
             **request, "state": "allowed" if allowed else "denied",
             "decision": "allowed" if allowed else "denied",
