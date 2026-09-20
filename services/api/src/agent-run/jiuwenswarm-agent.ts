@@ -127,6 +127,7 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
       };
     } catch (error) {
       if (this.controller.signal.aborted) throw new Error("Agent run cancelled");
+      console.warn(`[jiuwenswarm-agent] run of ${this.options.sessionId} failed: ${error instanceof Error ? error.message : String(error)}`);
       throw error;
     } finally {
       if (timeout) clearTimeout(timeout);
