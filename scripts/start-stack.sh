@@ -101,6 +101,7 @@ health_attempts=50
 gateway_python=""
 memory_graph_python=""
 evolve_python=""
+adapter_python=""
 runner_url=""
 data_dir=""
 runner_command=()
@@ -392,6 +393,17 @@ prepare_local() {
     fi
   fi
 
+  # Opt-in front door (SCIENCE_AGENT_ADAPTER=1): the Python adapter takes the
+  # public port and proxies every route it has not migrated to the legacy API,
+  # which moves to SCIENCE_AGENT_LEGACY_PORT (public port + 100 by default).
+  if [[ "${SCIENCE_AGENT_ADAPTER:-0}" == "1" ]]; then
+    adapter_python="$envs_dir/adapter/bin/python"
+    if [[ ! -x "$adapter_python" ]]; then
+      echo "Provisioning the adapter Python environment..." >&2
+      (cd services/adapter && UV_PROJECT_ENVIRONMENT="$envs_dir/adapter" uv sync)
+    fi
+  fi
+
   local runner_environment=(
     "SCIENCE_AGENT_BWRAP_PATH=${SCIENCE_AGENT_BWRAP_PATH:-bwrap}"
     "SCIENCE_AGENT_SANDBOX_PROVIDER=$sandbox_provider"
@@ -547,6 +559,17 @@ start_stack() {
     "$evolve_python" -m sciencediscovery_evolve.server &
     pids+=("$!")
     wait_healthy "evolve" "http://127.0.0.1:${SCIENCE_AGENT_EVOLVE_PORT:-4313}/health"
+  fi
+
+  if [[ -n "$adapter_python" ]]; then
+    local public_port="${SCIENCE_AGENT_PORT:-4310}"
+    local legacy_port="${SCIENCE_AGENT_LEGACY_PORT:-$((public_port + 100))}"
+    echo "Starting the adapter on port $public_port (legacy API on $legacy_port)..." >&2
+    SCIENCE_AGENT_LEGACY_PORT="$legacy_port" \
+    "$adapter_python" -m sciencediscovery_adapter.server &
+    pids+=("$!")
+    # The legacy API binds the legacy port; the adapter owns the public one.
+    api_command=(env "SCIENCE_AGENT_PORT=$legacy_port" "${api_command[@]}")
   fi
 
   echo "Starting the control API..." >&2
