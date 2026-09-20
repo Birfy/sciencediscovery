@@ -22,7 +22,9 @@ import httpx
 from fastapi import FastAPI, Request
 from fastapi.responses import Response
 
+from .agent_runs import AgentRunner, agent_router
 from .config import Settings
+from .mcp_server import ToolsetRegistry, mcp_router
 from .proxy import proxy_to_legacy
 
 
@@ -32,17 +34,23 @@ def create_app(settings: Settings | None = None, *, transport: httpx.AsyncBaseTr
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         # No read timeout: SSE runs stay open for the whole agent run.
-        async with httpx.AsyncClient(
-            base_url=settings.legacy_url,
-            transport=transport,
-            timeout=httpx.Timeout(connect=5.0, read=None, write=60.0, pool=5.0),
-            follow_redirects=False,
-        ) as client:
-            app.state.legacy = client
+        timeout = httpx.Timeout(connect=5.0, read=None, write=60.0, pool=5.0)
+        async with (
+            httpx.AsyncClient(base_url=settings.legacy_url, transport=transport, timeout=timeout,
+                              follow_redirects=False) as legacy,
+            # Tool-bridge calls go to loopback URLs the caller names, not to the legacy base URL.
+            httpx.AsyncClient(timeout=timeout) as bridge,
+        ):
+            app.state.legacy = legacy
+            app.state.bridge = bridge
             yield
 
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 
+    registry = ToolsetRegistry()
+    app.include_router(mcp_router(registry))
+    app.state.agent_runner = AgentRunner(settings, registry, lambda: app.state.bridge)
+    app.include_router(agent_router(app.state.agent_runner, settings))
     # Migrated routes are registered above this line, one router per domain.
 
     @app.api_route(

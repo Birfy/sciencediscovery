@@ -24,6 +24,8 @@ started for it (its script is consumed one turn per request):
     approval  STUB_LLM_SCRIPT=tests/fixtures/stub_script_approval.json (user allows)
     deny      the same script (user denies)
     cancel    STUB_LLM_SCRIPT=tests/fixtures/stub_script_slow.json
+    agent_run STUB_LLM_SCRIPT=tests/fixtures/stub_script_agent_run.json, same env as mcp (the
+              server name is generated per run, so the script names the tool as ~run_shell)
     mcp       STUB_LLM_SCRIPT=tests/fixtures/stub_script_mcp_live.json, plus
               JIUWENSWARM_MGMT_URL=ws://127.0.0.1:<web port>/ws and an instance with
               `progressive_tool_enabled: false` (MCP tools are then direct tools)
@@ -34,6 +36,7 @@ bash scenario runs `echo`/`pwd`, which it does).
 """
 
 import asyncio
+import json
 import os
 import uuid
 
@@ -173,3 +176,67 @@ async def test_real_gateway_calls_a_tool_hosted_by_the_adapter():
     completed = next(e for e in events if e["type"] == "tool.completed")["trace"]
     assert completed["status"] == "completed" and "bridge ran: echo J-LIVE-1" in completed["output"]
     assert mapper.final_text == "live mcp done" and mapper.finished
+
+
+@pytest.mark.skipif(SCENARIO != "agent_run", reason="scenario is not agent_run")
+async def test_agent_runs_endpoint_drives_a_real_run_through_its_own_toolset():
+    import socket
+
+    import httpx
+    import uvicorn
+    from fastapi import FastAPI
+
+    from sciencediscovery_adapter.app import create_app
+    from sciencediscovery_adapter.config import Settings
+
+    def free_port():
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            return probe.getsockname()[1]
+
+    async def serve(app, port):
+        server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
+        task = asyncio.create_task(server.serve())
+        while not server.started:
+            await asyncio.sleep(0.05)
+        return server, task
+
+    bridge_calls = []
+    bridge = FastAPI()
+
+    @bridge.post("/bridge")
+    async def bridge_call(body: dict):
+        bridge_calls.append(body)
+        return {"text": f"bridge ran: {body['arguments']['command']}", "isError": False}
+
+    adapter_port, bridge_port = free_port(), free_port()
+    settings = Settings(
+        host="127.0.0.1", port=adapter_port, legacy_url="http://127.0.0.1:1", gateway_url=URL,
+        mgmt_url=os.environ["JIUWENSWARM_MGMT_URL"], public_url=f"http://127.0.0.1:{adapter_port}",
+    )
+    adapter_server, adapter_task = await serve(create_app(settings), adapter_port)
+    bridge_server, bridge_task = await serve(bridge, bridge_port)
+    try:
+        body = {
+            "sessionId": f"live-{uuid.uuid4().hex[:8]}", "prompt": "use the tool",
+            "tools": [{"name": "run_shell", "description": "Run a shell command.",
+                       "inputSchema": {"type": "object", "properties": {"command": {"type": "string"}}, "required": ["command"]}}],
+            "bridge": {"url": f"http://127.0.0.1:{bridge_port}/bridge", "token": "t"},
+        }
+        lines = []
+        async with httpx.AsyncClient(timeout=90) as client:
+            async with client.stream("POST", f"http://127.0.0.1:{adapter_port}/agent/runs", json=body) as response:
+                assert response.status_code == 200
+                async for line in response.aiter_lines():
+                    if line:
+                        lines.append(json.loads(line))
+    finally:
+        for server, task in ((adapter_server, adapter_task), (bridge_server, bridge_task)):
+            server.should_exit = True
+            await task
+    events = [line["event"] for line in lines if "event" in line]
+    assert bridge_calls == [{"name": "run_shell", "arguments": {"command": "echo J-LIVE-1"}}]
+    completed = next(e for e in events if e["type"] == "tool.completed")["trace"]
+    assert completed["name"] == "run_shell" and "bridge ran: echo J-LIVE-1" in completed["output"]
+    assert lines[-1]["done"]["finalText"] == "live mcp done"
+    assert lines[-1]["done"]["unmapped"] == []

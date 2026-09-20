@@ -20,6 +20,8 @@ list of turns, consumed one per chat request:
     [{"tool": "bash", "arguments": {"command": "echo hi"}}, {"text": "done", "delay": 5}]
 
 "delay" (seconds) holds the reply back, for cancellation scenarios.
+"tool": "~run_shell" calls whichever offered MCP tool is named mcp_<server>_run_shell,
+for servers whose name is generated per run.
 """
 import json, os, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -52,7 +54,11 @@ class H(BaseHTTPRequestHandler):
             return "data: " + json.dumps({"id": "c1", "object": "chat.completion.chunk", "created": int(time.time()), "model": "stub-model", "choices": [{"index": 0, "delta": delta, "finish_reason": finish}]}) + "\n\n"
 
         if "tool" in turn:
-            call = {"index": 0, "id": "call_" + str(int(time.time() * 1000)), "type": "function", "function": {"name": turn["tool"], "arguments": json.dumps(turn.get("arguments", {}))}}
+            tool_name = turn["tool"]
+            if tool_name.startswith("~"):
+                offered = [t["function"]["name"] for t in body.get("tools", [])]
+                tool_name = next((n for n in offered if n.startswith("mcp_") and n.endswith("_" + tool_name[1:])), tool_name[1:])
+            call = {"index": 0, "id": "call_" + str(int(time.time() * 1000)), "type": "function", "function": {"name": tool_name, "arguments": json.dumps(turn.get("arguments", {}))}}
             parts, finish = [{"tool_calls": [call]}], "tool_calls"
         else:
             words = turn.get("text", "").split(" ")

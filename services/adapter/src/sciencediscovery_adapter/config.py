@@ -26,6 +26,14 @@ class Settings:
     port: int
     # The legacy TypeScript API that still serves every route not yet migrated.
     legacy_url: str
+    # JiuwenSwarm: chats go to the gateway route, management calls to the web channel.
+    gateway_url: str = "ws://127.0.0.1:19001/tui"
+    mgmt_url: str = "ws://127.0.0.1:19000/ws"
+    # How JiuwenSwarm reaches this process to call the per-run MCP toolsets.
+    public_url: str = ""
+    # Bearer token the legacy API presents on /agent/*; empty leaves them open
+    # (the adapter listens on loopback by default).
+    agent_token: str = ""
 
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> "Settings":
@@ -36,4 +44,8 @@ class Settings:
             host=env.get("SCIENCE_AGENT_HOST", "127.0.0.1"),
             port=port,
             legacy_url=env.get("SCIENCE_AGENT_LEGACY_URL", f"http://127.0.0.1:{legacy_port}").rstrip("/"),
+            gateway_url=env.get("JIUWENSWARM_GATEWAY_URL", "ws://127.0.0.1:19001/tui"),
+            mgmt_url=env.get("JIUWENSWARM_MGMT_URL", "ws://127.0.0.1:19000/ws"),
+            public_url=env.get("SCIENCE_AGENT_ADAPTER_PUBLIC_URL", f"http://127.0.0.1:{port}").rstrip("/"),
+            agent_token=env.get("SCIENCE_AGENT_ADAPTER_TOKEN", ""),
         )
