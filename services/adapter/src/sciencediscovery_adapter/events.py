@@ -30,7 +30,8 @@ from typing import Any
 
 # Frames that carry no run-visible state. Listed so that "ignored on purpose"
 # stays distinguishable from "not mapped yet" in `RunEventMapper.unmapped`.
-_IGNORED_EVENTS = frozenset({"connection.ack", "context.usage", "chat.tool_update"})
+# `chat.usage_summary` repeats the sum of the per-call `chat.usage_metadata` events.
+_IGNORED_EVENTS = frozenset({"connection.ack", "context.usage", "chat.tool_update", "chat.usage_summary"})
 
 _ERROR_CODES: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"\b(401|403)\b|unauthori[sz]ed|invalid.{0,10}api.?key", re.I), "unauthorized"),
@@ -261,6 +262,21 @@ class RunEventMapper:
             {"type": "tool.output", "toolCallId": tool_id, "chunk": text},
             {"type": "tool.completed", "trace": trace},
         ]
+
+    def _on_chat_usage_metadata(self, payload: dict[str, Any]) -> list[dict[str, Any]]:
+        usage = ((payload.get("metadata") or {}).get("usage_metadata")) or {}
+        if "input_tokens" not in usage and "output_tokens" not in usage:
+            return []
+        usage_out: dict[str, Any] = {
+            "inputTokens": int(usage.get("input_tokens") or 0),
+            "outputTokens": int(usage.get("output_tokens") or 0),
+            "totalTokens": int(usage.get("total_tokens") or 0),
+        }
+        # Cache fields are null when the provider did not report them, which is
+        # different from zero; keep that distinction.
+        for source, target in (("cache_read_tokens", "cacheReadTokens"), ("cache_write_tokens", "cacheWriteTokens")):
+            usage_out[target] = usage.get(source)
+        return [{"type": "model.usage", "usage": usage_out, "reasoningTokens": usage.get("reasoning_tokens")}]
 
     def _on_chat_final(self, payload: dict[str, Any]) -> list[dict[str, Any]]:
         if payload.get("content"):

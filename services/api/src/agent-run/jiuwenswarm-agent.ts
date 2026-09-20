@@ -202,6 +202,11 @@ class EventTranslator {
       case "assistant.response.settled":
         this.emit({ type: "response_settled", responseId: String(event.responseId), turn: Number(event.turn) });
         break;
+      case "model.usage": {
+        const usage = event.usage as { cacheReadTokens?: number | null; cacheWriteTokens?: number | null; inputTokens: number; outputTokens: number; totalTokens: number };
+        this.emit({ type: "model_usage", usage, usageReported: true });
+        break;
+      }
       default:
         break;
     }

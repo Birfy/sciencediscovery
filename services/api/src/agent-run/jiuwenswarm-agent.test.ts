@@ -132,6 +132,25 @@ test("translates the adapter's run events into agent events", async () => {
   }
 });
 
+test("reported token usage becomes a model_usage event the run can record", async () => {
+  const adapter = await fakeAdapter((_request, response) => {
+    response.writeHead(200);
+    response.write(line({ event: { type: "model.usage", usage: { inputTokens: 731, outputTokens: 87, totalTokens: 818, cacheReadTokens: 0, cacheWriteTokens: null }, reasoningTokens: 71 } }));
+    response.end(line({ done: { finalText: "" } }));
+  });
+  try {
+    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options());
+    const events = collect(agent);
+    await agent.execute("go");
+    assert.deepEqual(events, [{
+      type: "model_usage", usageReported: true,
+      usage: { inputTokens: 731, outputTokens: 87, totalTokens: 818, cacheReadTokens: 0, cacheWriteTokens: null },
+    }]);
+  } finally {
+    await adapter.close();
+  }
+});
+
 test("a tool call from the adapter runs the real tool here and is reported as tool events", async () => {
   let bridgeStatus = 0;
   let bridgeReply: any;

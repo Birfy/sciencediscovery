@@ -293,3 +293,17 @@ def test_a_directly_exposed_mcp_tool_maps_without_any_wrapper():
     completed = next(e for e in events if e["type"] == "tool.completed")["trace"]
     assert completed["output"] == "SPIKE-OUT: echo J-DIRECT" and completed["status"] == "completed"
     assert mapper.final_text == "direct done" and mapper.finished and mapper.unmapped == []
+
+
+def test_per_call_usage_becomes_model_usage_and_the_summary_is_ignored_on_purpose():
+    mapper, events = run("jw_usage.raw")
+    assert events == [{
+        "type": "model.usage", "reasoningTokens": 71,
+        "usage": {"inputTokens": 731, "outputTokens": 87, "totalTokens": 818, "cacheReadTokens": 0, "cacheWriteTokens": None},
+    }]
+    assert mapper.unmapped == []
+
+
+def test_usage_without_token_counts_emits_nothing():
+    mapper = RunEventMapper()
+    assert mapper.feed({"type": "event", "event": "chat.usage_metadata", "payload": {"metadata": {"usage_metadata": {}}}}) == []
