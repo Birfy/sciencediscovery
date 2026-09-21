@@ -101,6 +101,16 @@ if window:
         sys.exit("context_engine_config not found in " + path)
 open(path, "w", encoding="utf-8").write(text)
 print("config: progressive_tool_enabled: false" + (f", context_window_tokens: {window}" if window else ""))
+# JiuwenSwarm registers its free search only at start-up, from these two switches. ScienceDiscovery's web settings
+# set them (config.set) and default to on; until the API has applied them once, start with that default.
+import os
+env_path = os.path.join(os.path.dirname(path), ".env")
+env = open(env_path, encoding="utf-8").read() if os.path.exists(env_path) else ""
+missing = [name for name in ("FREE_SEARCH_DDG_ENABLED", "FREE_SEARCH_BING_ENABLED")
+           if not re.search(r"^" + name + r"=", env, flags=re.M)]
+if missing:
+    with open(env_path, "a", encoding="utf-8") as handle:
+        handle.write(("" if not env or env.endswith("\n") else "\n") + "".join(f'{name}="true"\n' for name in missing))
 PY
 }
 

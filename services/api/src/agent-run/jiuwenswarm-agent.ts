@@ -86,7 +86,7 @@ export const TODO_PLANNING_SECTION = [
 ].join("\n");
 
 /** ScienceDiscovery's web tools and the JiuwenSwarm tools that take their place. */
-export const JIUWENSWARM_WEB_TOOLS: Record<string, string> = { web_search: "mcp_free_search", web_fetch: "fetch_webpage" };
+export const JIUWENSWARM_WEB_TOOLS: Record<string, string> = { web_search: "free_search (or paid_search)", web_fetch: "fetch_webpage" };
 
 /** JiuwenSwarm's own todo tools, left visible to the model unless planning is `update_plan`. */
 export const JIUWENSWARM_TODO_TOOLS = ["todo_create", "todo_modify", "todo_list", "todo_get"] as const;
