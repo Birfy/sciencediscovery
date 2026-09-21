@@ -4622,6 +4622,241 @@
    ]
   },
   {
+   "name": "session usage after the run",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "byInvocationKind": [
+     {
+      "cacheReadTokens": null,
+      "cacheWriteTokens": null,
+      "costUsd": null,
+      "inputTokens": 20,
+      "invocationCount": 1,
+      "key": "task",
+      "label": "task",
+      "outputTokens": 8,
+      "reportedInvocationCount": 1,
+      "totalTokens": 28,
+      "unreportedInvocationCount": 0
+     }
+    ],
+    "byModel": [
+     {
+      "cacheReadTokens": null,
+      "cacheWriteTokens": null,
+      "costUsd": null,
+      "inputTokens": 20,
+      "invocationCount": 1,
+      "key": "<uuid:1>",
+      "label": "L2 stub model",
+      "outputTokens": 8,
+      "reportedInvocationCount": 1,
+      "totalTokens": 28,
+      "unreportedInvocationCount": 0
+     }
+    ],
+    "byRun": [
+     {
+      "cacheReadTokens": null,
+      "cacheWriteTokens": null,
+      "costUsd": null,
+      "inputTokens": 20,
+      "invocationCount": 1,
+      "key": "<uuid:6>",
+      "label": "<uuid:6>",
+      "outputTokens": 8,
+      "reportedInvocationCount": 1,
+      "totalTokens": 28,
+      "unreportedInvocationCount": 0
+     }
+    ],
+    "invocations": [
+     {
+      "attemptIndex": 0,
+      "cacheReadTokens": null,
+      "cacheWriteTokens": null,
+      "costUsd": null,
+      "finishedAt": "<time>",
+      "id": "<uuid:10>",
+      "inputTokens": 20,
+      "invocationId": "<uuid:11>",
+      "invocationKind": "task",
+      "model": "contract-stub",
+      "modelProfileId": "<uuid:1>",
+      "modelProfileName": "L2 stub model",
+      "outcome": "completed",
+      "outputTokens": 8,
+      "projectId": "<uuid:2>",
+      "promptManifestId": "<uuid:12>",
+      "runId": "<uuid:6>",
+      "sessionId": "<uuid:3>",
+      "startedAt": "<time>",
+      "totalTokens": 28,
+      "usageStatus": "reported"
+     }
+    ],
+    "latestInvocation": {
+     "attemptIndex": 0,
+     "cacheReadTokens": null,
+     "cacheWriteTokens": null,
+     "costUsd": null,
+     "finishedAt": "<time>",
+     "id": "<uuid:10>",
+     "inputTokens": 20,
+     "invocationId": "<uuid:11>",
+     "invocationKind": "task",
+     "model": "contract-stub",
+     "modelProfileId": "<uuid:1>",
+     "modelProfileName": "L2 stub model",
+     "outcome": "completed",
+     "outputTokens": 8,
+     "projectId": "<uuid:2>",
+     "promptManifestId": "<uuid:12>",
+     "runId": "<uuid:6>",
+     "sessionId": "<uuid:3>",
+     "startedAt": "<time>",
+     "totalTokens": 28,
+     "usageStatus": "reported"
+    },
+    "sessionId": "<uuid:3>",
+    "totals": {
+     "cacheReadTokens": null,
+     "cacheWriteTokens": null,
+     "costUsd": null,
+     "inputTokens": 20,
+     "invocationCount": 1,
+     "key": "<uuid:3>",
+     "label": "Session",
+     "outputTokens": 8,
+     "reportedInvocationCount": 1,
+     "totalTokens": 28,
+     "unreportedInvocationCount": 0
+    }
+   }
+  },
+  {
+   "name": "usage per model after the run",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "byModel": [
+     {
+      "bucket": {
+       "cacheReadTokens": null,
+       "cacheWriteTokens": null,
+       "costUsd": null,
+       "inputTokens": 20,
+       "invocationCount": 1,
+       "key": "<uuid:1>",
+       "label": "L2 stub model",
+       "outputTokens": 8,
+       "reportedInvocationCount": 1,
+       "totalTokens": 28,
+       "unreportedInvocationCount": 0
+      },
+      "model": "contract-stub",
+      "modelProfileId": "<uuid:1>",
+      "modelProfileName": "L2 stub model",
+      "projects": [
+       {
+        "bucket": {
+         "cacheReadTokens": null,
+         "cacheWriteTokens": null,
+         "costUsd": null,
+         "inputTokens": 20,
+         "invocationCount": 1,
+         "key": "<uuid:2>",
+         "label": "L2 project",
+         "outputTokens": 8,
+         "reportedInvocationCount": 1,
+         "totalTokens": 28,
+         "unreportedInvocationCount": 0
+        },
+        "projectId": "<uuid:2>",
+        "projectName": "L2 project",
+        "sessions": [
+         {
+          "bucket": {
+           "cacheReadTokens": null,
+           "cacheWriteTokens": null,
+           "costUsd": null,
+           "inputTokens": 20,
+           "invocationCount": 1,
+           "key": "<uuid:3>",
+           "label": "L2 session",
+           "outputTokens": 8,
+           "reportedInvocationCount": 1,
+           "totalTokens": 28,
+           "unreportedInvocationCount": 0
+          },
+          "runs": [
+           {
+            "bucket": {
+             "cacheReadTokens": null,
+             "cacheWriteTokens": null,
+             "costUsd": null,
+             "inputTokens": 20,
+             "invocationCount": 1,
+             "key": "<uuid:6>",
+             "label": "<uuid:6>",
+             "outputTokens": 8,
+             "reportedInvocationCount": 1,
+             "totalTokens": 28,
+             "unreportedInvocationCount": 0
+            },
+            "invocations": [
+             {
+              "attemptIndex": 0,
+              "cacheReadTokens": null,
+              "cacheWriteTokens": null,
+              "costUsd": null,
+              "finishedAt": "<time>",
+              "id": "<uuid:10>",
+              "inputTokens": 20,
+              "invocationId": "<uuid:11>",
+              "invocationKind": "task",
+              "model": "contract-stub",
+              "modelProfileId": "<uuid:1>",
+              "modelProfileName": "L2 stub model",
+              "outcome": "completed",
+              "outputTokens": 8,
+              "projectId": "<uuid:2>",
+              "promptManifestId": "<uuid:12>",
+              "runId": "<uuid:6>",
+              "sessionId": "<uuid:3>",
+              "startedAt": "<time>",
+              "totalTokens": 28,
+              "usageStatus": "reported"
+             }
+            ],
+            "runId": "<uuid:6>"
+           }
+          ],
+          "sessionId": "<uuid:3>",
+          "sessionTitle": "L2 session"
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "totals": {
+     "cacheReadTokens": null,
+     "cacheWriteTokens": null,
+     "costUsd": null,
+     "inputTokens": 20,
+     "invocationCount": 1,
+     "key": "global",
+     "label": "All models",
+     "outputTokens": 8,
+     "reportedInvocationCount": 1,
+     "totalTokens": 28,
+     "unreportedInvocationCount": 0
+    }
+   }
+  },
+  {
    "name": "wait for the run to settle",
    "status": 200,
    "polled": "completed"
