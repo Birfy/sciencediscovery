@@ -150,7 +150,10 @@ const checks = {
       const started = events.find((event) => event.type === "tool.started");
       const completed = events.find((event) => event.type === "tool.completed");
       if (started?.trace?.name !== "bash") throw new Error(`no bash tool call in the run: ${events.map((e) => e.type).join(" ")}`);
-      if (!JSON.stringify(completed ?? {}).includes("JW-BASH-OK")) throw new Error(`bash output missing: ${JSON.stringify(completed)?.slice(0, 300)}`);
+      // A tool's output is kept in its own stream; the completed event only points at it.
+      const stream = completed?.trace?.outputStream;
+      const output = stream ? await api("GET", `/api/sessions/${sessionId}/runs/${run.id}/streams/${stream}/events`) : [];
+      if (!JSON.stringify(output).includes("JW-BASH-OK")) throw new Error(`bash output missing from ${stream}: ${JSON.stringify(output).slice(0, 300)}`);
       console.log("native-tools: ok (JiuwenSwarm's bash ran and its output is in the run's tool card)");
     } finally {
       await cleanup();
