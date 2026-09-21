@@ -1002,3 +1002,21 @@ test("with JiuwenSwarm's tools, web search and fetching are JiuwenSwarm's, in th
     await adapter.close();
   }
 });
+
+test("a finished JiuwenSwarm search is recorded through the run's web recorder", async () => {
+  const recorded: any[] = [];
+  const adapter = await fakeAdapter(async (_request, response) => {
+    response.writeHead(200);
+    response.write(line({ event: { type: "tool.started", trace: { id: "s1", name: "free_search", args: { query: "q" }, status: "running", native: true } } }));
+    response.write(line({ event: { type: "tool.completed", trace: { id: "s1", name: "free_search", args: {}, status: "completed", native: true,
+      output: "Free search results (Bing) for: q\n1. T\n   URL: https://t.example" } } }));
+    response.end(line({ done: { finalText: "ok" } }));
+  });
+  try {
+    const recordWebResult = async (id: string, result: unknown) => { recorded.push({ id, result }); };
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ recordWebResult } as never)).execute("go");
+    assert.deepEqual(recorded, [{ id: "s1", result: { kind: "search", toolName: "free_search", rows: [{ url: "https://t.example", title: "T" }] } }]);
+  } finally {
+    await adapter.close();
+  }
+});

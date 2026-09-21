@@ -182,6 +182,16 @@ const checks = {
       const output = JSON.stringify(await api("GET", `/api/sessions/${sessionId}/runs/${run.id}/streams/${completed.trace.outputStream}/events`));
       console.log(`web-search: ${completed.trace.status} (${output.length} characters of output): ${output.slice(0, 200)}`);
       if (completed.trace.status !== "completed") throw new Error("the search failed");
+      // The hits are recorded in the memory graph as WebPage nodes, as ScienceDiscovery's own search records them.
+      let pages = [];
+      for (let attempt = 0; attempt < 10 && !pages.length; attempt += 1) {
+        const graph = await api("GET", `/api/memory/subgraph?sessionId=${sessionId}`);
+        if (graph.reason) { console.log(`web-search: memory graph not available here (${graph.reason}); not checked`); return; }
+        pages = (graph.nodes ?? []).filter((node) => /web/i.test(String(node.type ?? node.label ?? node.labels ?? "")));
+        if (!pages.length) await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+      if (!pages.length) throw new Error("no WebPage node in the session's memory graph");
+      console.log(`web-search: ${pages.length} WebPage node(s) in the memory graph, e.g. ${JSON.stringify(pages[0]).slice(0, 200)}`);
     } finally {
       await cleanup();
     }

@@ -309,6 +309,10 @@ export interface WorkspaceToolOptions {
   }, signal?: AbortSignal) => Promise<unknown>;
   webFetch?: (toolCallId: string, url: string, signal?: AbortSignal) => Promise<unknown>;
   webSearch?: (toolCallId: string, query: string, signal?: AbortSignal) => Promise<unknown>;
+  /** Record a web search or page fetch that another runtime ran (JiuwenSwarm's own tools) as ours are recorded. */
+  recordWebResult?: (toolCallId: string, result:
+    | { kind: "search"; toolName: string; rows: Array<{ url: string; title?: string; snippet?: string }> }
+    | { kind: "fetch"; toolName: string; url: string; content: string }) => Promise<void>;
   approvalMode?: "always_allow" | "ask_for_dangerous";
   runSubagent?: (input: SubagentInput, signal?: AbortSignal) => Promise<Subagent>;
   /**

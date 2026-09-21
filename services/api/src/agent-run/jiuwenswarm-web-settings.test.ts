@@ -49,3 +49,23 @@ test("a failure is reported, not thrown", async () => {
   assert.equal(result.ok, false);
   assert.match(result.error!, /502/);
 });
+
+import { jiuwenSwarmWebResult } from "./jiuwenswarm-web-settings.js";
+
+test("JiuwenSwarm's free search output becomes search rows", () => {
+  const output = "Free search results (DuckDuckGo) for: perovskite\n1. Long-term stability - Nature\n   URL: https://nature.com/a\n   Snippet: We report\n2. Other\n   URL: https://example.org/b";
+  assert.deepEqual(jiuwenSwarmWebResult("free_search", { query: "perovskite" }, output), { kind: "search", toolName: "free_search", rows: [
+    { url: "https://nature.com/a", title: "Long-term stability - Nature", snippet: "We report" },
+    { url: "https://example.org/b", title: "Other" },
+  ] });
+});
+
+test("JiuwenSwarm's paid search sources, its fetched page, and failures", () => {
+  assert.deepEqual(jiuwenSwarmWebResult("paid_search", {}, "Answer:\nIt is stable.\nURLs:\n1. https://x.example/1\n2. https://x.example/2"),
+    { kind: "search", toolName: "paid_search", rows: [{ url: "https://x.example/1" }, { url: "https://x.example/2" }] });
+  assert.deepEqual(jiuwenSwarmWebResult("fetch_webpage", { url: "https://x.example/1" }, "page text"),
+    { kind: "fetch", toolName: "fetch_webpage", url: "https://x.example/1", content: "page text" });
+  assert.equal(jiuwenSwarmWebResult("free_search", {}, "[ERROR]: free search failed: timeout"), undefined);
+  assert.equal(jiuwenSwarmWebResult("free_search", {}, "No search results for: x"), undefined);
+  assert.equal(jiuwenSwarmWebResult("bash", {}, "out"), undefined);
+});

@@ -347,6 +347,7 @@ export interface WorkspaceAgentOptions {
   paperExtractPdf?: WorkspaceToolOptions["paperExtractPdf"];
   webFetch?: WorkspaceToolOptions["webFetch"];
   webSearch?: WorkspaceToolOptions["webSearch"];
+  recordWebResult?: WorkspaceToolOptions["recordWebResult"];
   approvalMode?: "always_allow" | "ask_for_dangerous";
   /** Whether the memory-graph feature is on. Gates the declare/query_graph
    * system-prompt injection so a disabled graph doesn't mislead the model

@@ -58,3 +58,43 @@ export async function syncWebSettingsToJiuwenSwarm(
     return { ok: false, error: message };
   }
 }
+
+export type JiuwenSwarmWebResult =
+  | { kind: "search"; toolName: string; rows: Array<{ url: string; title?: string; snippet?: string }> }
+  | { kind: "fetch"; toolName: string; url: string; content: string };
+
+/**
+ * What JiuwenSwarm's own web tools returned, as a result to record in the memory graph like ours.
+ *
+ * `free_search` lists hits as "N. title / URL: ... / Snippet: ..."; `paid_search` gives an answer and then its
+ * sources under "URLs:"; `fetch_webpage` returns the page, whose address is in the call's arguments. A failed
+ * call ("[ERROR]: ...") or an empty one records nothing.
+ */
+export function jiuwenSwarmWebResult(toolName: string, args: Record<string, unknown>, output: string): JiuwenSwarmWebResult | undefined {
+  const text = output.trim();
+  if (!text || text.startsWith("[ERROR]")) return undefined;
+  if (toolName === "free_search") {
+    const rows: Array<{ url: string; title?: string; snippet?: string }> = [];
+    let current: { url: string; title?: string; snippet?: string } | undefined;
+    let title: string | undefined;
+    for (const line of text.split("\n")) {
+      const heading = line.match(/^\d+\.\s+(.*)$/);
+      const url = line.match(/^\s+URL:\s*(\S+)/);
+      const snippet = line.match(/^\s+Snippet:\s*(.*)$/);
+      if (heading) { title = heading[1]!.trim(); current = undefined; }
+      else if (url) { current = { url: url[1]!, ...(title ? { title } : {}) }; rows.push(current); }
+      else if (snippet && current) current.snippet = snippet[1]!.trim();
+    }
+    return rows.length ? { kind: "search", toolName, rows } : undefined;
+  }
+  if (toolName === "paid_search") {
+    const at = text.indexOf("URLs:");
+    const urls = at < 0 ? [] : [...text.slice(at).matchAll(/^\d+\.\s+(\S+)/gm)].map((match) => match[1]!);
+    return urls.length ? { kind: "search", toolName, rows: urls.map((url) => ({ url })) } : undefined;
+  }
+  if (toolName === "fetch_webpage") {
+    const url = typeof args.url === "string" ? args.url : undefined;
+    return url ? { kind: "fetch", toolName, url, content: output } : undefined;
+  }
+  return undefined;
+}

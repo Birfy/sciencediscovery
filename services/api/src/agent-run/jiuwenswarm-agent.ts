@@ -22,6 +22,7 @@ import { TOOL_SEARCH_NAME, TOOL_SEARCH_SPEC, type AgentTool } from "@sciencedisc
 import { DurableContextStore } from "@sciencediscovery/context";
 
 import { startModelGateway } from "./jiuwenswarm-model-gateway.js";
+import { jiuwenSwarmWebResult } from "./jiuwenswarm-web-settings.js";
 
 import { resolveModelClientPolicy, type streamModelTurn } from "@sciencediscovery/model";
 
@@ -200,6 +201,14 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
     }
   }
 
+  /** JiuwenSwarm's own web search and fetching, recorded in the memory graph as ours are. Fire and forget. */
+  private recordWeb(call: { args: unknown; id: string; name: string; output: string; failed: boolean }): void {
+    const record = this.options.recordWebResult;
+    if (!record || call.failed) return;
+    const result = jiuwenSwarmWebResult(call.name, (call.args ?? {}) as Record<string, unknown>, call.output);
+    if (result) void record(call.id, result).catch(() => undefined);
+  }
+
   /** JiuwenSwarm's todo list, as the run's plan: what the plan panel and the API's plan events read. */
   private async recordPlan(store: NonNullable<NativeAgentOptions["planStore"]>, items: Array<{ content: string; status: string }>, toolCallId: string): Promise<void> {
     const plan = items.flatMap(({ content, status }) => {
@@ -272,7 +281,8 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
     const planStore = this.options.planStore;
     const translator = new EventTranslator((event) => this.emit(event), announcements, transcript,
       new Set(jiuwenSwarmPlans ? JIUWENSWARM_TODO_TOOLS : []),
-      planStore ? (items, toolCallId) => this.recordPlan(planStore, items, toolCallId) : undefined);
+      planStore ? (items, toolCallId) => this.recordPlan(planStore, items, toolCallId) : undefined,
+      (call) => this.recordWeb(call));
     let finalText = "";
     let failure: string | undefined;
     for await (const line of ndjson(response.body)) {
@@ -461,6 +471,8 @@ class EventTranslator {
     /** JiuwenSwarm's own tools the model may call; they run there, so their events come from here. */
     private readonly nativeTools: ReadonlySet<string> = new Set(),
     private readonly onPlan?: (items: Array<{ content: string; status: string }>, toolCallId: string) => void,
+    /** Called when one of JiuwenSwarm's own tools has finished (to record its web results). */
+    private readonly onNativeResult?: (call: { args: unknown; id: string; name: string; output: string; failed: boolean }) => void,
   ) {}
 
   private lastNativeCall = "";
@@ -517,6 +529,7 @@ class EventTranslator {
           result: { content: [{ type: "text", text }] },
         });
         this.transcript.toolResult(trace.id, trace.name, text);
+        this.onNativeResult?.({ args: this.nativeCalls.get(trace.id)?.args, id: trace.id, name: trace.name, output: text, failed: trace.status === "failed" });
         break;
       }
       case "plan.updated":
