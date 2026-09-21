@@ -4584,6 +4584,11 @@
    ]
   },
   {
+   "name": "wait for the run list to show it settled",
+   "status": 200,
+   "polled": "completed"
+  },
+  {
    "name": "the run it created",
    "status": 200,
    "contentType": "application/json",
@@ -4592,6 +4597,7 @@
      "annotationIds": [],
      "assistantMessageId": "<uuid:8>",
      "createdAt": "<time>",
+     "finishedAt": "<time>",
      "id": "<uuid:6>",
      "prompt": "Say hello.",
      "queueOrder": 1,
@@ -4610,7 +4616,7 @@
       "thinkingMode": "auto"
      },
      "startedAt": "<time>",
-     "status": "running",
+     "status": "completed",
      "userMessageId": "<uuid:9>"
     }
    ]
