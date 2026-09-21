@@ -25,6 +25,9 @@ const DIGEST = /sha256:[0-9a-f]{64}/g;
 const WORKSPACE_ID = /ws_[0-9a-f]{64}/g;
 // The system environment revision names the sandbox in use (bwrap on Linux, seatbelt on macOS).
 const SYSTEM_ENVIRONMENT = /system-(?:python3|shell)-(?:bwrap|seatbelt)-v\d+/g;
+// Scripted stubs listen on a free port; the sandbox makes a randomly named private temp directory.
+const LOCAL_URL = /http:\/\/127\.0\.0\.1:\d+/g;
+const SANDBOX_TEMP = /(seatbelt|bwrap)-[A-Za-z0-9]{6}\b/g;
 const HEX_TOKEN = /\b[0-9a-f]{32,}\b/gi;
 const TIMEY_KEY = /(At|Time|Ts|Timestamp)$/;
 // Keys whose value is a per-run measurement, not part of the contract.
@@ -41,6 +44,8 @@ export function createNormalizer() {
     .replace(DIGEST, "<sha256>")
     .replace(WORKSPACE_ID, "<workspace>")
     .replace(SYSTEM_ENVIRONMENT, "<system-environment>")
+    .replace(LOCAL_URL, "http://127.0.0.1:<port>")
+    .replace(SANDBOX_TEMP, "\$1-<tmp>")
     .replace(UUID, (match) => `<uuid:${idFor(match)}>`)
     .replace(ISO_TIME, "<time>")
     .replace(HEX_TOKEN, "<hex>");

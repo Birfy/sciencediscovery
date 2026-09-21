@@ -41,6 +41,19 @@ if (args.includes("--coverage")) {
 const base = option("--base") ?? process.env.E2E_BASE_URL;
 const token = option("--token") ?? process.env.E2E_API_TOKEN;
 if (!base || !token) { console.error("Need --base/--token or E2E_BASE_URL/E2E_API_TOKEN."); process.exit(2); }
+// Scenarios list, count and delete things; a stack that already holds data would leak it into
+// the recordings (and into the diff). Start from a fresh data directory.
+if (!args.includes("--allow-existing")) {
+  const existing = {};
+  for (const path of ["/api/projects", "/api/models"]) {
+    const answer = await fetch(`${base}${path}`, { headers: { authorization: `Bearer ${token}` } });
+    existing[path] = answer.ok ? (await answer.json()).length : 0;
+  }
+  if (existing["/api/projects"] || existing["/api/models"]) {
+    console.error(`The stack already has ${existing["/api/projects"]} projects and ${existing["/api/models"]} models. Start it with a fresh data directory, or pass --allow-existing.`);
+    process.exit(2);
+  }
+}
 const only = all("--case");
 const selected = only.length ? cases.filter((testCase) => only.includes(testCase.id)) : cases;
 const recording = await runAll(selected, { base, token });

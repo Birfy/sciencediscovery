@@ -1,0 +1,1222 @@
+{
+ "domain": "L2 run event streams",
+ "cases": [
+  {
+   "id": "l2-text-only",
+   "description": "One model turn that answers in text.",
+   "stub": {
+    "main": [
+     {
+      "text": "Hello from the contract stub."
+     }
+    ]
+   },
+   "steps": [
+    {
+     "name": "remember the global settings",
+     "request": {
+      "method": "GET",
+      "path": "/api/settings"
+     },
+     "capture": {
+      "originalOverrides": "$.overrides"
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "register the stub model",
+     "request": {
+      "method": "POST",
+      "path": "/api/models",
+      "body": {
+       "vision": false,
+       "apiToken": "{{stubToken}}",
+       "baseUrl": "{{stubBaseUrl}}",
+       "model": "{{stubModel}}",
+       "name": "L2 stub model"
+      }
+     },
+     "capture": {
+      "modelId": "$.id"
+     },
+     "expectStatus": 201
+    },
+    {
+     "name": "create a project",
+     "request": {
+      "method": "POST",
+      "path": "/api/projects",
+      "body": {
+       "name": "L2 project"
+      }
+     },
+     "capture": {
+      "projectId": "$.id",
+      "sessionId": "$.firstSession.id"
+     },
+     "expectStatus": 201
+    },
+    {
+     "name": "choose the model",
+     "request": {
+      "method": "PATCH",
+      "path": "/api/sessions/{{sessionId}}",
+      "body": {
+       "modelId": "{{modelId}}",
+       "title": "L2 session"
+      }
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "choose the approval mode",
+     "request": {
+      "method": "PATCH",
+      "path": "/api/sessions/{{sessionId}}",
+      "body": {
+       "approvalMode": "always_allow"
+      }
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "send a message",
+     "request": {
+      "method": "POST",
+      "path": "/api/sessions/{{sessionId}}/runs",
+      "body": {
+       "content": "Say hello."
+      }
+     },
+     "capture": {
+      "runId": "$.id"
+     },
+     "expectStatus": 201
+    },
+    {
+     "name": "run events",
+     "request": {
+      "method": "GET",
+      "path": "/api/sessions/{{sessionId}}/runs/{{runId}}/events",
+      "headers": {
+       "accept": "text/event-stream"
+      }
+     },
+     "stream": {
+      "until": [
+       "run.completed",
+       "run.failed",
+       "run.cancelled"
+      ],
+      "timeoutMs": 60000,
+      "profile": "run-events"
+     }
+    },
+    {
+     "name": "delete the project",
+     "request": {
+      "method": "DELETE",
+      "path": "/api/projects/{{projectId}}",
+      "body": {
+       "confirmationId": "{{projectId}}"
+      }
+     },
+     "always": true
+    },
+    {
+     "name": "restore the global settings",
+     "request": {
+      "method": "PUT",
+      "path": "/api/settings",
+      "body": "{{originalOverrides}}"
+     },
+     "always": true
+    },
+    {
+     "name": "delete the model",
+     "request": {
+      "method": "DELETE",
+      "path": "/api/models/{{modelId}}"
+     },
+     "always": true
+    }
+   ]
+  },
+  {
+   "id": "l2-tool-call",
+   "description": "A shell call, then the answer.",
+   "stub": {
+    "main": [
+     {
+      "tool": "run_shell",
+      "arguments": {
+       "command": "echo L2-MARK"
+      }
+     },
+     {
+      "text": "The command printed L2-MARK."
+     }
+    ]
+   },
+   "steps": [
+    {
+     "name": "remember the global settings",
+     "request": {
+      "method": "GET",
+      "path": "/api/settings"
+     },
+     "capture": {
+      "originalOverrides": "$.overrides"
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "register the stub model",
+     "request": {
+      "method": "POST",
+      "path": "/api/models",
+      "body": {
+       "vision": false,
+       "apiToken": "{{stubToken}}",
+       "baseUrl": "{{stubBaseUrl}}",
+       "model": "{{stubModel}}",
+       "name": "L2 stub model"
+      }
+     },
+     "capture": {
+      "modelId": "$.id"
+     },
+     "expectStatus": 201
+    },
+    {
+     "name": "create a project",
+     "request": {
+      "method": "POST",
+      "path": "/api/projects",
+      "body": {
+       "name": "L2 project"
+      }
+     },
+     "capture": {
+      "projectId": "$.id",
+      "sessionId": "$.firstSession.id"
+     },
+     "expectStatus": 201
+    },
+    {
+     "name": "choose the model",
+     "request": {
+      "method": "PATCH",
+      "path": "/api/sessions/{{sessionId}}",
+      "body": {
+       "modelId": "{{modelId}}",
+       "title": "L2 session"
+      }
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "choose the approval mode",
+     "request": {
+      "method": "PATCH",
+      "path": "/api/sessions/{{sessionId}}",
+      "body": {
+       "approvalMode": "always_allow"
+      }
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "send a message",
+     "request": {
+      "method": "POST",
+      "path": "/api/sessions/{{sessionId}}/runs",
+      "body": {
+       "content": "Run the marker command."
+      }
+     },
+     "capture": {
+      "runId": "$.id"
+     },
+     "expectStatus": 201
+    },
+    {
+     "name": "run events",
+     "request": {
+      "method": "GET",
+      "path": "/api/sessions/{{sessionId}}/runs/{{runId}}/events",
+      "headers": {
+       "accept": "text/event-stream"
+      }
+     },
+     "stream": {
+      "until": [
+       "run.completed",
+       "run.failed",
+       "run.cancelled"
+      ],
+      "timeoutMs": 60000,
+      "profile": "run-events"
+     }
+    },
+    {
+     "name": "delete the project",
+     "request": {
+      "method": "DELETE",
+      "path": "/api/projects/{{projectId}}",
+      "body": {
+       "confirmationId": "{{projectId}}"
+      }
+     },
+     "always": true
+    },
+    {
+     "name": "restore the global settings",
+     "request": {
+      "method": "PUT",
+      "path": "/api/settings",
+      "body": "{{originalOverrides}}"
+     },
+     "always": true
+    },
+    {
+     "name": "delete the model",
+     "request": {
+      "method": "DELETE",
+      "path": "/api/models/{{modelId}}"
+     },
+     "always": true
+    }
+   ]
+  },
+  {
+   "id": "l2-approval-allowed",
+   "description": "A guarded shell call pauses for approval; the user allows it once.",
+   "stub": {
+    "main": [
+     {
+      "tool": "run_shell",
+      "arguments": {
+       "command": "echo L2-MARK"
+      }
+     },
+     {
+      "text": "Allowed and done."
+     }
+    ]
+   },
+   "steps": [
+    {
+     "name": "remember the global settings",
+     "request": {
+      "method": "GET",
+      "path": "/api/settings"
+     },
+     "capture": {
+      "originalOverrides": "$.overrides"
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "register the stub model",
+     "request": {
+      "method": "POST",
+      "path": "/api/models",
+      "body": {
+       "vision": false,
+       "apiToken": "{{stubToken}}",
+       "baseUrl": "{{stubBaseUrl}}",
+       "model": "{{stubModel}}",
+       "name": "L2 stub model"
+      }
+     },
+     "capture": {
+      "modelId": "$.id"
+     },
+     "expectStatus": 201
+    },
+    {
+     "name": "create a project",
+     "request": {
+      "method": "POST",
+      "path": "/api/projects",
+      "body": {
+       "name": "L2 project"
+      }
+     },
+     "capture": {
+      "projectId": "$.id",
+      "sessionId": "$.firstSession.id"
+     },
+     "expectStatus": 201
+    },
+    {
+     "name": "choose the model",
+     "request": {
+      "method": "PATCH",
+      "path": "/api/sessions/{{sessionId}}",
+      "body": {
+       "modelId": "{{modelId}}",
+       "title": "L2 session"
+      }
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "choose the approval mode",
+     "request": {
+      "method": "PATCH",
+      "path": "/api/sessions/{{sessionId}}",
+      "body": {
+       "approvalMode": "ask_for_dangerous"
+      }
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "send a message",
+     "request": {
+      "method": "POST",
+      "path": "/api/sessions/{{sessionId}}/runs",
+      "body": {
+       "content": "Run the marker command."
+      }
+     },
+     "capture": {
+      "runId": "$.id"
+     },
+     "expectStatus": 201
+    },
+    {
+     "name": "run events",
+     "request": {
+      "method": "GET",
+      "path": "/api/sessions/{{sessionId}}/runs/{{runId}}/events",
+      "headers": {
+       "accept": "text/event-stream"
+      }
+     },
+     "stream": {
+      "until": [
+       "run.completed",
+       "run.failed",
+       "run.cancelled"
+      ],
+      "timeoutMs": 60000,
+      "profile": "run-events",
+      "reactions": [
+       {
+        "when": "permission.required",
+        "capture": {
+         "requestId": "$.request.id"
+        },
+        "request": {
+         "method": "POST",
+         "path": "/api/permission-requests/{{requestId}}/decision",
+         "body": {
+          "decision": "allow_once"
+         }
+        }
+       }
+      ]
+     }
+    },
+    {
+     "name": "delete the project",
+     "request": {
+      "method": "DELETE",
+      "path": "/api/projects/{{projectId}}",
+      "body": {
+       "confirmationId": "{{projectId}}"
+      }
+     },
+     "always": true
+    },
+    {
+     "name": "restore the global settings",
+     "request": {
+      "method": "PUT",
+      "path": "/api/settings",
+      "body": "{{originalOverrides}}"
+     },
+     "always": true
+    },
+    {
+     "name": "delete the model",
+     "request": {
+      "method": "DELETE",
+      "path": "/api/models/{{modelId}}"
+     },
+     "always": true
+    }
+   ]
+  },
+  {
+   "id": "l2-approval-denied",
+   "description": "The same call, denied by the user.",
+   "stub": {
+    "main": [
+     {
+      "tool": "run_shell",
+      "arguments": {
+       "command": "echo L2-MARK"
+      }
+     },
+     {
+      "text": "The command was not allowed."
+     }
+    ]
+   },
+   "steps": [
+    {
+     "name": "remember the global settings",
+     "request": {
+      "method": "GET",
+      "path": "/api/settings"
+     },
+     "capture": {
+      "originalOverrides": "$.overrides"
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "register the stub model",
+     "request": {
+      "method": "POST",
+      "path": "/api/models",
+      "body": {
+       "vision": false,
+       "apiToken": "{{stubToken}}",
+       "baseUrl": "{{stubBaseUrl}}",
+       "model": "{{stubModel}}",
+       "name": "L2 stub model"
+      }
+     },
+     "capture": {
+      "modelId": "$.id"
+     },
+     "expectStatus": 201
+    },
+    {
+     "name": "create a project",
+     "request": {
+      "method": "POST",
+      "path": "/api/projects",
+      "body": {
+       "name": "L2 project"
+      }
+     },
+     "capture": {
+      "projectId": "$.id",
+      "sessionId": "$.firstSession.id"
+     },
+     "expectStatus": 201
+    },
+    {
+     "name": "choose the model",
+     "request": {
+      "method": "PATCH",
+      "path": "/api/sessions/{{sessionId}}",
+      "body": {
+       "modelId": "{{modelId}}",
+       "title": "L2 session"
+      }
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "choose the approval mode",
+     "request": {
+      "method": "PATCH",
+      "path": "/api/sessions/{{sessionId}}",
+      "body": {
+       "approvalMode": "ask_for_dangerous"
+      }
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "send a message",
+     "request": {
+      "method": "POST",
+      "path": "/api/sessions/{{sessionId}}/runs",
+      "body": {
+       "content": "Run the marker command."
+      }
+     },
+     "capture": {
+      "runId": "$.id"
+     },
+     "expectStatus": 201
+    },
+    {
+     "name": "run events",
+     "request": {
+      "method": "GET",
+      "path": "/api/sessions/{{sessionId}}/runs/{{runId}}/events",
+      "headers": {
+       "accept": "text/event-stream"
+      }
+     },
+     "stream": {
+      "until": [
+       "run.completed",
+       "run.failed",
+       "run.cancelled"
+      ],
+      "timeoutMs": 60000,
+      "profile": "run-events",
+      "reactions": [
+       {
+        "when": "permission.required",
+        "capture": {
+         "requestId": "$.request.id"
+        },
+        "request": {
+         "method": "POST",
+         "path": "/api/permission-requests/{{requestId}}/decision",
+         "body": {
+          "decision": "deny"
+         }
+        }
+       }
+      ]
+     }
+    },
+    {
+     "name": "delete the project",
+     "request": {
+      "method": "DELETE",
+      "path": "/api/projects/{{projectId}}",
+      "body": {
+       "confirmationId": "{{projectId}}"
+      }
+     },
+     "always": true
+    },
+    {
+     "name": "restore the global settings",
+     "request": {
+      "method": "PUT",
+      "path": "/api/settings",
+      "body": "{{originalOverrides}}"
+     },
+     "always": true
+    },
+    {
+     "name": "delete the model",
+     "request": {
+      "method": "DELETE",
+      "path": "/api/models/{{modelId}}"
+     },
+     "always": true
+    }
+   ]
+  },
+  {
+   "id": "l2-cancel",
+   "description": "The user stops a run while the model is still thinking.",
+   "stub": {
+    "main": [
+     {
+      "text": "never delivered",
+      "delayMs": 20000
+     }
+    ]
+   },
+   "steps": [
+    {
+     "name": "remember the global settings",
+     "request": {
+      "method": "GET",
+      "path": "/api/settings"
+     },
+     "capture": {
+      "originalOverrides": "$.overrides"
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "register the stub model",
+     "request": {
+      "method": "POST",
+      "path": "/api/models",
+      "body": {
+       "vision": false,
+       "apiToken": "{{stubToken}}",
+       "baseUrl": "{{stubBaseUrl}}",
+       "model": "{{stubModel}}",
+       "name": "L2 stub model"
+      }
+     },
+     "capture": {
+      "modelId": "$.id"
+     },
+     "expectStatus": 201
+    },
+    {
+     "name": "create a project",
+     "request": {
+      "method": "POST",
+      "path": "/api/projects",
+      "body": {
+       "name": "L2 project"
+      }
+     },
+     "capture": {
+      "projectId": "$.id",
+      "sessionId": "$.firstSession.id"
+     },
+     "expectStatus": 201
+    },
+    {
+     "name": "choose the model",
+     "request": {
+      "method": "PATCH",
+      "path": "/api/sessions/{{sessionId}}",
+      "body": {
+       "modelId": "{{modelId}}",
+       "title": "L2 session"
+      }
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "choose the approval mode",
+     "request": {
+      "method": "PATCH",
+      "path": "/api/sessions/{{sessionId}}",
+      "body": {
+       "approvalMode": "always_allow"
+      }
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "send a message",
+     "request": {
+      "method": "POST",
+      "path": "/api/sessions/{{sessionId}}/runs",
+      "body": {
+       "content": "Take your time."
+      }
+     },
+     "capture": {
+      "runId": "$.id"
+     },
+     "expectStatus": 201
+    },
+    {
+     "name": "run events",
+     "request": {
+      "method": "GET",
+      "path": "/api/sessions/{{sessionId}}/runs/{{runId}}/events",
+      "headers": {
+       "accept": "text/event-stream"
+      }
+     },
+     "stream": {
+      "until": [
+       "run.completed",
+       "run.failed",
+       "run.cancelled"
+      ],
+      "timeoutMs": 60000,
+      "profile": "run-events",
+      "reactions": [
+       {
+        "when": "run.started",
+        "request": {
+         "method": "POST",
+         "path": "/api/sessions/{{sessionId}}/runs/{{runId}}/cancel",
+         "body": {}
+        }
+       }
+      ]
+     }
+    },
+    {
+     "name": "delete the project",
+     "request": {
+      "method": "DELETE",
+      "path": "/api/projects/{{projectId}}",
+      "body": {
+       "confirmationId": "{{projectId}}"
+      }
+     },
+     "always": true
+    },
+    {
+     "name": "restore the global settings",
+     "request": {
+      "method": "PUT",
+      "path": "/api/settings",
+      "body": "{{originalOverrides}}"
+     },
+     "always": true
+    },
+    {
+     "name": "delete the model",
+     "request": {
+      "method": "DELETE",
+      "path": "/api/models/{{modelId}}"
+     },
+     "always": true
+    }
+   ]
+  },
+  {
+   "id": "l2-provider-unauthorized",
+   "description": "The model endpoint rejects the key.",
+   "stub": {
+    "main": [
+     {
+      "fail": 401
+     }
+    ]
+   },
+   "steps": [
+    {
+     "name": "remember the global settings",
+     "request": {
+      "method": "GET",
+      "path": "/api/settings"
+     },
+     "capture": {
+      "originalOverrides": "$.overrides"
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "register the stub model",
+     "request": {
+      "method": "POST",
+      "path": "/api/models",
+      "body": {
+       "vision": false,
+       "apiToken": "{{stubToken}}",
+       "baseUrl": "{{stubBaseUrl}}",
+       "model": "{{stubModel}}",
+       "name": "L2 stub model"
+      }
+     },
+     "capture": {
+      "modelId": "$.id"
+     },
+     "expectStatus": 201
+    },
+    {
+     "name": "create a project",
+     "request": {
+      "method": "POST",
+      "path": "/api/projects",
+      "body": {
+       "name": "L2 project"
+      }
+     },
+     "capture": {
+      "projectId": "$.id",
+      "sessionId": "$.firstSession.id"
+     },
+     "expectStatus": 201
+    },
+    {
+     "name": "choose the model",
+     "request": {
+      "method": "PATCH",
+      "path": "/api/sessions/{{sessionId}}",
+      "body": {
+       "modelId": "{{modelId}}",
+       "title": "L2 session"
+      }
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "choose the approval mode",
+     "request": {
+      "method": "PATCH",
+      "path": "/api/sessions/{{sessionId}}",
+      "body": {
+       "approvalMode": "always_allow"
+      }
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "send a message",
+     "request": {
+      "method": "POST",
+      "path": "/api/sessions/{{sessionId}}/runs",
+      "body": {
+       "content": "Anything."
+      }
+     },
+     "capture": {
+      "runId": "$.id"
+     },
+     "expectStatus": 201
+    },
+    {
+     "name": "run events",
+     "request": {
+      "method": "GET",
+      "path": "/api/sessions/{{sessionId}}/runs/{{runId}}/events",
+      "headers": {
+       "accept": "text/event-stream"
+      }
+     },
+     "stream": {
+      "until": [
+       "run.completed",
+       "run.failed",
+       "run.cancelled"
+      ],
+      "timeoutMs": 60000,
+      "profile": "run-events"
+     }
+    },
+    {
+     "name": "delete the project",
+     "request": {
+      "method": "DELETE",
+      "path": "/api/projects/{{projectId}}",
+      "body": {
+       "confirmationId": "{{projectId}}"
+      }
+     },
+     "always": true
+    },
+    {
+     "name": "restore the global settings",
+     "request": {
+      "method": "PUT",
+      "path": "/api/settings",
+      "body": "{{originalOverrides}}"
+     },
+     "always": true
+    },
+    {
+     "name": "delete the model",
+     "request": {
+      "method": "DELETE",
+      "path": "/api/models/{{modelId}}"
+     },
+     "always": true
+    }
+   ]
+  },
+  {
+   "id": "l2-subagent",
+   "description": "The main agent delegates one task to a subagent and reports its result.",
+   "stub": {
+    "main": [
+     {
+      "tool": "task",
+      "arguments": {
+       "description": "Write a note",
+       "prompt": "Say done.",
+       "subagent_type": "general-purpose"
+      }
+     },
+     {
+      "text": "The subagent finished."
+     }
+    ],
+    "subagent": [
+     {
+      "text": "done."
+     }
+    ]
+   },
+   "steps": [
+    {
+     "name": "remember the global settings",
+     "request": {
+      "method": "GET",
+      "path": "/api/settings"
+     },
+     "capture": {
+      "originalOverrides": "$.overrides"
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "register the stub model",
+     "request": {
+      "method": "POST",
+      "path": "/api/models",
+      "body": {
+       "vision": false,
+       "apiToken": "{{stubToken}}",
+       "baseUrl": "{{stubBaseUrl}}",
+       "model": "{{stubModel}}",
+       "name": "L2 stub model"
+      }
+     },
+     "capture": {
+      "modelId": "$.id"
+     },
+     "expectStatus": 201
+    },
+    {
+     "name": "create a project",
+     "request": {
+      "method": "POST",
+      "path": "/api/projects",
+      "body": {
+       "name": "L2 project"
+      }
+     },
+     "capture": {
+      "projectId": "$.id",
+      "sessionId": "$.firstSession.id"
+     },
+     "expectStatus": 201
+    },
+    {
+     "name": "choose the model",
+     "request": {
+      "method": "PATCH",
+      "path": "/api/sessions/{{sessionId}}",
+      "body": {
+       "modelId": "{{modelId}}",
+       "title": "L2 session"
+      }
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "choose the approval mode",
+     "request": {
+      "method": "PATCH",
+      "path": "/api/sessions/{{sessionId}}",
+      "body": {
+       "approvalMode": "always_allow"
+      }
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "send a message",
+     "request": {
+      "method": "POST",
+      "path": "/api/sessions/{{sessionId}}/runs",
+      "body": {
+       "content": "Delegate one task."
+      }
+     },
+     "capture": {
+      "runId": "$.id"
+     },
+     "expectStatus": 201
+    },
+    {
+     "name": "run events",
+     "request": {
+      "method": "GET",
+      "path": "/api/sessions/{{sessionId}}/runs/{{runId}}/events",
+      "headers": {
+       "accept": "text/event-stream"
+      }
+     },
+     "stream": {
+      "until": [
+       "run.completed",
+       "run.failed",
+       "run.cancelled"
+      ],
+      "timeoutMs": 60000,
+      "profile": "run-events"
+     }
+    },
+    {
+     "name": "delete the project",
+     "request": {
+      "method": "DELETE",
+      "path": "/api/projects/{{projectId}}",
+      "body": {
+       "confirmationId": "{{projectId}}"
+      }
+     },
+     "always": true
+    },
+    {
+     "name": "restore the global settings",
+     "request": {
+      "method": "PUT",
+      "path": "/api/settings",
+      "body": "{{originalOverrides}}"
+     },
+     "always": true
+    },
+    {
+     "name": "delete the model",
+     "request": {
+      "method": "DELETE",
+      "path": "/api/models/{{modelId}}"
+     },
+     "always": true
+    }
+   ]
+  },
+  {
+   "id": "l2-resume-after-disconnect",
+   "description": "A client that dropped the stream reads the rest with ?after=N and sees the same events.",
+   "stub": {
+    "main": [
+     {
+      "text": "A short answer."
+     }
+    ]
+   },
+   "steps": [
+    {
+     "name": "remember the global settings",
+     "request": {
+      "method": "GET",
+      "path": "/api/settings"
+     },
+     "capture": {
+      "originalOverrides": "$.overrides"
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "register the stub model",
+     "request": {
+      "method": "POST",
+      "path": "/api/models",
+      "body": {
+       "vision": false,
+       "apiToken": "{{stubToken}}",
+       "baseUrl": "{{stubBaseUrl}}",
+       "model": "{{stubModel}}",
+       "name": "L2 stub model"
+      }
+     },
+     "capture": {
+      "modelId": "$.id"
+     },
+     "expectStatus": 201
+    },
+    {
+     "name": "create a project",
+     "request": {
+      "method": "POST",
+      "path": "/api/projects",
+      "body": {
+       "name": "L2 project"
+      }
+     },
+     "capture": {
+      "projectId": "$.id",
+      "sessionId": "$.firstSession.id"
+     },
+     "expectStatus": 201
+    },
+    {
+     "name": "choose the model",
+     "request": {
+      "method": "PATCH",
+      "path": "/api/sessions/{{sessionId}}",
+      "body": {
+       "modelId": "{{modelId}}",
+       "title": "L2 session"
+      }
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "choose the approval mode",
+     "request": {
+      "method": "PATCH",
+      "path": "/api/sessions/{{sessionId}}",
+      "body": {
+       "approvalMode": "always_allow"
+      }
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "send a message",
+     "request": {
+      "method": "POST",
+      "path": "/api/sessions/{{sessionId}}/runs",
+      "body": {
+       "content": "Answer briefly."
+      }
+     },
+     "capture": {
+      "runId": "$.id"
+     },
+     "expectStatus": 201
+    },
+    {
+     "name": "first read, cut after 2 events",
+     "request": {
+      "method": "GET",
+      "path": "/api/sessions/{{sessionId}}/runs/{{runId}}/events",
+      "headers": {
+       "accept": "text/event-stream"
+      }
+     },
+     "capture": {
+      "cursor": "$.last.sequence"
+     },
+     "stream": {
+      "maxEvents": 2,
+      "timeoutMs": 60000
+     }
+    },
+    {
+     "name": "second read from the cursor",
+     "request": {
+      "method": "GET",
+      "path": "/api/sessions/{{sessionId}}/runs/{{runId}}/events?after={{cursor}}",
+      "headers": {
+       "accept": "text/event-stream"
+      }
+     },
+     "stream": {
+      "until": [
+       "run.completed",
+       "run.failed",
+       "run.cancelled"
+      ],
+      "timeoutMs": 60000,
+      "profile": "run-events"
+     }
+    },
+    {
+     "name": "delete the project",
+     "request": {
+      "method": "DELETE",
+      "path": "/api/projects/{{projectId}}",
+      "body": {
+       "confirmationId": "{{projectId}}"
+      }
+     },
+     "always": true
+    },
+    {
+     "name": "restore the global settings",
+     "request": {
+      "method": "PUT",
+      "path": "/api/settings",
+      "body": "{{originalOverrides}}"
+     },
+     "always": true
+    },
+    {
+     "name": "delete the model",
+     "request": {
+      "method": "DELETE",
+      "path": "/api/models/{{modelId}}"
+     },
+     "always": true
+    }
+   ]
+  }
+ ]
+}

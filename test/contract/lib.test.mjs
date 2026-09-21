@@ -122,3 +122,16 @@ test("coverage counts rows with a case, exempts not-migrated ones and flags unkn
   assert.deepEqual(report.missing.map((row) => row.key), ["GET /b"]);
   assert.deepEqual(report.unknown, ["GET /typo"]);
 });
+
+test("a variable that is the whole value keeps its type, so a captured object is sent back as an object", async () => {
+  const backend = await fakeBackend((request, response) => json(response, 200, { overrides: { a: 1, list: [1, 2] } }));
+  try {
+    await runCase({ id: "c", steps: [
+      { name: "read", request: { method: "GET", path: "/settings" }, capture: { original: "$.overrides" } },
+      { name: "restore", request: { method: "PUT", path: "/settings", body: "{{original}}" } },
+    ] }, { base: backend.base, token: "t" });
+    assert.deepEqual(backend.seen[1].body, { a: 1, list: [1, 2] });
+  } finally {
+    await backend.close();
+  }
+});

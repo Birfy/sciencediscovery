@@ -22,6 +22,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 import { createNormalizer, diff } from "./normalize.mjs";
+import { startStubModel } from "./stub-model.mjs";
 
 export function loadCases(directory) {
   return readdirSync(directory).filter((name) => name.endsWith(".json")).sort()
@@ -37,6 +38,9 @@ export function lookup(value, expression) {
 
 function substitute(value, variables) {
   if (typeof value === "string") {
+    // A value that is exactly one variable keeps its type, so a captured object can be sent back whole.
+    const whole = value.match(/^\{\{(\w+)\}\}$/);
+    if (whole && whole[1] in variables) return variables[whole[1]];
     return value.replace(/\{\{(\w+)\}\}/g, (_, name) => {
       if (!(name in variables)) throw new Error(`variable {{${name}}} was never captured`);
       return String(variables[name]);
@@ -47,7 +51,7 @@ function substitute(value, variables) {
   return value;
 }
 
-async function readSse(response, stream) {
+async function readSse(response, stream, onEvent = async () => undefined) {
   const events = [];
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -68,6 +72,7 @@ async function readSse(response, stream) {
       try { events.push(JSON.parse(data)); } catch { events.push({ raw: data }); }
       const last = events[events.length - 1];
       const type = last?.event?.type ?? last?.type;
+      await onEvent(last, type);
       if (stream.until?.includes(type) || events.length >= (stream.maxEvents ?? 1_000)) {
         await reader.cancel().catch(() => undefined);
         return events;
@@ -78,10 +83,44 @@ async function readSse(response, stream) {
   return events;
 }
 
+/**
+ * The run-event profile: what a user could see, in a form that does not depend on timing.
+ * Consecutive text/thinking/tool-output fragments of one response are joined (how many
+ * fragments arrive is a matter of timing), envelope fields that only count or time events
+ * are dropped, and the native agent's own evidence (`agent.record` and each event's
+ * `evidence`) is left out: it is not part of what another executor has to reproduce.
+ */
+export function profileRunEvents(events) {
+  const out = [];
+  const JOINED = { "assistant.delta": "delta", "assistant.thinking.delta": "delta", "tool.output": "chunk" };
+  for (const wrapper of events) {
+    const { evidence, ...event } = wrapper.event ?? wrapper;
+    if (event.type === "agent.record") continue;
+    const field = JOINED[event.type];
+    const previous = out[out.length - 1];
+    const sameStream = previous && previous.type === event.type
+      && (previous.responseId ?? previous.toolCallId) === (event.responseId ?? event.toolCallId);
+    if (field && sameStream) previous[field] += event[field];
+    else out.push(event);
+  }
+  return out;
+}
+
 /** Run one case; returns one record per step. Steps marked always:true run even after a failure. */
 export async function runCase(testCase, { base, token, fetchImpl = fetch }) {
   const normalize = createNormalizer();
   const variables = {};
+  // A case that needs a model gets its own scripted stub, so every case starts from step one.
+  const stub = testCase.stub ? await startStubModel(testCase.stub) : undefined;
+  if (stub) Object.assign(variables, { stubBaseUrl: stub.baseUrl, stubModel: stub.model, stubToken: stub.apiToken });
+  try {
+    return await runSteps(testCase, { base, token, fetchImpl, normalize, variables });
+  } finally {
+    await stub?.stop();
+  }
+}
+
+async function runSteps(testCase, { base, token, fetchImpl, normalize, variables }) {
   const records = [];
   let failed = false;
   for (const step of testCase.steps) {
@@ -97,7 +136,30 @@ export async function runCase(testCase, { base, token, fetchImpl = fetch }) {
       record.status = response.status;
       record.contentType = (response.headers.get("content-type") ?? "").split(";")[0];
       if (step.stream) {
-        record.events = (await readSse(response, step.stream)).map((event) => normalize.json(event));
+        const reactionErrors = [];
+        const send = async (reaction) => {
+          const follow = substitute(reaction.request, variables);
+          const answer = await fetchImpl(`${base}${follow.path}`, {
+            method: follow.method,
+            headers: { authorization: `Bearer ${token}`, ...(follow.body !== undefined ? { "content-type": "application/json" } : {}) },
+            ...(follow.body !== undefined ? { body: JSON.stringify(follow.body) } : {}),
+          });
+          // A reaction that fails would otherwise look like a run that never continued.
+          if (!answer.ok) reactionErrors.push(`${follow.method} ${follow.path} -> ${answer.status} ${(await answer.text()).slice(0, 200)}`);
+        };
+        const fired = new Set();
+        const raw = await readSse(response, step.stream, async (event, type) => {
+          for (const [index, reaction] of (step.stream.reactions ?? []).entries()) {
+            if (reaction.when !== type || fired.has(index)) continue;
+            fired.add(index);
+            for (const [name, expression] of Object.entries(reaction.capture ?? {})) variables[name] = lookup(event.event ?? event, expression);
+            await send(reaction);
+          }
+        });
+        for (const [name, expression] of Object.entries(step.capture ?? {})) variables[name] = lookup({ events: raw, last: raw[raw.length - 1] }, expression);
+        if (reactionErrors.length) record.error = `reaction failed: ${reactionErrors.join("; ")}`;
+        const shown = step.stream.profile === "run-events" ? profileRunEvents(raw) : raw;
+        record.events = shown.map((event) => normalize.json(event));
       } else {
         const raw = await response.text();
         let parsed;

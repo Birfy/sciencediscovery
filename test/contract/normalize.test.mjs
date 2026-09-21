@@ -70,3 +70,9 @@ test("the sandbox-specific name of the system environment is hidden", () => {
     a: "<system-environment>", b: "<system-environment>",
   });
 });
+
+test("a stub's port and the sandbox's random temp directory name are hidden", () => {
+  const normalize = createNormalizer();
+  assert.equal(normalize.text("http://127.0.0.1:56778/v1"), "http://127.0.0.1:<port>/v1");
+  assert.equal(normalize.text("/data/runner-runtime/tmp/seatbelt-fW42DG/x"), "/data/runner-runtime/tmp/seatbelt-<tmp>/x");
+});
