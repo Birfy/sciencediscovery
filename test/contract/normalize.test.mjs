@@ -102,3 +102,8 @@ test("exchange rates and their dates are hidden: they come from an outside servi
   const out = normalize.json({ exchangeRates: [{ provider: "Frankfurter", rate: 6.6999, effectiveDate: "2026-09-21" }] });
   assert.deepEqual(out.exchangeRates[0], { provider: "Frankfurter", rate: "<volatile>", effectiveDate: "<volatile>" });
 });
+
+test("a runner's host measurements are hidden as one value", () => {
+  const out = createNormalizer().json({ runnerStatus: { state: "ready", resources: { cpuCores: 2, uptimeSeconds: 9.5 } } });
+  assert.deepEqual(out.runnerStatus, { state: "ready", resources: "<volatile>" });
+});
