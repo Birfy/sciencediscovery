@@ -107,6 +107,19 @@ export const JIUWENSWARM_HOST_TOOLS = ["bash", "read_file", "write_file", "edit_
 /** What the model is told instead: JiuwenSwarm's own prompt still names those tools. */
 export const HOST_TOOLS_SECTION = "Commands, scripts and file writes run in the sandbox through run_shell; read workspace files with read_file and list_files. JiuwenSwarm's bash, write_file, edit_file, glob, grep and read_pdf are not available here.";
 
+/**
+ * ScienceDiscovery's tools JiuwenSwarm's permission engine asks the user about: those that needed approval before
+ * (they execute, reach a host or a Runner, or download), and every custom MCP connector tool (`mcp__...`). The
+ * others are allowed. JiuwenSwarm is given this per tool; what the user then chooses ("always") is kept there.
+ */
+export const JIUWENSWARM_ASK_TOOLS: ReadonlySet<string> = new Set([
+  "run_shell", "execute", "environment_setup", "run_npu_job", "execution_cancel", "workspace_transfer",
+  "sync_remote_workspace", "artifact_download", "arxiv_prepare_paper_download", "pubmed_prepare_paper_download",
+  "pdb_prepare_structure_download",
+]);
+
+export const approvalFor = (name: string): "allow" | "ask" => JIUWENSWARM_ASK_TOOLS.has(name) || name.startsWith("mcp__") ? "ask" : "allow";
+
 /** JiuwenSwarm's own todo tools, left visible to the model unless planning is `update_plan`. */
 export const JIUWENSWARM_TODO_TOOLS = ["todo_create", "todo_modify", "todo_list", "todo_get"] as const;
 
@@ -126,6 +139,9 @@ export function jiuwenSwarmConfigFromEnv(env: NodeJS.ProcessEnv = process.env): 
 }
 
 type Listener = (event: AgentEvent) => void;
+
+/** One of JiuwenSwarm's approval questions, as the adapter reports it (`permission.required`). */
+interface ApprovalQuestion { id: string; resource?: string; summary?: string; toolCallId?: string }
 
 /** A line of the adapter's NDJSON stream. */
 type RunLine =
@@ -267,6 +283,28 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
     if (id) this.loadSkill(id);
   }
 
+  /**
+   * JiuwenSwarm's permission engine stopped a call and asks: put it to the user as a ScienceDiscovery approval and
+   * send the answer back. The run waits in JiuwenSwarm meanwhile. Without a way to ask, the call is denied.
+   */
+  private answerApproval(question: ApprovalQuestion): void {
+    const ask = this.options.requestApproval;
+    const decided = ask
+      ? ask({ resource: question.resource ?? question.summary ?? "tool call", summary: question.summary ?? question.resource ?? "tool call",
+        ...(question.toolCallId ? { toolCallId: question.toolCallId } : {}) }, this.controller.signal)
+      : Promise.resolve("deny" as const);
+    void decided.catch(() => "deny" as const).then(async (decision) => {
+      const response = await (this.config.fetch ?? fetch)(`${this.config.adapterUrl}/agent/approvals/${encodeURIComponent(question.id)}`, {
+        method: "POST",
+        headers: { "content-type": "application/json", ...(this.config.adapterToken ? { authorization: `Bearer ${this.config.adapterToken}` } : {}) },
+        body: JSON.stringify({ decision }),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    }).catch((error) => {
+      console.warn(`[jiuwenswarm-agent] could not answer JiuwenSwarm's approval question ${question.id}: ${error instanceof Error ? error.message : String(error)}`);
+    });
+  }
+
   /** JiuwenSwarm's own web search and fetching, recorded in the memory graph as ours are. Fire and forget. */
   private recordWeb(call: { args: unknown; id: string; name: string; output: string; failed: boolean }): void {
     const record = this.options.recordWebResult;
@@ -338,7 +376,7 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
         // JiuwenSwarm gives a tool call 30 s unless told otherwise; the run's own timeout is the limit here.
         ...(this.options.runTimeoutMs ? { toolTimeoutSeconds: Math.ceil(this.options.runTimeoutMs / 1000) } : {}),
         tools: [...tools.values()].map((tool) => ({
-          name: tool.name, description: this.describe(tool), inputSchema: tool.parameters,
+          name: tool.name, description: this.describe(tool), inputSchema: tool.parameters, approval: approvalFor(tool.name),
         })),
         bridge: { url: bridgeUrl, token: bridgeToken },
       }),
@@ -355,6 +393,7 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
     let finalText = "";
     let failure: string | undefined;
     for await (const line of ndjson(response.body)) {
+      if ("event" in line && line.event.type === "permission.required") this.answerApproval(line.event.request as ApprovalQuestion);
       if ("done" in line) finalText = line.done.finalText;
       else if (line.event.type === "run.failed") failure = String(line.event.error);
       else translator.handle(line.event);

@@ -4373,3 +4373,16 @@ test("with every skill everywhere (the JiuwenSwarm backend) a Session's skill se
   assert.equal(effective.skillSelectionMode, "all");
   assert.deepEqual([...effective.enabledSkillIds].sort(), ["code-engineer", "evolve-design"]);
 });
+
+test("an action JiuwenSwarm's permission engine let through is allowed and recorded as its decision", async (context) => {
+  const root = resolve(process.cwd(), ".tmp", `jw-authorize-${randomUUID()}`);
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const store = new SessionStore(root); await store.load();
+  const project = await store.createProject("Approvals");
+  const session = await store.createSession(project.id, "Approvals", {}, {}, { allowUnconfiguredModel: true });
+  const { allowed, authorization } = await store.authorizeByJiuwenSwarm(session.id, "code", "run_shell: ls", { toolCallId: "c1" });
+  assert.equal(allowed, true);
+  assert.equal(authorization.source, "jiuwenswarm");
+  assert.equal(authorization.outcome, "allowed");
+  assert.equal(store.getPermissionAuthorization(authorization.id)?.toolCallId, "c1");
+});

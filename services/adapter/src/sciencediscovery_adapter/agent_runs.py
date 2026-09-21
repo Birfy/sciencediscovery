@@ -59,6 +59,9 @@ class ToolSpec(BaseModel):
     name: str
     description: str = ""
     inputSchema: dict[str, Any] = Field(default_factory=lambda: {"type": "object", "properties": {}})
+    # What JiuwenSwarm's permission engine does before a call: "ask" the user, or "allow". Set once per tool name,
+    # the first time a run brings it (JiuwenSwarm's own settings, or a user's "always", win after that).
+    approval: Literal["allow", "ask"] = "allow"
 
 
 class Bridge(BaseModel):
@@ -127,6 +130,10 @@ class SkillEnabled(BaseModel):
     enabled: bool
 
 
+class PermissionAnswer(BaseModel):
+    decision: Literal["allow_once", "allow_matching", "deny"]
+
+
 def model_alias_base(model: str) -> str:
     """A model id as a JiuwenSwarm entry name: letters, digits, `.`, `_` and `-` only, at most 48 characters."""
     return re.sub(r"[^A-Za-z0-9._-]+", "-", model).strip("-")[:48] or "model"
@@ -162,6 +169,9 @@ class AgentRunner:
         self._shared_lock = asyncio.Lock()
         self._shared_registered = False
         self._shared_timeout_s = 0
+        self._permissions_on = False
+        # Runs paused on one of JiuwenSwarm's approval questions, by the question's id.
+        self.pending_approvals: dict[str, tuple[Any, RunEventMapper]] = {}
 
     async def ensure_default_model(self) -> None:
         """Point JiuwenSwarm's default model at the adapter (see `llm_proxy.DEFAULT_ALIAS`)."""
@@ -172,7 +182,9 @@ class AgentRunner:
         """Give JiuwenSwarm the one MCP server for every run's tools (see mcp_server), and its list again when a run
         brought a tool (or an argument) it did not have. A reconnect makes JiuwenSwarm read the list afresh."""
         async with self._shared_lock:
+            new = [tool for tool in tools if tool["name"] not in self.registry.shared]
             changed = self.registry.merge(tools)
+            await self._apply_approvals(new)
             longer = timeout_s > self._shared_timeout_s
             if self._shared_registered and not changed and not longer:
                 return
@@ -190,6 +202,26 @@ class AgentRunner:
                 })
             await self.rpc(self.settings.mgmt_url, "mcp.connect", {"name": SERVER_NAME})
             self._shared_registered = True
+
+    async def answer_approval(self, request_id: str, decision: str) -> None:
+        """Resume a run paused on one of JiuwenSwarm's approval questions with the user's decision."""
+        pending = self.pending_approvals.pop(request_id, None)
+        if pending is None:
+            raise KeyError(request_id)
+        run, mapper = pending
+        answer, _ = mapper.decide(request_id, decision)
+        await run.answer(request_id, "permission_interrupt", answer)
+
+    async def _apply_approvals(self, tools: list[dict[str, Any]]) -> None:
+        """JiuwenSwarm's permission engine decides every call (ScienceDiscovery's approval layer allows what it
+        lets through). Switched on once; a tool it has not seen yet gets the level the API asked for."""
+        if not self._permissions_on:
+            await self.rpc(self.settings.mgmt_url, "config.set", {"permissions_enabled": True})
+            self._permissions_on = True
+        for tool in tools:
+            await self.rpc(self.settings.mgmt_url, "permissions.tools.update", {
+                "tool": f"mcp_{SERVER_NAME}_{tool['name']}", "level": tool.get("approval") or "allow",
+            })
 
     async def stream(self, request: AgentRunRequest) -> AsyncIterator[str]:
         name = SERVER_NAME
@@ -242,6 +274,8 @@ class AgentRunner:
                 try:
                     async for frame in run:
                         for event in mapper.feed(frame):
+                            if event["type"] == "permission.required":
+                                self.pending_approvals[event["request"]["id"]] = (run, mapper)
                             if _DEBUG and event["type"].startswith("tool."):
                                 print(f"[adapter-debug] {request.sessionId[:8]} {json.dumps(event, ensure_ascii=False)[:500]}",
                                       file=sys.stderr, flush=True)
@@ -273,6 +307,8 @@ class AgentRunner:
                     pass
             if token:
                 self.registry.remove(token)  # the shared server stays; calls for this run find nothing now
+            for request_id in [key for key, (_, owner) in self.pending_approvals.items() if owner is mapper]:
+                self.pending_approvals.pop(request_id, None)
 
 
 def agent_router(runner: AgentRunner, settings: Settings) -> APIRouter:
@@ -308,6 +344,17 @@ def agent_router(runner: AgentRunner, settings: Settings) -> APIRouter:
         except Exception as error:
             raise HTTPException(status_code=502, detail=f"JiuwenSwarm could not list its skills: {str(error)[:200]}") from error
         return {"skills": imported}
+
+    @router.post("/agent/approvals/{request_id}")
+    async def answer_approval(request_id: str, body: PermissionAnswer, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        """The user's decision on one of JiuwenSwarm's approval questions (`permission.required` in a run's stream)."""
+        if settings.agent_token and authorization != f"Bearer {settings.agent_token}":
+            raise HTTPException(status_code=401, detail="unauthorized")
+        try:
+            await runner.answer_approval(request_id, body.decision)
+        except KeyError:
+            raise HTTPException(status_code=404, detail="no run is waiting on that question") from None
+        return {"answered": request_id, "decision": body.decision}
 
     @router.get("/agent/skills")
     async def list_skills(authorization: str | None = Header(default=None)) -> dict[str, Any]:

@@ -358,6 +358,57 @@ const checks = {
   },
 
   /**
+   * JiuwenSwarm's permission engine decides: with a session that asks, run_shell stops on its question, which shows
+   * as one of our approvals. Allowed once, the command runs (recorded as JiuwenSwarm's decision); the next call asks
+   * again and, denied, runs nothing.
+   */
+  async approvals() {
+    const stub = await startStubModel({ main: [
+      { tool: "run_shell", arguments: { command: "echo APPROVED-RUN" } },
+      { tool: "run_shell", arguments: { command: "echo DENIED-RUN" } },
+      { text: "Done." },
+    ] });
+    const { sessionId, cleanup } = await setup(stub);
+    try {
+      await api("PATCH", `/api/sessions/${sessionId}`, { approvalMode: "ask_for_dangerous" });
+      const run = await api("POST", `/api/sessions/${sessionId}/runs`, { content: "Run two commands." });
+      const decide = async (decision) => {
+        for (let i = 0; i < 120; i += 1) {
+          const pending = (await api("GET", `/api/permission-requests?sessionId=${sessionId}`)).filter((request) => request.state === "pending");
+          if (pending.length) {
+            await api("POST", `/api/permission-requests/${pending[0].id}/decision`, { decision });
+            return pending[0];
+          }
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+        throw new Error(`no approval was asked for (to ${decision})`);
+      };
+      const first = await decide("allow_once");
+      const second = await decide("deny");
+      let current;
+      for (let i = 0; i < 120; i += 1) {
+        current = await api("GET", `/api/sessions/${sessionId}/runs/${run.id}`);
+        if (["completed", "failed", "cancelled", "interrupted"].includes(current.status)) break;
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+      if (current.status !== "completed") throw new Error(`run ${current.status}: ${current.error}`);
+      const events = JSON.stringify(await runEvents(sessionId, run.id));
+      const streams = await Promise.all((await runEvents(sessionId, run.id))
+        .filter((event) => event.type === "tool.completed" && event.trace?.outputStream)
+        .map((event) => api("GET", `/api/sessions/${sessionId}/runs/${run.id}/streams/${event.trace.outputStream}/events`)));
+      const outputs = events + JSON.stringify(streams);
+      if (!outputs.includes("APPROVED-RUN")) throw new Error("the allowed command did not run");
+      if (/DENIED-RUN\\n|"DENIED-RUN"/.test(JSON.stringify(streams))) throw new Error("the denied command ran");
+      const authorizations = await api("GET", `/api/sessions/${sessionId}/permission-authorizations`);
+      const byJiuwenSwarm = authorizations.filter((authorization) => authorization.source === "jiuwenswarm");
+      if (!byJiuwenSwarm.length) throw new Error(`no authorization recorded as JiuwenSwarm's: ${JSON.stringify(authorizations).slice(0, 300)}`);
+      console.log(`approvals: ok (asked twice: "${first.summary.slice(0, 50)}"; allowed once it ran, denied it did not; ${byJiuwenSwarm.length} action(s) recorded as JiuwenSwarm's decision)`);
+    } finally {
+      await cleanup();
+    }
+  },
+
+  /**
    * Where the time before the first token goes, with a model that answers at once: from the run's start to the
    * model's first request, and from there to the first text event. Two runs, since the first of a session sets more up.
    */

@@ -1129,3 +1129,44 @@ test("with SCIENCE_AGENT_JIUWENSWARM_SKILLS=ours nothing is installed and the sk
     await adapter.close();
   }
 });
+
+test("each tool carries what JiuwenSwarm's permission engine does before a call: ask for what executes, allow the rest", async () => {
+  const adapter = await fakeAdapter(async (_request, response) => { response.writeHead(200); response.end(line({ done: { finalText: "ok" } })); });
+  try {
+    const connector = { label: "Search", name: "mcp__pubmed__search", description: "Search.", parameters: Type.Object({}), execute: async () => ({ content: [] }) };
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ extraTools: [connector as never] })).execute("go");
+    const levels = Object.fromEntries(adapter.requests[0].body.tools.map((tool: { name: string; approval: string }) => [tool.name, tool.approval]));
+    assert.equal(levels.run_shell, "ask");
+    assert.equal(levels.mcp__pubmed__search, "ask");
+    assert.equal(levels.read_file, "allow");
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("a JiuwenSwarm approval question is put to the user as ours and the answer goes back to the adapter", async () => {
+  let answered: any;
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    if (body.decision) {
+      answered = body;
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end("{}");
+      return;
+    }
+    response.writeHead(200);
+    response.write(line({ event: { type: "permission.required", request: { id: "q1", resource: "run_shell: rm -rf out", summary: "run_shell: rm -rf out", toolCallId: "q1" } } }));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    response.end(line({ done: { finalText: "ok" } }));
+  });
+  try {
+    const asked: unknown[] = [];
+    const requestApproval = async (request: unknown) => { asked.push(request); return "allow_matching" as const; };
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ requestApproval } as never)).execute("go");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.deepEqual(asked, [{ resource: "run_shell: rm -rf out", summary: "run_shell: rm -rf out", toolCallId: "q1" }]);
+    assert.deepEqual(answered, { decision: "allow_matching" });
+    assert.equal(adapter.requests.at(-1).body.decision, "allow_matching");
+  } finally {
+    await adapter.close();
+  }
+});

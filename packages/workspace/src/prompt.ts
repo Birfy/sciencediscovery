@@ -304,6 +304,14 @@ export function buildWorkspaceSystemPrompt(
 }
 
 export interface WorkspaceAgentOptions {
+  /**
+   * With the JiuwenSwarm backend: ask the user about a call JiuwenSwarm's permission engine stopped, as a
+   * ScienceDiscovery approval (session approval mode and standing grants apply). The answer goes back to JiuwenSwarm.
+   */
+  requestApproval?: (
+    request: { resource: string; summary: string; toolCallId?: string },
+    signal?: AbortSignal,
+  ) => Promise<"allow_once" | "allow_matching" | "deny">;
   localRunnerAllowed?: boolean;
   workflowInstructions?: string;
   pluginSettings?: import("@sciencediscovery/schema").RuntimeSettingsOverrides["plugins"];

@@ -175,6 +175,7 @@ import { MAX_PAPER_PDF_BYTES, PaperService } from "../papers.js";
 import { closedModelContext } from "./model-context.js";
 import { RemoteComputeClient } from "@sciencediscovery/executor";
 import { classifySubagentFailure } from "@sciencediscovery/specialist";
+import { jiuwenSwarmConfigFromEnv } from "../agent-run/jiuwenswarm-agent.js";
 import { runMainRequestExecution, runSubagentTask } from "../agent-run/orchestrators.js";
 import { createAgentPermissionRuntime } from "@sciencediscovery/governance";
 import type { EvolveRunProposal } from "@sciencediscovery/schema";
@@ -1027,6 +1028,17 @@ async function executeAgentRun(
   };
   let mainExecution: ReturnType<typeof runMainRequestExecution> | undefined;
   const externalWaitByExecution = new Map<string, () => () => void>();
+  const approvalsByJiuwenSwarm = Boolean(jiuwenSwarmConfigFromEnv());
+  // A call JiuwenSwarm's permission engine stopped, put to the user as one of ours.
+  const requestApproval: NonNullable<WorkspaceAgentOptions["requestApproval"]> = async ({ resource, summary, toolCallId }, signal) => {
+    const check = await store.requestPermission(sessionId, "code", resource, summary, toolCallId ? { toolCallId } : {});
+    if (check.allowed) return "allow_once";
+    responseSink.emit({ request: check.request, type: "permission.required" });
+    const decided = await waitForPermissionDecision(store, check.request, timeoutSettings.permissionWaitTimeoutMs, signal, { emit, runId, sessionId });
+    if (decided.state !== "allowed") return "deny";
+    const grant = decided.grantId ? store.getPermissionGrant(decided.grantId) : undefined;
+    return grant && grant.scope !== "once" ? "allow_matching" : "allow_once";
+  };
   const permissionRuntime = createAgentPermissionRuntime(initialPermissionEpoch, {
     beginExternalWait: (executionId) => {
       const begin = executionId ? externalWaitByExecution.get(executionId) : undefined;
@@ -1039,8 +1051,10 @@ async function executeAgentRun(
     },
     readEpoch: () => store.getSessionPermissionEpoch(sessionId),
     readAuthorization: (authorizationId) => store.getPermissionAuthorization(authorizationId),
-    requestPermission: (action, resource, summary, context) =>
-      store.requestPermission(sessionId, action, resource, summary, context),
+    // With the JiuwenSwarm backend its permission engine decides before a tool runs; ScienceDiscovery records that.
+    requestPermission: (action, resource, summary, context) => approvalsByJiuwenSwarm
+      ? store.authorizeByJiuwenSwarm(sessionId, action, resource, context)
+      : store.requestPermission(sessionId, action, resource, summary, context),
     waitForDecision: (permissionRequest, signal) =>
       waitForPermissionDecision(
         store,
@@ -1185,6 +1199,7 @@ async function executeAgentRun(
       });
     },
     enabledConnectorIds: settingsSnapshot.enabledConnectorIds,
+    ...(approvalsByJiuwenSwarm ? { requestApproval } : {}),
     ...(leadExtraTools.length ? { extraTools: leadExtraTools } : {}),
     memoryGraphEnabled: memoryGraphSink.enabled,
     ...createArtifactBindings(store.workspacePath(sessionId), runId),
@@ -1674,6 +1689,7 @@ async function executeAgentRun(
             pluginSettings: settingsSnapshot.plugins,
             config: agentConfig,
             enabledConnectorIds: subagentConnectorIds,
+            ...(approvalsByJiuwenSwarm ? { requestApproval } : {}),
             ...(scientificEnvironments ? { environments: scientificEnvironments } : {}),
             ...createArtifactBindings(subagentWorkspaceRoot, childExecution.identity.executionId, handoff.privateWorkspacePath, subagent.id),
             ...createWorkspaceExecutionBindings({

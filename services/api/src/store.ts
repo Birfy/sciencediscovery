@@ -4459,6 +4459,30 @@ export class SessionStore {
     };
   }
 
+  /**
+   * The JiuwenSwarm backend: its permission engine already decided about the tool call (and asked the user when its
+   * policy says so), so the privileged action is allowed here and recorded as JiuwenSwarm's decision.
+   */
+  async authorizeByJiuwenSwarm(
+    sessionId: string,
+    action: PermissionAction,
+    resourceValue: string,
+    context: { executionId?: string; toolCallId?: string } = {},
+  ): Promise<{ allowed: true; authorization: PermissionAuthorization }> {
+    const session = this.assertSessionWritable(sessionId);
+    const authorization = this.createPermissionAuthorization({
+      action,
+      ...context,
+      outcome: "allowed",
+      permissionEpochId: session.permissionEpochId,
+      resource: resourceValue.trim().slice(0, 500),
+      session,
+      source: "jiuwenswarm",
+    });
+    await this.appendPermissionAuthorizations([authorization]);
+    return { allowed: true, authorization: structuredClone(authorization) };
+  }
+
   async requestPermission(
     sessionId: string,
     action: PermissionAction,

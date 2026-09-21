@@ -370,3 +370,40 @@ async def test_only_web_search_settings_are_accepted(harness):
 async def test_the_config_route_needs_the_agent_token_when_there_is_one():
     app = create_app(Settings(**{**SETTINGS.__dict__, "agent_token": "secret"}))
     assert (await post_config(app, {"free_search_ddg_enabled": "true"})).status_code == 401
+
+
+async def test_jiuwenswarms_permission_engine_is_switched_on_and_each_new_tool_gets_its_level_once(harness):
+    app, _, rpcs = harness
+    FakeRun.fixture = "jw_chat_mcp_direct.raw"
+    bridge = {"url": "http://legacy.test/bridge", "token": "t"}
+    tools = [{"name": "run_shell", "description": "d", "approval": "ask"}, {"name": "read_file", "description": "d"}]
+    await post(app, {"sessionId": "s1", "prompt": "go", "tools": tools, "bridge": bridge})
+    await post(app, {"sessionId": "s2", "prompt": "go", "tools": [*tools, {"name": "declare_claim", "description": "d"}], "bridge": bridge})
+    calls = [(m, p) for _, m, p in rpcs if m in ("config.set", "permissions.tools.update")]
+    assert calls == [
+        ("config.set", {"permissions_enabled": True}),
+        ("permissions.tools.update", {"tool": "mcp_sci_run_shell", "level": "ask"}),
+        ("permissions.tools.update", {"tool": "mcp_sci_read_file", "level": "allow"}),
+        ("permissions.tools.update", {"tool": "mcp_sci_declare_claim", "level": "allow"}),
+    ]
+
+
+async def test_an_approval_answer_resumes_the_run_waiting_on_that_question(harness):
+    from sciencediscovery_adapter.events import RunEventMapper
+
+    app, runner, _ = harness
+    answered = []
+
+    class Waiting:
+        async def answer(self, request_id, source, answer):
+            answered.append((request_id, source, answer))
+
+    mapper = RunEventMapper(session_id="s1")
+    mapper._permissions["q1"] = ["本次允许", "本会话允许", "总是允许", "拒绝"]
+    mapper._pending_requests["q1"] = {"id": "q1", "state": "pending"}
+    runner.pending_approvals["q1"] = (Waiting(), mapper)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://adapter") as client:
+        ok = await client.post("/agent/approvals/q1", json={"decision": "allow_matching"})
+        missing = await client.post("/agent/approvals/q1", json={"decision": "deny"})
+    assert ok.status_code == 200 and missing.status_code == 404
+    assert answered == [("q1", "permission_interrupt", {"selected_options": ["本会话允许"], "custom_input": "本会话允许"})]
