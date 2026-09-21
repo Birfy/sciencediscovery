@@ -113,6 +113,12 @@ def rewrite_request(body: dict[str, Any], route: LlmRoute) -> dict[str, Any]:
     choice = body.get("tool_choice")
     if isinstance(choice, dict) and isinstance(choice.get("function"), dict):
         out["tool_choice"] = {**choice, "function": {**choice["function"], "name": _unprefixed(choice["function"]["name"], route)}}
+    if _DEBUG_FULL:
+        for message in body.get("messages", []):
+            if message.get("role") == "system":
+                text = message.get("content") if isinstance(message.get("content"), str) else json.dumps(message.get("content"), ensure_ascii=False)
+                print(f"[llm-proxy:jw-system] {len(text)} chars: {text!r}", file=sys.stderr, flush=True)
+        print(f"[llm-proxy:jw-tools] {[t['function']['name'] for t in body.get('tools') or []]}", file=sys.stderr, flush=True)
     messages = []
     replaced = False
     for message in body.get("messages", []):
