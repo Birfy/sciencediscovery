@@ -56,7 +56,7 @@ async function setup(stub, modelExtras = {}) {
     await api("DELETE", `/api/models/${model.id}`).catch(() => undefined);
     await stub.stop();
   };
-  return { sessionId, cleanup };
+  return { sessionId, cleanup, modelId: model.id };
 }
 
 async function runAndWait(sessionId, content) {
@@ -250,24 +250,36 @@ const checks = {
   },
 
   /**
-   * The session's skills are JiuwenSwarm skills: its prompt lists them (ours does not), and its skill_tool loads one.
+   * The session's skills are JiuwenSwarm skills: imported into it (skill-creator as sciencediscovery-skill-creator, since
+   * JiuwenSwarm has its own), loaded with its skill_tool, and neither our catalog nor read_skill is offered. JiuwenSwarm
+   * lists every skill in its prompt while they fit its budget and otherwise has the model search them (skill_index), so
+   * the check loads them by name rather than looking for them in the prompt.
    */
   async skills() {
-    const stub = await startStubModel({ main: [{ tool: "skill_tool", arguments: { skill_name: "evolve-design" } }, { text: "Loaded." }] });
-    const { sessionId, cleanup } = await setup(stub);
+    const stub = await startStubModel({ main: [
+      { tool: "skill_tool", arguments: { skill_name: "evolve-design" } },
+      { tool: "skill_tool", arguments: { skill_name: "sciencediscovery-skill-creator" } },
+      { text: "Loaded." },
+    ] });
+    const { sessionId, cleanup, modelId } = await setup(stub);
     try {
-      const run = await runAndWait(sessionId, "Load the evolve-design skill.");
+      // A new project starts with no skills; this session gets all of them. The PUT replaces every override, the model too.
+      await api("PUT", `/api/sessions/${sessionId}/settings`, { skillSelectionMode: "all", modelId });
+      const run = await runAndWait(sessionId, "Load the evolve-design and skill-creator skills.");
       if (run.status !== "completed") throw new Error(`run ${run.status}: ${run.error}`);
       const system = JSON.stringify((stub.lastMessages?.() ?? []).filter((message) => message.role === "system"));
       if (system.includes("<available_skills>")) throw new Error("our skill catalog is still in the prompt");
-      if (!/`evolve-design`/.test(system)) throw new Error("JiuwenSwarm's installed-skill list does not name evolve-design");
+      if (!system.includes("Skill")) throw new Error("JiuwenSwarm's installed-skills section is missing");
       const events = await runEvents(sessionId, run.id);
-      const done = events.find((event) => event.type === "tool.completed" && event.trace?.name === "skill_tool");
-      const output = JSON.stringify(done?.trace ?? {});
-      if (!/evolution search|create_evolve_run/.test(output)) throw new Error(`skill_tool did not return the SKILL.md: ${output.slice(0, 300)}`);
+      const loads = events.filter((event) => event.type === "tool.completed" && event.trace?.name === "skill_tool");
+      // A long output is kept in its own stream rather than in the event.
+      const outputs = await Promise.all(loads.map(async (event) => JSON.stringify(event.trace) + JSON.stringify(event.trace.outputStream
+        ? await api("GET", `/api/sessions/${sessionId}/runs/${run.id}/streams/${event.trace.outputStream}/events?after=0`) : "")));
+      if (!outputs.some((output) => /create_evolve_run/.test(output))) throw new Error(`skill_tool did not return evolve-design's SKILL.md: ${outputs.join(" ").slice(0, 300)}`);
+      if (!outputs.some((output) => /create_skill|reviewable reusable Agent Skill/.test(output))) throw new Error(`skill_tool did not return our skill-creator: ${outputs.join(" ").slice(0, 300)}`);
       const names = new Set(stub.requests.flatMap((request) => request.toolNames ?? []));
-      if (names.has("read_skill") || [...names].some((name) => name.endsWith("_read_skill"))) throw new Error("read_skill is still offered");
-      console.log("skills: ok (JiuwenSwarm's prompt lists evolve-design, skill_tool returned its SKILL.md, no catalog or read_skill of ours)");
+      if ([...names].some((name) => /(^|_)read_skill(_resource)?$/.test(name))) throw new Error("read_skill is still offered");
+      console.log(`skills: ok (evolve-design and sciencediscovery-skill-creator loaded with skill_tool; no catalog or read_skill of ours; JiuwenSwarm prompt ${system.includes("newly_installed_skills") ? "in search mode" : "lists the skills"})`);
     } finally {
       await cleanup();
     }
