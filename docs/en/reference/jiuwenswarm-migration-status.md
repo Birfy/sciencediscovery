@@ -30,7 +30,7 @@ Design and measured protocol facts: [`services/adapter/README.md`](../../../serv
 
 | Issue | State | What exists | What does not |
 |---|---|---|---|
-| 86 Acceptance baseline, protocol calibration | closed | Interface inventory (259 rows), L1/L2 tooling, 21 recorded cases on Linux, protocol experiments, `CI_E2E_BACKEND=jiuwenswarm` | Cases for 125 rows; the 59 "approximate" mappings were not calibrated; `AgentRuntime` not evaluated |
+| 86 Acceptance baseline, protocol calibration | closed | Interface inventory (259 rows), L1/L2 tooling, 24 recorded cases on Linux, protocol experiments, `CI_E2E_BACKEND=jiuwenswarm` | Cases for 104 rows; the 59 "approximate" mappings were not calibrated; `AgentRuntime` not evaluated |
 | 87 Adapter core | closed | Public port, streaming proxy (SSE, NDJSON), 502 on upstream failure, optional token on `/agent/*` | Own storage, run registry, event log and resume: they stay in the legacy API |
 | 88 Sessions and projects | closed | Served by the legacy API through the proxy; L1 covers all 13 rows | Nothing moves to JiuwenSwarm's session store |
 | 89 Chat and runs | closed | A run executes on JiuwenSwarm; events, cancel, approval, usage, disconnect handling; L2 golden traces for 8 scenarios | See "Known gaps" |
@@ -39,9 +39,9 @@ Design and measured protocol facts: [`services/adapter/README.md`](../../../serv
 | 92 MCP and data sources | closed | All 21 rows have L1 cases; the five MCP journeys pass on this executor (custom MCP, agent calls a custom MCP tool, OAuth, secret edit x2); deferred MCP tools are promoted up front and `tool_search` is offered | MCP OAuth against a real provider was not exercised |
 | 93 Skills and libraries | open | Served by legacy | 0/35 L1 cases; skill use on this executor is not verified |
 | 94 Files, workspace, trajectory | open | Read routes have L1 cases | Trajectory view is empty for JiuwenSwarm runs (no `evidence` recorded) |
-| 95 Planning and sub-agents | open | `update_plan` and `task` run through the bridge; M0 plan and delegate journeys pass | Subagent resume gets no earlier history |
-| 97 Science toolset as MCP | open | The equivalent toolset is offered as MCP tools that call the legacy tools over the bridge, through the same ToolRegistry | `packages/tools` not inventoried one by one; deferred loading (`tool_search`) and parallel calls not verified |
-| 103 Usage | open | Per-model-call token counts become `model.usage` and are summed | Not checked in the usage page; cross-session statistics not done |
+| 95 Planning and sub-agents | closed | `update_plan` and `task` run through the bridge; L1 covers every row; L2 subagent and two-turn cases match; M0 plan and delegate journeys pass; a resumed subagent gets its history | JiuwenSwarm's own todo/subagent/agent-template features are not used (subagents are the API's `task` tool) |
+| 97 Science toolset as MCP | closed | The equivalent toolset is offered as MCP tools that call the legacy tools over the bridge, through the same ToolRegistry; a test pins the offered set and schemas to the registry's; deferred tools are promoted up front with `tool_search` offered; parallel calls run and match | Tools of later sub-issues (idea-tree, evolve, memory, artifact review) arrive with those |
+| 103 Usage | closed | Per-model-call token counts become `model.usage` and are summed; session usage and per-model usage after a run match the built-in loop (L2); every row has an L1 case | Nothing moves to adapter storage; analytics stay in the API |
 | 93, 94, 96, 98-102, 104-106 | open | Unchanged legacy behaviour behind the proxy | Everything: not started as migrations. Runner/environment/remote-host reads have L1 cases |
 
 ## Verified
@@ -50,7 +50,7 @@ On the Aliyun Linux server (bubblewrap sandbox) with `SCIENCE_AGENT_ADAPTER=1 SC
 
 - The five milestone-0 journeys (first run, compact process ×2, plan workspace, delegate subtask, deliver result) pass.
 - One journey against a live OpenAI-compatible model passes (`journey-real-request`).
-- L2: 8 run-event scenarios have the same event-type sequence as the built-in loop. Accepted differences are in
+- L2: 10 run-event scenarios (text, tool call, approve/deny, cancel, 401, subagent, resume, post-messages, two-turn conversation, parallel tool calls) have the same event-type sequence as the built-in loop. Accepted differences are in
   `test/contract/accepted-differences.json` (the wording of a provider 401, and the evidence gap).
 - L1: the recorded cases match between the built-in loop and the adapter + JiuwenSwarm stack, apart from build version strings, which are scrubbed.
 - Unit tests: adapter (`pytest`, about 108) and the TypeScript agent factory (20).
@@ -60,8 +60,8 @@ On the Aliyun Linux server (bubblewrap sandbox) with `SCIENCE_AGENT_ADAPTER=1 SC
 1. **No evidence or trajectory.** Runs on JiuwenSwarm produce no `agent.record`/`evidence` events, so the trajectory view is empty.
 2. **History.** The API's record is sent with every run and inserted by the adapter's model proxy; JiuwenSwarm runs each turn in its own session. A session begun on the built-in loop, a resumed subagent and the API's compaction therefore carry over. JiuwenSwarm's own session store is no longer used for conversation state.
 3. **OpenAI chat-completions only.**
-4. **No tool-output store, deferred tools or parallel tool calls** in the JiuwenSwarm toolset.
-5. **Wake notices.** The mocked E2E `issue-77-wake-notice` fails on this executor (the scripted model recognises the wake turn by a prompt JiuwenSwarm does not present that way). `issue-85` passes. Run the group with `CI_E2E_BACKEND=jiuwenswarm .ci/run-e2e.sh mocked`; other specs have not been run through it.
+4. **No tool-output store** in the JiuwenSwarm toolset. Deferred tools are promoted up front. Parallel tool calls run side by side (the built-in loop runs them one after another): both give the same calls and results, in a different order of events.
+5. **Wake notices.** The mocked E2E `issue-77-wake-notice` fails on this executor (the scripted model recognises the wake turn by a prompt JiuwenSwarm does not present that way). `issue-85` passes. Run the group with `CI_E2E_BACKEND=jiuwenswarm .ci/run-e2e.sh mocked`. The journeys are load-sensitive on a small host: two of them failed once when run back to back on the 2-core server and passed alone (three repeats), so run them one at a time when in doubt.
 6. **Legacy bugs found while recording (not fixed):** `PUT /api/sessions/:id/settings` with a bad body returns 500; `PUT /api/web/settings` with its own GET body returns 500; skill evolution on an unknown run returns 500; reading a file outside the workspace (`/file?path=../../etc/passwd`) returns 500 instead of 4xx.
 7. **Finding for #90:** after `POST /api/sessions/:id/permission-epoch`, a session-scoped grant still applies (the epoch concerns the sandbox, the grant the session). The issue text expects old authorizations to become invalid; the baseline records what legacy does.
 
