@@ -268,54 +268,17 @@ async def test_the_per_run_mcp_server_gets_a_tool_timeout_far_beyond_jiuwenswarm
     assert next(p for _, m, p in rpcs if m == "mcp.register_custom")["timeout_s"] == 7200
 
 
-class HistoryHarness:
-    """A gateway that says whether it already has a conversation for a session."""
-
-    def __init__(self, harness, known: dict[str, int]):
-        self.app, self.runner, self.rpcs = harness
-        self.known = known
-        original = self.runner.rpc
-
-        async def rpc(url, method, params=None, **kwargs):
-            if method == "session.get_metadata":
-                if params["session_id"] not in known:
-                    raise RuntimeError("session.get_metadata refused: session not found")
-                return {"message_count": known[params["session_id"]]}
-            return await original(url, method, params, **kwargs)
-
-        self.runner.rpc = rpc
-
-
-HISTORY = [{"role": "user", "content": "earlier question"}, {"role": "assistant", "content": "earlier answer"}]
-
-
-async def test_a_session_jiuwenswarm_has_no_context_for_is_started_with_the_earlier_conversation(harness):
-    h = HistoryHarness(harness, {})
-    await post(h.app, {"sessionId": "s1", "prompt": "next", "history": HISTORY})
-    content = FakeRun.instances[0].params["content"]
-    assert "<earlier_conversation>" in content and "user: earlier question" in content and "assistant: earlier answer" in content
-    assert content.endswith("next")
-    assert FakeRun.instances[0].params["session_id"] == "s1"
-
-
-async def test_a_session_that_already_has_context_is_continued_as_it_is(harness):
-    h = HistoryHarness(harness, {"s1": 4})
-    await post(h.app, {"sessionId": "s1", "prompt": "next", "history": HISTORY})
-    assert FakeRun.instances[0].params["content"] == "next"
-
-
-async def test_a_known_but_empty_session_is_started_with_the_history_too(harness):
-    h = HistoryHarness(harness, {"s1": 0})
-    await post(h.app, {"sessionId": "s1", "prompt": "next", "history": HISTORY})
-    assert "<earlier_conversation>" in FakeRun.instances[0].params["content"]
-
-
-async def test_the_session_key_names_the_jiuwenswarm_session_and_no_history_means_no_lookup(harness):
-    h = HistoryHarness(harness, {})
-    await post(h.app, {"sessionId": "s1", "sessionKey": "s1--sub-7", "prompt": "hi"})
+async def test_the_session_key_names_the_jiuwenswarm_session_and_the_prompt_goes_as_it_is(harness):
+    app, _, rpcs = harness
+    await post(app, {"sessionId": "s1", "sessionKey": "s1--sub-7", "prompt": "hi"})
     assert FakeRun.instances[0].params["session_id"] == "s1--sub-7"
     assert FakeRun.instances[0].params["content"] == "hi"
-    assert "session.get_metadata" not in [m for _, m, _ in h.rpcs]
+    assert "session.get_metadata" not in [m for _, m, _ in rpcs], "the adapter does not look at JiuwenSwarm's history"
+
+
+async def test_a_request_carries_no_history_field(harness):
+    from sciencediscovery_adapter.agent_runs import AgentRunRequest
+    assert "history" not in AgentRunRequest.model_fields
 
 
 async def test_the_models_context_window_is_given_to_jiuwenswarm_as_the_entrys_window(harness):

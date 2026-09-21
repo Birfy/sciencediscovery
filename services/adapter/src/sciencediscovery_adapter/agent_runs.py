@@ -47,7 +47,6 @@ from .llm_proxy import LlmRoute, LlmRoutes
 from .mcp_server import Toolset, ToolsetRegistry
 from .models import ModelProfile, ModelSync
 from .schema import relax_schema
-from .seed import seeded_prompt
 
 # SCIENCE_AGENT_ADAPTER_DEBUG=1 prints every tool event of every run to stderr.
 _DEBUG = os.environ.get("SCIENCE_AGENT_ADAPTER_DEBUG") == "1"
@@ -87,11 +86,8 @@ class AgentRunRequest(BaseModel):
     systemPrompt: str | None = None
     # The JiuwenSwarm session that holds this agent's conversation: stable across runs, one per agent
     # (the main agent, and each subagent, of one caller session). JiuwenSwarm keeps and compresses the
-    # context there. Defaults to `sessionId`.
+    # context there; the adapter neither sends nor rebuilds any history. Defaults to `sessionId`.
     sessionKey: str | None = None
-    # The conversation so far, as OpenAI chat messages, from the caller's own record. Used only to
-    # start a session that has no context in JiuwenSwarm yet (see seed.py); ignored otherwise.
-    history: list[dict[str, Any]] | None = None
     # Names of JiuwenSwarm's own tools that stay visible to the model besides the toolset above
     # (for example `todo_create`). They run inside JiuwenSwarm, not over the bridge.
     nativeTools: list[str] = Field(default_factory=list)
@@ -126,14 +122,6 @@ class AgentRunner:
         self.rpc = gateway.rpc
         self.models = ModelSync(lambda *a, **k: self.rpc(*a, **k), settings.mgmt_url)
 
-    async def _has_context(self, session: str) -> bool:
-        """Whether JiuwenSwarm already holds a conversation for this session."""
-        try:
-            meta = await self.rpc(self.settings.mgmt_url, "session.get_metadata", {"session_id": session})
-        except Exception:  # an unknown session is reported as an error
-            return False
-        return int(meta.get("message_count") or 0) > 0
-
     async def stream(self, request: AgentRunRequest) -> AsyncIterator[str]:
         name = "sci" + _SAFE_NAME.sub("", uuid.uuid4().hex)[:10]
         token = None
@@ -141,10 +129,9 @@ class AgentRunner:
         model_alias = None
         registered = False
         jw_session = request.sessionKey or request.sessionId
-        prompt = request.prompt
         mapper = RunEventMapper(session_id=request.sessionId, mcp_prefixes=(f"mcp_{name}_",))
         params: dict[str, Any] = {
-            "session_id": jw_session, "content": prompt, "query": prompt,
+            "session_id": jw_session, "content": request.prompt, "query": request.prompt,
             "mode": request.mode, "cwd": request.cwd, "project_dir": request.cwd, "trusted_dirs": [request.cwd],
             "supports_user_interaction": True, "agent_ref": {"mode": request.mode, "id": "default"},
         }
@@ -164,8 +151,6 @@ class AgentRunner:
                 params["model_name"] = await self.models.ensure(ModelProfile(
                     model_alias, f"{self.settings.public_url}/llm/{llm_token}/v1", llm_token, "OpenAI",
                     context_window=request.model.contextWindow))
-            if request.history and not await self._has_context(jw_session):
-                params["content"] = params["query"] = seeded_prompt(request.history, request.prompt)
             if request.tools:
                 if request.bridge is None:
                     raise ValueError("tools were given without a bridge to run them")

@@ -24,7 +24,7 @@ What exists and what does not: [JiuwenSwarm migration: status and hand-over](../
 | Public port | the API on 4310 | the adapter on 4310, the API on 4410 |
 | Modes | local, Docker, binary | **local (source) only** |
 
-The choice is made when the stack starts; there is no switch in the UI. To go back, start without the flag (and without the two variables). Data (sessions, projects, models, settings) is the same directory either way, so a session begun on one backend continues on the other; a conversation begun on the built-in loop is handed to JiuwenSwarm once, at its first turn there.
+The choice is made when the stack starts; there is no switch in the UI. To go back, start without the flag (and without the two variables). Data (sessions, projects, models, settings, messages on screen) is the same directory either way, but the **model's conversation context is not shared**: JiuwenSwarm keeps its own, and it starts empty. A session begun on the built-in loop therefore shows its earlier turns but JiuwenSwarm does not remember them, so start a new session after switching if that matters. The other way round is fine: the built-in loop reads the record of what JiuwenSwarm did.
 
 **Check which backend is running:**
 

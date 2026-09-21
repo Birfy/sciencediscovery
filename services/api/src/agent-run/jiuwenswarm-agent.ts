@@ -210,7 +210,6 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
           // JiuwenSwarm compresses a conversation against the model's window; it cannot know a model behind an alias.
           ...(model.contextWindow ? { contextWindow: model.contextWindow } : {}),
         },
-        history: openAiHistory(this.options.gatewayHistory ?? []),
         ...(jiuwenSwarmPlans ? { nativeTools: [...JIUWENSWARM_TODO_TOOLS] } : {}),
         // JiuwenSwarm gives a tool call 30 s unless told otherwise; the run's own timeout is the limit here.
         ...(this.options.runTimeoutMs ? { toolTimeoutSeconds: Math.ceil(this.options.runTimeoutMs / 1000) } : {}),
@@ -543,50 +542,13 @@ async function readJson(request: IncomingMessage): Promise<unknown> {
 /**
  * The JiuwenSwarm session that holds one agent's conversation. It is stable across runs, so JiuwenSwarm
  * keeps (and compresses) the context itself, and there is one per agent: the main agent uses the
- * session's own id, a subagent its own key, so a resumed subagent finds its conversation.
+ * session's own id, a subagent its own key, so a resumed subagent finds its conversation. Nothing of the
+ * conversation is sent along: JiuwenSwarm is the only holder of the model's context.
  */
 export function jiuwenSwarmSessionKey(options: Pick<NativeAgentOptions, "sessionId" | "versioning">): string {
   const agentId = options.versioning?.agentId ?? "main";
   if (agentId.startsWith("main")) return options.sessionId;
   return `${options.sessionId}--${agentId.replace(/[^A-Za-z0-9_-]+/g, "-")}`;
-}
-
-/**
- * The conversation so far as OpenAI chat messages, from the API's record. JiuwenSwarm keeps the
- * context itself; the adapter uses this only to start a session JiuwenSwarm has no context for yet
- * (a conversation that began on the built-in loop).
- */
-export function openAiHistory(history: readonly Record<string, unknown>[]): Array<Record<string, unknown>> {
-  const out: Array<Record<string, unknown>> = [];
-  for (const message of history) {
-    const role = message.role;
-    if (role !== "user" && role !== "assistant" && role !== "tool") continue;
-    // `additional_kwargs` carries the full tool output for the API's own bookkeeping; nothing else is dropped,
-    // so what a provider needs sent back verbatim (see ModelGateway.restore) survives from turn to turn.
-    const { additional_kwargs: _bookkeeping, ...rest } = message as Record<string, unknown>;
-    const content = message.content ?? "";
-    if (role === "tool") {
-      out.push({ ...rest, role, content, tool_call_id: message.tool_call_id });
-      continue;
-    }
-    const toolCalls = Array.isArray(message.tool_calls) ? message.tool_calls.map(openAiToolCall).filter(Boolean) : [];
-    const { tool_calls: _calls, ...others } = rest;
-    out.push({ ...others, role, content, ...(toolCalls.length ? { tool_calls: toolCalls } : {}) });
-  }
-  return out;
-}
-
-function openAiToolCall(call: unknown): Record<string, unknown> | undefined {
-  if (typeof call !== "object" || call === null) return undefined;
-  const record = call as Record<string, unknown>;
-  const fn = record.function as { name?: unknown; arguments?: unknown } | undefined;
-  const name = typeof fn?.name === "string" ? fn.name : typeof record.name === "string" ? record.name : undefined;
-  if (!name || typeof record.id !== "string") return undefined;
-  const raw = fn?.arguments ?? record.args ?? record.arguments ?? {};
-  return {
-    ...(record.response_item_id !== undefined ? { response_item_id: record.response_item_id } : {}),
-    id: record.id, type: "function", function: { name, arguments: typeof raw === "string" ? raw : JSON.stringify(raw) },
-  };
 }
 
 /**

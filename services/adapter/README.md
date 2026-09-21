@@ -146,14 +146,15 @@ passes against a live OpenAI-compatible endpoint.
 
 Not done yet:
 
-- **History and context**: JiuwenSwarm keeps each agent's conversation in a stable session
-  (`sessionKey`: the caller's session id for the main agent, `<session>--<agent>` for a subagent) and
-  compresses it itself (its context engine compresses at 80% of the model's window; the adapter passes
-  the real window as `context_window_tokens` on the model entry, and `chat.usage_summary` reports it
-  back). The caller's own record (`history`) is used only to start a session JiuwenSwarm has no context for
-  (`session.get_metadata` says so), as an `<earlier_conversation>` block at the top of its first message
-  (`seed.py`): JiuwenSwarm has no call that writes into a session's context (`history.append_record`
-  only writes the display record). Not verified: how its compression behaves on a full window.
+- **History and context**: JiuwenSwarm is the only holder of the model's context. It keeps each agent's
+  conversation in a stable session (`sessionKey`: the caller's session id for the main agent,
+  `<session>--<agent>` for a subagent), persisted in its checkpoint database, and compresses it itself (its
+  context engine compresses at 80% of the model's window; the adapter passes the real window as
+  `context_window_tokens` on the model entry, and `chat.usage_summary` reports it back). The adapter sends
+  and rebuilds no history: a conversation that began on the built-in loop is not known to JiuwenSwarm
+  (there is no call that writes into a session's context; `history.append_record` only writes the display
+  record). Not verified: whether the context survives a restart of JiuwenSwarm, and how its compression
+  behaves on a full window.
 - **Deferred tools**: JiuwenSwarm fixes the tool list at the start of a run, so every deferred MCP tool is
   promoted up front and `tool_search` is offered as well (`offerDeferredTools`).
 - **Tool output store** (`ToolOutputStore`, oversized results by reference) is not part of

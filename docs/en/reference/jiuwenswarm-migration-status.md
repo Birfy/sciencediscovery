@@ -61,7 +61,7 @@ JiuwenSwarm has a context engine of its own (it compresses at 80% of the model's
 
 | | Built-in loop | JiuwenSwarm executor |
 |---|---|---|
-| Where the conversation lives | The API's record, re-sent every step | JiuwenSwarm's session, one per agent; the API's record only starts an empty session |
+| Where the conversation lives | The API's record, re-sent every step | JiuwenSwarm's session, one per agent (persisted in its checkpoint database); nothing is sent along and the adapter holds none |
 | Compression when the window fills | ScienceDiscovery's own compactor | JiuwenSwarm's (the model's real window is passed on; **behaviour on a full window not verified**) |
 | System prompt sections (identity, governance, capabilities, skills) | Assembled per step | Same text, composed once per run |
 | Run contract, protected | Every step | **Not injected** |
@@ -74,7 +74,7 @@ JiuwenSwarm has a context engine of its own (it compresses at 80% of the model's
 ## Known gaps
 
 1. **No evidence or trajectory.** Runs on JiuwenSwarm produce no `agent.record`/`evidence` events, so the trajectory view is empty.
-2. **History and context.** JiuwenSwarm keeps each agent's conversation in a stable session and compresses it; the API's record only starts a session JiuwenSwarm has no context for. The run contract and the per-step dynamic context (plan snapshot, durable state) are not injected: see "Context management". If the API's record and JiuwenSwarm's session diverge (a conversation edited or rewound in the API) they are not reconciled.
+2. **History and context.** JiuwenSwarm is the only holder of the model's context: a stable session per agent, compressed by JiuwenSwarm; the adapter and the API send and rebuild nothing. So a session begun on the built-in loop is not remembered by JiuwenSwarm (its earlier turns are on screen only), and a conversation edited or rewound in the API is not reflected there. Whether that context survives a restart of JiuwenSwarm has not been verified end to end (a sqlite checkpoint database exists). The run contract and the per-step dynamic context (plan snapshot, durable state) are not injected: see "Context management".
 3. **Model protocols:** all three the UI can configure work (a loopback gateway in the API serves JiuwenSwarm's chat-completions requests through the native model client). Images are not sent to the model.
 4. **No tool-output store** in the JiuwenSwarm toolset. Deferred tools are promoted up front. Tool calls of one model response are scheduled by the native rules (a tool not declared concurrency-safe runs alone, in the order the model called it; duplicate calls are superseded by batch policies), so both executors produce the same events in the same order.
 5. **Wake notices.** The mocked E2E `issue-77-wake-notice` fails on this executor (the scripted model recognises the wake turn by a prompt JiuwenSwarm does not present that way). `issue-85` passes. Run the group with `CI_E2E_BACKEND=jiuwenswarm .ci/run-e2e.sh mocked`. The journeys are load-sensitive on a small host: two of them failed once when run back to back on the 2-core server and passed alone (three repeats), so run them one at a time when in doubt.

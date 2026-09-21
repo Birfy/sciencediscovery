@@ -26,7 +26,6 @@ import { createToolRegistry, startPluginScope, type NativeAgentOptions } from ".
 import {
   createJiuwenSwarmAgentFactory,
   jiuwenSwarmSessionKey,
-  openAiHistory,
   jiuwenSwarmConfigFromEnv,
 } from "./jiuwenswarm-agent.js";
 
@@ -589,48 +588,6 @@ test("a run with no deferred tools is not offered tool_search", async () => {
   }
 });
 
-test("the API's history is sent as OpenAI messages, so a resumed conversation continues", async () => {
-  let sent: any[] = [];
-  const adapter = await fakeAdapter(async ({ body }, response) => {
-    sent = body.history;
-    response.writeHead(200);
-    response.end(line({ done: { finalText: "ok" } }));
-  });
-  try {
-    const history = [
-      { role: "user", content: "run it" },
-      { role: "assistant", content: "", tool_calls: [{ id: "c1", name: "echo", args: { word: "a" } }] },
-      { role: "tool", tool_call_id: "c1", name: "echo", content: "echo:a", additional_kwargs: { tool_output: {} } },
-      { role: "system", content: "dropped" },
-      { role: "assistant", content: "done", tool_calls: [{ id: "c2", type: "function", function: { name: "echo", arguments: "{\"word\":\"b\"}" } }] },
-    ];
-    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ gatewayHistory: history as never })).execute("next");
-    assert.deepEqual(sent, [
-      { role: "user", content: "run it" },
-      { role: "assistant", content: "", tool_calls: [{ id: "c1", type: "function", function: { name: "echo", arguments: "{\"word\":\"a\"}" } }] },
-      { role: "tool", content: "echo:a", tool_call_id: "c1", name: "echo" },
-      { role: "assistant", content: "done", tool_calls: [{ id: "c2", type: "function", function: { name: "echo", arguments: "{\"word\":\"b\"}" } }] },
-    ]);
-  } finally {
-    await adapter.close();
-  }
-});
-
-test("a first turn sends an empty history, not none", async () => {
-  let sent: unknown;
-  const adapter = await fakeAdapter(async ({ body }, response) => {
-    sent = body.history;
-    response.writeHead(200);
-    response.end(line({ done: { finalText: "ok" } }));
-  });
-  try {
-    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options()).execute("hi");
-    assert.deepEqual(sent, []);
-  } finally {
-    await adapter.close();
-  }
-});
-
 test("the tools offered are exactly the native registry's, every one with its own schema (plus tool_search when some are deferred)", async () => {
   const planStore = { latest: async () => undefined, update: async () => ({ id: "p", steps: [] }) as never };
   const deferredTool = {
@@ -759,30 +716,6 @@ test("the run's timeout is passed on as the longest a single tool call may take"
     assert.equal(sent.toolTimeoutSeconds, 90);
     await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options()).execute("go");
     assert.equal("toolTimeoutSeconds" in sent, false);
-  } finally {
-    await adapter.close();
-  }
-});
-
-test("provider fields in the API's history (thinking blocks, reasoning items) go to the adapter untouched", async () => {
-  let sent: any[] = [];
-  const adapter = await fakeAdapter(async ({ body }, response) => {
-    sent = body.history;
-    response.writeHead(200);
-    response.end(line({ done: { finalText: "ok" } }));
-  });
-  try {
-    const history = [
-      { role: "user", content: "run it" },
-      { role: "assistant", content: "", anthropic_content: [{ type: "thinking", thinking: "t", signature: "s" }], tool_calls: [{ id: "c1", type: "function", function: { name: "echo", arguments: "{}" }, response_item_id: "fc-1" }],
-        response_items: [{ type: "reasoning", id: "rs-1" }] },
-      { role: "tool", tool_call_id: "c1", name: "echo", content: "out", additional_kwargs: { tool_output: { big: true } } },
-    ];
-    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ gatewayHistory: history as never })).execute("next");
-    assert.deepEqual(sent[1].anthropic_content, [{ type: "thinking", thinking: "t", signature: "s" }]);
-    assert.deepEqual(sent[1].response_items, [{ type: "reasoning", id: "rs-1" }]);
-    assert.equal(sent[1].tool_calls[0].response_item_id, "fc-1");
-    assert.equal("additional_kwargs" in sent[2], false, "bookkeeping of the API's own is not sent");
   } finally {
     await adapter.close();
   }
@@ -940,6 +873,20 @@ test("a turn that ended normally reports nothing", async () => {
     const events = collect(agent);
     await agent.execute("go");
     assert.equal(events.some((event) => event.type === "turn_truncated"), false);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("no part of the conversation is sent to the adapter: JiuwenSwarm holds the context", async () => {
+  let sent: any;
+  const adapter = await fakeAdapter(async ({ body }, response) => { sent = body; response.writeHead(200); response.end(line({ done: { finalText: "ok" } })); });
+  try {
+    const history = [{ role: "user", content: "earlier question" }, { role: "assistant", content: "earlier answer" }];
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ gatewayHistory: history as never })).execute("next");
+    assert.equal("history" in sent, false);
+    assert.equal(sent.prompt, "next");
+    assert.equal(JSON.stringify(sent).includes("earlier answer"), false);
   } finally {
     await adapter.close();
   }
