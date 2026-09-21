@@ -41,10 +41,11 @@ if [[ "$prepare_only" -eq 1 && "$prepared" -eq 1 ]]; then
   exit 2
 fi
 
-# CI_E2E_BACKEND=jiuwenswarm runs the same journeys with the adapter in front
-# and agent turns on JiuwenSwarm (issue 84). Nothing else about the run changes,
-# so a diff between the two reports is a diff between the two backends.
-backend="${CI_E2E_BACKEND:-legacy}"
+# Agent turns run on JiuwenSwarm, behind the adapter (issue 84): that is the
+# backend the product ships. CI_E2E_BACKEND=legacy runs the same journeys on the
+# built-in loop while it still exists, so a diff between the two reports is a
+# diff between the two backends.
+backend="${CI_E2E_BACKEND:-jiuwenswarm}"
 case "$backend" in
   legacy|jiuwenswarm) ;;
   *)
@@ -66,6 +67,7 @@ stack_log="$results_root/stack.log"
 test_log="$results_root/run.log"
 summary="$results_root/summary.txt"
 stack_pid=""
+jiuwenswarm_started=0
 test_started=0
 started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
@@ -83,6 +85,11 @@ finish() {
     # blocked waiting for pnpm while report collection waits behind it.
     kill -TERM -- "-$stack_pid" 2>/dev/null || true
     wait "$stack_pid" 2>/dev/null || true
+  fi
+  # The JiuwenSwarm instance this layer started goes with its stack; one that was
+  # already running (a developer's) is left alone.
+  if [[ "$jiuwenswarm_started" -eq 1 ]]; then
+    "$repository_root/scripts/jiuwenswarm.sh" stop >> "$stack_log" 2>&1 || true
   fi
   if [[ "$test_started" -eq 1 ]]; then
     mkdir -p "$results_root/playwright-report" "$results_root/test-results"
@@ -221,9 +228,29 @@ if [[ "$backend" == "jiuwenswarm" ]]; then
   # to ScienceDiscovery's `update_plan`, so they run with that tool; the todo path is covered by
   # test/contract/jw-only/live.mjs todo-plan.
   export SCIENCE_AGENT_JIUWENSWARM_PLANNING=update_plan
-  # Likewise they script ScienceDiscovery's read_file/list_files with its argument shapes; JiuwenSwarm's own
-  # tools are covered by test/contract/jw-only/live.mjs native-tools.
-  export SCIENCE_AGENT_JIUWENSWARM_TOOLS=ours
+  # A JiuwenSwarm instance of this layer's own, so a run never shares skills, config or sessions with the
+  # instance a developer uses (the install itself, JIUWENSWARM_ROOT, is shared).
+  export JIUWENSWARM_INSTANCE="${JIUWENSWARM_INSTANCE:-sd-e2e}"
+  # A host without JiuwenSwarm gets the pinned release installed; a prepared workspace brought its own.
+  if [[ "$prepared" -eq 0 ]]; then
+    "$repository_root/scripts/jiuwenswarm.sh" setup >> "$test_log" 2>&1 || {
+      printf 'BLOCKED: JiuwenSwarm could not be installed (scripts/jiuwenswarm.sh setup); see %s.\n' "$test_log" | tee -a "$test_log" >&2
+      exit 2
+    }
+  fi
+  eval "$("$repository_root/scripts/jiuwenswarm.sh" env)" || {
+    printf 'BLOCKED: the JiuwenSwarm instance %s is not set up.\n' "$JIUWENSWARM_INSTANCE" | tee -a "$test_log" >&2
+    exit 2
+  }
+  jiuwenswarm_gateway_port="${JIUWENSWARM_GATEWAY_URL##*:}"; jiuwenswarm_gateway_port="${jiuwenswarm_gateway_port%%/*}"
+  if ! (exec 3<>"/dev/tcp/127.0.0.1/$jiuwenswarm_gateway_port") 2>/dev/null; then
+    "$repository_root/scripts/jiuwenswarm.sh" start >> "$stack_log" 2>&1 || {
+      printf 'BLOCKED: JiuwenSwarm did not start; see %s.\n' "$stack_log" | tee -a "$test_log" >&2
+      exit 2
+    }
+    jiuwenswarm_started=1
+  fi
+  export JIUWENSWARM_GATEWAY_URL JIUWENSWARM_MGMT_URL
 fi
 
 stack_arguments=(--mode local)
