@@ -179,3 +179,19 @@ test("the run-event profile joins text fragments, drops agent evidence and colla
     { type: "subagent.step", step: { id: "s2", content: "next" } },
   ]);
 });
+
+test("an accepted difference is reported with its reason instead of failing the comparison", () => {
+  const baseline = { a: [{ name: "run events", events: [{ type: "run.failed", error: "provider says no" }, { type: "x", n: 1 }] }] };
+  const actual = { a: [{ name: "run events", events: [{ type: "run.failed", error: "JiuwenSwarm says no" }, { type: "x", n: 2 }] }] };
+  const rules = [{ case: "a", step: "run events", path: "$.events[*].error", reason: "wording of the provider error" }];
+  const report = { accepted: [] };
+  assert.deepEqual(compareRecordings(baseline, actual, rules, report), ["a / run events: $.events[1].n expected 1 got 2"]);
+  assert.deepEqual(report.accepted, ["a / run events: $.events[0].error (wording of the provider error)"]);
+});
+
+test("a rule for one case or step does not excuse the same path elsewhere, and brackets are literal", () => {
+  const baseline = { a: [{ name: "s", list: [1] }], b: [{ name: "s", list: [1] }] };
+  const actual = { a: [{ name: "s", list: [2] }], b: [{ name: "s", list: [2] }] };
+  const rules = [{ case: "a", step: "s", path: "$.list[0]", reason: "only here" }];
+  assert.deepEqual(compareRecordings(baseline, actual, rules), ["b / s: $.list[0] expected 1 got 2"]);
+});

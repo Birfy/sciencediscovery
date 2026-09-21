@@ -1,0 +1,11 @@
+{
+  "comment": "Differences between the native executor and the JiuwenSwarm executor that were looked at and judged acceptable. Each rule names the case, the step and the path, and says why. run.mjs --compare lists them as accepted; --strict fails on them too. Adding a rule to make a comparison pass needs a human review.",
+  "rules": [
+    {
+      "case": "l2-provider-unauthorized",
+      "step": "run events",
+      "path": "$.events[*].error",
+      "reason": "the errorCode is the same (unauthorized); the text is each executor's own wording of the provider's 401"
+    }
+  ]
+}

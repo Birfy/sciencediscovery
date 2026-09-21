@@ -28,3 +28,36 @@ is caught.
   normaliser, not the baseline.
 - The baseline is recorded on the legacy API with no model configured. Cases that need a
   model, a runner or an external service are separate scenarios and say so.
+
+## L2: run event streams
+
+`cases/l2-runs.json` records what a client sees while an agent runs: the event stream of
+`GET /api/sessions/:id/runs/:runId/events`, for a text turn, a tool call, approval allowed and
+denied, cancel, a provider that rejects the key, a subagent, and resuming with `?after=N`. A case
+with a `stub` starts its own scripted model (`stub-model.mjs`: text, a tool call, an HTTP failure,
+a delay; one script for the main agent and one for a subagent) and registers it through the API, so
+no external model is involved and every case starts from step one.
+
+A stream step can react to an event while it is being read (`reactions`: decide a permission when
+`permission.required` arrives, cancel when `run.started` arrives) and can wait for a run to reach a
+terminal state (`poll`) so that cleanup does not race the run.
+
+The recording is **profiled** (`profileRunEvents` in `lib.mjs`) so that it does not depend on timing:
+
+- fragments of one response (`assistant.delta`, `assistant.thinking.delta`, `tool.output`) are joined;
+- consecutive snapshots of one subagent step collapse to the last;
+- the native agent's own evidence (`agent.record` events and each event's `evidence`) is left out,
+  because it is internal to that executor and not something another executor has to reproduce.
+
+### Comparing two executors
+
+1. Start the legacy stack on a **fresh data directory** and `--record baselines/legacy-l2.json`.
+2. Start the stack you want to check (for example `SCIENCE_AGENT_ADAPTER=1 SCIENCE_AGENT_EXECUTOR=jiuwenswarm`)
+   the same way and `--compare` against that file.
+
+`run.mjs` refuses a stack that already holds projects or models. Recording twice on the same stack
+must give identical output, and every case removes what it created, so a second run passes the same
+check; if it does not, a case leaks or the normaliser misses something.
+
+Which differences matter is a judgement, so they are listed rather than hidden: see
+"Known differences between executors" below.

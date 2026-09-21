@@ -213,8 +213,20 @@ export async function runAll(cases, options) {
   return result;
 }
 
-/** Differences between a baseline recording and a fresh one, as readable lines. */
-export function compareRecordings(baseline, actual) {
+/** `$.events[*].error` matches `$.events[7].error`; a rule names the case and the step it is about. */
+function pathMatches(pattern, path) {
+  const source = pattern.split("[*]")
+    .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*"))
+    .join("\\[\\d+\\]");
+  return new RegExp(`^${source}$`).test(path);
+}
+
+/**
+ * Differences between a baseline recording and a fresh one, as readable lines. A difference that
+ * an `accepted` rule covers ({ case, step, path, reason }) is not a problem; it is returned in
+ * `accepted` with its reason, so the list of tolerated divergences stays visible.
+ */
+export function compareRecordings(baseline, actual, accepted = [], report = { accepted: [] }) {
   const problems = [];
   for (const [id, expectedSteps] of Object.entries(baseline)) {
     const actualSteps = actual[id];
@@ -223,6 +235,8 @@ export function compareRecordings(baseline, actual) {
       const got = actualSteps[index];
       if (!got) { problems.push(`${id} / ${expected.name}: step missing`); return; }
       for (const difference of diff(expected, got)) {
+        const rule = accepted.find((item) => item.case === id && item.step === expected.name && pathMatches(item.path, difference.path));
+        if (rule) { report.accepted.push(`${id} / ${expected.name}: ${difference.path} (${rule.reason})`); continue; }
         problems.push(`${id} / ${expected.name}: ${difference.path} expected ${JSON.stringify(difference.expected)} got ${JSON.stringify(difference.actual)}`);
       }
     });

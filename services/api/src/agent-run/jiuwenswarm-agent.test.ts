@@ -181,9 +181,10 @@ test("reported token usage becomes model_usage events and one summed usage event
       type: "model_usage", usageReported: true,
       usage: { inputTokens: 700, outputTokens: 80, totalTokens: 780, cacheReadTokens: 0, cacheWriteTokens: null },
     });
-    assert.deepEqual((events[2] as { usage: unknown }).usage, {
-      cacheReadTokens: 10, cacheWriteTokens: null, inputTokens: 731, outputTokens: 87, totalTokens: 818,
-    });
+    const summary = (events[2] as { usage: unknown }).usage;
+    assert.deepEqual(summary, { cacheReadTokens: 10, cacheWriteTokens: null, inputTokens: 731, outputTokens: 87, totalTokens: 818 });
+    // The same key order the native agent's summary has: it is serialised into subagent results.
+    assert.deepEqual(Object.keys(summary as object), ["inputTokens", "outputTokens", "totalTokens", "cacheReadTokens", "cacheWriteTokens"]);
   } finally {
     await adapter.close();
   }
@@ -432,7 +433,7 @@ test("the run leaves the model-facing transcript of its tool round, as the nativ
     response.writeHead(200);
     response.write(line({ event: { type: "assistant.response.started", responseId: "r1", turn: 1 } }));
     response.write(line({ event: { type: "assistant.response.settled", responseId: "r1", turn: 1 } }));
-    response.write(line({ event: { type: "tool.started", trace: { id: "call-1", name: "echo", input: "{\"word\":\"hi\"}", args: { word: "hi" }, status: "running" } } }));
+    response.write(line({ event: { type: "tool.started", trace: { id: "call-1", name: "echo", input: "{\"word\": \"hi\"}", args: { word: "hi" }, status: "running" } } }));
     await fetch(body.bridge.url, {
       method: "POST", headers: { authorization: `Bearer ${body.bridge.token}` },
       body: JSON.stringify({ name: "echo", arguments: { word: "hi" } }),

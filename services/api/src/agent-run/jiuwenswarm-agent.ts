@@ -324,7 +324,8 @@ class EventTranslator {
         // is recorded and announced so the bridge can run under the model's id, in order.
         const trace = event.trace as { args?: unknown; id: string; input?: string; name: string };
         const input = trace.input ?? JSON.stringify(trace.args ?? {});
-        this.transcript.toolCall(trace.id, trace.name, input);
+        // Compact JSON like the model sent it; JiuwenSwarm re-serialises arguments with spaces.
+        this.transcript.toolCall(trace.id, trace.name, JSON.stringify(trace.args ?? {}));
         this.announcements.announce({ args: trace.args ?? {}, id: trace.id, input, name: trace.name });
         break;
       }
@@ -347,12 +348,13 @@ class EventTranslator {
   private add(usage: { cacheReadTokens?: number | null; cacheWriteTokens?: number | null; inputTokens: number; outputTokens: number; totalTokens: number }): void {
     const plus = (a: number | null, b: number | null | undefined) => (b === null || b === undefined ? a : (a ?? 0) + b);
     const total = this.total ?? { cacheReadTokens: null, cacheWriteTokens: null, inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+    // Key order matters: subagent summaries serialise this object into a tool result string.
     this.total = {
-      cacheReadTokens: plus(total.cacheReadTokens, usage.cacheReadTokens),
-      cacheWriteTokens: plus(total.cacheWriteTokens, usage.cacheWriteTokens),
       inputTokens: total.inputTokens + usage.inputTokens,
       outputTokens: total.outputTokens + usage.outputTokens,
       totalTokens: total.totalTokens + usage.totalTokens,
+      cacheReadTokens: plus(total.cacheReadTokens, usage.cacheReadTokens),
+      cacheWriteTokens: plus(total.cacheWriteTokens, usage.cacheWriteTokens),
     };
   }
 
