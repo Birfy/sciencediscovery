@@ -19,6 +19,7 @@ Answers the questions the source does not settle, by doing them:
   disconnect   what happens to a run when its client goes away
   two-clients  what a second connection on the same session sees and can do
   faults       which frames a failing model produces (401, 429, 500, no endpoint, bad stream)
+  resume       what chat.resume does from a new connection after the first one dropped
 
     JIUWENSWARM_GATEWAY_URL=ws://127.0.0.1:21001/tui JIUWENSWARM_MGMT_URL=ws://127.0.0.1:21000/ws \
       python tools/probe_gateway.py disconnect two-clients faults
@@ -136,6 +137,28 @@ async def disconnect(port: int) -> None:
     await watch(GATEWAY, "second", t0, 15, req(session, "are you free?", "probe-ok"))
 
 
+async def resume(port: int) -> None:
+    print("\n== resume: chat.resume from a new connection after the first one dropped (and with no run to resume)")
+    session, t0 = f"probe-rs-{uuid.uuid4().hex[:6]}", time.time()
+    async with websockets.connect(GATEWAY, max_size=None) as ws:
+        await ws.recv()
+        await ws.send(json.dumps(req(session, "count slowly", "probe-slow")))
+        end = time.time() + 3
+        while time.time() < end:
+            try:
+                line(t0, "client", json.loads(await asyncio.wait_for(ws.recv(), max(0.1, end - time.time()))))
+            except asyncio.TimeoutError:
+                break
+    gap = float(os.environ.get("PROBE_RESUME_GAP", "0"))
+    print(f"  --- connection closed; {gap}s later, chat.resume from a new connection ---")
+    await asyncio.sleep(gap)
+    resume_request = {**req(session, "", "probe-slow"), "method": "chat.resume"}
+    await watch(GATEWAY, "resume", t0, 12, resume_request)
+    print("  --- chat.resume on a session that never ran ---")
+    idle = {**req(f"probe-rs-{uuid.uuid4().hex[:6]}", "", "probe-ok"), "method": "chat.resume"}
+    await watch(GATEWAY, "idle", time.time(), 6, idle)
+
+
 async def two_clients(port: int) -> None:
     print("\n== two clients on one session")
     session, t0 = f"probe-2c-{uuid.uuid4().hex[:6]}", time.time()
@@ -162,7 +185,7 @@ async def main() -> None:
     await rpc(MGMT, "models.replace_all", {"models": [*keep, *added]})
     try:
         for name in sys.argv[1:] or ["disconnect", "two-clients", "faults"]:
-            await {"disconnect": disconnect, "two-clients": two_clients, "faults": faults}[name](port)
+            await {"disconnect": disconnect, "two-clients": two_clients, "faults": faults, "resume": resume}[name](port)
     finally:
         await rpc(MGMT, "models.replace_all", {"models": keep})
         server.shutdown()
