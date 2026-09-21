@@ -92,7 +92,9 @@ def _original(function: dict[str, Any], route: LlmRoute) -> dict[str, Any]:
     return {**function, "name": name, "description": spec["description"], "parameters": spec["parameters"]}
 
 
-_DEBUG = os.environ.get("SCIENCE_AGENT_ADAPTER_DEBUG") == "1"
+_DEBUG = os.environ.get("SCIENCE_AGENT_ADAPTER_DEBUG") in ("1", "2")
+# 2: every message of every model request, as far as the first 1500 characters (what JiuwenSwarm adds around the prompt).
+_DEBUG_FULL = os.environ.get("SCIENCE_AGENT_ADAPTER_DEBUG") == "2"
 
 
 def rewrite_request(body: dict[str, Any], route: LlmRoute) -> dict[str, Any]:
@@ -131,6 +133,12 @@ def rewrite_request(body: dict[str, Any], route: LlmRoute) -> dict[str, Any]:
     if _DEBUG:
         tail = [f"{m.get('role')}:{str(m.get('content'))[:90]!r}" for m in messages[-3:]]
         print(f"[llm-proxy] {len(messages)} messages, last: {tail}", file=sys.stderr, flush=True)
+        if _DEBUG_FULL:
+            for index, message in enumerate(messages):
+                content = message.get("content")
+                text = content if isinstance(content, str) else json.dumps(content, ensure_ascii=False)
+                print(f"[llm-proxy:full] #{index} {message.get('role')} {len(text)} chars: {text[:1500]!r}", file=sys.stderr, flush=True)
+            print(f"[llm-proxy:full] tools sent to the model: {[t['function']['name'] for t in out.get('tools', [])]}", file=sys.stderr, flush=True)
     return out
 
 
