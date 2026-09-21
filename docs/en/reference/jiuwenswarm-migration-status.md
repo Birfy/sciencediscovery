@@ -30,7 +30,7 @@ Design and measured protocol facts: [`services/adapter/README.md`](../../../serv
 
 | Issue | State | What exists | What does not |
 |---|---|---|---|
-| 86 Acceptance baseline, protocol calibration | closed | Interface inventory (259 rows), L1/L2 tooling, 24 recorded cases on Linux, protocol experiments, `CI_E2E_BACKEND=jiuwenswarm` | Cases for 104 rows; the 59 "approximate" mappings were not calibrated; `AgentRuntime` not evaluated |
+| 86 Acceptance baseline, protocol calibration | closed | Interface inventory (259 rows), L1/L2 tooling, 27 recorded cases on Linux, protocol experiments, `CI_E2E_BACKEND=jiuwenswarm` | Cases for 104 rows; the 59 "approximate" mappings were not calibrated; `AgentRuntime` not evaluated |
 | 87 Adapter core | closed | Public port, streaming proxy (SSE, NDJSON), 502 on upstream failure, optional token on `/agent/*` | Own storage, run registry, event log and resume: they stay in the legacy API |
 | 88 Sessions and projects | closed | Served by the legacy API through the proxy; L1 covers all 13 rows | Nothing moves to JiuwenSwarm's session store |
 | 89 Chat and runs | closed | A run executes on JiuwenSwarm; events, cancel, approval, usage, disconnect handling; L2 golden traces for 8 scenarios | See "Known gaps" |
@@ -53,7 +53,7 @@ On the Aliyun Linux server (bubblewrap sandbox) with `SCIENCE_AGENT_ADAPTER=1 SC
 - L2: 10 run-event scenarios (text, tool call, approve/deny, cancel, 401, subagent, resume, post-messages, two-turn conversation, parallel tool calls) have the same event-type sequence as the built-in loop. Accepted differences are in
   `test/contract/accepted-differences.json` (the wording of a provider 401, and the evidence gap).
 - L1: the recorded cases match between the built-in loop and the adapter + JiuwenSwarm stack, apart from build version strings, which are scrubbed.
-- Unit tests: adapter (`pytest`, about 108) and the TypeScript agent factory (20).
+- Unit tests: adapter (`pytest`, 135) and the TypeScript agent factory and model gateway (51). `test/contract/jw-only/live.mjs` checks against a running JiuwenSwarm stack what only this backend does (conversation continuity, todo planning).
 
 ## Context management
 
@@ -83,7 +83,7 @@ JiuwenSwarm has a context engine of its own (it compresses at 80% of the model's
 
 ## Start working on a sub-issue
 
-1. Install and start JiuwenSwarm, then the stack: see the [how-to](../how-to/run-with-jiuwenswarm.md).
+1. Choose the backend and start the stack: `scripts/jiuwenswarm.sh setup` once, then `./scripts/start-stack.sh --mode local --jiuwenswarm` (check with `GET /agent/info`); see the [how-to](../how-to/run-with-jiuwenswarm.md).
 2. Find your routes in `test/contract/routes.json` (`node test/contract/run.mjs --coverage` lists the rows without a case).
 3. Add a case under `test/contract/cases/`, record it on a **fresh data directory** against the built-in loop, compare it against the adapter + JiuwenSwarm stack. Rules, the SSE step form and normalization: [`test/contract/README.md`](../../../test/contract/README.md). Baselines are read-only for agents; a change needs human review.
 4. For behaviour, use the run-event cases (`l2-runs.json`); the stub model is `test/contract/stub-model.mjs`.

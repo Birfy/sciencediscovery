@@ -100,6 +100,13 @@ executor offers every tool up front), long-running tools, and errors other than 
 - `POST /api/model-catalog/refresh` has no case on purpose: it downloads the live model catalog
   (`origin: "downloaded"`), so its answer changes with the outside world.
 
+## Checks that only make sense on JiuwenSwarm
+
+`jw-only/live.mjs` runs against a stack started with `--jiuwenswarm` (and, for `todo-plan`,
+`SCIENCE_AGENT_JIUWENSWARM_PLANNING=todo`): `history` (the second turn reaches the model with the first in its
+context) and `todo-plan` (JiuwenSwarm's todo tool drives the plan). There is nothing to compare them with on
+the built-in loop, so they are not cases.
+
 ## Coverage left for the sub-issues that own the routes
 
 150 of 254 rows have a recorded case (22 baseline cases). The rest belong to the

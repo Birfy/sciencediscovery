@@ -23,7 +23,7 @@ issue 84（复用 JiuwenSwarm 后端）做到哪一步、现在能跑什么、�
 
 | Issue | 状态 | 已有 | 没有 |
 |---|---|---|---|
-| 86 验收基线与协议校准 | 已关闭 | 接口清单（259 行）、L1/L2 工具、Linux 上 24 个录制用例、协议实验、`CI_E2E_BACKEND=jiuwenswarm` | 104 行没有用例；59 条“近似映射”未校准；未评估 `AgentRuntime` |
+| 86 验收基线与协议校准 | 已关闭 | 接口清单（259 行）、L1/L2 工具、Linux 上 27 个录制用例、协议实验、`CI_E2E_BACKEND=jiuwenswarm` | 104 行没有用例；59 条“近似映射”未校准；未评估 `AgentRuntime` |
 | 87 适配器核心 | 已关闭 | 公共端口、流式代理（SSE、NDJSON）、上游失败返回 502、`/agent/*` 可选 token | 自有存储、run 注册表、事件日志与续传：仍在 legacy API |
 | 88 会话与项目 | 已关闭 | 经代理由 legacy API 提供；L1 覆盖 13 行 | 没有迁到 JiuwenSwarm 的会话存储 |
 | 89 对话与运行 | 已关闭 | 运行在 JiuwenSwarm 上执行；事件、取消、审批、用量、断线处理；8 个场景的 L2 黄金轨迹 | 见“已知缺口” |
@@ -45,7 +45,7 @@ issue 84（复用 JiuwenSwarm 后端）做到哪一步、现在能跑什么、�
 - 一条使用真实 OpenAI 兼容模型的旅程通过（`journey-real-request`）。
 - L2：10 个运行事件场景（文本、工具调用、审批允许/拒绝、取消、401、子代理、断线续传、post-messages、两轮对话、并行工具调用）的事件类型序列与内置循环一致。被接受的差异记在 `test/contract/accepted-differences.json`（供应商 401 的措辞、evidence 缺口）。
 - L1：内置循环与“适配器 + JiuwenSwarm”栈上录制的用例一致（构建版本号已归一化）。
-- 单测：适配器（`pytest`，约 108 个）、TypeScript 的 agent 工厂（20 个）。
+- 单测：适配器（`pytest`，135 个）、TypeScript 的 agent 工厂与模型网关（51 个）。`test/contract/jw-only/live.mjs` 在运行中的 JiuwenSwarm 栈上检查只有这个后端才有的行为（对话连续性、todo 规划）。
 
 ## 上下文管理
 
@@ -75,7 +75,7 @@ JiuwenSwarm 自己有一套上下文引擎（占用到模型窗口的 80% 时压
 
 ## 开始做某个子 issue
 
-1. 安装并启动 JiuwenSwarm，再启动整套栈：见[操作指南](../how-to/run-with-jiuwenswarm.md)。
+1. 选择后端并启动整套栈：先执行一次 `scripts/jiuwenswarm.sh setup`，再 `./scripts/start-stack.sh --mode local --jiuwenswarm`（用 `GET /agent/info` 确认）；见[操作指南](../how-to/run-with-jiuwenswarm.md)。
 2. 在 `test/contract/routes.json` 里找到你的路由（`node test/contract/run.mjs --coverage` 会列出没有用例的行）。
 3. 在 `test/contract/cases/` 下加用例，在**全新数据目录**上对内置循环录制，再对“适配器 + JiuwenSwarm”栈比对。规则、SSE 步骤写法和归一化见 [`test/contract/README.md`](../../../test/contract/README.md)。基线对智能体只读，改动需要人工评审。
 4. 行为类用 run 事件用例（`l2-runs.json`）；脚本化模型是 `test/contract/stub-model.mjs`。
