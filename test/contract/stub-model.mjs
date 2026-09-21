@@ -38,6 +38,12 @@ export async function startStubModel(steps = {}) {
   const requests = [];
   const consumed = { main: 0, subagent: 0 };
   const server = createServer((request, response) => {
+    if (request.method === "GET" && /\/models$/.test(request.url ?? "")) {
+      // Provider model discovery.
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ data: [{ id: "contract-stub", object: "model" }, { id: "contract-stub-2", object: "model" }], object: "list" }));
+      return;
+    }
     const chunks = [];
     request.on("data", (part) => chunks.push(part));
     request.on("end", async () => {

@@ -26,7 +26,7 @@ const WORKSPACE_ID = /ws_[0-9a-f]{64}/g;
 // The system environment revision names the sandbox in use (bwrap on Linux, seatbelt on macOS).
 const SYSTEM_ENVIRONMENT = /system-(?:python3|shell)-(?:bwrap|seatbelt)-v\d+/g;
 // Scripted stubs listen on a free port; the sandbox makes a randomly named private temp directory.
-const LOCAL_URL = /http:\/\/127\.0\.0\.1:\d+/g;
+const LOCAL_URL = /(http:\/\/)?127\.0\.0\.1:\d+/g;
 const SANDBOX_TEMP = /(seatbelt|bwrap)-[A-Za-z0-9]{6}\b/g;
 // Build-specific values that can sit inside a string that is itself JSON (a tool result).
 const RUNNER_VERSION = /(\\*"runnerVersion\\*":\\*")[^"\\]*/g;
@@ -45,7 +45,7 @@ export function scrubText(value) {
     .replace(DIGEST, "<sha256>")
     .replace(WORKSPACE_ID, "<workspace>")
     .replace(SYSTEM_ENVIRONMENT, "<system-environment>")
-    .replace(LOCAL_URL, "http://127.0.0.1:<port>")
+    .replace(LOCAL_URL, "$1127.0.0.1:<port>")
     .replace(SANDBOX_TEMP, "$1-<tmp>")
     .replace(RUNNER_VERSION, "$1<volatile>");
 }

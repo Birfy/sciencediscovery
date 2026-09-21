@@ -21,7 +21,10 @@
      "capture": {
       "originalOverrides": "$.overrides"
      },
-     "expectStatus": 200
+     "expectStatus": 200,
+     "covers": [
+      "GET /api/settings"
+     ]
     },
     {
      "name": "register the stub model",
@@ -39,7 +42,10 @@
      "capture": {
       "modelId": "$.id"
      },
-     "expectStatus": 201
+     "expectStatus": 201,
+     "covers": [
+      "POST /api/models"
+     ]
     },
     {
      "name": "create a project",
@@ -91,7 +97,10 @@
      "capture": {
       "runId": "$.id"
      },
-     "expectStatus": 201
+     "expectStatus": 201,
+     "covers": [
+      "POST /api/sessions/:id/runs"
+     ]
     },
     {
      "name": "run events",
@@ -110,7 +119,10 @@
       ],
       "timeoutMs": 60000,
       "profile": "run-events"
-     }
+     },
+     "covers": [
+      "GET /api/sessions/:id/runs/:runId/events"
+     ]
     },
     {
      "name": "wait for the run to settle",
@@ -128,7 +140,10 @@
       ],
       "timeoutMs": 30000
      },
-     "always": true
+     "always": true,
+     "covers": [
+      "GET /api/sessions/:id/runs/:runId"
+     ]
     },
     {
      "name": "delete the project",
@@ -148,7 +163,10 @@
       "path": "/api/settings",
       "body": "{{originalOverrides}}"
      },
-     "always": true
+     "always": true,
+     "covers": [
+      "PUT /api/settings"
+     ]
     },
     {
      "name": "delete the model",
@@ -156,7 +174,10 @@
       "method": "DELETE",
       "path": "/api/models/{{modelId}}"
      },
-     "always": true
+     "always": true,
+     "covers": [
+      "DELETE /api/models/:id"
+     ]
     }
    ]
   },
@@ -186,7 +207,10 @@
      "capture": {
       "originalOverrides": "$.overrides"
      },
-     "expectStatus": 200
+     "expectStatus": 200,
+     "covers": [
+      "GET /api/settings"
+     ]
     },
     {
      "name": "register the stub model",
@@ -204,7 +228,10 @@
      "capture": {
       "modelId": "$.id"
      },
-     "expectStatus": 201
+     "expectStatus": 201,
+     "covers": [
+      "POST /api/models"
+     ]
     },
     {
      "name": "create a project",
@@ -256,7 +283,10 @@
      "capture": {
       "runId": "$.id"
      },
-     "expectStatus": 201
+     "expectStatus": 201,
+     "covers": [
+      "POST /api/sessions/:id/runs"
+     ]
     },
     {
      "name": "run events",
@@ -275,7 +305,10 @@
       ],
       "timeoutMs": 60000,
       "profile": "run-events"
-     }
+     },
+     "covers": [
+      "GET /api/sessions/:id/runs/:runId/events"
+     ]
     },
     {
      "name": "wait for the run to settle",
@@ -293,7 +326,107 @@
       ],
       "timeoutMs": 30000
      },
-     "always": true
+     "always": true,
+     "covers": [
+      "GET /api/sessions/:id/runs/:runId"
+     ]
+    },
+    {
+     "name": "the session's runs",
+     "request": {
+      "method": "GET",
+      "path": "/api/sessions/{{sessionId}}/runs"
+     },
+     "covers": [
+      "GET /api/sessions/:id/runs"
+     ],
+     "expectStatus": 200
+    },
+    {
+     "name": "prompt manifests",
+     "request": {
+      "method": "GET",
+      "path": "/api/sessions/{{sessionId}}/prompt-manifests"
+     },
+     "covers": [
+      "GET /api/sessions/:id/prompt-manifests"
+     ],
+     "expectStatus": 200
+    },
+    {
+     "name": "execution runs",
+     "request": {
+      "method": "GET",
+      "path": "/api/sessions/{{sessionId}}/execution-runs"
+     },
+     "covers": [
+      "GET /api/sessions/:id/execution-runs"
+     ],
+     "expectStatus": 200
+    },
+    {
+     "name": "a tool's output stream",
+     "request": {
+      "method": "GET",
+      "path": "/api/sessions/{{sessionId}}/runs/{{runId}}/streams/tool-call-main-1/events"
+     },
+     "covers": [
+      "GET /api/sessions/:id/runs/:runId/streams/:streamId/events"
+     ],
+     "expectStatus": 200
+    },
+    {
+     "name": "agent activity after a shell call",
+     "request": {
+      "method": "GET",
+      "path": "/api/sessions/{{sessionId}}/agent-activity"
+     },
+     "capture": {
+      "executionId": "$.executions[0].id"
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "the execution's logs",
+     "request": {
+      "method": "GET",
+      "path": "/api/sessions/{{sessionId}}/agent-activity/executions/{{executionId}}/logs"
+     },
+     "covers": [
+      "GET /api/sessions/:id/agent-activity/executions/:execId/logs"
+     ]
+    },
+    {
+     "name": "cancelling a finished execution",
+     "request": {
+      "method": "POST",
+      "path": "/api/sessions/{{sessionId}}/agent-activity/executions/{{executionId}}/cancel",
+      "body": {}
+     },
+     "covers": [
+      "POST /api/sessions/:id/agent-activity/{executions|transfers|timers}/:id/cancel"
+     ]
+    },
+    {
+     "name": "remote workspace sync records",
+     "request": {
+      "method": "GET",
+      "path": "/api/sessions/{{sessionId}}/remote-workspace/sync-records"
+     },
+     "covers": [
+      "GET /api/sessions/:id/remote-workspace/sync-records"
+     ]
+    },
+    {
+     "name": "deleting a remote workspace that does not exist",
+     "request": {
+      "method": "DELETE",
+      "path": "/api/sessions/{{sessionId}}/remote-workspace/delete",
+      "body": {}
+     },
+     "covers": [
+      "DELETE /api/sessions/:id/remote-workspace/delete"
+     ]
     },
     {
      "name": "delete the project",
@@ -313,7 +446,10 @@
       "path": "/api/settings",
       "body": "{{originalOverrides}}"
      },
-     "always": true
+     "always": true,
+     "covers": [
+      "PUT /api/settings"
+     ]
     },
     {
      "name": "delete the model",
@@ -321,7 +457,10 @@
       "method": "DELETE",
       "path": "/api/models/{{modelId}}"
      },
-     "always": true
+     "always": true,
+     "covers": [
+      "DELETE /api/models/:id"
+     ]
     }
    ]
   },
@@ -351,7 +490,10 @@
      "capture": {
       "originalOverrides": "$.overrides"
      },
-     "expectStatus": 200
+     "expectStatus": 200,
+     "covers": [
+      "GET /api/settings"
+     ]
     },
     {
      "name": "register the stub model",
@@ -369,7 +511,10 @@
      "capture": {
       "modelId": "$.id"
      },
-     "expectStatus": 201
+     "expectStatus": 201,
+     "covers": [
+      "POST /api/models"
+     ]
     },
     {
      "name": "create a project",
@@ -421,7 +566,10 @@
      "capture": {
       "runId": "$.id"
      },
-     "expectStatus": 201
+     "expectStatus": 201,
+     "covers": [
+      "POST /api/sessions/:id/runs"
+     ]
     },
     {
      "name": "run events",
@@ -455,7 +603,11 @@
         }
        }
       ]
-     }
+     },
+     "covers": [
+      "GET /api/sessions/:id/runs/:runId/events",
+      "POST /api/permission-requests/:id/decision"
+     ]
     },
     {
      "name": "wait for the run to settle",
@@ -473,7 +625,10 @@
       ],
       "timeoutMs": 30000
      },
-     "always": true
+     "always": true,
+     "covers": [
+      "GET /api/sessions/:id/runs/:runId"
+     ]
     },
     {
      "name": "delete the project",
@@ -493,7 +648,10 @@
       "path": "/api/settings",
       "body": "{{originalOverrides}}"
      },
-     "always": true
+     "always": true,
+     "covers": [
+      "PUT /api/settings"
+     ]
     },
     {
      "name": "delete the model",
@@ -501,7 +659,10 @@
       "method": "DELETE",
       "path": "/api/models/{{modelId}}"
      },
-     "always": true
+     "always": true,
+     "covers": [
+      "DELETE /api/models/:id"
+     ]
     }
    ]
   },
@@ -531,7 +692,10 @@
      "capture": {
       "originalOverrides": "$.overrides"
      },
-     "expectStatus": 200
+     "expectStatus": 200,
+     "covers": [
+      "GET /api/settings"
+     ]
     },
     {
      "name": "register the stub model",
@@ -549,7 +713,10 @@
      "capture": {
       "modelId": "$.id"
      },
-     "expectStatus": 201
+     "expectStatus": 201,
+     "covers": [
+      "POST /api/models"
+     ]
     },
     {
      "name": "create a project",
@@ -601,7 +768,10 @@
      "capture": {
       "runId": "$.id"
      },
-     "expectStatus": 201
+     "expectStatus": 201,
+     "covers": [
+      "POST /api/sessions/:id/runs"
+     ]
     },
     {
      "name": "run events",
@@ -635,7 +805,11 @@
         }
        }
       ]
-     }
+     },
+     "covers": [
+      "GET /api/sessions/:id/runs/:runId/events",
+      "POST /api/permission-requests/:id/decision"
+     ]
     },
     {
      "name": "wait for the run to settle",
@@ -653,7 +827,10 @@
       ],
       "timeoutMs": 30000
      },
-     "always": true
+     "always": true,
+     "covers": [
+      "GET /api/sessions/:id/runs/:runId"
+     ]
     },
     {
      "name": "delete the project",
@@ -673,7 +850,10 @@
       "path": "/api/settings",
       "body": "{{originalOverrides}}"
      },
-     "always": true
+     "always": true,
+     "covers": [
+      "PUT /api/settings"
+     ]
     },
     {
      "name": "delete the model",
@@ -681,7 +861,10 @@
       "method": "DELETE",
       "path": "/api/models/{{modelId}}"
      },
-     "always": true
+     "always": true,
+     "covers": [
+      "DELETE /api/models/:id"
+     ]
     }
    ]
   },
@@ -706,7 +889,10 @@
      "capture": {
       "originalOverrides": "$.overrides"
      },
-     "expectStatus": 200
+     "expectStatus": 200,
+     "covers": [
+      "GET /api/settings"
+     ]
     },
     {
      "name": "register the stub model",
@@ -724,7 +910,10 @@
      "capture": {
       "modelId": "$.id"
      },
-     "expectStatus": 201
+     "expectStatus": 201,
+     "covers": [
+      "POST /api/models"
+     ]
     },
     {
      "name": "create a project",
@@ -776,7 +965,10 @@
      "capture": {
       "runId": "$.id"
      },
-     "expectStatus": 201
+     "expectStatus": 201,
+     "covers": [
+      "POST /api/sessions/:id/runs"
+     ]
     },
     {
      "name": "run events",
@@ -805,7 +997,11 @@
         }
        }
       ]
-     }
+     },
+     "covers": [
+      "GET /api/sessions/:id/runs/:runId/events",
+      "POST /api/sessions/:id/runs/:runId/cancel"
+     ]
     },
     {
      "name": "wait for the run to settle",
@@ -823,7 +1019,10 @@
       ],
       "timeoutMs": 30000
      },
-     "always": true
+     "always": true,
+     "covers": [
+      "GET /api/sessions/:id/runs/:runId"
+     ]
     },
     {
      "name": "delete the project",
@@ -843,7 +1042,10 @@
       "path": "/api/settings",
       "body": "{{originalOverrides}}"
      },
-     "always": true
+     "always": true,
+     "covers": [
+      "PUT /api/settings"
+     ]
     },
     {
      "name": "delete the model",
@@ -851,7 +1053,10 @@
       "method": "DELETE",
       "path": "/api/models/{{modelId}}"
      },
-     "always": true
+     "always": true,
+     "covers": [
+      "DELETE /api/models/:id"
+     ]
     }
    ]
   },
@@ -875,7 +1080,10 @@
      "capture": {
       "originalOverrides": "$.overrides"
      },
-     "expectStatus": 200
+     "expectStatus": 200,
+     "covers": [
+      "GET /api/settings"
+     ]
     },
     {
      "name": "register the stub model",
@@ -893,7 +1101,10 @@
      "capture": {
       "modelId": "$.id"
      },
-     "expectStatus": 201
+     "expectStatus": 201,
+     "covers": [
+      "POST /api/models"
+     ]
     },
     {
      "name": "create a project",
@@ -945,7 +1156,10 @@
      "capture": {
       "runId": "$.id"
      },
-     "expectStatus": 201
+     "expectStatus": 201,
+     "covers": [
+      "POST /api/sessions/:id/runs"
+     ]
     },
     {
      "name": "run events",
@@ -964,7 +1178,10 @@
       ],
       "timeoutMs": 60000,
       "profile": "run-events"
-     }
+     },
+     "covers": [
+      "GET /api/sessions/:id/runs/:runId/events"
+     ]
     },
     {
      "name": "wait for the run to settle",
@@ -982,7 +1199,10 @@
       ],
       "timeoutMs": 30000
      },
-     "always": true
+     "always": true,
+     "covers": [
+      "GET /api/sessions/:id/runs/:runId"
+     ]
     },
     {
      "name": "delete the project",
@@ -1002,7 +1222,10 @@
       "path": "/api/settings",
       "body": "{{originalOverrides}}"
      },
-     "always": true
+     "always": true,
+     "covers": [
+      "PUT /api/settings"
+     ]
     },
     {
      "name": "delete the model",
@@ -1010,7 +1233,10 @@
       "method": "DELETE",
       "path": "/api/models/{{modelId}}"
      },
-     "always": true
+     "always": true,
+     "covers": [
+      "DELETE /api/models/:id"
+     ]
     }
    ]
   },
@@ -1047,7 +1273,10 @@
      "capture": {
       "originalOverrides": "$.overrides"
      },
-     "expectStatus": 200
+     "expectStatus": 200,
+     "covers": [
+      "GET /api/settings"
+     ]
     },
     {
      "name": "register the stub model",
@@ -1065,7 +1294,10 @@
      "capture": {
       "modelId": "$.id"
      },
-     "expectStatus": 201
+     "expectStatus": 201,
+     "covers": [
+      "POST /api/models"
+     ]
     },
     {
      "name": "create a project",
@@ -1117,7 +1349,10 @@
      "capture": {
       "runId": "$.id"
      },
-     "expectStatus": 201
+     "expectStatus": 201,
+     "covers": [
+      "POST /api/sessions/:id/runs"
+     ]
     },
     {
      "name": "run events",
@@ -1136,7 +1371,10 @@
       ],
       "timeoutMs": 60000,
       "profile": "run-events"
-     }
+     },
+     "covers": [
+      "GET /api/sessions/:id/runs/:runId/events"
+     ]
     },
     {
      "name": "wait for the run to settle",
@@ -1154,7 +1392,43 @@
       ],
       "timeoutMs": 30000
      },
-     "always": true
+     "always": true,
+     "covers": [
+      "GET /api/sessions/:id/runs/:runId"
+     ]
+    },
+    {
+     "name": "subagents after the run",
+     "request": {
+      "method": "GET",
+      "path": "/api/sessions/{{sessionId}}/subagents"
+     },
+     "capture": {
+      "subagentId": "$[0].id"
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "resume a finished subagent",
+     "request": {
+      "method": "POST",
+      "path": "/api/sessions/{{sessionId}}/subagents/{{subagentId}}/resume",
+      "body": {}
+     },
+     "covers": [
+      "POST /api/sessions/:id/subagents/:sid/resume"
+     ]
+    },
+    {
+     "name": "stop a finished subagent",
+     "request": {
+      "method": "POST",
+      "path": "/api/sessions/{{sessionId}}/subagents/{{subagentId}}/stop",
+      "body": {}
+     },
+     "covers": [
+      "POST /api/sessions/:id/subagents/:sid/stop"
+     ]
     },
     {
      "name": "delete the project",
@@ -1174,7 +1448,10 @@
       "path": "/api/settings",
       "body": "{{originalOverrides}}"
      },
-     "always": true
+     "always": true,
+     "covers": [
+      "PUT /api/settings"
+     ]
     },
     {
      "name": "delete the model",
@@ -1182,7 +1459,10 @@
       "method": "DELETE",
       "path": "/api/models/{{modelId}}"
      },
-     "always": true
+     "always": true,
+     "covers": [
+      "DELETE /api/models/:id"
+     ]
     }
    ]
   },
@@ -1206,7 +1486,10 @@
      "capture": {
       "originalOverrides": "$.overrides"
      },
-     "expectStatus": 200
+     "expectStatus": 200,
+     "covers": [
+      "GET /api/settings"
+     ]
     },
     {
      "name": "register the stub model",
@@ -1224,7 +1507,10 @@
      "capture": {
       "modelId": "$.id"
      },
-     "expectStatus": 201
+     "expectStatus": 201,
+     "covers": [
+      "POST /api/models"
+     ]
     },
     {
      "name": "create a project",
@@ -1276,7 +1562,10 @@
      "capture": {
       "runId": "$.id"
      },
-     "expectStatus": 201
+     "expectStatus": 201,
+     "covers": [
+      "POST /api/sessions/:id/runs"
+     ]
     },
     {
      "name": "first read, cut after 2 events",
@@ -1330,7 +1619,10 @@
       ],
       "timeoutMs": 30000
      },
-     "always": true
+     "always": true,
+     "covers": [
+      "GET /api/sessions/:id/runs/:runId"
+     ]
     },
     {
      "name": "delete the project",
@@ -1350,7 +1642,10 @@
       "path": "/api/settings",
       "body": "{{originalOverrides}}"
      },
-     "always": true
+     "always": true,
+     "covers": [
+      "PUT /api/settings"
+     ]
     },
     {
      "name": "delete the model",
@@ -1358,7 +1653,187 @@
       "method": "DELETE",
       "path": "/api/models/{{modelId}}"
      },
+     "always": true,
+     "covers": [
+      "DELETE /api/models/:id"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "l2-post-messages",
+   "description": "Sending a message with POST /messages: the answer to the request is the run's event stream.",
+   "stub": {
+    "main": [
+     {
+      "text": "Hello over the message stream."
+     }
+    ]
+   },
+   "steps": [
+    {
+     "name": "remember the global settings",
+     "request": {
+      "method": "GET",
+      "path": "/api/settings"
+     },
+     "capture": {
+      "originalOverrides": "$.overrides"
+     },
+     "expectStatus": 200,
+     "covers": [
+      "GET /api/settings"
+     ]
+    },
+    {
+     "name": "register the stub model",
+     "request": {
+      "method": "POST",
+      "path": "/api/models",
+      "body": {
+       "vision": false,
+       "apiToken": "{{stubToken}}",
+       "baseUrl": "{{stubBaseUrl}}",
+       "model": "{{stubModel}}",
+       "name": "L2 stub model"
+      }
+     },
+     "capture": {
+      "modelId": "$.id"
+     },
+     "expectStatus": 201,
+     "covers": [
+      "POST /api/models"
+     ]
+    },
+    {
+     "name": "create a project",
+     "request": {
+      "method": "POST",
+      "path": "/api/projects",
+      "body": {
+       "name": "L2 project"
+      }
+     },
+     "capture": {
+      "projectId": "$.id",
+      "sessionId": "$.firstSession.id"
+     },
+     "expectStatus": 201
+    },
+    {
+     "name": "choose the model",
+     "request": {
+      "method": "PATCH",
+      "path": "/api/sessions/{{sessionId}}",
+      "body": {
+       "modelId": "{{modelId}}",
+       "title": "L2 session"
+      }
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "choose the approval mode",
+     "request": {
+      "method": "PATCH",
+      "path": "/api/sessions/{{sessionId}}",
+      "body": {
+       "approvalMode": "always_allow"
+      }
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "send a message and read the stream that comes back",
+     "request": {
+      "method": "POST",
+      "path": "/api/sessions/{{sessionId}}/messages",
+      "body": {
+       "content": "Say hello."
+      },
+      "headers": {
+       "accept": "text/event-stream"
+      }
+     },
+     "covers": [
+      "POST /api/sessions/:id/messages"
+     ],
+     "stream": {
+      "until": [
+       "run.completed",
+       "run.failed",
+       "run.cancelled"
+      ],
+      "timeoutMs": 60000,
+      "profile": "run-events"
+     }
+    },
+    {
+     "name": "the run it created",
+     "request": {
+      "method": "GET",
+      "path": "/api/sessions/{{sessionId}}/runs"
+     },
+     "capture": {
+      "runId": "$[0].id"
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "wait for the run to settle",
+     "request": {
+      "method": "GET",
+      "path": "/api/sessions/{{sessionId}}/runs/{{runId}}"
+     },
+     "poll": {
+      "path": "$.status",
+      "in": [
+       "completed",
+       "failed",
+       "cancelled",
+       "interrupted"
+      ],
+      "timeoutMs": 30000
+     },
+     "always": true,
+     "covers": [
+      "GET /api/sessions/:id/runs/:runId"
+     ]
+    },
+    {
+     "name": "delete the project",
+     "request": {
+      "method": "DELETE",
+      "path": "/api/projects/{{projectId}}",
+      "body": {
+       "confirmationId": "{{projectId}}"
+      }
+     },
      "always": true
+    },
+    {
+     "name": "restore the global settings",
+     "request": {
+      "method": "PUT",
+      "path": "/api/settings",
+      "body": "{{originalOverrides}}"
+     },
+     "always": true,
+     "covers": [
+      "PUT /api/settings"
+     ]
+    },
+    {
+     "name": "delete the model",
+     "request": {
+      "method": "DELETE",
+      "path": "/api/models/{{modelId}}"
+     },
+     "always": true,
+     "covers": [
+      "DELETE /api/models/:id"
+     ]
     }
    ]
   }

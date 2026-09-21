@@ -90,3 +90,9 @@ test("scrubbing an older recording applies rules that were added after it was ma
   const old = { body: { chunk: '{"runnerVersion":"aaa1111","x":1}' } };
   assert.deepEqual(scrubValue(old), { body: { chunk: '{"runnerVersion":"<volatile>","x":1}' } });
 });
+
+test("a bare host:port for a local stub is hidden too, with or without the scheme", () => {
+  const normalize = createNormalizer();
+  assert.equal(normalize.text("127.0.0.1:59652"), "127.0.0.1:<port>");
+  assert.equal(normalize.text("http://127.0.0.1:59652/v1"), "http://127.0.0.1:<port>/v1");
+});
