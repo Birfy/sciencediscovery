@@ -456,7 +456,20 @@ const checks = {
       if (!english.includes("# Identity")) throw new Error(`with en, JiuwenSwarm's prompt is not English: ${english.slice(0, 200)}`);
       const chinese = await promptIn("zh-CN");
       if (!chinese.includes("# 身份")) throw new Error(`with zh-CN, JiuwenSwarm's prompt is not Chinese: ${chinese.slice(0, 200)}`);
-      console.log("language: ok (en gives JiuwenSwarm's prompt in English, zh-CN in Chinese)");
+      // Switching in the middle of a session: its next run.
+      const stub = await startStubModel({ main: [{ text: "One." }, { text: "Two." }] });
+      const { sessionId, cleanup } = await setup(stub);
+      let midSession;
+      try {
+        await runAndWait(sessionId, "First.");
+        await api("PUT", "/api/jiuwenswarm/language", { language: "en" });
+        await runAndWait(sessionId, "Second.");
+        const system = JSON.stringify((stub.lastMessages?.() ?? []).filter((message) => message.role === "system"));
+        midSession = system.includes("# Identity") ? "switches at the session's next run" : "keeps the language it started with";
+      } finally {
+        await cleanup();
+      }
+      console.log(`language: ok (en gives JiuwenSwarm's prompt in English, zh-CN in Chinese; a running session ${midSession})`);
     } finally {
       await api("PUT", "/api/jiuwenswarm/language", { language: process.env.LIVE_LANGUAGE || "zh-CN" }).catch(() => undefined);
     }
