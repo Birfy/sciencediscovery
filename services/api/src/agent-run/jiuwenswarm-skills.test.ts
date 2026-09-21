@@ -15,7 +15,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { importSkillsToJiuwenSwarm, listJiuwenSwarmSkills, setJiuwenSwarmSkillEnabled, skillLoadedBy } from "./jiuwenswarm-skills.js";
+import { importSkillsToJiuwenSwarm, listJiuwenSwarmSkills, setJiuwenSwarmLanguage, setJiuwenSwarmSkillEnabled, skillLoadedBy } from "./jiuwenswarm-skills.js";
 
 const ids = new Map([["evolve-design", "evolve-design"], ["sciencediscovery-skill-creator", "skill-creator"]]);
 
@@ -56,4 +56,11 @@ test("the skill list and the on/off switch go to the adapter with its token", as
 test("a refused switch is an error, not silence", async () => {
   const refusing = (async () => new Response("no", { status: 502 })) as unknown as typeof fetch;
   await assert.rejects(setJiuwenSwarmSkillEnabled({ adapterUrl: "http://a", fetch: refusing }, "xlsx", false), /HTTP 502/);
+});
+
+test("the UI's language is sent to the adapter as JiuwenSwarm's", async () => {
+  const calls: Array<{ url: string; body?: string }> = [];
+  const fake = (async (url: string, init: RequestInit) => { calls.push({ url, body: init.body as string }); return new Response("{}"); }) as unknown as typeof fetch;
+  await setJiuwenSwarmLanguage({ adapterUrl: "http://a", fetch: fake }, "en");
+  assert.deepEqual(calls, [{ url: "http://a/agent/language", body: JSON.stringify({ language: "en" }) }]);
 });

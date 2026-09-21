@@ -438,6 +438,30 @@ const checks = {
     }
   },
 
+  /** The UI's language is JiuwenSwarm's: after switching, a new session gets JiuwenSwarm's own prompt in it. */
+  async language() {
+    const promptIn = async (language) => {
+      await api("PUT", "/api/jiuwenswarm/language", { language });
+      const stub = await startStubModel({ main: [{ text: "Hi." }] });
+      const { sessionId, cleanup } = await setup(stub);
+      try {
+        await runAndWait(sessionId, "Hello.");
+        return JSON.stringify((stub.lastMessages?.() ?? []).filter((message) => message.role === "system"));
+      } finally {
+        await cleanup();
+      }
+    };
+    try {
+      const english = await promptIn("en");
+      if (!english.includes("# Identity")) throw new Error(`with en, JiuwenSwarm's prompt is not English: ${english.slice(0, 200)}`);
+      const chinese = await promptIn("zh-CN");
+      if (!chinese.includes("# 身份")) throw new Error(`with zh-CN, JiuwenSwarm's prompt is not Chinese: ${chinese.slice(0, 200)}`);
+      console.log("language: ok (en gives JiuwenSwarm's prompt in English, zh-CN in Chinese)");
+    } finally {
+      await api("PUT", "/api/jiuwenswarm/language", { language: process.env.LIVE_LANGUAGE || "zh-CN" }).catch(() => undefined);
+    }
+  },
+
   /** Not a check: prints what a JiuwenSwarm subagent (task_tool) looks like from here, to design the mapping. */
   async "subagent-probe"() {
     const stub = await startStubModel({

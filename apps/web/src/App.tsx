@@ -1280,6 +1280,11 @@ export function App({ initialToken }: { initialToken?: string } = {}) {
     setShowConfig(true);
   }, [token]);
   const client = useMemo(() => new ApiClient(token, promptForToken), [promptForToken, token]);
+  // With the JiuwenSwarm backend its language follows the UI's: on load, and whenever the user switches.
+  useEffect(() => {
+    if (webSettings?.backend !== "jiuwenswarm") return;
+    void client.setJiuwenSwarmLanguage(locale).catch(() => undefined);
+  }, [client, locale, webSettings?.backend]);
   const listSkillDrafts = useCallback(() => client.listSkillReviewDrafts(), [client]);
 
   // Derived rather than stored: the panel must show the *current* record, so a

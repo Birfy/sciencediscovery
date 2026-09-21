@@ -61,6 +61,11 @@ export class SkillsApiClient extends SettingsApiClient {
     return this.request("/api/jiuwenswarm/skills");
   }
 
+  /** The UI's language becomes JiuwenSwarm's (its prompt, and the language it asks the model to answer in). */
+  setJiuwenSwarmLanguage(language: "en" | "zh-CN"): Promise<{ applied: boolean; language: string }> {
+    return this.request("/api/jiuwenswarm/language", { body: JSON.stringify({ language }), method: "PUT" });
+  }
+
   setJiuwenSwarmSkillEnabled(name: string, enabled: boolean): Promise<{ enabled: boolean; name: string }> {
     return this.request(`/api/jiuwenswarm/skills/${encodeURIComponent(name)}`, { body: JSON.stringify({ enabled }), method: "PUT" });
   }

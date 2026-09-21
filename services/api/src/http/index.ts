@@ -20,7 +20,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { CasStore, VersionStore, withWorkspaceMutation } from "@sciencediscovery/cas";
 import { sessionTrajectory } from "../trajectory.js";
 import { jiuwenSwarmConfigFromEnv } from "../agent-run/jiuwenswarm-agent.js";
-import { listJiuwenSwarmSkills, setJiuwenSwarmSkillEnabled } from "../agent-run/jiuwenswarm-skills.js";
+import { listJiuwenSwarmSkills, setJiuwenSwarmLanguage, setJiuwenSwarmSkillEnabled } from "../agent-run/jiuwenswarm-skills.js";
 import { syncWebSettingsToJiuwenSwarm } from "../agent-run/jiuwenswarm-web-settings.js";
 import { dirname, resolve } from "node:path";
 import { listSshKeyFiles } from "../ssh-key-files.js";
@@ -627,6 +627,8 @@ export function createApiServer(config = loadServerConfig(), dependencies: ApiSe
   const jiuwenSwarm = jiuwenSwarmConfigFromEnv();
   const webBackend = jiuwenSwarm ? "jiuwenswarm" as const : "native" as const;
   if (jiuwenSwarm) store.useEverySkillEverywhere();
+  // The UI's language as JiuwenSwarm's; remembered so that each page load does not rewrite JiuwenSwarm's config.
+  let jiuwenSwarmLanguage: "en" | "zh" | undefined;
   const syncJiuwenSwarmWeb = async () => jiuwenSwarm
     ? await syncWebSettingsToJiuwenSwarm(jiuwenSwarm, store.getWebSettings(), (provider) => store.getWebProviderApiKey(provider))
     : { ok: true };
@@ -1096,6 +1098,25 @@ export function createApiServer(config = loadServerConfig(), dependencies: ApiSe
         const updated = await store.updateWebSettings(await readJson<UpdateWebSettingsRequest>(request));
         await syncJiuwenSwarmWeb();
         sendJson(response, 200, { ...updated, backend: webBackend });
+        return;
+      }
+      if (url.pathname === "/api/jiuwenswarm/language" && request.method === "PUT") {
+        const body = await readJson<{ language?: unknown }>(request);
+        const language = body.language === "zh-CN" || body.language === "zh" ? "zh" : body.language === "en" ? "en" : undefined;
+        if (!language) throw new ApiStatusError(400, "language must be en or zh-CN");
+        if (!jiuwenSwarm) {
+          sendJson(response, 200, { applied: false, backend: "native", language });
+          return;
+        }
+        if (language !== jiuwenSwarmLanguage) {
+          try {
+            await setJiuwenSwarmLanguage(jiuwenSwarm, language);
+          } catch (error) {
+            throw new ApiStatusError(502, error instanceof Error ? error.message : String(error));
+          }
+          jiuwenSwarmLanguage = language;
+        }
+        sendJson(response, 200, { applied: true, backend: "jiuwenswarm", language });
         return;
       }
       // With the JiuwenSwarm backend, skills are JiuwenSwarm's: what it has installed, and one on/off switch per skill.

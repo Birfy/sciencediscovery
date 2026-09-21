@@ -101,3 +101,13 @@ export async function setJiuwenSwarmSkillEnabled(
 ): Promise<void> {
   await adapterCall(config, `/agent/skills/${encodeURIComponent(name)}/enabled`, { enabled });
 }
+
+/**
+ * JiuwenSwarm's language, from the UI's: its own prompt, rails and tools, and the language it asks the model to
+ * answer in. One setting for every session (sessions started afterwards use it).
+ */
+export async function setJiuwenSwarmLanguage(
+  config: Pick<JiuwenSwarmAgentConfig, "adapterToken" | "adapterUrl" | "fetch">, language: "en" | "zh",
+): Promise<void> {
+  await adapterCall(config, "/agent/language", { language });
+}

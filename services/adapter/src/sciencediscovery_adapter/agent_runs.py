@@ -130,6 +130,10 @@ class SkillEnabled(BaseModel):
     enabled: bool
 
 
+class AgentLanguage(BaseModel):
+    language: Literal["zh", "en"]
+
+
 class PermissionAnswer(BaseModel):
     decision: Literal["allow_once", "allow_matching", "deny"]
 
@@ -365,6 +369,21 @@ def agent_router(runner: AgentRunner, settings: Settings) -> APIRouter:
         except Exception as error:
             raise HTTPException(status_code=502, detail=f"JiuwenSwarm could not list its skills: {str(error)[:200]}") from error
         return {"skills": imported}
+
+    @router.post("/agent/language")
+    async def set_language(body: AgentLanguage, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        """JiuwenSwarm's language (`preferred_language`): its own prompt, rails and tools, and the language it asks
+        the model to answer in. One setting for every session; a session started afterwards uses it. Only the TUI
+        channel's `config.set` has this key, so it goes there, not to the management channel."""
+        if settings.agent_token and authorization != f"Bearer {settings.agent_token}":
+            raise HTTPException(status_code=401, detail="unauthorized")
+        try:
+            result = await runner.rpc(settings.gateway_url, "config.set", {"preferred_language": body.language})
+        except Exception as error:
+            raise HTTPException(status_code=502, detail=f"JiuwenSwarm refused the language: {str(error)[:200]}") from error
+        if "preferred_language" not in (result.get("updated") or []):
+            raise HTTPException(status_code=502, detail=f"JiuwenSwarm did not take the language: {str(result)[:200]}")
+        return {"language": body.language}
 
     @router.post("/agent/approvals/{request_id}")
     async def answer_approval(request_id: str, body: PermissionAnswer, authorization: str | None = Header(default=None)) -> dict[str, Any]:

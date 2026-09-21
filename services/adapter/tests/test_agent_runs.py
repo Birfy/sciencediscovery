@@ -407,3 +407,18 @@ async def test_an_approval_answer_resumes_the_run_waiting_on_that_question(harne
         missing = await client.post("/agent/approvals/q1", json={"decision": "deny"})
     assert ok.status_code == 200 and missing.status_code == 404
     assert answered == [("q1", "permission_interrupt", {"selected_options": ["本会话允许"], "custom_input": "本会话允许"})]
+
+
+async def test_the_language_is_set_on_the_tui_channel(harness):
+    app, runner, rpcs = harness
+
+    async def tui(url, method, params=None, **kwargs):
+        rpcs.append((url, method, params))
+        return {"updated": ["preferred_language"]} if method == "config.set" else {}
+
+    runner.rpc = tui
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://adapter") as client:
+        ok = await client.post("/agent/language", json={"language": "en"})
+        bad = await client.post("/agent/language", json={"language": "fr"})
+    assert ok.status_code == 200 and bad.status_code == 422
+    assert rpcs[-1] == ("ws://gw/tui", "config.set", {"preferred_language": "en"})
