@@ -191,6 +191,22 @@ function normalizeHistoryMessage(message: WireMessage): WireMessage {
   return normalized;
 }
 
+/** The model endpoint a run talks to; shared by every executor so a model is reached the same way. */
+export function modelEndpointFor(options: Pick<NativeAgentOptions, "config">): ModelEndpoint {
+  const thinking = process.env.SCIENCE_AGENT_AGENT_THINKING?.trim();
+  return {
+    ...(options.config.apiProtocol ? { apiProtocol: options.config.apiProtocol } : {}),
+    ...(options.config.apiVariant ? { apiVariant: options.config.apiVariant } : {}),
+    baseUrl: options.config.baseUrl,
+    ...(options.config.apiToken ? { apiToken: options.config.apiToken } : {}),
+    model: options.config.model,
+    ...(options.config.thinkingEffort ? { thinkingEffort: options.config.thinkingEffort } : {}),
+    ...(options.config.thinkingMode ? { thinkingMode: options.config.thinkingMode } : {}),
+    ...(options.config.proxy ? { proxy: options.config.proxy } : {}),
+    ...(thinking === "disabled" || thinking === "enabled" ? { thinking } : {}),
+  } as ModelEndpoint;
+}
+
 function formatRunContract(contract: string): string {
   return [
     "<run_contract>",
@@ -369,18 +385,7 @@ class NativeAgent implements NativeAgentHandle {
     // toggle itself. Left unset by default: for most models the loop's own
     // reasoning is what makes it work. This belongs on the model profile
     // eventually; until then it is one switch for the deployment.
-    const thinking = process.env.SCIENCE_AGENT_AGENT_THINKING?.trim();
-    this.endpoint = {
-      ...(options.config.apiProtocol ? { apiProtocol: options.config.apiProtocol } : {}),
-      ...(options.config.apiVariant ? { apiVariant: options.config.apiVariant } : {}),
-      baseUrl: options.config.baseUrl,
-      ...(options.config.apiToken ? { apiToken: options.config.apiToken } : {}),
-      model: options.config.model,
-      ...(options.config.thinkingEffort ? { thinkingEffort: options.config.thinkingEffort } : {}),
-      ...(options.config.thinkingMode ? { thinkingMode: options.config.thinkingMode } : {}),
-      ...(options.config.proxy ? { proxy: options.config.proxy } : {}),
-      ...(thinking === "disabled" || thinking === "enabled" ? { thinking } : {}),
-    };
+    this.endpoint = modelEndpointFor(options);
     this.policy = resolveModelClientPolicy();
   }
 

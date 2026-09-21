@@ -94,7 +94,10 @@ test("sends the prompt, model and the run's tools to the adapter and returns the
     assert.equal(body.cwd, "/workspace");
     assert.equal(typeof body.systemPrompt, "string");
     assert.ok(body.systemPrompt.length > 200, "the run gets the workspace system prompt, not an empty one");
-    assert.deepEqual(body.model, { model: "gpt-x", baseUrl: "http://llm.test/v1", apiKey: "sk-test", provider: "OpenAI" });
+    assert.equal(body.model.model, "gpt-x");
+    assert.match(body.model.baseUrl, /^http:\/\/127\.0\.0\.1:\d+\/v1$/, "the adapter is pointed at the run's loopback model gateway, not the provider");
+    assert.notEqual(body.model.apiKey, "sk-test", "the provider's key never leaves this process");
+    assert.equal(body.model.provider, "OpenAI");
     const echo = body.tools.find((tool: { name: string }) => tool.name === "echo");
     assert.equal(echo.description, "Echo a word.");
     assert.deepEqual(echo.inputSchema.required, ["word"]);

@@ -1,0 +1,186 @@
+// Copyright (C) 2026-2026 Huawei Technologies Co., Ltd
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+import { randomUUID } from "node:crypto";
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import type { AddressInfo } from "node:net";
+
+import {
+  ModelRequestError,
+  streamModelTurn,
+  type ModelClientPolicy,
+  type ModelEndpoint,
+  type ModelTurn,
+  type WireToolSpec,
+} from "@sciencediscovery/model";
+
+/**
+ * The model, as JiuwenSwarm sees it: an OpenAI chat-completions endpoint on loopback.
+ *
+ * JiuwenSwarm only speaks OpenAI chat completions to a model, while a ScienceDiscovery model may be
+ * Anthropic Messages or OpenAI Responses, with a provider variant (DeepSeek, Gemini, Kimi, Qwen ...),
+ * thinking controls, a network proxy and a retry policy. Those already live in the native model
+ * client, so a run's model requests are served by it: JiuwenSwarm's request comes in as chat
+ * completions, goes out through `streamModelTurn` in the model's own protocol, and the answer (text,
+ * thinking, tool calls, usage) goes back as chat completions.
+ */
+export interface ModelGateway {
+  /** Base URL to give JiuwenSwarm, up to and including `/v1`. */
+  url: string;
+  token: string;
+  close(): Promise<void>;
+}
+
+type Streamer = typeof streamModelTurn;
+type HistoryMessage = Parameters<Streamer>[2][number];
+
+interface ChatRequest {
+  messages?: Array<Record<string, unknown>>;
+  stream?: boolean;
+  tools?: Array<{ function?: { description?: string; name?: string; parameters?: unknown } }>;
+}
+
+const readBody = async (request: IncomingMessage): Promise<ChatRequest> => {
+  const chunks: Buffer[] = [];
+  for await (const chunk of request) chunks.push(chunk as Buffer);
+  return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}") as ChatRequest;
+};
+
+/** The text of a message's content, whether it is a string or a list of parts. */
+function textOf(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content.map((part) => (typeof part === "object" && part !== null && (part as { type?: string }).type === "text"
+    ? String((part as { text?: unknown }).text ?? "") : "")).join("");
+}
+
+/** True when a message carries anything but text (an image), which the native client cannot send. */
+const hasNonText = (message: Record<string, unknown>) =>
+  Array.isArray(message.content) && message.content.some((part) => (part as { type?: string })?.type !== "text");
+
+export function toModelRequest(body: ChatRequest): { history: HistoryMessage[]; systemPrompt: string; tools: WireToolSpec[] } {
+  const messages = body.messages ?? [];
+  const systemPrompt = messages.filter((message) => message.role === "system").map((message) => textOf(message.content)).join("\n\n");
+  const history = messages.filter((message) => message.role !== "system").map((message) => ({
+    ...message,
+    ...(Array.isArray(message.content) ? { content: textOf(message.content) } : {}),
+  })) as HistoryMessage[];
+  const tools = (body.tools ?? []).flatMap((tool) => tool.function?.name
+    ? [{ name: tool.function.name, description: tool.function.description ?? "", parameters: tool.function.parameters ?? { type: "object" } }]
+    : []);
+  return { history, systemPrompt, tools };
+}
+
+function usageOf(turn: ModelTurn) {
+  const usage = turn.usage;
+  if (!usage) return undefined;
+  return {
+    prompt_tokens: usage.inputTokens, completion_tokens: usage.outputTokens, total_tokens: usage.totalTokens,
+    ...(usage.cacheReadTokens ? { prompt_tokens_details: { cached_tokens: usage.cacheReadTokens } } : {}),
+  };
+}
+
+const finishReason = (turn: ModelTurn) => turn.truncated ? "length" : turn.toolCalls.length ? "tool_calls" : "stop";
+const toolCallsOf = (turn: ModelTurn) => turn.toolCalls.map((call, index) => ({
+  index, id: call.id, type: "function", function: { name: call.name, arguments: JSON.stringify(call.args) },
+}));
+
+export async function startModelGateway(
+  endpoint: ModelEndpoint,
+  policy: ModelClientPolicy,
+  signal: AbortSignal,
+  streamer: Streamer = streamModelTurn,
+): Promise<ModelGateway> {
+  const token = randomUUID();
+  const server: Server = createServer(async (request: IncomingMessage, response: ServerResponse) => {
+    const fail = (status: number, message: string) => {
+      if (!response.headersSent) response.writeHead(status, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error: { message, type: "model_gateway_error" } }));
+    };
+    if (request.method !== "POST" || !request.url?.endsWith("/chat/completions") || request.headers.authorization !== `Bearer ${token}`) {
+      fail(request.headers.authorization === `Bearer ${token}` ? 404 : 401, "unauthorized");
+      return;
+    }
+    let body: ChatRequest;
+    try {
+      body = await readBody(request);
+    } catch {
+      fail(400, "invalid JSON");
+      return;
+    }
+    // JiuwenSwarm probes a model for image input with a picture; a text-only client answers "no".
+    if ((body.messages ?? []).some(hasNonText)) {
+      fail(400, "images are not supported by this gateway");
+      return;
+    }
+    const { history, systemPrompt, tools } = toModelRequest(body);
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    signal.addEventListener("abort", abort, { once: true });
+    response.on("close", () => { if (!response.writableEnded) controller.abort(); });
+    const id = `chatcmpl-${randomUUID()}`;
+    const chunk = (delta: Record<string, unknown>, finish: string | null = null, extra: Record<string, unknown> = {}) =>
+      `data: ${JSON.stringify({ id, object: "chat.completion.chunk", created: Math.floor(Date.now() / 1000), model: endpoint.model, choices: [{ index: 0, delta, finish_reason: finish }], ...extra })}\n\n`;
+    try {
+      if (body.stream) {
+        // Headers wait for the first byte of the answer so that a refused request is a real HTTP error.
+        let started = false;
+        const start = () => {
+          if (started) return;
+          started = true;
+          response.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
+          response.write(chunk({ role: "assistant" }));
+        };
+        const turn = await streamer(endpoint, systemPrompt, history, tools, policy, controller.signal, {
+          onTextDelta: (delta) => { start(); response.write(chunk({ content: delta })); },
+          onThinkingDelta: (delta) => { start(); response.write(chunk({ reasoning_content: delta })); },
+        });
+        start();
+        if (turn.toolCalls.length) response.write(chunk({ tool_calls: toolCallsOf(turn) }));
+        const usage = usageOf(turn);
+        response.write(chunk({}, finishReason(turn), usage ? { usage } : {}));
+        response.end("data: [DONE]\n\n");
+        return;
+      }
+      const turn = await streamer(endpoint, systemPrompt, history, tools, policy, controller.signal);
+      const content = typeof turn.assistantMessage.content === "string" ? turn.assistantMessage.content : textOf(turn.assistantMessage.content);
+      const usage = usageOf(turn);
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({
+        id, object: "chat.completion", created: Math.floor(Date.now() / 1000), model: endpoint.model,
+        choices: [{ index: 0, finish_reason: finishReason(turn), message: { role: "assistant", content, ...(turn.toolCalls.length ? { tool_calls: toolCallsOf(turn).map(({ index: _index, ...call }) => call) } : {}) } }],
+        ...(usage ? { usage } : {}),
+      }));
+    } catch (error) {
+      const status = error instanceof ModelRequestError && error.statusCode >= 400 && error.statusCode < 600 ? error.statusCode : 502;
+      const message = error instanceof Error ? error.message : String(error);
+      if (response.headersSent) {
+        // Mid-stream: tell the client the way OpenAI does, then stop.
+        response.write(`data: ${JSON.stringify({ error: { message, type: "model_gateway_error" } })}\n\n`);
+        response.end();
+      } else {
+        fail(status, message);
+      }
+    } finally {
+      signal.removeEventListener("abort", abort);
+    }
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address() as AddressInfo;
+  return {
+    url: `http://127.0.0.1:${port}/v1`,
+    token,
+    close: () => new Promise<void>((resolve) => { server.close(() => resolve()); server.closeAllConnections(); }),
+  };
+}

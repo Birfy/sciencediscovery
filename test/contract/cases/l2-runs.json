@@ -2496,6 +2496,384 @@
      ]
     }
    ]
+  },
+  {
+   "id": "l2-anthropic-tool-call",
+   "description": "The shell-call scenario with a model that speaks Anthropic Messages. The executor must reach it in that protocol and give the same events.",
+   "stub": {
+    "main": [
+     {
+      "tool": "run_shell",
+      "arguments": {
+       "command": "echo L2-MARK"
+      }
+     },
+     {
+      "text": "The command printed L2-MARK."
+     }
+    ]
+   },
+   "steps": [
+    {
+     "name": "remember the global settings",
+     "request": {
+      "method": "GET",
+      "path": "/api/settings"
+     },
+     "capture": {
+      "originalOverrides": "$.overrides"
+     },
+     "expectStatus": 200,
+     "covers": [
+      "GET /api/settings"
+     ]
+    },
+    {
+     "name": "register the stub model",
+     "request": {
+      "method": "POST",
+      "path": "/api/models",
+      "body": {
+       "vision": false,
+       "apiToken": "{{stubToken}}",
+       "baseUrl": "{{stubBaseUrl}}",
+       "model": "{{stubModel}}",
+       "name": "L2 stub model",
+       "apiProtocol": "anthropic-messages"
+      }
+     },
+     "capture": {
+      "modelId": "$.id"
+     },
+     "expectStatus": 201
+    },
+    {
+     "name": "create a project",
+     "request": {
+      "method": "POST",
+      "path": "/api/projects",
+      "body": {
+       "name": "L2 project"
+      }
+     },
+     "capture": {
+      "projectId": "$.id",
+      "sessionId": "$.firstSession.id"
+     },
+     "expectStatus": 201
+    },
+    {
+     "name": "choose the model",
+     "request": {
+      "method": "PATCH",
+      "path": "/api/sessions/{{sessionId}}",
+      "body": {
+       "modelId": "{{modelId}}",
+       "title": "L2 session"
+      }
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "choose the approval mode",
+     "request": {
+      "method": "PATCH",
+      "path": "/api/sessions/{{sessionId}}",
+      "body": {
+       "approvalMode": "always_allow"
+      }
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "send a message",
+     "request": {
+      "method": "POST",
+      "path": "/api/sessions/{{sessionId}}/runs",
+      "body": {
+       "content": "Run the marker command."
+      }
+     },
+     "capture": {
+      "runId": "$.id"
+     },
+     "expectStatus": 201
+    },
+    {
+     "name": "run events",
+     "request": {
+      "method": "GET",
+      "path": "/api/sessions/{{sessionId}}/runs/{{runId}}/events",
+      "headers": {
+       "accept": "text/event-stream"
+      }
+     },
+     "stream": {
+      "until": [
+       "run.completed",
+       "run.failed",
+       "run.cancelled"
+      ],
+      "timeoutMs": 60000,
+      "profile": "run-events"
+     },
+     "covers": [
+      "GET /api/sessions/:id/runs/:runId/events"
+     ]
+    },
+    {
+     "name": "wait for the run to settle",
+     "request": {
+      "method": "GET",
+      "path": "/api/sessions/{{sessionId}}/runs/{{runId}}"
+     },
+     "poll": {
+      "path": "$.status",
+      "in": [
+       "completed",
+       "failed",
+       "cancelled",
+       "interrupted"
+      ],
+      "timeoutMs": 30000
+     },
+     "always": true,
+     "covers": [
+      "GET /api/sessions/:id/runs/:runId"
+     ]
+    },
+    {
+     "name": "the session's runs",
+     "request": {
+      "method": "GET",
+      "path": "/api/sessions/{{sessionId}}/runs"
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "delete the project",
+     "request": {
+      "method": "DELETE",
+      "path": "/api/projects/{{projectId}}",
+      "body": {
+       "confirmationId": "{{projectId}}"
+      }
+     },
+     "always": true
+    },
+    {
+     "name": "restore the global settings",
+     "request": {
+      "method": "PUT",
+      "path": "/api/settings",
+      "body": "{{originalOverrides}}"
+     },
+     "always": true,
+     "covers": [
+      "PUT /api/settings"
+     ]
+    },
+    {
+     "name": "delete the model",
+     "request": {
+      "method": "DELETE",
+      "path": "/api/models/{{modelId}}"
+     },
+     "always": true,
+     "covers": [
+      "DELETE /api/models/:id"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "l2-responses-tool-call",
+   "description": "The shell-call scenario with a model that speaks OpenAI Responses. The executor must reach it in that protocol and give the same events.",
+   "stub": {
+    "main": [
+     {
+      "tool": "run_shell",
+      "arguments": {
+       "command": "echo L2-MARK"
+      }
+     },
+     {
+      "text": "The command printed L2-MARK."
+     }
+    ]
+   },
+   "steps": [
+    {
+     "name": "remember the global settings",
+     "request": {
+      "method": "GET",
+      "path": "/api/settings"
+     },
+     "capture": {
+      "originalOverrides": "$.overrides"
+     },
+     "expectStatus": 200,
+     "covers": [
+      "GET /api/settings"
+     ]
+    },
+    {
+     "name": "register the stub model",
+     "request": {
+      "method": "POST",
+      "path": "/api/models",
+      "body": {
+       "vision": false,
+       "apiToken": "{{stubToken}}",
+       "baseUrl": "{{stubBaseUrl}}",
+       "model": "{{stubModel}}",
+       "name": "L2 stub model",
+       "apiProtocol": "openai-responses"
+      }
+     },
+     "capture": {
+      "modelId": "$.id"
+     },
+     "expectStatus": 201
+    },
+    {
+     "name": "create a project",
+     "request": {
+      "method": "POST",
+      "path": "/api/projects",
+      "body": {
+       "name": "L2 project"
+      }
+     },
+     "capture": {
+      "projectId": "$.id",
+      "sessionId": "$.firstSession.id"
+     },
+     "expectStatus": 201
+    },
+    {
+     "name": "choose the model",
+     "request": {
+      "method": "PATCH",
+      "path": "/api/sessions/{{sessionId}}",
+      "body": {
+       "modelId": "{{modelId}}",
+       "title": "L2 session"
+      }
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "choose the approval mode",
+     "request": {
+      "method": "PATCH",
+      "path": "/api/sessions/{{sessionId}}",
+      "body": {
+       "approvalMode": "always_allow"
+      }
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "send a message",
+     "request": {
+      "method": "POST",
+      "path": "/api/sessions/{{sessionId}}/runs",
+      "body": {
+       "content": "Run the marker command."
+      }
+     },
+     "capture": {
+      "runId": "$.id"
+     },
+     "expectStatus": 201
+    },
+    {
+     "name": "run events",
+     "request": {
+      "method": "GET",
+      "path": "/api/sessions/{{sessionId}}/runs/{{runId}}/events",
+      "headers": {
+       "accept": "text/event-stream"
+      }
+     },
+     "stream": {
+      "until": [
+       "run.completed",
+       "run.failed",
+       "run.cancelled"
+      ],
+      "timeoutMs": 60000,
+      "profile": "run-events"
+     },
+     "covers": [
+      "GET /api/sessions/:id/runs/:runId/events"
+     ]
+    },
+    {
+     "name": "wait for the run to settle",
+     "request": {
+      "method": "GET",
+      "path": "/api/sessions/{{sessionId}}/runs/{{runId}}"
+     },
+     "poll": {
+      "path": "$.status",
+      "in": [
+       "completed",
+       "failed",
+       "cancelled",
+       "interrupted"
+      ],
+      "timeoutMs": 30000
+     },
+     "always": true,
+     "covers": [
+      "GET /api/sessions/:id/runs/:runId"
+     ]
+    },
+    {
+     "name": "the session's runs",
+     "request": {
+      "method": "GET",
+      "path": "/api/sessions/{{sessionId}}/runs"
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "delete the project",
+     "request": {
+      "method": "DELETE",
+      "path": "/api/projects/{{projectId}}",
+      "body": {
+       "confirmationId": "{{projectId}}"
+      }
+     },
+     "always": true
+    },
+    {
+     "name": "restore the global settings",
+     "request": {
+      "method": "PUT",
+      "path": "/api/settings",
+      "body": "{{originalOverrides}}"
+     },
+     "always": true,
+     "covers": [
+      "PUT /api/settings"
+     ]
+    },
+    {
+     "name": "delete the model",
+     "request": {
+      "method": "DELETE",
+      "path": "/api/models/{{modelId}}"
+     },
+     "always": true,
+     "covers": [
+      "DELETE /api/models/:id"
+     ]
+    }
+   ]
   }
  ]
 }

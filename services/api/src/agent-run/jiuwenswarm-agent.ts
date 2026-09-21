@@ -21,9 +21,14 @@ import { TOOL_SEARCH_NAME, TOOL_SEARCH_SPEC, type AgentTool } from "@sciencedisc
 
 import { DurableContextStore } from "@sciencediscovery/context";
 
+import { startModelGateway } from "./jiuwenswarm-model-gateway.js";
+
+import { resolveModelClientPolicy, type streamModelTurn } from "@sciencediscovery/model";
+
 import {
   composeSystemPrompt,
   createToolRegistry,
+  modelEndpointFor,
   startPluginScope,
   type NativeAgentHandle,
   type NativeAgentOptions,
@@ -47,6 +52,8 @@ export interface JiuwenSwarmAgentConfig {
   toolAnnouncementTimeoutMs?: number;
   /** Replaceable for tests. */
   fetch?: typeof fetch;
+  /** Replaceable for tests: the native model client the run's model requests are served by. */
+  modelStreamer?: typeof streamModelTurn;
 }
 
 /** Selected by SCIENCE_AGENT_EXECUTOR=jiuwenswarm; the native agent stays the default. */
@@ -59,12 +66,6 @@ export function jiuwenSwarmConfigFromEnv(env: NodeJS.ProcessEnv = process.env): 
     ...(env.SCIENCE_AGENT_ADAPTER_TOKEN?.trim() ? { adapterToken: env.SCIENCE_AGENT_ADAPTER_TOKEN.trim() } : {}),
   };
 }
-
-const PROVIDERS: Record<string, string> = {
-  "anthropic-messages": "Anthropic",
-  "openai-chat-completions": "OpenAI",
-  "openai-responses": "OpenAI",
-};
 
 type Listener = (event: AgentEvent) => void;
 
@@ -124,9 +125,11 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
     const transcript = new Transcript();
     const bridge = await startBridge(registry, tools, bridgeToken, this.controller.signal, (event) => this.emit(event), announcements, transcript,
       this.config.toolAnnouncementTimeoutMs);
+    // JiuwenSwarm only speaks OpenAI chat completions; the model itself may not (see the gateway).
+    const modelGateway = await startModelGateway(modelEndpointFor(this.options), resolveModelClientPolicy(), this.controller.signal, this.config.modelStreamer);
     const timeout = this.options.runTimeoutMs ? setTimeout(() => this.controller.abort(), this.options.runTimeoutMs) : undefined;
     try {
-      const finalText = await this.stream(text, tools, bridge.url, bridgeToken, announcements, transcript);
+      const finalText = await this.stream(text, tools, bridge.url, bridgeToken, announcements, transcript, modelGateway);
       return {
         finalMessages: [{ role: "user", content: text }, ...transcript.finish(finalText)] as never,
       };
@@ -137,16 +140,16 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
     } finally {
       if (timeout) clearTimeout(timeout);
       await bridge.close();
+      await modelGateway.close();
       await plugins.dispose();
     }
   }
 
   private async stream(
     text: string, tools: Map<string, AgentTool>, bridgeUrl: string, bridgeToken: string,
-    announcements: ToolAnnouncements, transcript: Transcript,
+    announcements: ToolAnnouncements, transcript: Transcript, modelGateway: { token: string; url: string },
   ): Promise<string> {
     const { config: model } = this.options;
-    const provider = model.apiProtocol ? PROVIDERS[model.apiProtocol] : undefined;
     const toolNames = new Set(tools.keys());
     // The same system prompt the native loop would send: the model is tuned to it.
     const { systemPrompt } = composeSystemPrompt(this.options, toolNames, toolNames.has("read_skill") ? this.options.skills ?? [] : []);
@@ -161,7 +164,8 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
         prompt: text,
         systemPrompt,
         cwd: this.options.workspaceRoot,
-        model: { model: model.model, baseUrl: model.baseUrl, apiKey: model.apiToken ?? "", ...(provider ? { provider } : {}) },
+        // The adapter's proxy forwards to this loopback gateway, which speaks the model's own protocol.
+        model: { model: model.model, baseUrl: modelGateway.url, apiKey: modelGateway.token, provider: "OpenAI" },
         history: openAiHistory(this.options.gatewayHistory ?? []),
         // JiuwenSwarm gives a tool call 30 s unless told otherwise; the run's own timeout is the limit here.
         ...(this.options.runTimeoutMs ? { toolTimeoutSeconds: Math.ceil(this.options.runTimeoutMs / 1000) } : {}),
