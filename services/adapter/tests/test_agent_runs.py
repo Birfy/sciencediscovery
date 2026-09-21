@@ -324,3 +324,31 @@ async def test_the_models_context_window_is_given_to_jiuwenswarm_as_the_entrys_w
     await post(harness[0], {"sessionId": "s1", "prompt": "hi", "model": {"model": "m", "baseUrl": "http://llm.test/v1", "apiKey": "k", "contextWindow": 131072}})
     replaced = [p for _, m, p in rpcs if m == "models.replace_all"]
     assert any(entry.get("context_window_tokens") == 131072 for p in replaced for entry in p["models"])
+
+
+async def get(app, path, headers=None):
+    async with app.router.lifespan_context(app):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://adapter") as client:
+            return await client.get(path, headers=headers or {})
+
+
+async def test_info_says_which_backend_runs_and_whether_jiuwenswarm_answers(harness):
+    app, *_ = harness
+    body = (await get(app, "/agent/info")).json()
+    assert body["adapter"] is True and body["executor"] == "native"
+    assert body["jiuwenswarm"]["reachable"] is True and body["jiuwenswarm"]["managementUrl"] == "ws://gw/ws"
+    assert body["toolTimeoutSeconds"] == 3600
+
+
+async def test_info_reports_an_executor_of_jiuwenswarm_and_a_gateway_that_does_not_answer():
+    # Nothing listens on the management URL of these settings, which is what a JiuwenSwarm that is down looks like.
+    app = create_app(Settings(**{**SETTINGS.__dict__, "executor": "jiuwenswarm", "mgmt_url": "ws://127.0.0.1:1/ws"}))
+    body = (await get(app, "/agent/info")).json()
+    assert body["executor"] == "jiuwenswarm" and body["jiuwenswarm"]["reachable"] is False
+    assert "unreachable" in body["jiuwenswarm"]["error"]
+
+
+async def test_info_needs_the_token_when_there_is_one():
+    guarded = create_app(Settings(**{**SETTINGS.__dict__, "agent_token": "secret"}))
+    assert (await get(guarded, "/agent/info")).status_code == 401
+    assert (await get(guarded, "/agent/info", {"authorization": "Bearer wrong"})).status_code == 401

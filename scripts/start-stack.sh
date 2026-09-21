@@ -21,7 +21,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: ./scripts/start-stack.sh --mode local|docker [--no-build] [--no-node-build]
+Usage: ./scripts/start-stack.sh --mode local|docker [--no-build] [--no-node-build] [--jiuwenswarm]
 
   --mode local    read .env, optionally install/build, and use data/envs
   --mode docker   use the prebuilt image environments and container checks
@@ -29,6 +29,13 @@ Usage: ./scripts/start-stack.sh --mode local|docker [--no-build] [--no-node-buil
   --no-node-build skip only the Node install/build; still provision the Python
                   service environments, whose editable installs record absolute
                   paths and cannot be prepared elsewhere
+  --jiuwenswarm   run agent turns on JiuwenSwarm instead of the built-in loop
+                  (local mode only): puts the adapter in front of the API
+                  (SCIENCE_AGENT_ADAPTER=1), selects the executor
+                  (SCIENCE_AGENT_EXECUTOR=jiuwenswarm) and starts the JiuwenSwarm
+                  instance if it is installed but not running. Install it once
+                  with scripts/jiuwenswarm.sh setup. See
+                  docs/en/how-to/run-with-jiuwenswarm.md.
 
 Environment:
   SCIENCE_DISCOVERY_HEALTH_TIMEOUT_SECONDS
@@ -42,6 +49,7 @@ mode=""
 mode_seen=0
 no_build=0
 no_node_build=0
+use_jiuwenswarm=0
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
     --mode)
@@ -74,6 +82,11 @@ while [[ "$#" -gt 0 ]]; do
       no_build=1
       shift
       ;;
+    --jiuwenswarm)
+      use_jiuwenswarm=1
+      export SCIENCE_AGENT_ADAPTER=1 SCIENCE_AGENT_EXECUTOR=jiuwenswarm
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -85,6 +98,11 @@ while [[ "$#" -gt 0 ]]; do
       ;;
   esac
 done
+
+if [[ "$use_jiuwenswarm" -eq 1 && "$mode" == "docker" ]]; then
+  echo "--jiuwenswarm is available in local mode only; the Docker image does not include the adapter or JiuwenSwarm." >&2
+  exit 2
+fi
 
 if [[ "$mode" != "local" && "$mode" != "docker" ]]; then
   echo "--mode must be local or docker." >&2
@@ -575,8 +593,14 @@ start_stack() {
     fi
     local gateway_port="${JIUWENSWARM_GATEWAY_URL##*:}"; gateway_port="${gateway_port%%/*}"
     if ! (exec 3<>"/dev/tcp/127.0.0.1/$gateway_port") 2>/dev/null; then
-      echo "JiuwenSwarm is not reachable at $JIUWENSWARM_GATEWAY_URL; start it with scripts/jiuwenswarm.sh start." >&2
-      exit 1
+      if [[ "$use_jiuwenswarm" -eq 1 ]]; then
+        echo "JiuwenSwarm is not running; starting it (scripts/jiuwenswarm.sh start)..." >&2
+        "$script_dir/jiuwenswarm.sh" start >&2 || exit 1
+      fi
+      if ! (exec 3<>"/dev/tcp/127.0.0.1/$gateway_port") 2>/dev/null; then
+        echo "JiuwenSwarm is not reachable at $JIUWENSWARM_GATEWAY_URL; start it with scripts/jiuwenswarm.sh start." >&2
+        exit 1
+      fi
     fi
     export JIUWENSWARM_GATEWAY_URL JIUWENSWARM_MGMT_URL
   fi

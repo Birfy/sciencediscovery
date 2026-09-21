@@ -233,4 +233,24 @@ def agent_router(runner: AgentRunner, settings: Settings) -> APIRouter:
             raise HTTPException(status_code=401, detail="unauthorized")
         return StreamingResponse(runner.stream(body), media_type="application/x-ndjson")
 
+    @router.get("/agent/info")
+    async def info(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        """Which backend runs agent turns, and whether JiuwenSwarm answers: the way to check a deployment."""
+        if settings.agent_token and authorization != f"Bearer {settings.agent_token}":
+            raise HTTPException(status_code=401, detail="unauthorized")
+        reachable, detail = True, None
+        try:
+            await runner.rpc(settings.mgmt_url, "models.list", timeout=5)
+        except Exception as error:  # gateway down, refused, timed out
+            reachable, detail = False, str(error)[:200]
+        return {
+            "adapter": True,
+            "executor": settings.executor,
+            "jiuwenswarm": {
+                "gatewayUrl": settings.gateway_url, "managementUrl": settings.mgmt_url,
+                "reachable": reachable, **({"error": detail} if detail else {}),
+            },
+            "toolTimeoutSeconds": settings.tool_timeout_s,
+        }
+
     return router
