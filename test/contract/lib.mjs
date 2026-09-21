@@ -115,7 +115,7 @@ export function profileRunEvents(events) {
 /** Run one case; returns one record per step. Steps marked always:true run even after a failure. */
 export async function runCase(testCase, { base, token, fetchImpl = fetch }) {
   const normalize = createNormalizer();
-  const variables = { repoRoot: REPO_ROOT };
+  const variables = { repoRoot: REPO_ROOT, baseUrl: base };
   // A case that needs a model gets its own scripted stub, so every case starts from step one.
   const stub = testCase.stub ? await startStubModel(testCase.stub) : undefined;
   if (stub) Object.assign(variables, { stubBaseUrl: stub.baseUrl, stubModel: stub.model, stubToken: stub.apiToken });
