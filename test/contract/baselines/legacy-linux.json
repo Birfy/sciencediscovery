@@ -8524,28 +8524,7 @@
    "contentType": "application/json",
    "body": {
     "dailyByModel": [],
-    "exchangeRates": [
-     {
-      "baseCurrency": "USD",
-      "effectiveDate": "<volatile>",
-      "provider": "Frankfurter",
-      "quoteCurrency": "CNY",
-      "rate": "<volatile>",
-      "retrievedAt": "<time>",
-      "sourceUrl": "https://api.frankfurter.dev/v2/rate/USD/CNY",
-      "stale": false
-     },
-     {
-      "baseCurrency": "CNY",
-      "effectiveDate": "<volatile>",
-      "provider": "Frankfurter",
-      "quoteCurrency": "USD",
-      "rate": "<volatile>",
-      "retrievedAt": "<time>",
-      "sourceUrl": "https://api.frankfurter.dev/v2/rate/USD/CNY",
-      "stale": false
-     }
-    ],
+    "exchangeRates": "<volatile>",
     "filters": {
      "timeZone": "Asia/Shanghai"
     },

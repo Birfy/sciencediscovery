@@ -97,10 +97,9 @@ test("a bare host:port for a local stub is hidden too, with or without the schem
   assert.equal(normalize.text("http://127.0.0.1:59652/v1"), "http://127.0.0.1:<port>/v1");
 });
 
-test("exchange rates and their dates are hidden: they come from an outside service", () => {
-  const normalize = createNormalizer();
-  const out = normalize.json({ exchangeRates: [{ provider: "Frankfurter", rate: 6.6999, effectiveDate: "2026-09-21" }] });
-  assert.deepEqual(out.exchangeRates[0], { provider: "Frankfurter", rate: "<volatile>", effectiveDate: "<volatile>" });
+test("the rate and its date are hidden wherever they appear: they come from an outside service", () => {
+  const out = createNormalizer().json({ quote: { provider: "Frankfurter", rate: 6.6999, effectiveDate: "2026-09-21" } });
+  assert.deepEqual(out.quote, { provider: "Frankfurter", rate: "<volatile>", effectiveDate: "<volatile>" });
 });
 
 test("a runner's host measurements are hidden as one value", () => {
@@ -131,4 +130,9 @@ test("a home directory is hidden, wherever the recording was made", () => {
   assert.equal(scrubValue("/rootless/keep"), "/rootless/keep");
   assert.equal(scrubValue("https://www.ncbi.nlm.nih.gov/home/about/policies/"), "https://www.ncbi.nlm.nih.gov/home/about/policies/", "a URL path is not a home directory");
   assert.equal(scrubValue("cwd /root/work"), "cwd <home>/work");
+});
+
+test("exchange rates are one volatile value: the service may not have answered", () => {
+  const out = createNormalizer().json({ exchangeRates: [{ rate: 1 }], filters: { timeZone: "Asia/Shanghai" } });
+  assert.deepEqual(out, { exchangeRates: "<volatile>", filters: { timeZone: "Asia/Shanghai" } });
 });

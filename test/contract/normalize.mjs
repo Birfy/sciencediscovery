@@ -45,7 +45,8 @@ const TIMEY_KEY = /(At|Time|Ts|Timestamp)$/;
 // Keys whose value is a per-run measurement, not part of the contract.
 const VOLATILE_KEYS = new Set(["durationMs", "elapsedMs", "latencyMs", "runnerVersion", "runnerVersionId", "localVersion", "remoteVersion", "pid",
   // Exchange rates come from an outside service (Frankfurter): both the number and its date move.
-  "rate", "effectiveDate",
+  // Whether there are rates at all depends on the outside service answering when the request is made.
+  "exchangeRates", "rate", "effectiveDate",
   // A runner's host measurements (load, free memory, uptime, disk, data directory) differ on every read.
   "resources"]);
 
