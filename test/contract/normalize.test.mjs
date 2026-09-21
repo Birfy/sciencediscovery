@@ -1,0 +1,72 @@
+//!/usr/bin/env bash
+// Copyright (C) 2026-2026 Huawei Technologies Co., Ltd
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import { createNormalizer, diff } from "./normalize.mjs";
+
+test("ids are numbered by first appearance so the same id stays recognisable", () => {
+  const normalize = createNormalizer();
+  const out = normalize.json({
+    id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    parent: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    again: "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA",
+  });
+  assert.deepEqual(out, { again: "<uuid:1>", id: "<uuid:1>", parent: "<uuid:2>" });
+});
+
+test("two runs with different ids and times normalise to the same value", () => {
+  const record = (id, time) => createNormalizer().json({ createdAt: time, id, title: `session ${id}` });
+  assert.deepEqual(
+    record("11111111-1111-4111-8111-111111111111", "2026-01-01T00:00:00.000Z"),
+    record("22222222-2222-4222-8222-222222222222", "2026-09-21T10:11:12.345Z"),
+  );
+});
+
+test("digests, workspace ids, long hex tokens and time-like numbers are hidden", () => {
+  const out = createNormalizer().json({
+    digest: `sha256:${"a".repeat(64)}`, workspaceId: `ws_${"b".repeat(64)}`, token: "c".repeat(40),
+    queuedAt: 1789939122918, count: 3, durationMs: 15, runnerVersion: "73015b2e",
+  });
+  assert.deepEqual(out, {
+    count: 3, digest: "<sha256>", durationMs: "<volatile>", queuedAt: "<time-number>",
+    runnerVersion: "<volatile>", token: "<hex>", workspaceId: "<workspace>",
+  });
+});
+
+test("object key order does not matter but array order does", () => {
+  const normalize = createNormalizer();
+  assert.equal(JSON.stringify(normalize.json({ b: 1, a: 2 })), JSON.stringify(normalize.json({ a: 2, b: 1 })));
+  assert.notEqual(JSON.stringify(normalize.json([1, 2])), JSON.stringify(normalize.json([2, 1])));
+});
+
+test("diff names the path of every difference and nothing when equal", () => {
+  assert.deepEqual(diff({ a: 1 }, { a: 1 }), []);
+  assert.deepEqual(
+    diff({ a: 1, list: [1, 2], gone: true }, { a: 2, list: [1, 2, 3] }),
+    [
+      { path: "$.a", expected: 1, actual: 2 },
+      { path: "$.gone", expected: true, actual: undefined },
+      { path: "$.list[2]", expected: undefined, actual: 3 },
+    ],
+  );
+});
+
+test("the sandbox-specific name of the system environment is hidden", () => {
+  const normalize = createNormalizer();
+  assert.deepEqual(normalize.json({ a: "system-python3-bwrap-v1", b: "system-shell-seatbelt-v1" }), {
+    a: "<system-environment>", b: "<system-environment>",
+  });
+});

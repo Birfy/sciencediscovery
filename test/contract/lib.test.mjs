@@ -1,0 +1,124 @@
+//!/usr/bin/env bash
+// Copyright (C) 2026-2026 Huawei Technologies Co., Ltd
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+
+import assert from "node:assert/strict";
+import { createServer } from "node:http";
+import test from "node:test";
+
+import { compareRecordings, coverage, lookup, runCase } from "./lib.mjs";
+
+async function fakeBackend(handler) {
+  const seen = [];
+  const server = createServer(async (request, response) => {
+    const chunks = [];
+    for await (const chunk of request) chunks.push(chunk);
+    const body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString("utf8")) : undefined;
+    seen.push({ method: request.method, url: request.url, auth: request.headers.authorization, body });
+    handler(request, response, body, seen);
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  return { base: `http://127.0.0.1:${server.address().port}`, seen, close: () => new Promise((resolve) => { server.close(resolve); server.closeAllConnections(); }) };
+}
+const json = (response, status, value) => { response.writeHead(status, { "content-type": "application/json" }); response.end(JSON.stringify(value)); };
+
+test("lookup follows dotted paths and indexes", () => {
+  assert.equal(lookup({ a: { b: [{ c: 7 }] } }, "$.a.b[0].c"), 7);
+  assert.equal(lookup({}, "$.missing.deeper"), undefined);
+});
+
+test("a case captures ids into later requests, sends the token and normalises the answers", async () => {
+  const backend = await fakeBackend((request, response, body) => {
+    if (request.method === "POST") json(response, 201, { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", createdAt: "2026-01-01T00:00:00Z" });
+    else json(response, 200, { echoed: request.url });
+  });
+  try {
+    const records = await runCase({ id: "c", steps: [
+      { name: "create", request: { method: "POST", path: "/things", body: { n: 1 } }, capture: { thingId: "$.id" }, expectStatus: 201 },
+      { name: "read", request: { method: "GET", path: "/things/{{thingId}}" }, expectStatus: 200 },
+    ] }, { base: backend.base, token: "tok" });
+    assert.equal(backend.seen[0].auth, "Bearer tok");
+    assert.deepEqual(backend.seen[0].body, { n: 1 });
+    assert.equal(backend.seen[1].url, "/things/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+    assert.deepEqual(records[0].body, { createdAt: "<time>", id: "<uuid:1>" });
+    assert.deepEqual(records[1].body, { echoed: "/things/<uuid:1>" });
+    assert.equal(records.every((record) => !record.error), true);
+  } finally {
+    await backend.close();
+  }
+});
+
+test("a failed expectation stops the case, but cleanup steps still run", async () => {
+  const backend = await fakeBackend((request, response) => json(response, request.method === "GET" ? 500 : 200, {}));
+  try {
+    const records = await runCase({ id: "c", steps: [
+      { name: "read", request: { method: "GET", path: "/a" }, expectStatus: 200 },
+      { name: "skipped", request: { method: "GET", path: "/b" } },
+      { name: "cleanup", request: { method: "DELETE", path: "/c" }, always: true },
+    ] }, { base: backend.base, token: "t" });
+    assert.deepEqual(records.map((record) => record.name), ["read", "cleanup"]);
+    assert.match(records[0].error, /expected status 200, got 500/);
+    assert.deepEqual(backend.seen.map((request) => request.url), ["/a", "/c"]);
+  } finally {
+    await backend.close();
+  }
+});
+
+test("a variable that was never captured is a clear error, not a request to /undefined", async () => {
+  const backend = await fakeBackend((request, response) => json(response, 200, {}));
+  try {
+    const records = await runCase({ id: "c", steps: [{ name: "x", request: { method: "GET", path: "/{{nope}}" } }] }, { base: backend.base, token: "t" });
+    assert.match(records[0].error, /\{\{nope\}\} was never captured/);
+    assert.equal(backend.seen.length, 0);
+  } finally {
+    await backend.close();
+  }
+});
+
+test("server-sent events are collected until the stop event", async () => {
+  const backend = await fakeBackend((request, response) => {
+    response.writeHead(200, { "content-type": "text/event-stream" });
+    response.write('data: {"type":"run.started"}\n\n');
+    response.write('data: {"type":"assistant.delta","delta":"hi"}\n\n');
+    response.write('data: {"type":"run.completed"}\n\n');
+    response.write('data: {"type":"after"}\n\n');
+  });
+  try {
+    const [record] = await runCase({ id: "c", steps: [{ name: "stream", request: { method: "GET", path: "/events" }, stream: { until: ["run.completed"] } }] },
+      { base: backend.base, token: "t" });
+    assert.deepEqual(record.events.map((event) => event.type), ["run.started", "assistant.delta", "run.completed"]);
+  } finally {
+    await backend.close();
+  }
+});
+
+test("comparing recordings names each difference and a missing case", () => {
+  const baseline = { a: [{ name: "s", status: 200, body: { n: 1 } }], b: [{ name: "t", status: 200 }] };
+  const actual = { a: [{ name: "s", status: 200, body: { n: 2 } }] };
+  assert.deepEqual(compareRecordings(baseline, actual), ['a / s: $.body.n expected 1 got 2', "b: case was not run"]);
+  assert.deepEqual(compareRecordings(baseline, baseline), []);
+});
+
+test("coverage counts rows with a case, exempts not-migrated ones and flags unknown keys", () => {
+  const routes = { rows: [
+    { domain: "d", method: "GET", path: "/a", handling: "direct" },
+    { domain: "d", method: "GET", path: "/b", handling: "adapter" },
+    { domain: "d", method: "GET", path: "/legacy", handling: "not-migrated" },
+  ] };
+  const cases = [{ steps: [{ covers: ["GET /a", "GET /typo"] }] }];
+  const report = coverage(routes, cases);
+  assert.equal(report.covered, 1);
+  assert.equal(report.exempt, 1);
+  assert.deepEqual(report.missing.map((row) => row.key), ["GET /b"]);
+  assert.deepEqual(report.unknown, ["GET /typo"]);
+});
