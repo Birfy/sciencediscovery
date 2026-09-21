@@ -75,6 +75,18 @@ class LlmRoute:
     hidden_native_tools: frozenset[str] = frozenset()
     # The run's tag: put in each call of one of its tools, it tells the shared MCP server which run the call is for.
     run_tag: str | None = None
+    # The calls the model made, oldest first, as JiuwenSwarm is asked to run them (name, arguments without the run
+    # tag): an approval question from JiuwenSwarm names the tool but not the arguments, which the user needs to see.
+    recent_calls: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
+
+    def take_call(self, question: str) -> tuple[str, dict[str, Any]] | None:
+        """The oldest call not yet asked about whose tool the question names (longest name first, so that
+        `mcp_sci_read_file` is not taken for `read_file`)."""
+        for name in sorted({name for name, _ in self.recent_calls}, key=len, reverse=True):
+            if name in question:
+                index = next(i for i, (called, _) in enumerate(self.recent_calls) if called == name)
+                return self.recent_calls.pop(index)
+        return None
 
 
 @dataclass
@@ -239,6 +251,17 @@ def _with_run_tag(arguments: Any, tag: str | None) -> Any:
     return json.dumps(parsed, ensure_ascii=False)
 
 
+def _remember_call(function: dict[str, Any], route: LlmRoute) -> None:
+    try:
+        arguments = json.loads(function.get("arguments") or "{}")
+    except (TypeError, ValueError):
+        return  # a streamed fragment: the model gateway sends whole calls, so this is not one of its calls
+    if isinstance(arguments, dict):
+        arguments.pop(RUN_ARG, None)
+        route.recent_calls.append((function["name"], arguments))
+        del route.recent_calls[:-50]
+
+
 def rewrite_response(payload: dict[str, Any], route: LlmRoute) -> dict[str, Any]:
     """Give tool calls the prefix again, and ours the run's tag. Works on a full response and on a stream chunk."""
     for choice in payload.get("choices") or []:
@@ -249,6 +272,7 @@ def rewrite_response(payload: dict[str, Any], route: LlmRoute) -> dict[str, Any]
                     function["name"] = _prefixed(function["name"], route)
                     if route.run_tag and function["name"].startswith(route.tool_prefix):
                         function["arguments"] = _with_run_tag(function.get("arguments"), route.run_tag)
+                    _remember_call(function, route)
     return payload
 
 

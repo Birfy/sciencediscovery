@@ -139,6 +139,25 @@ def model_alias_base(model: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]+", "-", model).strip("-")[:48] or "model"
 
 
+def describe_approval(request: dict[str, Any], route: LlmRoute | None) -> None:
+    """Say what a JiuwenSwarm approval question is about: the tool and the arguments of the call it stopped.
+
+    Its question names the tool (`mcp_sci_run_shell（当前模式默认需确认）…`) but not the call; the model proxy saw
+    the call go by. Its own text stays as the resource when no call matches.
+    """
+    call = route.take_call(str(request.get("summary") or "")) if route else None
+    if call is None:
+        return
+    name, arguments = call
+    shown = name.removeprefix(route.tool_prefix) if route and name.startswith(route.tool_prefix) else name
+    main = next((arguments[key] for key in ("command", "scriptPath", "code", "file_path", "path", "url", "query")
+                 if isinstance(arguments.get(key), str) and arguments[key].strip()), None)
+    detail = main if main is not None else json.dumps(arguments, ensure_ascii=False)
+    text = f"{shown}: {detail}" if arguments else shown
+    request["summary"] = text[:500]
+    request["resource"] = text[:500]
+
+
 def bridge_caller(bridge: Bridge, client: httpx.AsyncClient):
     async def call(name: str, arguments: dict[str, Any]) -> tuple[str, bool]:
         response = await client.post(
@@ -276,6 +295,8 @@ class AgentRunner:
                         for event in mapper.feed(frame):
                             if event["type"] == "permission.required":
                                 self.pending_approvals[event["request"]["id"]] = (run, mapper)
+                                route = self.routes.get(llm_token) if llm_token else None
+                                describe_approval(event["request"], route)
                             if _DEBUG and event["type"].startswith("tool."):
                                 print(f"[adapter-debug] {request.sessionId[:8]} {json.dumps(event, ensure_ascii=False)[:500]}",
                                       file=sys.stderr, flush=True)

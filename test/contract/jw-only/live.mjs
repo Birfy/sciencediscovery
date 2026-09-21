@@ -385,6 +385,10 @@ const checks = {
       };
       const first = await decide("allow_once");
       const second = await decide("deny");
+      // The card says what the call is: the tool and its command, not only JiuwenSwarm's question.
+      if (first.summary !== "run_shell: echo APPROVED-RUN" || second.summary !== "run_shell: echo DENIED-RUN") {
+        throw new Error(`the approvals do not show the calls: ${JSON.stringify([first.summary, second.summary])}`);
+      }
       let current;
       for (let i = 0; i < 120; i += 1) {
         current = await api("GET", `/api/sessions/${sessionId}/runs/${run.id}`);

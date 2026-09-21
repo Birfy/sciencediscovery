@@ -328,3 +328,22 @@ def test_our_calls_get_the_runs_tag_and_the_history_loses_it():
         {"id": "c1", "function": {"name": "mcp_sci_run_shell", "arguments": '{"command": "ls", "_sd_run": "run-old"}'}}]}]}
     [message] = rewrite_request(history, route)["messages"][1:]
     assert json.loads(message["tool_calls"][0]["function"]["arguments"]) == {"command": "ls"}
+
+
+def test_an_approval_question_is_described_by_the_call_it_stopped():
+    from sciencediscovery_adapter.agent_runs import describe_approval
+
+    route = LlmRoute(**{**ROUTE.__dict__, "tool_names": frozenset({"run_shell", "read_file"}), "run_tag": "r1", "shadowed": set(), "recent_calls": []})
+    chunk = {"choices": [{"delta": {"tool_calls": [
+        {"function": {"name": "read_file", "arguments": '{"path": "a.txt"}'}},
+        {"function": {"name": "run_shell", "arguments": '{"command": "rm -rf out"}'}},
+        {"function": {"name": "run_shell", "arguments": '{"command": "ls"}'}}]}}]}
+    rewrite_response(chunk, route)
+    first = {"id": "q1", "summary": "mcp_sci_run_shell（当前模式默认需确认） > 选择「会话内记住」", "resource": "x"}
+    second = {"id": "q2", "summary": "mcp_sci_run_shell（当前模式默认需确认）", "resource": "x"}
+    unknown = {"id": "q3", "summary": "acp_chat（需确认）", "resource": "acp_chat"}
+    for request in (first, second, unknown):
+        describe_approval(request, route)
+    assert first["summary"] == first["resource"] == "run_shell: rm -rf out"
+    assert second["summary"] == "run_shell: ls"
+    assert unknown["summary"] == "acp_chat（需确认）"  # no call seen: JiuwenSwarm's own words stay
