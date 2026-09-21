@@ -87,6 +87,12 @@ executor against them (`baselines/legacy-linux.json`, recorded on Linux with bub
   `model.completed`. The JiuwenSwarm executor produces none of it, so the trajectory view of such a
   run has nothing to show. Reproducing it needs the executor to record its own context and state.
 
+- **a gap seen through the full mocked E2E group** (`CI_E2E_BACKEND=jiuwenswarm`, not required to pass
+  for #86): `issue-77-wake-notice` fails. The scripted model recognises the wake turn by a last user
+  message starting `[Execution notifications]`; on JiuwenSwarm the wake prompt does not arrive that way
+  (JiuwenSwarm keeps its own session history), so the stub runs out of script. Not yet diagnosed
+  further. `issue-85-foreground-exec-inbox` passes.
+
 **Not covered yet**: the native agent's `agent.record` evidence (left out of the profile on purpose),
 parallel tool calls, reasoning/thinking streams, `tool_search` and deferred tools (the JiuwenSwarm
 executor offers every tool up front), long-running tools, and errors other than a 401.
