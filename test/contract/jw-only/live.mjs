@@ -185,7 +185,7 @@ const checks = {
       // The hits are recorded in the memory graph as WebPage nodes, as ScienceDiscovery's own search records them.
       let pages = [];
       for (let attempt = 0; attempt < 10 && !pages.length; attempt += 1) {
-        const graph = await api("GET", `/api/memory/subgraph?sessionId=${sessionId}`);
+        const graph = await api("GET", `/api/memory/subgraph?session_id=${sessionId}`);
         if (graph.reason) { console.log(`web-search: memory graph not available here (${graph.reason}); not checked`); return; }
         pages = (graph.nodes ?? []).filter((node) => /web/i.test(String(node.type ?? node.label ?? node.labels ?? "")));
         if (!pages.length) await new Promise((resolve) => setTimeout(resolve, 1000));
