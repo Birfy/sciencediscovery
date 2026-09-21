@@ -20,8 +20,12 @@
  *   E2E_BASE_URL=http://127.0.0.1:4310 E2E_API_TOKEN=... node test/contract/jw-only/live.mjs history
  *   SCIENCE_AGENT_JIUWENSWARM_PLANNING=todo (stack) ... node test/contract/jw-only/live.mjs todo-plan
  *
+ *   LIVE_RESTART_CMD='scripts/jiuwenswarm.sh stop && scripts/jiuwenswarm.sh start' ... live.mjs history-restart
+ *
  * Each check builds its own project, model and scripted model, and deletes them.
  */
+
+import { execSync } from "node:child_process";
 
 import { startStubModel } from "../stub-model.mjs";
 
@@ -80,6 +84,25 @@ const checks = {
       const text = JSON.stringify(seen);
       if (!text.includes("4711")) throw new Error("the second request did not carry the first turn");
       console.log(`history: ok (the second model request had ${seen.length} messages and the first turn in them)`);
+    } finally {
+      await cleanup();
+    }
+  },
+
+  /** The conversation is still in JiuwenSwarm's context after JiuwenSwarm itself was restarted between two turns. */
+  async "history-restart"() {
+    const restart = process.env.LIVE_RESTART_CMD;
+    if (!restart) throw new Error("history-restart needs LIVE_RESTART_CMD, the command that restarts JiuwenSwarm");
+    const stub = await startStubModel({ main: [{ text: "First answer." }, { text: "Second answer." }] });
+    const { sessionId, cleanup } = await setup(stub);
+    try {
+      await runAndWait(sessionId, "My favourite number is 4711.");
+      execSync(restart, { stdio: "inherit", shell: "/bin/bash", timeout: 300_000 });
+      const second = await runAndWait(sessionId, "What did I say my favourite number was?");
+      if (second.status !== "completed") throw new Error(`second run ${second.status}: ${second.error}`);
+      const seen = stub.lastMessages?.() ?? [];
+      if (!JSON.stringify(seen).includes("4711")) throw new Error(`after the restart the second request did not carry the first turn (${seen.length} messages)`);
+      console.log(`history-restart: ok (after restarting JiuwenSwarm the second request still had the first turn among its ${seen.length} messages)`);
     } finally {
       await cleanup();
     }
