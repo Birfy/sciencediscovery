@@ -87,6 +87,20 @@ so a run is reproducible.
 - **Argument handling**: JiuwenSwarm validates MCP tool arguments strictly (pydantic) where
   the native agent never validated, and it **drops empty arrays and objects** from a call
   (`{"plan": []}` arrives as `{}`; `""`, `0` and `false` survive). `schema.py` compensates.
+- **A client that disconnects mid-run** gets nothing more, and a new connection is not subscribed to
+  that run's output. The next `chat.send` on the same session was served at once although the earlier
+  (slow) run had ~10 s left, so the run was ended when its client left (inferred from that behaviour,
+  not from the gateway's log). There is no replay: anything that must survive a browser disconnect has
+  to keep its own connection open and its own event log, which is what this adapter does per run.
+- **Two connections on one session**: a second `chat.send` while a run is active does not queue and
+  is not refused; it takes over. The first run stopped, and the *second* run's frames reached **both**
+  connections. A connection that only listens (sends no request) receives nothing. The legacy API queues
+  runs per session, so it must keep serialising them; the gateway will not.
+- **Model failures** (401, 429, 500, or a stream that breaks halfway) all arrive as `chat.error` with
+  `[181001] model call failed, reason: openAI API async stream error: <Exception>: Error code: <status> - ...`,
+  followed by the usual completion status; a partial reply that streamed before a broken stream is
+  delivered first. Each failed once within about a second, so there is no retry. Not observed: any
+  `execution.error` or `runtime.error` (nothing in these scenarios produces them).
 - **Usage**: `chat.usage_metadata` (one per model call) carries token counts including
   reasoning and cache fields; `chat.usage_summary` repeats their sum.
 

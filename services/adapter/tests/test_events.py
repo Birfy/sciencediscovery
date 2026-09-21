@@ -317,3 +317,14 @@ def test_response_ids_are_uuids_like_the_native_agents():
     _, events = run("jw_chat_plain.raw")
     started = next(e for e in events if e["type"] == "assistant.response.started")
     assert re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", started["responseId"])
+
+
+@pytest.mark.parametrize("text,code", [
+    # Recorded from a real 0.2.6 gateway whose model answered with each of these (tools/probe_gateway.py).
+    ("[181001] model call failed, reason: openAI API async stream error: AuthenticationError: Error code: 401 - {'error': {'message': 'scripted http401'}}", "unauthorized"),
+    ("[181001] model call failed, reason: openAI API async stream error: RateLimitError: Error code: 429 - {'error': {'message': 'scripted http429'}}", "rate-limited"),
+    ("[181001] model call failed, reason: openAI API async stream error: InternalServerError: Error code: 500 - {'error': {'message': 'scripted http500'}}", "server-error"),
+    ("[181001] model call failed, reason: openAI API async stream error: JSONDecodeError: Expecting property name enclosed in double quotes", "semantic-error"),
+])
+def test_real_gateway_model_errors_are_classified(text, code):
+    assert classify_failure(text) == code
