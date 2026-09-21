@@ -47,6 +47,7 @@ from .llm_proxy import DEFAULT_ALIAS, LlmRoute, LlmRoutes
 from .mcp_server import Toolset, ToolsetRegistry
 from .models import ModelProfile, ModelSync
 from .schema import relax_schema
+from .skills import SkillSync
 
 # SCIENCE_AGENT_ADAPTER_DEBUG=1 prints every tool event of every run to stderr.
 _DEBUG = os.environ.get("SCIENCE_AGENT_ADAPTER_DEBUG") == "1"
@@ -109,6 +110,16 @@ class JiuwenSwarmConfig(BaseModel):
     values: dict[str, str]
 
 
+class SkillPackage(BaseModel):
+    id: str = Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    path: str  # the frozen package on this host, with SKILL.md at its top
+    hash: str
+
+
+class SkillImport(BaseModel):
+    skills: list[SkillPackage] = Field(max_length=200)
+
+
 def model_alias_base(model: str) -> str:
     """A model id as a JiuwenSwarm entry name: letters, digits, `.`, `_` and `-` only, at most 48 characters."""
     return re.sub(r"[^A-Za-z0-9._-]+", "-", model).strip("-")[:48] or "model"
@@ -140,6 +151,7 @@ class AgentRunner:
         self.chat_run = gateway.ChatRun
         self.rpc = gateway.rpc
         self.models = ModelSync(lambda *a, **k: self.rpc(*a, **k), settings.mgmt_url)
+        self.skills = SkillSync(lambda *a, **k: self.rpc(*a, **k), settings.mgmt_url)
 
     async def ensure_default_model(self) -> None:
         """Point JiuwenSwarm's default model at the adapter (see `llm_proxy.DEFAULT_ALIAS`)."""
@@ -259,6 +271,17 @@ def agent_router(runner: AgentRunner, settings: Settings) -> APIRouter:
         except Exception as error:
             raise HTTPException(status_code=502, detail=f"JiuwenSwarm refused the settings: {str(error)[:200]}") from error
         return {"applied": sorted(body.values), "jiuwenswarm": result}
+
+    @router.post("/agent/skills")
+    async def import_skills(body: SkillImport, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        """Install a run's skills in JiuwenSwarm (see `skills.py`). Answers, by id, the name it has there or an error."""
+        if settings.agent_token and authorization != f"Bearer {settings.agent_token}":
+            raise HTTPException(status_code=401, detail="unauthorized")
+        try:
+            imported = await runner.skills.sync([skill.model_dump() for skill in body.skills])
+        except Exception as error:
+            raise HTTPException(status_code=502, detail=f"JiuwenSwarm could not list its skills: {str(error)[:200]}") from error
+        return {"skills": imported}
 
     @router.get("/agent/info")
     async def info(authorization: str | None = Header(default=None)) -> dict[str, Any]:

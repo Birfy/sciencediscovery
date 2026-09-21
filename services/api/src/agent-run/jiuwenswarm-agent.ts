@@ -22,6 +22,7 @@ import { TOOL_SEARCH_NAME, TOOL_SEARCH_SPEC, type AgentTool } from "@sciencedisc
 import { DurableContextStore } from "@sciencediscovery/context";
 
 import { startModelGateway } from "./jiuwenswarm-model-gateway.js";
+import { importSkillsToJiuwenSwarm, skillLoadedBy } from "./jiuwenswarm-skills.js";
 import { jiuwenSwarmWebResult } from "./jiuwenswarm-web-settings.js";
 
 import { resolveModelClientPolicy, type streamModelTurn } from "@sciencediscovery/model";
@@ -73,6 +74,12 @@ export interface JiuwenSwarmAgentConfig {
    * JiuwenSwarm's is used. `ours`: ScienceDiscovery's only (and JiuwenSwarm's todo tools for planning).
    */
   tools?: "jiuwenswarm" | "ours";
+  /**
+   * Whose skill mechanism the model uses. `jiuwenswarm` (default, with the `prepend` prompt and JiuwenSwarm's
+   * tools): the run's skills are installed in JiuwenSwarm, listed by its prompt and loaded with its `skill_tool`;
+   * ScienceDiscovery's skill catalog and `read_skill` are left out. `ours`: ScienceDiscovery's catalog and tools.
+   */
+  skills?: "jiuwenswarm" | "ours";
 }
 
 /**
@@ -103,6 +110,7 @@ export function jiuwenSwarmConfigFromEnv(env: NodeJS.ProcessEnv = process.env): 
     ...(env.SCIENCE_AGENT_JIUWENSWARM_PLANNING?.trim() === "update_plan" ? { planning: "update_plan" as const } : {}),
     ...(env.SCIENCE_AGENT_JIUWENSWARM_PROMPT?.trim() === "replace" ? { prompt: "replace" as const } : {}),
     ...(env.SCIENCE_AGENT_JIUWENSWARM_TOOLS?.trim() === "ours" ? { tools: "ours" as const } : {}),
+    ...(env.SCIENCE_AGENT_JIUWENSWARM_SKILLS?.trim() === "ours" ? { skills: "ours" as const } : {}),
   };
 }
 
@@ -121,6 +129,11 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
   private readonly listeners = new Set<Listener>();
   private readonly controller = new AbortController();
   private executed = false;
+  /** The run's skills installed in JiuwenSwarm: JiuwenSwarm's name for each, and back. */
+  private readonly skillNames = new Map<string, string>();
+  private readonly skillIds = new Map<string, string>();
+  /** Loads a skill the ScienceDiscovery way, so that what depends on a loaded skill (create_skill) sees it. */
+  private loadSkill?: (id: string) => void;
 
   constructor(private readonly config: JiuwenSwarmAgentConfig, private readonly options: NativeAgentOptions) {}
 
@@ -165,6 +178,11 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
     // Web search and page fetching are JiuwenSwarm's own when its tools are in use.
     const allJiuwenSwarmTools = (this.config.tools ?? "jiuwenswarm") === "jiuwenswarm";
     if (allJiuwenSwarmTools) for (const name of Object.keys(JIUWENSWARM_WEB_TOOLS)) tools.delete(name);
+    await this.installSkills(tools, allJiuwenSwarmTools);
+    this.loadSkill = (id) => {
+      void registry.execute({ id: randomUUID(), name: "read_skill", args: { skillId: id } } as never, this.controller.signal)
+        .catch(() => undefined);
+    };
     const bridgeToken = randomUUID();
     const announcements = new ToolAnnouncements();
     const transcript = new Transcript();
@@ -201,6 +219,43 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
     }
   }
 
+  /**
+   * With JiuwenSwarm's skill mechanism, the run's skills are installed there and the model loads them with its
+   * `skill_tool`; ScienceDiscovery's skill tools go. A skill that could not be installed stays ours: `read_skill`
+   * and the catalog in the product prompt then offer that one.
+   */
+  private async installSkills(tools: Map<string, AgentTool>, allJiuwenSwarmTools: boolean): Promise<void> {
+    const skills = this.options.skills ?? [];
+    const root = this.options.skillPackagesRoot;
+    const wanted = (this.config.skills ?? "jiuwenswarm") === "jiuwenswarm" && allJiuwenSwarmTools
+      && (this.config.prompt ?? "prepend") === "prepend";
+    if (!wanted || !skills.length || !root || !tools.has("read_skill")) return;
+    const imported = await importSkillsToJiuwenSwarm(this.config, skills, root, this.controller.signal);
+    for (const [id, name] of imported) {
+      this.skillNames.set(id, name);
+      this.skillIds.set(name, id);
+    }
+    if (skills.every((skill) => imported.has(skill.id))) {
+      tools.delete("read_skill");
+      tools.delete("read_skill_resource");
+    }
+  }
+
+  /** A tool's description as JiuwenSwarm's model reads it: skills it loads with skill_tool, under their names there. */
+  private describe(tool: AgentTool): string {
+    const creator = this.skillNames.get("skill-creator");
+    return creator && tool.name === "create_skill"
+      ? tool.description.replace("load skill-creator with read_skill", `load the ${creator} skill with skill_tool`)
+      : tool.description;
+  }
+
+  /** A JiuwenSwarm call that loaded one of the run's skills counts as loading it here. */
+  private recordSkillLoad(call: { args: unknown; name: string; failed: boolean }): void {
+    if (call.failed || !this.loadSkill) return;
+    const id = skillLoadedBy(call, this.skillIds);
+    if (id) this.loadSkill(id);
+  }
+
   /** JiuwenSwarm's own web search and fetching, recorded in the memory graph as ours are. Fire and forget. */
   private recordWeb(call: { args: unknown; id: string; name: string; output: string; failed: boolean }): void {
     const record = this.options.recordWebResult;
@@ -234,8 +289,9 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
     // The same system prompt the native loop would send: the model is tuned to it.
     // The run contract changes every turn; it is sent apart and put last, so that what comes before it is the
     // same on every request (and can be cached by the provider).
+    // Skills installed in JiuwenSwarm are listed by its prompt; the product prompt lists only those that were not.
     const composed = composeSystemPrompt({ ...this.options, runContract: undefined }, toolNames,
-      toolNames.has("read_skill") ? this.options.skills ?? [] : []).systemPrompt;
+      toolNames.has("read_skill") ? (this.options.skills ?? []).filter((skill) => !this.skillNames.has(skill.id)) : []).systemPrompt;
     const runContract = this.options.runContract ? formatRunContract(this.options.runContract) : undefined;
     // Appended after JiuwenSwarm's own prompt, its todo section already says how to plan; only when its prompt is
     // replaced does the model need to be told about the todo tools here.
@@ -269,7 +325,7 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
         // JiuwenSwarm gives a tool call 30 s unless told otherwise; the run's own timeout is the limit here.
         ...(this.options.runTimeoutMs ? { toolTimeoutSeconds: Math.ceil(this.options.runTimeoutMs / 1000) } : {}),
         tools: [...tools.values()].map((tool) => ({
-          name: tool.name, description: tool.description, inputSchema: tool.parameters,
+          name: tool.name, description: this.describe(tool), inputSchema: tool.parameters,
         })),
         bridge: { url: bridgeUrl, token: bridgeToken },
       }),
@@ -282,7 +338,7 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
     const translator = new EventTranslator((event) => this.emit(event), announcements, transcript,
       new Set(jiuwenSwarmPlans ? JIUWENSWARM_TODO_TOOLS : []),
       planStore ? (items, toolCallId) => this.recordPlan(planStore, items, toolCallId) : undefined,
-      (call) => this.recordWeb(call));
+      (call) => { this.recordWeb(call); this.recordSkillLoad(call); });
     let finalText = "";
     let failure: string | undefined;
     for await (const line of ndjson(response.body)) {

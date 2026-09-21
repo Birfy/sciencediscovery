@@ -86,6 +86,7 @@ scripts/jiuwenswarm.sh setup     # 一次性：克隆固定版本（workswarm0.2
 | `SCIENCE_AGENT_ADAPTER_TOOL_TIMEOUT_S` | `3600` | 单次工具调用最长多久（JiuwenSwarm 自己的限制是 30 秒；API 有运行超时时会传运行的超时） |
 | `SCIENCE_AGENT_JIUWENSWARM_PLANNING` | `todo` | 谁来维护计划。`todo`：模型用 JiuwenSwarm 自己的 todo 工具，它的清单就是计划。`update_plan`：改用 ScienceDiscovery 自己的工具（模拟浏览器旅程里脚本化的就是它） |
 | `SCIENCE_AGENT_JIUWENSWARM_TOOLS` | `jiuwenswarm` | `jiuwenswarm`：JiuwenSwarm 自己的工具，加上它没有的 ScienceDiscovery 工具（重名时用 JiuwenSwarm 的）。`ours`：只用 ScienceDiscovery 的，每次调用都经过它的权限和 Runner（模拟浏览器旅程用的就是这个） |
+| `SCIENCE_AGENT_JIUWENSWARM_SKILLS` | `jiuwenswarm` | `jiuwenswarm`：会话启用的技能导入 JiuwenSwarm（`skills.import_local`），按它的机制使用：它的提示词列出技能，模型用 `skill_tool` 加载；不再发送 ScienceDiscovery 的技能目录和 `read_skill`。与 JiuwenSwarm 自带技能重名的（`skill-creator`）以 `sciencediscovery-<id>` 导入。`ours`：用 ScienceDiscovery 的技能目录和 `read_skill`（`PROMPT=replace` 或 `TOOLS=ours` 时也是这样） |
 | `SCIENCE_AGENT_JIUWENSWARM_PROMPT` | `prepend` | `prepend`：先是 ScienceDiscovery 的产品提示词，再是 JiuwenSwarm 的完整提示词，最后是运行契约。`replace`：只有 ScienceDiscovery 的到达模型 |
 | `SCIENCE_AGENT_LLM_MAX_TOKENS` | `16384` | 每次模型调用的输出预算（与内置循环共用）；推理模型请调大 |
 | `SCIENCE_AGENT_LLM_MAX_RETRIES`、`SCIENCE_AGENT_LLM_TIMEOUT_SECONDS` | `2`、`600` | 重试次数（429 等瞬时错误）和单次调用超时（共用） |
@@ -98,7 +99,7 @@ scripts/jiuwenswarm.sh setup     # 一次性：克隆固定版本（workswarm0.2
 ## 使用时会看到什么
 
 - 与内置循环相同的对话、工具卡片、权限提示、计划、子代理和产物；里程碑 0 的旅程在这个后端上通过。
-- JiuwenSwarm 把每个智能体（主智能体和每个子代理）的对话保存在自己的会话里，达到 `JIUWENSWARM_CONTEXT_WINDOW_TOKENS` 的 80% 时压缩。JiuwenSwarm 自己的模型调用（压缩时写的摘要、会话标题）用的是它的*默认模型*：适配器把这个条目指向自己（`sd-default`），再把这些调用转给当前正在运行的那次运行的模型。所以这个 JiuwenSwarm 实例是 ScienceDiscovery 专用的，不要和别的工作共用。系统提示词是 JiuwenSwarm 自己的完整版本（身份、任务执行策略、安全原则、工具使用规则、记忆、输入输出规则、子代理规则、运行环境、目录边界、上下文压缩、已安装 Skill），ScienceDiscovery 定义产品的提示词放在它**前面**（科学工作区、我们的工具与治理规则、专家角色、技能目录），运行契约放在它**后面**。JiuwenSwarm 没有按运行设置自定义提示词的接口，所以由适配器的模型代理负责拼接；运行契约每轮都变，放在最后可让前面部分保持相同前缀，便于供应商缓存。设 `SCIENCE_AGENT_JIUWENSWARM_PROMPT=replace` 则改为用 ScienceDiscovery 的把 JiuwenSwarm 的换掉。ScienceDiscovery 每一步的上下文（计划快照、持久状态）**不会**注入，JiuwenSwarm 仍会把它自己的每轮包装和动态上下文（运行时状态）作为用户消息加进去。
+- JiuwenSwarm 把每个智能体（主智能体和每个子代理）的对话保存在自己的会话里，达到 `JIUWENSWARM_CONTEXT_WINDOW_TOKENS` 的 80% 时压缩。JiuwenSwarm 自己的模型调用（压缩时写的摘要、会话标题）用的是它的*默认模型*：适配器把这个条目指向自己（`sd-default`），再把这些调用转给当前正在运行的那次运行的模型。所以这个 JiuwenSwarm 实例是 ScienceDiscovery 专用的，不要和别的工作共用。系统提示词是 JiuwenSwarm 自己的完整版本（身份、任务执行策略、安全原则、工具使用规则、记忆、输入输出规则、子代理规则、运行环境、目录边界、上下文压缩、已安装 Skill），ScienceDiscovery 定义产品的提示词放在它**前面**（科学工作区、我们的工具与治理规则、专家角色），运行契约放在它**后面**。JiuwenSwarm 没有按运行设置自定义提示词的接口，所以由适配器的模型代理负责拼接；运行契约每轮都变，放在最后可让前面部分保持相同前缀，便于供应商缓存。设 `SCIENCE_AGENT_JIUWENSWARM_PROMPT=replace` 则改为用 ScienceDiscovery 的把 JiuwenSwarm 的换掉。技能用 JiuwenSwarm 的：每次运行前，适配器把这次运行冻结的技能包导入 JiuwenSwarm 的技能目录（内容哈希没变的跳过）；用 `skill_tool` 加载一个技能，在 ScienceDiscovery 这边也算加载了它（所以对 skill-creator 调用 `skill_tool` 之后 `create_skill` 可用）。JiuwenSwarm 所有会话共用一个技能目录，所以导入的技能在每个会话里都会列出，版本是最后一次导入的。ScienceDiscovery 每一步的上下文（计划快照、持久状态）**不会**注入，JiuwenSwarm 仍会把它自己的每轮包装和动态上下文（运行时状态）作为用户消息加进去。
 - 对话、计划和事件的数据仍保存在 ScienceDiscovery 自己的存储里。
 - JiuwenSwarm 的运行没有轨迹和 evidence 记录，图片也不会发给模型。
 - 新增一个模型时，JiuwenSwarm 会向它发一条很小的探测请求（检测是否支持图片输入）；网关会拒绝那张图片，所以日志里出现一条 `400` 是预期的。

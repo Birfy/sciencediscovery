@@ -117,7 +117,7 @@ export async function startStubModel(steps = {}) {
       lastMessages = body.messages ?? body.input ?? [];
       const step = queues[route].shift();
       if (step) consumed[route] += 1;
-      requests.push({ route, step });
+      requests.push({ route, step, toolNames: (body.tools ?? []).map((tool) => tool.function?.name ?? tool.name).filter(Boolean) });
       if (!step) {
         response.writeHead(500, { "content-type": "application/json" });
         response.end(JSON.stringify({ error: { message: `no scripted ${route} step left` } }));

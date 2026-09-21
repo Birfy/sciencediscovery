@@ -1020,3 +1020,109 @@ test("a finished JiuwenSwarm search is recorded through the run's web recorder",
     await adapter.close();
   }
 });
+
+function skill(id: string, description = `${id} things`) {
+  return {
+    content: `---\nname: ${id}\ndescription: ${description}\n---\nFollow the steps.`, description, hash: `hash-${id}`, id,
+    packagePath: `$SCIENCEDISCOVERY_SKILLS_DIR/${id}`, readResource: () => { throw new Error("no resources"); },
+    resources: [], revision: 1, version: "1.0.0",
+  };
+}
+
+const skillOptions = (extra: Record<string, unknown> = {}) => options({
+  skills: [skill("evolve-design"), skill("skill-creator")], skillPackagesRoot: "/data/skill-snapshots/abc", ...extra,
+} as never);
+
+test("the run's skills are installed in JiuwenSwarm and loaded its way: no catalog of ours, no read_skill", async () => {
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    if (body.skills) {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ skills: { "evolve-design": { name: "evolve-design" }, "skill-creator": { name: "sciencediscovery-skill-creator" } } }));
+      return;
+    }
+    response.writeHead(200);
+    response.end(line({ done: { finalText: "ok" } }));
+  });
+  try {
+    const created: unknown[] = [];
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(skillOptions({ createSkill: async (draft: unknown) => { created.push(draft); return { id: "d1" }; } })).execute("go");
+    const [install, run] = adapter.requests.map((request) => request.body);
+    assert.deepEqual(install.skills, [
+      { hash: "hash-evolve-design", id: "evolve-design", path: "/data/skill-snapshots/abc/evolve-design" },
+      { hash: "hash-skill-creator", id: "skill-creator", path: "/data/skill-snapshots/abc/skill-creator" },
+    ]);
+    const names = run.tools.map((tool: { name: string }) => tool.name);
+    assert.equal(names.includes("read_skill") || names.includes("read_skill_resource"), false);
+    assert.equal(/<available_skills>|read_skill/.test(run.systemPrompt), false, "JiuwenSwarm's prompt lists the skills, ours does not");
+    const createSkill = run.tools.find((tool: { name: string }) => tool.name === "create_skill");
+    assert.match(createSkill.description, /load the sciencediscovery-skill-creator skill with skill_tool/);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("loading skill-creator with JiuwenSwarm's skill_tool lets create_skill run, as read_skill did", async () => {
+  let reply: any;
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    if (body.skills) {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ skills: { "evolve-design": { name: "evolve-design" }, "skill-creator": { name: "sciencediscovery-skill-creator" } } }));
+      return;
+    }
+    response.writeHead(200);
+    response.write(line({ event: { type: "tool.started", trace: { id: "k1", name: "skill_tool", args: { skill_name: "sciencediscovery-skill-creator" }, status: "running", native: true } } }));
+    response.write(line({ event: { type: "tool.completed", trace: { id: "k1", name: "skill_tool", args: {}, status: "completed", output: "# skill-creator", native: true } } }));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const args = { name: "my-skill", description: "Does a thing.", instructions: "Do the thing." };
+    response.write(line({ event: { type: "tool.started", trace: { id: "c1", name: "create_skill", args, status: "running" } } }));
+    const call = await fetch(body.bridge.url, {
+      method: "POST",
+      headers: { authorization: `Bearer ${body.bridge.token}`, "content-type": "application/json" },
+      body: JSON.stringify({ name: "create_skill", arguments: args }),
+    });
+    reply = await call.json();
+    response.end(line({ done: { finalText: "ok" } }));
+  });
+  try {
+    const created: any[] = [];
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(skillOptions({ createSkill: async (draft: unknown) => { created.push(draft); return { id: "d1" }; } })).execute("go");
+    assert.equal(reply.isError, false, reply.text);
+    assert.equal(created[0].name, "my-skill");
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("a skill JiuwenSwarm could not install stays ours: read_skill and our catalog offer just that one", async () => {
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    if (body.skills) {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ skills: { "evolve-design": { name: "evolve-design" }, "skill-creator": { error: "refused" } } }));
+      return;
+    }
+    response.writeHead(200);
+    response.end(line({ done: { finalText: "ok" } }));
+  });
+  try {
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(skillOptions()).execute("go");
+    const run = adapter.requests[1].body;
+    assert.ok(run.tools.some((tool: { name: string }) => tool.name === "read_skill"));
+    assert.match(run.systemPrompt, /<name>skill-creator<\/name>/);
+    assert.doesNotMatch(run.systemPrompt, /<name>evolve-design<\/name>/);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("with SCIENCE_AGENT_JIUWENSWARM_SKILLS=ours nothing is installed and the skills are offered our way", async () => {
+  const adapter = await fakeAdapter(async (_request, response) => { response.writeHead(200); response.end(line({ done: { finalText: "ok" } })); });
+  try {
+    const config = { ...jiuwenSwarmConfigFromEnv({ SCIENCE_AGENT_EXECUTOR: "jiuwenswarm", SCIENCE_AGENT_ADAPTER_URL: adapter.url, SCIENCE_AGENT_JIUWENSWARM_SKILLS: "ours" })! };
+    await createJiuwenSwarmAgentFactory(config)(skillOptions()).execute("go");
+    assert.equal(adapter.requests.length, 1, "no skill import");
+    assert.ok(adapter.requests[0].body.tools.some((tool: { name: string }) => tool.name === "read_skill"));
+    assert.match(adapter.requests[0].body.systemPrompt, /<available_skills>/);
+  } finally {
+    await adapter.close();
+  }
+});

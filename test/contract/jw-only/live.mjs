@@ -250,6 +250,30 @@ const checks = {
   },
 
   /**
+   * The session's skills are JiuwenSwarm skills: its prompt lists them (ours does not), and its skill_tool loads one.
+   */
+  async skills() {
+    const stub = await startStubModel({ main: [{ tool: "skill_tool", arguments: { skill_name: "evolve-design" } }, { text: "Loaded." }] });
+    const { sessionId, cleanup } = await setup(stub);
+    try {
+      const run = await runAndWait(sessionId, "Load the evolve-design skill.");
+      if (run.status !== "completed") throw new Error(`run ${run.status}: ${run.error}`);
+      const system = JSON.stringify((stub.lastMessages?.() ?? []).filter((message) => message.role === "system"));
+      if (system.includes("<available_skills>")) throw new Error("our skill catalog is still in the prompt");
+      if (!/`evolve-design`/.test(system)) throw new Error("JiuwenSwarm's installed-skill list does not name evolve-design");
+      const events = await runEvents(sessionId, run.id);
+      const done = events.find((event) => event.type === "tool.completed" && event.trace?.name === "skill_tool");
+      const output = JSON.stringify(done?.trace ?? {});
+      if (!/evolution search|create_evolve_run/.test(output)) throw new Error(`skill_tool did not return the SKILL.md: ${output.slice(0, 300)}`);
+      const names = new Set(stub.requests.flatMap((request) => request.toolNames ?? []));
+      if (names.has("read_skill") || [...names].some((name) => name.endsWith("_read_skill"))) throw new Error("read_skill is still offered");
+      console.log("skills: ok (JiuwenSwarm's prompt lists evolve-design, skill_tool returned its SKILL.md, no catalog or read_skill of ours)");
+    } finally {
+      await cleanup();
+    }
+  },
+
+  /**
    * Where the time before the first token goes, with a model that answers at once: from the run's start to the
    * model's first request, and from there to the first text event. Two runs, since the first of a session sets more up.
    */
