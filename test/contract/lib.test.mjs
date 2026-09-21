@@ -16,7 +16,7 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import test from "node:test";
 
-import { compareRecordings, coverage, lookup, runCase } from "./lib.mjs";
+import { compareRecordings, coverage, lookup, profileRunEvents, runCase } from "./lib.mjs";
 
 async function fakeBackend(handler) {
   const seen = [];
@@ -134,4 +134,64 @@ test("a variable that is the whole value keeps its type, so a captured object is
   } finally {
     await backend.close();
   }
+});
+
+test("a poll step waits for the condition and records only the final value", async () => {
+  let calls = 0;
+  const backend = await fakeBackend((request, response) => json(response, 200, { status: ++calls < 3 ? "running" : "completed" }));
+  try {
+    const [record] = await runCase({ id: "c", steps: [{
+      name: "settle", request: { method: "GET", path: "/run" }, poll: { path: "\$.status", in: ["completed"], timeoutMs: 5000 },
+    }] }, { base: backend.base, token: "t" });
+    assert.deepEqual(record, { name: "settle", status: 200, polled: "completed" });
+    assert.equal(calls, 3);
+  } finally {
+    await backend.close();
+  }
+});
+
+test("a poll that never reaches its condition is an error, not a hang", async () => {
+  const backend = await fakeBackend((request, response) => json(response, 200, { status: "running" }));
+  try {
+    const [record] = await runCase({ id: "c", steps: [{
+      name: "settle", request: { method: "GET", path: "/run" }, poll: { path: "\$.status", in: ["completed"], timeoutMs: 400 },
+    }] }, { base: backend.base, token: "t" });
+    assert.match(record.error, /still "running"/);
+  } finally {
+    await backend.close();
+  }
+});
+
+test("the run-event profile joins text fragments, drops agent evidence and collapses step snapshots", () => {
+  const raw = [
+    { event: { type: "agent.record", name: "context.captured" } },
+    { event: { type: "assistant.delta", delta: "Hel", responseId: "r", evidence: { turn: 1 } } },
+    { event: { type: "assistant.delta", delta: "lo", responseId: "r" } },
+    { event: { type: "assistant.delta", delta: "!", responseId: "other" } },
+    { event: { type: "subagent.step", step: { id: "s1", content: "do" } } },
+    { event: { type: "subagent.step", step: { id: "s1", content: "done" } } },
+    { event: { type: "subagent.step", step: { id: "s2", content: "next" } } },
+  ];
+  assert.deepEqual(profileRunEvents(raw), [
+    { type: "assistant.delta", delta: "Hello", responseId: "r" },
+    { type: "assistant.delta", delta: "!", responseId: "other" },
+    { type: "subagent.step", step: { id: "s1", content: "done" } },
+    { type: "subagent.step", step: { id: "s2", content: "next" } },
+  ]);
+});
+
+test("an accepted difference is reported with its reason instead of failing the comparison", () => {
+  const baseline = { a: [{ name: "run events", events: [{ type: "run.failed", error: "provider says no" }, { type: "x", n: 1 }] }] };
+  const actual = { a: [{ name: "run events", events: [{ type: "run.failed", error: "JiuwenSwarm says no" }, { type: "x", n: 2 }] }] };
+  const rules = [{ case: "a", step: "run events", path: "$.events[*].error", reason: "wording of the provider error" }];
+  const report = { accepted: [] };
+  assert.deepEqual(compareRecordings(baseline, actual, rules, report), ["a / run events: $.events[1].n expected 1 got 2"]);
+  assert.deepEqual(report.accepted, ["a / run events: $.events[0].error (wording of the provider error)"]);
+});
+
+test("a rule for one case or step does not excuse the same path elsewhere, and brackets are literal", () => {
+  const baseline = { a: [{ name: "s", list: [1] }], b: [{ name: "s", list: [1] }] };
+  const actual = { a: [{ name: "s", list: [2] }], b: [{ name: "s", list: [2] }] };
+  const rules = [{ case: "a", step: "s", path: "$.list[0]", reason: "only here" }];
+  assert.deepEqual(compareRecordings(baseline, actual, rules), ["b / s: $.list[0] expected 1 got 2"]);
 });

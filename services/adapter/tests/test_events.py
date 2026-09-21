@@ -112,23 +112,26 @@ def test_failure_classification(text, code):
 def test_tool_round_maps_to_started_output_completed_then_a_new_response():
     mapper, events = run("jw_chat_bash.raw")
     kinds = [e["type"] for e in events]
-    assert kinds[:4] == ["agent.phase", "tool.started", "tool.output", "tool.completed"]
-    assert kinds[4] == "assistant.response.started" and kinds[-1] == "assistant.response.settled"
-    started, completed = events[1]["trace"], events[3]["trace"]
+    # A model call that only produced a tool call still announces (and closes) a response,
+    # as the native agent does.
+    assert kinds[:6] == ["agent.phase", "assistant.response.started", "assistant.response.settled",
+                         "tool.started", "tool.output", "tool.completed"]
+    assert kinds[6] == "assistant.response.started" and kinds[-1] == "assistant.response.settled"
+    started, completed = events[3]["trace"], events[5]["trace"]
     assert started["name"] == "bash" and started["status"] == "running"
     assert started["args"] == {"command": "echo J-MARK-1 && pwd"}
     assert started["summary"].startswith("执行 ")
     assert completed["id"] == started["id"] and completed["status"] == "completed"
     assert "J-MARK-1" in completed["output"] and "Exit Code: 0" in completed["output"]
-    assert events[2] == {"type": "tool.output", "toolCallId": started["id"], "chunk": completed["output"]}
+    assert events[4] == {"type": "tool.output", "toolCallId": started["id"], "chunk": completed["output"]}
     assert mapper.final_text == "tool finished ok"
     assert mapper.unmapped == []
 
 
 def test_the_reply_after_a_tool_is_a_new_response_in_a_later_turn():
     _, events = run("jw_chat_bash.raw")
-    after = next(e for e in events if e["type"] == "assistant.response.started")
-    assert after["turn"] == 2
+    started = [e for e in events if e["type"] == "assistant.response.started"]
+    assert [e["turn"] for e in started] == [1, 2]  # the tool-only call, then the answer after the tool
 
 
 def test_tool_result_repr_is_parsed():
@@ -307,3 +310,31 @@ def test_per_call_usage_becomes_model_usage_and_the_summary_is_ignored_on_purpos
 def test_usage_without_token_counts_emits_nothing():
     mapper = RunEventMapper()
     assert mapper.feed({"type": "event", "event": "chat.usage_metadata", "payload": {"metadata": {"usage_metadata": {}}}}) == []
+
+
+def test_response_ids_are_uuids_like_the_native_agents():
+    import re
+    _, events = run("jw_chat_plain.raw")
+    started = next(e for e in events if e["type"] == "assistant.response.started")
+    assert re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", started["responseId"])
+
+
+@pytest.mark.parametrize("text,code", [
+    # Recorded from a real 0.2.6 gateway whose model answered with each of these (tools/probe_gateway.py).
+    ("[181001] model call failed, reason: openAI API async stream error: AuthenticationError: Error code: 401 - {'error': {'message': 'scripted http401'}}", "unauthorized"),
+    ("[181001] model call failed, reason: openAI API async stream error: RateLimitError: Error code: 429 - {'error': {'message': 'scripted http429'}}", "rate-limited"),
+    ("[181001] model call failed, reason: openAI API async stream error: InternalServerError: Error code: 500 - {'error': {'message': 'scripted http500'}}", "server-error"),
+    ("[181001] model call failed, reason: openAI API async stream error: JSONDecodeError: Expecting property name enclosed in double quotes", "semantic-error"),
+])
+def test_real_gateway_model_errors_are_classified(text, code):
+    assert classify_failure(text) == code
+
+
+def test_jiuwenswarms_todo_list_becomes_a_plan_update_with_its_whole_list():
+    mapper = RunEventMapper()
+    events = mapper.feed({"type": "event", "event": "todo.updated", "payload": {"todos": [
+        {"id": "a", "content": "Step A", "activeForm": "Doing A", "status": "in_progress"},
+        {"id": "b", "content": "Step B", "activeForm": "Doing B", "status": "pending"}]}})
+    assert events == [{"type": "plan.updated", "items": [
+        {"id": "a", "content": "Step A", "status": "in_progress"}, {"id": "b", "content": "Step B", "status": "pending"}]}]
+    assert mapper.unmapped == []

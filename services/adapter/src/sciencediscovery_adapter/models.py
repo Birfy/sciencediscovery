@@ -43,10 +43,15 @@ class ModelProfile:
     base_url: str
     api_key: str
     provider: str = "OpenAI"
+    # In tokens; JiuwenSwarm compresses a conversation against it (its default is 200000).
+    context_window: int | None = None
 
     def entry(self) -> dict[str, Any]:
-        return {"model_name": self.model, "api_base": self.base_url, "api_key": self.api_key,
-                "model_provider": self.provider}
+        entry = {"model_name": self.model, "api_base": self.base_url, "api_key": self.api_key,
+                 "model_provider": self.provider}
+        if self.context_window:
+            entry["context_window_tokens"] = int(self.context_window)
+        return entry
 
 
 class ModelSync:
@@ -81,3 +86,21 @@ class ModelSync:
             if kept and not any(m.get("is_default") for m in kept):
                 kept[0]["is_default"] = True
             await self._rpc(self._url, "models.replace_all", {"models": kept})
+
+    async def prune(self, prefix: str) -> int:
+        """Drop every entry whose name starts with `prefix`; return how many.
+
+        A run that ended abnormally (the stack was killed, the process crashed) never removed its private
+        alias, and JiuwenSwarm probes every entry in its list each time it starts, so leftovers become
+        a burst of failing requests at every restart. Only safe while no run is active: at start-up.
+        """
+        async with self._lock:
+            current = (await self._rpc(self._url, "models.list")).get("models", [])
+            kept = [{k: v for k, v in m.items() if k not in _DERIVED}
+                    for m in current if not str(m.get("model_name", "")).startswith(prefix)]
+            if len(kept) == len(current):
+                return 0
+            if kept and not any(m.get("is_default") for m in kept):
+                kept[0]["is_default"] = True
+            await self._rpc(self._url, "models.replace_all", {"models": kept})
+            return len(current) - len(kept)

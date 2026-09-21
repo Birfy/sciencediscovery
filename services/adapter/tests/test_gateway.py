@@ -71,14 +71,69 @@ async def test_unreachable_gateway_is_a_gateway_error():
         await collect("ws://127.0.0.1:9/tui", {})
 
 
-async def test_connection_dropped_mid_run_is_a_gateway_error():
-    def script(request):
-        yield {"type": "event", "event": "chat.delta", "payload": {"content": "x"}}
+def serve_connections(*scripts):
+    """A fake gateway whose n-th connection plays scripts[n](request); later connections get no answer."""
+    counter = {"n": 0}
+    requests = []
 
-    async with serve(script) as server:
+    async def handler(connection):
+        index = counter["n"]
+        counter["n"] += 1
+        await connection.send(json.dumps({"type": "event", "event": "connection.ack", "payload": {}}))
+        request = json.loads(await connection.recv())
+        requests.append(request)
+        if index < len(scripts):
+            for frame in scripts[index](request):
+                await connection.send(json.dumps(frame))
+
+    return websockets.serve(handler, "127.0.0.1", 0), requests
+
+
+async def drain(url, params, **kwargs):
+    async with ChatRun(url, params, reconnect_delay=0.01, **kwargs) as run:
+        return [frame async for frame in run], run
+
+
+DELTA = lambda text: {"type": "event", "event": "chat.delta", "payload": {"content": text}}  # noqa: E731
+RESUMED = [{"type": "res", "id": "resume-x", "ok": True, "payload": {}},
+           {"type": "event", "event": "chat.interrupt_result", "payload": {"message": "任务已恢复"}}]
+
+
+async def test_a_connection_lost_mid_run_is_taken_up_again_with_chat_resume():
+    server, requests = serve_connections(
+        lambda request: [DELTA("a")],
+        lambda request: [*RESUMED, DELTA("b"), DONE],
+    )
+    async with server:
         port = server.sockets[0].getsockname()[1]
+        frames, run = await drain(f"ws://127.0.0.1:{port}/tui", {"session_id": "s1", "mode": "m"})
+    assert [r["method"] for r in requests] == ["chat.send", "chat.resume"]
+    assert requests[1]["params"]["session_id"] == "s1"
+    texts = [f["payload"]["content"] for f in frames if f.get("event") == "chat.delta"]
+    assert texts == ["a", "b"]
+    assert not any(f.get("event") == "chat.interrupt_result" for f in frames), "the gateway's own answer is not a cancellation"
+    assert run.resumed == 1
+
+
+async def test_a_run_that_ended_while_the_connection_was_down_is_an_error_not_a_silent_success():
+    server, _ = serve_connections(
+        lambda request: [DELTA("a")],
+        lambda request: [{"type": "event", "event": "chat.interrupt_result", "payload": {"message": "任务已完成"}}],
+    )
+    async with server:
+        port = server.sockets[0].getsockname()[1]
+        with pytest.raises(GatewayError, match="ended while"):
+            await drain(f"ws://127.0.0.1:{port}/tui", {"session_id": "s1"})
+
+
+async def test_a_gateway_that_never_comes_back_is_a_gateway_error_after_the_retries():
+    server, requests = serve_connections(lambda request: [DELTA("a")])
+    async with server:
+        port = server.sockets[0].getsockname()[1]
+        # Every later connection is accepted and then ignored: no answer to chat.resume, then the drop again.
         with pytest.raises(GatewayError, match="closed"):
-            await collect(f"ws://127.0.0.1:{port}/tui", {})
+            await drain(f"ws://127.0.0.1:{port}/tui", {"session_id": "s1"}, reconnects=2)
+    assert [r["method"] for r in requests] == ["chat.send", "chat.resume", "chat.resume"]
 
 
 async def test_a_chat_final_alone_does_not_end_the_run():

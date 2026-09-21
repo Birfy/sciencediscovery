@@ -52,7 +52,7 @@ and hands the model the original tool schemas.
 | `gateway.py` | `ChatRun` (one chat on one connection, approval answers, cancel) and `rpc()` |
 | `events.py` | `RunEventMapper`: gateway frames → run events, error classification, usage |
 | `mcp_server.py` | Stateless per-run MCP server; forwards tool calls to the bridge |
-| `llm_proxy.py` | Per-run OpenAI chat-completions proxy |
+| `llm_proxy.py` | Per-run OpenAI chat-completions proxy; forwards to the API's loopback model gateway |
 | `models.py` | Puts the run's model alias into JiuwenSwarm's global model list |
 | `schema.py` | Relaxes tool schemas for JiuwenSwarm; restores dropped empty arguments |
 
@@ -84,26 +84,40 @@ so a run is reproducible.
 - **Models**: `models.replace_all` applies without a restart and replaces the whole list;
   `chat.send` selects an entry with `model_name`, which is also the id sent to the provider.
   Adding a model triggers an image-modality probe request (tool-less, non-streaming).
+- **Tool call time limit**: JiuwenSwarm's MCP client gives every call 30 s (`[mcp-timeout] default_timeout=30.0s`) and fails a longer one with an empty `[182301] execute invoke failed, error=''`, without retrying a non-idempotent tool. `mcp.register_custom` accepts `timeout_s`, which the adapter sets per run.
 - **Argument handling**: JiuwenSwarm validates MCP tool arguments strictly (pydantic) where
   the native agent never validated, and it **drops empty arrays and objects** from a call
   (`{"plan": []}` arrives as `{}`; `""`, `0` and `false` survive). `schema.py` compensates.
+- **A client that disconnects mid-run** gets nothing more, and a new connection is not subscribed to
+  that run's output. The run itself **keeps going** (measured: its output resumes on a new connection after
+  `chat.resume`). `chat.resume` from a new connection answers `chat.interrupt_result` "task resumed" and
+  the run's frames flow to it again, but **nothing sent in the gap is replayed** (a 6 s gap lost 6 frames);
+  with no run it answers "task completed". `ChatRun` uses it to take a run up again when its connection to the
+  gateway drops (three tries, then the run fails). An earlier reading of this section (the run ends when
+  its client leaves) was wrong. A second `chat.send` on the same session still takes the session over.
+- **Two connections on one session**: a second `chat.send` while a run is active does not queue and
+  is not refused; it takes over. The first run stopped, and the *second* run's frames reached **both**
+  connections. A connection that only listens (sends no request) receives nothing. The legacy API queues
+  runs per session, so it must keep serialising them; the gateway will not.
+- **Model failures** (401, 429, 500, or a stream that breaks halfway) all arrive as `chat.error` with
+  `[181001] model call failed, reason: openAI API async stream error: <Exception>: Error code: <status> - ...`,
+  followed by the usual completion status; a partial reply that streamed before a broken stream is
+  delivered first. Each failed once within about a second, so there is no retry. Not observed: any
+  `execution.error` or `runtime.error` (nothing in these scenarios produces them).
 - **Usage**: `chat.usage_metadata` (one per model call) carries token counts including
   reasoning and cache fields; `chat.usage_summary` repeats their sum.
 
 ## Configuration
 
-| Variable | Default | Meaning |
-|---|---|---|
-| `SCIENCE_AGENT_ADAPTER` | unset | `1` makes `start-stack.sh` start the adapter on the public port |
-| `SCIENCE_AGENT_PORT` | `4310` | Public port (the adapter's) |
-| `SCIENCE_AGENT_LEGACY_PORT` / `SCIENCE_AGENT_LEGACY_URL` | port + 100 | Where the legacy API listens |
-| `SCIENCE_AGENT_EXECUTOR` | unset | `jiuwenswarm` runs agent turns on JiuwenSwarm (needs the adapter) |
-| `JIUWENSWARM_GATEWAY_URL` | `ws://127.0.0.1:19001/tui` | Chat route of the gateway |
-| `JIUWENSWARM_MGMT_URL` | `ws://127.0.0.1:19000/ws` | Web channel used for `mcp.*` and `models.*` |
-| `SCIENCE_AGENT_ADAPTER_PUBLIC_URL` | `http://127.0.0.1:<port>` | How JiuwenSwarm reaches the adapter |
-| `SCIENCE_AGENT_ADAPTER_TOKEN` | unset | Bearer token required on `/agent/*` when set |
-| `SCIENCE_AGENT_ADAPTER_DEBUG` | unset | `1` prints every tool event of every run to stderr |
-| `SCIENCE_AGENT_JIUWENSWARM_DEBUG` | unset | `1` (legacy API) logs every bridge tool call |
+Choosing the backend and every variable, with defaults, is in one place:
+[Run agent turns on JiuwenSwarm](../../docs/en/how-to/run-with-jiuwenswarm.md#choose-the-backend). In short:
+`./scripts/start-stack.sh --mode local --jiuwenswarm` (the same as `SCIENCE_AGENT_ADAPTER=1
+SCIENCE_AGENT_EXECUTOR=jiuwenswarm`); `GET /agent/info` on the public port says which backend runs and
+whether JiuwenSwarm answers (it takes the API's `SCIENCE_AGENT_AUTH_TOKEN`, or `SCIENCE_AGENT_ADAPTER_TOKEN`).
+The adapter itself reads `SCIENCE_AGENT_HOST`, `SCIENCE_AGENT_PORT`, `SCIENCE_AGENT_LEGACY_PORT`/`_URL`,
+`JIUWENSWARM_GATEWAY_URL`, `JIUWENSWARM_MGMT_URL`, `SCIENCE_AGENT_ADAPTER_PUBLIC_URL`,
+`SCIENCE_AGENT_ADAPTER_TOKEN`, `SCIENCE_AGENT_ADAPTER_TOOL_TIMEOUT_S`, `SCIENCE_AGENT_EXECUTOR` and
+`SCIENCE_AGENT_ADAPTER_DEBUG` (`config.py`).
 
 ## Tests
 
@@ -132,14 +146,28 @@ passes against a live OpenAI-compatible endpoint.
 
 Not done yet:
 
-- **History**: only the current prompt is sent; JiuwenSwarm keeps history per `session_id`.
-  `gatewayHistory` from the legacy API is unused, so pre-existing conversations are not
-  carried over, a resumed subagent does not get its history, and legacy compaction is not
-  applied.
+- **History and context**: JiuwenSwarm is the only holder of the model's context. It keeps each agent's
+  conversation in a stable session (`sessionKey`: the caller's session id for the main agent,
+  `<session>--<agent>` for a subagent), persisted in its checkpoint database, and compresses it itself (its
+  context engine compresses at 80% of the model's window; the adapter passes the real window as
+  `context_window_tokens` on the model entry, and `chat.usage_summary` reports it back). The adapter sends
+  and rebuilds no history: a conversation that began on the built-in loop is not known to JiuwenSwarm
+  (there is no call that writes into a session's context; `history.append_record` only writes the display
+  record). The context survives a restart of JiuwenSwarm (`test/contract/jw-only/live.mjs history-restart`). Not
+  verified: how its compression behaves on a full window.
+- **Deferred tools**: JiuwenSwarm fixes the tool list at the start of a run, so every deferred MCP tool is
+  promoted up front and `tool_search` is offered as well (`offerDeferredTools`).
 - **Tool output store** (`ToolOutputStore`, oversized results by reference) is not part of
   the toolset; tool arguments are not schema-validated (as in the native agent).
-- **Protocols**: only OpenAI chat completions. Anthropic and Responses fail the run with a
-  clear message.
+- **Protocols**: JiuwenSwarm only speaks OpenAI chat completions to a model. The API starts a loopback
+  model gateway per run (`services/api/src/agent-run/jiuwenswarm-model-gateway.ts`) that serves those
+  requests through the native model client, so every protocol and variant the UI can configure
+  (OpenAI chat completions with the DeepSeek/Gemini/Kimi/Qwen/MiniMax/Ollama variants, OpenAI Responses,
+  Anthropic Messages) works, with the same thinking controls, network proxy, retries (including 429
+  back-off) and usage accounting as the built-in loop. The provider's own assistant messages (Anthropic
+  thinking blocks and signatures, Responses reasoning items) are restored on later requests and kept in
+  the saved history. Images are not sent (the gateway refuses a request that carries one, which is how
+  JiuwenSwarm's image probe learns the model has no image input here).
 - **Model alias**: an entry is keyed by model id, so two endpoints serving the same id
   share one entry while a run is active.
 - Everything outside `/agent/*` and `/llm/*` and `/mcp/*` is still proxied to the legacy API.

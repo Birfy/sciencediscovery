@@ -86,3 +86,21 @@ async def test_removing_an_absent_entry_changes_nothing():
     gateway = FakeGateway([entry("m1", default=True)])
     await ModelSync(gateway.rpc, URL).remove("nope")
     assert gateway.replacements == []
+
+
+async def test_prune_removes_leftover_run_aliases_and_keeps_everything_else():
+    gw = FakeGateway([entry("real", default=True), entry("sd-aaaa"), entry("sd-bbbb"), entry("other")])
+    assert await ModelSync(gw.rpc, URL).prune("sd-") == 2
+    assert [m["model_name"] for m in gw.models] == ["real", "other"]
+
+
+async def test_prune_with_nothing_to_remove_writes_nothing():
+    gw = FakeGateway([entry("real", default=True)])
+    assert await ModelSync(gw.rpc, URL).prune("sd-") == 0
+    assert gw.replacements == []
+
+
+async def test_prune_keeps_a_default_when_the_default_was_a_leftover():
+    gw = FakeGateway([entry("sd-aaaa", default=True), entry("real")])
+    await ModelSync(gw.rpc, URL).prune("sd-")
+    assert [(m["model_name"], m["is_default"]) for m in gw.models] == [("real", True)]

@@ -65,6 +65,8 @@ def harness(monkeypatch):
     rpcs = []
 
     async def fake_rpc(url, method, params=None, **kwargs):
+        if method == "models.list" and not rpcs and not FakeRun.instances:
+            return {}  # the clean-up at start-up (see test_start_up_removes_stale_aliases), not part of a run
         rpcs.append((url, method, params))
         return {}
 
@@ -236,3 +238,87 @@ async def test_no_model_leaves_the_gateways_default_in_charge(harness):
     app, *_ = harness
     await post(app, {"sessionId": "s1", "prompt": "hi"})
     assert "model_name" not in FakeRun.instances[0].params
+
+
+async def test_start_up_removes_stale_aliases_left_by_an_earlier_process():
+    calls = []
+
+    async def rpc(url, method, params=None, **kwargs):
+        calls.append(method)
+        if method == "models.list":
+            return {"models": [{"model_name": "sd-old", "is_default": False}, {"model_name": "kept", "is_default": True}]}
+        return {}
+
+    app = create_app(SETTINGS)
+    app.state.agent_runner.models._rpc = rpc
+    async with app.router.lifespan_context(app):
+        pass
+    assert calls == ["models.list", "models.replace_all"]
+
+
+async def test_the_per_run_mcp_server_gets_a_tool_timeout_far_beyond_jiuwenswarms_30_seconds(harness):
+    app, _, rpcs = harness
+    FakeRun.fixture = "jw_chat_mcp_direct.raw"
+    tools = [{"name": "run_shell", "description": "d", "inputSchema": {"type": "object"}}]
+    bridge = {"url": "http://legacy.test/bridge", "token": "t"}
+    await post(app, {"sessionId": "s1", "prompt": "go", "tools": tools, "bridge": bridge})
+    assert next(p for _, m, p in rpcs if m == "mcp.register_custom")["timeout_s"] == 3600
+    rpcs.clear()
+    await post(app, {"sessionId": "s1", "prompt": "go", "tools": tools, "bridge": bridge, "toolTimeoutSeconds": 7200})
+    assert next(p for _, m, p in rpcs if m == "mcp.register_custom")["timeout_s"] == 7200
+
+
+async def test_the_session_key_names_the_jiuwenswarm_session_and_the_prompt_goes_as_it_is(harness):
+    app, _, rpcs = harness
+    await post(app, {"sessionId": "s1", "sessionKey": "s1--sub-7", "prompt": "hi"})
+    assert FakeRun.instances[0].params["session_id"] == "s1--sub-7"
+    assert FakeRun.instances[0].params["content"] == "hi"
+    assert "session.get_metadata" not in [m for _, m, _ in rpcs], "the adapter does not look at JiuwenSwarm's history"
+
+
+async def test_a_request_carries_no_history_field(harness):
+    from sciencediscovery_adapter.agent_runs import AgentRunRequest
+    assert "history" not in AgentRunRequest.model_fields
+
+
+async def test_the_models_context_window_is_given_to_jiuwenswarm_as_the_entrys_window(harness):
+    _, runner, rpcs = harness
+    FakeRun.fixture = "jw_chat_plain.raw"
+    await post(harness[0], {"sessionId": "s1", "prompt": "hi", "model": {"model": "m", "baseUrl": "http://llm.test/v1", "apiKey": "k", "contextWindow": 131072}})
+    replaced = [p for _, m, p in rpcs if m == "models.replace_all"]
+    assert any(entry.get("context_window_tokens") == 131072 for p in replaced for entry in p["models"])
+
+
+async def get(app, path, headers=None):
+    async with app.router.lifespan_context(app):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://adapter") as client:
+            return await client.get(path, headers=headers or {})
+
+
+async def test_info_says_which_backend_runs_and_whether_jiuwenswarm_answers(harness):
+    app, *_ = harness
+    body = (await get(app, "/agent/info")).json()
+    assert body["adapter"] is True and body["executor"] == "native"
+    assert body["jiuwenswarm"]["reachable"] is True and body["jiuwenswarm"]["managementUrl"] == "ws://gw/ws"
+    assert body["toolTimeoutSeconds"] == 3600
+
+
+async def test_info_reports_an_executor_of_jiuwenswarm_and_a_gateway_that_does_not_answer():
+    # Nothing listens on the management URL of these settings, which is what a JiuwenSwarm that is down looks like.
+    app = create_app(Settings(**{**SETTINGS.__dict__, "executor": "jiuwenswarm", "mgmt_url": "ws://127.0.0.1:1/ws"}))
+    body = (await get(app, "/agent/info")).json()
+    assert body["executor"] == "jiuwenswarm" and body["jiuwenswarm"]["reachable"] is False
+    assert "unreachable" in body["jiuwenswarm"]["error"]
+
+
+async def test_info_needs_a_token_when_there_is_one():
+    guarded = create_app(Settings(**{**SETTINGS.__dict__, "agent_token": "secret"}))
+    assert (await get(guarded, "/agent/info")).status_code == 401
+    assert (await get(guarded, "/agent/info", {"authorization": "Bearer wrong"})).status_code == 401
+    assert (await get(guarded, "/agent/info", {"authorization": "Bearer secret"})).status_code == 200
+
+
+async def test_info_also_opens_with_the_apis_own_access_token():
+    app = create_app(Settings(**{**SETTINGS.__dict__, "api_token": "api-token"}))
+    assert (await get(app, "/agent/info")).status_code == 401
+    assert (await get(app, "/agent/info", {"authorization": "Bearer api-token"})).status_code == 200
