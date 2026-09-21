@@ -150,20 +150,3 @@ async def test_an_unreachable_endpoint_is_a_502_and_an_unknown_token_a_404():
     app, token = make_app(boom)
     assert (await post(app, token, {"messages": []})).status_code == 502
     assert (await post(app, "nope", {"messages": []})).status_code == 404
-
-
-def test_history_goes_between_the_system_prompt_and_the_turn_jiuwenswarm_sent():
-    history = [{"role": "user", "content": "earlier question"},
-               {"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "type": "function", "function": {"name": "run_shell", "arguments": "{}"}}]},
-               {"role": "tool", "tool_call_id": "c1", "name": "run_shell", "content": "ok"}]
-    route = LlmRoute(**{**ROUTE.__dict__, "history": history})
-    body = {"messages": [{"role": "system", "content": "You are JiuwenSwarm."}, {"role": "user", "content": "now"}]}
-    out = rewrite_request(body, route)["messages"]
-    assert [m["role"] for m in out] == ["system", "user", "assistant", "tool", "user"]
-    assert out[1]["content"] == "earlier question" and out[-1]["content"] == "now"
-    assert route.history[0] is not out[1], "the caller's record is copied, not shared"
-
-
-def test_no_history_leaves_the_messages_as_they_were():
-    out = rewrite_request({"messages": [{"role": "user", "content": "hi"}]}, ROUTE)["messages"]
-    assert [m["role"] for m in out] == ["system", "user"]

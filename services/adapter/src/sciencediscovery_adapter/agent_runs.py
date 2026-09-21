@@ -47,6 +47,7 @@ from .llm_proxy import LlmRoute, LlmRoutes
 from .mcp_server import Toolset, ToolsetRegistry
 from .models import ModelProfile, ModelSync
 from .schema import relax_schema
+from .seed import seeded_prompt
 
 # SCIENCE_AGENT_ADAPTER_DEBUG=1 prints every tool event of every run to stderr.
 _DEBUG = os.environ.get("SCIENCE_AGENT_ADAPTER_DEBUG") == "1"
@@ -69,6 +70,9 @@ class ModelSpec(BaseModel):
     baseUrl: str
     apiKey: str = ""
     provider: str = "OpenAI"
+    # The model's context window, in tokens. JiuwenSwarm compresses a conversation against it; without
+    # it the model is an unknown alias and a default is assumed.
+    contextWindow: int | None = None
 
 
 class AgentRunRequest(BaseModel):
@@ -81,9 +85,12 @@ class AgentRunRequest(BaseModel):
     model: ModelSpec | None = None
     # Replaces JiuwenSwarm's own system prompt for this run (needs `model`).
     systemPrompt: str | None = None
-    # The conversation so far, as OpenAI chat messages, from the caller's own record. When given it
-    # is the only history the model sees: it is inserted into every model request of the run and
-    # JiuwenSwarm runs the turn in a session of its own, so nothing is remembered twice.
+    # The JiuwenSwarm session that holds this agent's conversation: stable across runs, one per agent
+    # (the main agent, and each subagent, of one caller session). JiuwenSwarm keeps and compresses the
+    # context there. Defaults to `sessionId`.
+    sessionKey: str | None = None
+    # The conversation so far, as OpenAI chat messages, from the caller's own record. Used only to
+    # start a session that has no context in JiuwenSwarm yet (see seed.py); ignored otherwise.
     history: list[dict[str, Any]] | None = None
     # Longest a single tool call may take, in seconds; the run's own timeout, when the caller has one.
     toolTimeoutSeconds: int | None = None
@@ -116,16 +123,25 @@ class AgentRunner:
         self.rpc = gateway.rpc
         self.models = ModelSync(lambda *a, **k: self.rpc(*a, **k), settings.mgmt_url)
 
+    async def _has_context(self, session: str) -> bool:
+        """Whether JiuwenSwarm already holds a conversation for this session."""
+        try:
+            meta = await self.rpc(self.settings.mgmt_url, "session.get_metadata", {"session_id": session})
+        except Exception:  # an unknown session is reported as an error
+            return False
+        return int(meta.get("message_count") or 0) > 0
+
     async def stream(self, request: AgentRunRequest) -> AsyncIterator[str]:
         name = "sci" + _SAFE_NAME.sub("", uuid.uuid4().hex)[:10]
         token = None
         llm_token = None
         model_alias = None
         registered = False
-        jw_session = request.sessionId if request.history is None else f"{request.sessionId}-{uuid.uuid4().hex[:8]}"
+        jw_session = request.sessionKey or request.sessionId
+        prompt = request.prompt
         mapper = RunEventMapper(session_id=request.sessionId, mcp_prefixes=(f"mcp_{name}_",))
         params: dict[str, Any] = {
-            "session_id": jw_session, "content": request.prompt, "query": request.prompt,
+            "session_id": jw_session, "content": prompt, "query": prompt,
             "mode": request.mode, "cwd": request.cwd, "project_dir": request.cwd, "trusted_dirs": [request.cwd],
             "supports_user_interaction": True, "agent_ref": {"mode": request.mode, "id": "default"},
         }
@@ -139,11 +155,14 @@ class AgentRunner:
                     base_url=request.model.baseUrl.rstrip("/"), api_key=request.model.apiKey, model=request.model.model,
                     tool_prefix=f"mcp_{name}_", tool_names=frozenset(t.name for t in request.tools),
                     tool_specs={t.name: {"description": t.description, "parameters": t.inputSchema} for t in request.tools},
-                    system_prompt=request.systemPrompt, history=request.history or [],
+                    system_prompt=request.systemPrompt,
                 ))
                 model_alias = f"sd-{llm_token[:12]}"
                 params["model_name"] = await self.models.ensure(ModelProfile(
-                    model_alias, f"{self.settings.public_url}/llm/{llm_token}/v1", llm_token, "OpenAI"))
+                    model_alias, f"{self.settings.public_url}/llm/{llm_token}/v1", llm_token, "OpenAI",
+                    context_window=request.model.contextWindow))
+            if request.history and not await self._has_context(jw_session):
+                params["content"] = params["query"] = seeded_prompt(request.history, request.prompt)
             if request.tools:
                 if request.bridge is None:
                     raise ValueError("tools were given without a bridge to run them")

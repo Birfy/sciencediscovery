@@ -25,6 +25,7 @@ import { DurableContextStore } from "@sciencediscovery/context";
 import { createToolRegistry, startPluginScope, type NativeAgentOptions } from "../native-agent/index.js";
 import {
   createJiuwenSwarmAgentFactory,
+  jiuwenSwarmSessionKey,
   openAiHistory,
   jiuwenSwarmConfigFromEnv,
 } from "./jiuwenswarm-agent.js";
@@ -785,4 +786,29 @@ test("provider fields in the API's history (thinking blocks, reasoning items) go
   } finally {
     await adapter.close();
   }
+});
+
+test("a run names the JiuwenSwarm session that holds its agent's conversation, and gives the model's window", async () => {
+  const sent: any[] = [];
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    sent.push(body);
+    response.writeHead(200);
+    response.end(line({ done: { finalText: "ok" } }));
+  });
+  try {
+    const factory = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url });
+    const base = options();
+    await factory({ ...base, config: { ...base.config, contextWindow: 131072 }, versioning: { agentId: "main:thread-1" } as never }).execute("a");
+    await factory({ ...base, versioning: { agentId: "subagent:Sub Agent/7" } as never }).execute("b");
+    assert.equal(sent[0].sessionKey, "session-1", "the main agent's conversation is the session's own");
+    assert.equal(sent[0].model.contextWindow, 131072);
+    assert.equal(sent[1].sessionKey, "session-1--subagent-Sub-Agent-7");
+    assert.equal("contextWindow" in sent[1].model, false);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("session keys: a run without an agent id is the main agent", () => {
+  assert.equal(jiuwenSwarmSessionKey({ sessionId: "s" } as never), "s");
 });

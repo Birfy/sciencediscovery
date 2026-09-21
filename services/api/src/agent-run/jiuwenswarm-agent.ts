@@ -161,11 +161,16 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
       },
       body: JSON.stringify({
         sessionId: this.options.sessionId,
+        sessionKey: jiuwenSwarmSessionKey(this.options),
         prompt: text,
         systemPrompt,
         cwd: this.options.workspaceRoot,
         // The adapter's proxy forwards to this loopback gateway, which speaks the model's own protocol.
-        model: { model: model.model, baseUrl: modelGateway.url, apiKey: modelGateway.token, provider: "OpenAI" },
+        model: {
+          model: model.model, baseUrl: modelGateway.url, apiKey: modelGateway.token, provider: "OpenAI",
+          // JiuwenSwarm compresses a conversation against the model's window; it cannot know a model behind an alias.
+          ...(model.contextWindow ? { contextWindow: model.contextWindow } : {}),
+        },
         history: openAiHistory(this.options.gatewayHistory ?? []),
         // JiuwenSwarm gives a tool call 30 s unless told otherwise; the run's own timeout is the limit here.
         ...(this.options.runTimeoutMs ? { toolTimeoutSeconds: Math.ceil(this.options.runTimeoutMs / 1000) } : {}),
@@ -466,10 +471,20 @@ async function readJson(request: IncomingMessage): Promise<unknown> {
 }
 
 /**
- * The conversation so far as OpenAI chat messages. The API's record is the only history the model
- * sees: the adapter inserts it into every model request and runs the turn in a JiuwenSwarm session
- * of its own, so a resumed subagent, a session begun on the built-in loop and the API's compaction
- * all carry over.
+ * The JiuwenSwarm session that holds one agent's conversation. It is stable across runs, so JiuwenSwarm
+ * keeps (and compresses) the context itself, and there is one per agent: the main agent uses the
+ * session's own id, a subagent its own key, so a resumed subagent finds its conversation.
+ */
+export function jiuwenSwarmSessionKey(options: Pick<NativeAgentOptions, "sessionId" | "versioning">): string {
+  const agentId = options.versioning?.agentId ?? "main";
+  if (agentId.startsWith("main")) return options.sessionId;
+  return `${options.sessionId}--${agentId.replace(/[^A-Za-z0-9_-]+/g, "-")}`;
+}
+
+/**
+ * The conversation so far as OpenAI chat messages, from the API's record. JiuwenSwarm keeps the
+ * context itself; the adapter uses this only to start a session JiuwenSwarm has no context for yet
+ * (a conversation that began on the built-in loop).
  */
 export function openAiHistory(history: readonly Record<string, unknown>[]): Array<Record<string, unknown>> {
   const out: Array<Record<string, unknown>> = [];
