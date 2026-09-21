@@ -60,6 +60,10 @@ class LlmRoute:
     # prompt (identity, safety, tools, todo, context compression, installed skills) stays whole and
     # `system_prompt` is added after it.
     system_prompt_mode: str = "replace"
+    # Offer every one of JiuwenSwarm's own tools, not only `native_tools`. Where one of ours has the same
+    # name, JiuwenSwarm's is kept and ours is not offered (`shadowed`, filled in as requests go by).
+    all_native_tools: bool = False
+    shadowed: set[str] = field(default_factory=set)
 
 
 @dataclass
@@ -105,11 +109,19 @@ def rewrite_request(body: dict[str, Any], route: LlmRoute) -> dict[str, Any]:
     out = dict(body)
     out["model"] = route.model
     if body.get("tools"):
+        names = [tool.get("function", {}).get("name", "") for tool in body["tools"]]
+        native = {name for name in names if not name.startswith(route.tool_prefix)}
+        if route.all_native_tools:
+            route.shadowed |= native & route.tool_names
+
+        def keep(name: str) -> bool:
+            if _is_ours(name, route):
+                return _unprefixed(name, route) not in route.shadowed
+            return name in route.native_tools or (route.all_native_tools and name in native)
+
         out["tools"] = [
             {**tool, "function": _original(tool["function"], route)}
-            for tool in body["tools"]
-            if _is_ours(tool.get("function", {}).get("name", ""), route)
-            or tool.get("function", {}).get("name", "") in route.native_tools
+            for tool in body["tools"] if keep(tool.get("function", {}).get("name", ""))
         ]
         if not out["tools"]:
             del out["tools"]
@@ -168,7 +180,7 @@ def _is_ours(name: str, route: LlmRoute) -> bool:
 
 
 def _prefixed(name: str, route: LlmRoute) -> str:
-    return route.tool_prefix + name if name in route.tool_names else name
+    return route.tool_prefix + name if name in route.tool_names and name not in route.shadowed else name
 
 
 def rewrite_response(payload: dict[str, Any], route: LlmRoute) -> dict[str, Any]:

@@ -65,6 +65,12 @@ export interface JiuwenSwarmAgentConfig {
    * `replace`: ScienceDiscovery's takes its place and JiuwenSwarm's never reaches the model.
    */
   prompt?: "append" | "replace";
+  /**
+   * Which tools the model gets. `jiuwenswarm` (default): all of JiuwenSwarm's own (bash, files, web, sub-agents,
+   * todo, memory, skills ...) plus ScienceDiscovery's that JiuwenSwarm does not have; on a name clash
+   * JiuwenSwarm's is used. `ours`: ScienceDiscovery's only (and JiuwenSwarm's todo tools for planning).
+   */
+  tools?: "jiuwenswarm" | "ours";
 }
 
 /**
@@ -91,6 +97,7 @@ export function jiuwenSwarmConfigFromEnv(env: NodeJS.ProcessEnv = process.env): 
     ...(env.SCIENCE_AGENT_ADAPTER_TOKEN?.trim() ? { adapterToken: env.SCIENCE_AGENT_ADAPTER_TOKEN.trim() } : {}),
     ...(env.SCIENCE_AGENT_JIUWENSWARM_PLANNING?.trim() === "update_plan" ? { planning: "update_plan" as const } : {}),
     ...(env.SCIENCE_AGENT_JIUWENSWARM_PROMPT?.trim() === "replace" ? { prompt: "replace" as const } : {}),
+    ...(env.SCIENCE_AGENT_JIUWENSWARM_TOOLS?.trim() === "ours" ? { tools: "ours" as const } : {}),
   };
 }
 
@@ -213,7 +220,10 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
     // Appended after JiuwenSwarm's own prompt, its todo section already says how to plan; only when its prompt is
     // replaced does the model need to be told about the todo tools here.
     const appendPrompt = (this.config.prompt ?? "append") === "append";
-    const systemPrompt = jiuwenSwarmPlans && !appendPrompt ? `${composed}\n\n${TODO_PLANNING_SECTION}` : composed;
+    const allJiuwenSwarmTools = (this.config.tools ?? "jiuwenswarm") === "jiuwenswarm";
+    // With JiuwenSwarm's tools the model is no longer limited to the ones registered here.
+    const ours = allJiuwenSwarmTools ? composed.replace("Use only the registered workspace tools. ", "") : composed;
+    const systemPrompt = jiuwenSwarmPlans && !appendPrompt ? `${ours}\n\n${TODO_PLANNING_SECTION}` : ours;
     const response = await (this.config.fetch ?? fetch)(`${this.config.adapterUrl}/agent/runs`, {
       method: "POST",
       headers: {
@@ -230,6 +240,7 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
         // The adapter's proxy forwards to this loopback gateway, which speaks the model's own protocol.
         model: { model: model.model, baseUrl: modelGateway.url, apiKey: modelGateway.token, provider: "OpenAI" },
         ...(jiuwenSwarmPlans ? { nativeTools: [...JIUWENSWARM_TODO_TOOLS] } : {}),
+        jiuwenSwarmTools: allJiuwenSwarmTools ? "all" : "listed",
         // JiuwenSwarm gives a tool call 30 s unless told otherwise; the run's own timeout is the limit here.
         ...(this.options.runTimeoutMs ? { toolTimeoutSeconds: Math.ceil(this.options.runTimeoutMs / 1000) } : {}),
         tools: [...tools.values()].map((tool) => ({
@@ -467,11 +478,11 @@ class EventTranslator {
       case "tool.started": {
         // Not translated (the bridge reports the tool from where it runs), but the model's call
         // is recorded and announced so the bridge can run under the model's id, in order.
-        const trace = event.trace as { args?: unknown; id: string; input?: string; name: string };
+        const trace = event.trace as { args?: unknown; id: string; input?: string; name: string; native?: boolean };
         const input = trace.input ?? JSON.stringify(trace.args ?? {});
         // Compact JSON like the model sent it; JiuwenSwarm re-serialises arguments with spaces.
         this.transcript.toolCall(trace.id, trace.name, JSON.stringify(trace.args ?? {}));
-        if (this.nativeTools.has(trace.name)) {
+        if (trace.native === true || this.nativeTools.has(trace.name)) {
           // Runs inside JiuwenSwarm: nothing will claim it at the bridge, so report it from here.
           this.lastNativeCall = trace.id;
           this.nativeCalls.set(trace.id, { args: trace.args ?? {}, name: trace.name });

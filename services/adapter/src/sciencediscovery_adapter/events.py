@@ -243,6 +243,10 @@ class RunEventMapper:
         }
         if call.get("display_name"):
             trace["summary"] = str(call["display_name"])
+        raw_name = str(call.get("name") or "")
+        if self.mcp_prefixes and not any(raw_name.startswith(prefix) for prefix in self.mcp_prefixes):
+            # One of JiuwenSwarm's own tools: it runs there, nobody calls the bridge for it.
+            trace["native"] = True
         self._tools[tool_id] = trace
         return [*self._empty_response(), *self._settle_response(), {"type": "tool.started", "trace": dict(trace)}]
 

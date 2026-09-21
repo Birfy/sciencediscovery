@@ -241,3 +241,21 @@ def test_append_leaves_a_second_system_message_out_as_replace_does():
     route = LlmRoute(**{**ROUTE.__dict__, "system_prompt_mode": "append"})
     body = {"messages": [{"role": "system", "content": "A"}, {"role": "system", "content": "B"}, {"role": "user", "content": "hi"}]}
     assert [m["content"] for m in rewrite_request(body, route)["messages"]] == ["A\n\nYou are the science agent.", "hi"]
+
+
+def test_all_native_tools_offers_jiuwenswarms_whole_toolset_and_ours_gives_way_on_a_clash():
+    route = LlmRoute(**{**ROUTE.__dict__, "tool_names": frozenset({"read_file", "run_shell"}), "all_native_tools": True})
+    body = {"tools": [tool("read_file"), tool("bash"), tool("subagent_spawn"), tool("mcp_sci_read_file"), tool("mcp_sci_run_shell")], "messages": []}
+    names = [t["function"]["name"] for t in rewrite_request(body, route)["tools"]]
+    assert names == ["read_file", "bash", "subagent_spawn", "run_shell"]
+    assert route.shadowed == {"read_file"}
+    # A call to read_file is JiuwenSwarm's: it keeps its name; run_shell is ours and gets the prefix back.
+    chunk = {"choices": [{"delta": {"tool_calls": [{"function": {"name": "read_file"}}, {"function": {"name": "run_shell"}}]}}]}
+    calls = rewrite_response(chunk, route)["choices"][0]["delta"]["tool_calls"]
+    assert [c["function"]["name"] for c in calls] == ["read_file", "mcp_sci_run_shell"]
+
+
+def test_without_all_native_tools_only_the_listed_ones_are_offered():
+    route = LlmRoute(**{**ROUTE.__dict__, "native_tools": frozenset({"todo_create"})})
+    body = {"tools": [tool("bash"), tool("todo_create"), tool("mcp_sci_run_shell")], "messages": []}
+    assert [t["function"]["name"] for t in rewrite_request(body, route)["tools"]] == ["todo_create", "run_shell"]

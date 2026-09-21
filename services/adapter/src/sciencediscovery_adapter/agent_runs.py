@@ -90,6 +90,8 @@ class AgentRunRequest(BaseModel):
     # Names of JiuwenSwarm's own tools that stay visible to the model besides the toolset above
     # (for example `todo_create`). They run inside JiuwenSwarm, not over the bridge.
     nativeTools: list[str] = Field(default_factory=list)
+    # "all": every one of JiuwenSwarm's own tools is offered too, and one of ours with the same name gives way.
+    jiuwenSwarmTools: Literal["all", "listed"] = "listed"
     # Longest a single tool call may take, in seconds; the run's own timeout, when the caller has one.
     toolTimeoutSeconds: int | None = None
 
@@ -150,7 +152,7 @@ class AgentRunner:
                     tool_prefix=f"mcp_{name}_", tool_names=frozenset(t.name for t in request.tools),
                     tool_specs={t.name: {"description": t.description, "parameters": t.inputSchema} for t in request.tools},
                     system_prompt=request.systemPrompt, system_prompt_mode=request.systemPromptMode,
-                    native_tools=frozenset(request.nativeTools),
+                    native_tools=frozenset(request.nativeTools), all_native_tools=request.jiuwenSwarmTools == "all",
                 ))
                 model_alias = f"sd-{llm_token[:12]}"
                 await self.ensure_default_model()

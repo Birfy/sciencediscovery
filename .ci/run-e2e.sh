@@ -221,6 +221,9 @@ if [[ "$backend" == "jiuwenswarm" ]]; then
   # to ScienceDiscovery's `update_plan`, so they run with that tool; the todo path is covered by
   # test/contract/jw-only/live.mjs todo-plan.
   export SCIENCE_AGENT_JIUWENSWARM_PLANNING=update_plan
+  # Likewise they script ScienceDiscovery's read_file/list_files with its argument shapes; JiuwenSwarm's own
+  # tools are covered by test/contract/jw-only/live.mjs native-tools.
+  export SCIENCE_AGENT_JIUWENSWARM_TOOLS=ours
 fi
 
 stack_arguments=(--mode local)

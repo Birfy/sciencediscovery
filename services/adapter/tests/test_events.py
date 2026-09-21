@@ -338,3 +338,12 @@ def test_jiuwenswarms_todo_list_becomes_a_plan_update_with_its_whole_list():
     assert events == [{"type": "plan.updated", "items": [
         {"id": "a", "content": "Step A", "status": "in_progress"}, {"id": "b", "content": "Step B", "status": "pending"}]}]
     assert mapper.unmapped == []
+
+
+def test_a_jiuwenswarm_tool_is_marked_native_and_one_of_ours_is_not():
+    mapper = RunEventMapper(mcp_prefixes=("mcp_sci_",))
+    own = mapper.feed({"type": "event", "event": "chat.tool_call", "payload": {"tool_call": {"name": "bash", "arguments": "{}", "tool_call_id": "a"}}})
+    ours = mapper.feed({"type": "event", "event": "chat.tool_call", "payload": {"tool_call": {"name": "mcp_sci_run_shell", "arguments": "{}", "tool_call_id": "b"}}})
+    started = [e for e in own + ours if e["type"] == "tool.started"]
+    assert started[0]["trace"].get("native") is True and started[0]["trace"]["name"] == "bash"
+    assert "native" not in started[1]["trace"] and started[1]["trace"]["name"] == "run_shell"

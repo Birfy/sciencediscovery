@@ -138,6 +138,25 @@ const checks = {
     }
   },
 
+  /** One of JiuwenSwarm's own tools (bash) runs, and the run shows it as a tool call with its output. */
+  async "native-tools"() {
+    const stub = await startStubModel({ main: [{ tool: "bash", arguments: { command: "echo JW-BASH-OK" } }, { text: "Ran it." }] });
+    const { sessionId, cleanup } = await setup(stub);
+    try {
+      const run = await runAndWait(sessionId, "Run echo.");
+      if (run.status !== "completed") throw new Error(`run ${run.status}: ${run.error}`);
+      const offered = JSON.stringify(stub.requests.at(-1) ?? {});
+      const events = await runEvents(sessionId, run.id);
+      const started = events.find((event) => event.type === "tool.started");
+      const completed = events.find((event) => event.type === "tool.completed");
+      if (started?.trace?.name !== "bash") throw new Error(`no bash tool call in the run: ${events.map((e) => e.type).join(" ")}`);
+      if (!JSON.stringify(completed ?? {}).includes("JW-BASH-OK")) throw new Error(`bash output missing: ${JSON.stringify(completed)?.slice(0, 300)}`);
+      console.log("native-tools: ok (JiuwenSwarm's bash ran and its output is in the run's tool card)");
+    } finally {
+      await cleanup();
+    }
+  },
+
   /** JiuwenSwarm's own todo tool drives the plan (the default; not with SCIENCE_AGENT_JIUWENSWARM_PLANNING=update_plan). */
   async "todo-plan"() {
     const tasks = [
