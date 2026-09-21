@@ -89,10 +89,12 @@ so a run is reproducible.
   the native agent never validated, and it **drops empty arrays and objects** from a call
   (`{"plan": []}` arrives as `{}`; `""`, `0` and `false` survive). `schema.py` compensates.
 - **A client that disconnects mid-run** gets nothing more, and a new connection is not subscribed to
-  that run's output. The next `chat.send` on the same session was served at once although the earlier
-  (slow) run had ~10 s left, so the run was ended when its client left (inferred from that behaviour,
-  not from the gateway's log). There is no replay: anything that must survive a browser disconnect has
-  to keep its own connection open and its own event log, which is what this adapter does per run.
+  that run's output. The run itself **keeps going** (measured: its output resumes on a new connection after
+  `chat.resume`). `chat.resume` from a new connection answers `chat.interrupt_result` "task resumed" and
+  the run's frames flow to it again, but **nothing sent in the gap is replayed** (a 6 s gap lost 6 frames);
+  with no run it answers "task completed". `ChatRun` uses it to take a run up again when its connection to the
+  gateway drops (three tries, then the run fails). An earlier reading of this section (the run ends when
+  its client leaves) was wrong. A second `chat.send` on the same session still takes the session over.
 - **Two connections on one session**: a second `chat.send` while a run is active does not queue and
   is not refused; it takes over. The first run stopped, and the *second* run's frames reached **both**
   connections. A connection that only listens (sends no request) receives nothing. The legacy API queues
@@ -148,10 +150,14 @@ passes against a live OpenAI-compatible endpoint.
 
 Not done yet:
 
-- **History**: the API's record (`gatewayHistory`) is sent with the run as OpenAI messages
-  (`history`); `llm_proxy.rewrite_request` inserts it after the system prompt in every model
-  request, and the run gets a JiuwenSwarm session of its own (`<session>-<random>`), so nothing is
-  remembered twice and the API's compaction applies. JiuwenSwarm accumulates one small session per run.
+- **History and context**: JiuwenSwarm keeps each agent's conversation in a stable session
+  (`sessionKey`: the caller's session id for the main agent, `<session>--<agent>` for a subagent) and
+  compresses it itself (its context engine compresses at 80% of the model's window; the adapter passes
+  the real window as `context_window_tokens` on the model entry, and `chat.usage_summary` reports it
+  back). The caller's own record (`history`) is used only to start a session JiuwenSwarm has no context for
+  (`session.get_metadata` says so), as an `<earlier_conversation>` block at the top of its first message
+  (`seed.py`): JiuwenSwarm has no call that writes into a session's context (`history.append_record`
+  only writes the display record). Not verified: how its compression behaves on a full window.
 - **Deferred tools**: JiuwenSwarm fixes the tool list at the start of a run, so every deferred MCP tool is
   promoted up front and `tool_search` is offered as well (`offerDeferredTools`).
 - **Tool output store** (`ToolOutputStore`, oversized results by reference) is not part of

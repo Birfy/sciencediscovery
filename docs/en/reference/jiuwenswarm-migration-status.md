@@ -57,26 +57,24 @@ On the Aliyun Linux server (bubblewrap sandbox) with `SCIENCE_AGENT_ADAPTER=1 SC
 
 ## Context management
 
-The built-in loop assembles context on every model step and manages its size. On the JiuwenSwarm executor:
+JiuwenSwarm has a context engine of its own (it compresses at 80% of the model's window and injects its own per-step dynamic context). The executor now uses it:
 
-| Built-in loop | JiuwenSwarm executor |
-|---|---|
-| System prompt sections (identity, governance, capabilities, skills) | Same text, composed once per run |
-| Run contract, protected, in every step | **Not injected** |
-| Per-step dynamic context: plan snapshot, durable state, plugin contributors, `runtime_context_data` | **Not injected**; the model only sees plan or state through earlier tool results |
-| Tool routing hints | **Not injected** |
-| Tool-output guard and reader (bounded results by reference) | Works: calls go through the same `ToolRegistry` |
-| Context budget from the model's context window | **None** |
-| History compaction (summarise older turns) | **None** |
-| Recovery from an input-too-large error (compact, retry) | **None**: the run fails with the provider's message |
-| Trajectory and evidence records | **None** |
-
-JiuwenSwarm has its own context handling; how it behaves with the models used here has not been measured.
+| | Built-in loop | JiuwenSwarm executor |
+|---|---|---|
+| Where the conversation lives | The API's record, re-sent every step | JiuwenSwarm's session, one per agent; the API's record only starts an empty session |
+| Compression when the window fills | ScienceDiscovery's own compactor | JiuwenSwarm's (the model's real window is passed on; **behaviour on a full window not verified**) |
+| System prompt sections (identity, governance, capabilities, skills) | Assembled per step | Same text, composed once per run |
+| Run contract, protected | Every step | **Not injected** |
+| Plan snapshot, durable state, plugin context | Every step | **Not injected**; JiuwenSwarm adds its own dynamic context |
+| Tool routing hints | Yes | **Not injected** |
+| Tool-output guard and reader | Yes | Yes (same `ToolRegistry`) |
+| Recovery from an input-too-large error | Compact and retry | JiuwenSwarm's own handling; **not verified** |
+| Trajectory and evidence | Yes | **None** |
 
 ## Known gaps
 
 1. **No evidence or trajectory.** Runs on JiuwenSwarm produce no `agent.record`/`evidence` events, so the trajectory view is empty.
-2. **History.** The API's record is sent with every run and inserted by the adapter's model proxy; JiuwenSwarm runs each turn in its own session. A session begun on the built-in loop and a resumed subagent therefore carry over (history the built-in loop already compacted stays compacted). **No new compaction, context budgeting or overflow recovery happens on this executor**, and the run contract and the per-step dynamic context (plan snapshot, durable state, plugin context) are not injected: see "Context management" below. JiuwenSwarm's own session store is not used for conversation state.
+2. **History and context.** JiuwenSwarm keeps each agent's conversation in a stable session and compresses it; the API's record only starts a session JiuwenSwarm has no context for. The run contract and the per-step dynamic context (plan snapshot, durable state) are not injected: see "Context management". If the API's record and JiuwenSwarm's session diverge (a conversation edited or rewound in the API) they are not reconciled.
 3. **Model protocols:** all three the UI can configure work (a loopback gateway in the API serves JiuwenSwarm's chat-completions requests through the native model client). Images are not sent to the model.
 4. **No tool-output store** in the JiuwenSwarm toolset. Deferred tools are promoted up front. Tool calls of one model response are scheduled by the native rules (a tool not declared concurrency-safe runs alone, in the order the model called it; duplicate calls are superseded by batch policies), so both executors produce the same events in the same order.
 5. **Wake notices.** The mocked E2E `issue-77-wake-notice` fails on this executor (the scripted model recognises the wake turn by a prompt JiuwenSwarm does not present that way). `issue-85` passes. Run the group with `CI_E2E_BACKEND=jiuwenswarm .ci/run-e2e.sh mocked`. The journeys are load-sensitive on a small host: two of them failed once when run back to back on the 2-core server and passed alone (three repeats), so run them one at a time when in doubt.

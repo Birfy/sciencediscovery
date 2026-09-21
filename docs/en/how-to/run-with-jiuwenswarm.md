@@ -52,7 +52,7 @@ With the adapter on, the adapter takes the public port (default 4310) and the le
 ## What to expect
 
 - The same conversations, tool cards, permission prompts, plans, subagents and artifacts as with the built-in loop; the milestone-0 journeys pass on this executor.
-- Conversation history stays in ScienceDiscovery: each run sends it along and JiuwenSwarm runs the turn in a session of its own. Sessions begun on the built-in loop and resumed subagents therefore carry over. Context management (compaction, budgeting, per-step context injection) is **not** done on this executor yet, so very long conversations or very large tool outputs can exceed the model's context window. Deferred (MCP) tools are offered up front.
+- JiuwenSwarm keeps each agent's conversation (main agent, and each subagent) in its own session and compresses it as the model's context window fills; ScienceDiscovery passes it the model's real window. A session begun on the built-in loop is handed over once, at its first JiuwenSwarm turn. What is not done here: the run contract and ScienceDiscovery's per-step context (plan snapshot, durable state) are not injected. Planning: by default the model keeps the plan with `update_plan`; set `SCIENCE_AGENT_JIUWENSWARM_PLANNING=todo` on the stack to let it use JiuwenSwarm's own todo tools instead, whose list becomes the plan. Deferred (MCP) tools are offered up front.
 - Adding a model makes JiuwenSwarm send one small probe request to it (to detect image input).
 - Token usage is reported per model call, including reasoning tokens.
 

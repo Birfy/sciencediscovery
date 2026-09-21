@@ -52,7 +52,7 @@ SCIENCE_AGENT_ADAPTER=1 SCIENCE_AGENT_EXECUTOR=jiuwenswarm ./scripts/start-stack
 ## 预期行为
 
 - 与内置循环相同的对话、工具卡片、权限提示、计划、子 agent 和产物；里程碑 0 的用例在该执行器上通过。
-- 对话历史仍保存在 ScienceDiscovery：每次运行都会把它一并发出，JiuwenSwarm 在独立会话里跑这一轮。所以在内置循环上开始的会话、恢复的子 agent 都能延续。上下文管理（压缩、预算、每一步的上下文注入）在这个执行器上**还没有做**，所以很长的对话或很大的工具输出可能超出模型的上下文窗口。延迟加载的 MCP 工具会一并提供。
+- JiuwenSwarm 把每个智能体（主智能体和每个子代理）的对话保存在自己的会话里，并在模型的上下文窗口快满时自己压缩；ScienceDiscovery 会把模型真实的窗口大小告诉它。原来在内置循环上开始的会话，在第一次跑 JiuwenSwarm 时一次性交接过去。这里没做的：运行契约和 ScienceDiscovery 每一步的上下文（计划快照、持久状态）不会注入。规划：默认由模型用 `update_plan` 维护计划；在栈上设 `SCIENCE_AGENT_JIUWENSWARM_PLANNING=todo` 则改用 JiuwenSwarm 自己的 todo 工具，它的清单就是计划。延迟加载的 MCP 工具会一并提供。
 - 新增模型时，JiuwenSwarm 会向它发一次很小的探测请求（用于判断是否支持图片输入）。
 - token 用量按每次模型调用上报，包含推理 token。
 
