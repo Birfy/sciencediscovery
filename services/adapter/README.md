@@ -153,8 +153,8 @@ Not done yet:
   `context_window_tokens` on the model entry, and `chat.usage_summary` reports it back). The adapter sends
   and rebuilds no history: a conversation that began on the built-in loop is not known to JiuwenSwarm
   (there is no call that writes into a session's context; `history.append_record` only writes the display
-  record). Not verified: whether the context survives a restart of JiuwenSwarm, and how its compression
-  behaves on a full window.
+  record). The context survives a restart of JiuwenSwarm (`test/contract/jw-only/live.mjs history-restart`). Not
+  verified: how its compression behaves on a full window.
 - **Deferred tools**: JiuwenSwarm fixes the tool list at the start of a run, so every deferred MCP tool is
   promoted up front and `tool_search` is offered as well (`offerDeferredTools`).
 - **Tool output store** (`ToolOutputStore`, oversized results by reference) is not part of
