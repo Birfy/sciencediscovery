@@ -8,7 +8,7 @@ is caught.
 
     node test/contract/run.mjs --coverage                       which of the 259 interface rows have a case
     node test/contract/run.mjs --record out.json                record against $E2E_BASE_URL with $E2E_API_TOKEN
-    node test/contract/run.mjs --compare test/contract/baselines/legacy.json
+    node test/contract/run.mjs --compare test/contract/baselines/legacy-linux.json
     node --test test/contract/*.test.mjs                        the tooling's own tests
 
 ## Files
@@ -17,7 +17,7 @@ is caught.
 |---|---|
 | `routes.json` | The interface inventory, parsed from issue 84 (259 rows, handling per row). Not hand-edited: regenerate from the issue if it changes. |
 | `cases/*.json` | Scenarios. A step lists `covers: ["GET /api/projects"]` (the row's method and path exactly as in `routes.json`), a `request`, optional `capture` (`{"id": "$.id"}`, used later as `{{id}}`), `expectStatus`, `stream` for SSE, and `always: true` for cleanup that must run after a failure. Every case deletes what it creates. |
-| `baselines/legacy.json` | What the legacy API answered, recorded with `--record`. **Read-only for agents**: changing it to make a comparison pass needs a human review. |
+| `baselines/legacy-linux.json` | What the legacy API answered, recorded with `--record`. **Read-only for agents**: changing it to make a comparison pass needs a human review. |
 | `normalize.mjs` | Ids become `<uuid:N>` (numbered by first appearance), times, digests, workspace ids and the sandbox-specific environment name become placeholders. |
 
 ## Rules
@@ -51,7 +51,7 @@ The recording is **profiled** (`profileRunEvents` in `lib.mjs`) so that it does 
 
 ### Comparing two executors
 
-1. Start the legacy stack on a **fresh data directory** and `--record baselines/legacy-l2.json`.
+1. Start the legacy stack on a **fresh data directory** and `--record baselines/legacy-linux.json`.
 2. Start the stack you want to check (for example `SCIENCE_AGENT_ADAPTER=1 SCIENCE_AGENT_EXECUTOR=jiuwenswarm`)
    the same way and `--compare` against that file.
 
