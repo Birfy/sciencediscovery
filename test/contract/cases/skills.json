@@ -1,0 +1,261 @@
+{
+ "domain": "Skills, libraries, review drafts",
+ "cases": [
+  {
+   "id": "skills-lifecycle",
+   "description": "A skill created, read, versioned, written and deleted, plus the review-draft and import routes with input that cannot succeed. Nothing is fetched from git.",
+   "steps": [
+    {
+     "name": "skills before",
+     "request": {
+      "method": "GET",
+      "path": "/api/skills"
+     },
+     "covers": [
+      "GET /api/skills"
+     ],
+     "expectStatus": 200
+    },
+    {
+     "name": "create a skill",
+     "request": {
+      "method": "POST",
+      "path": "/api/skills",
+      "body": {
+       "name": "l1-skill",
+       "description": "A skill made by the L1 contract case.",
+       "instructions": "Say hello."
+      }
+     },
+     "capture": {
+      "skillId": "$.id",
+      "revision": "$.revision"
+     },
+     "covers": [
+      "POST /api/skills"
+     ],
+     "expectStatus": 201
+    },
+    {
+     "name": "read it",
+     "request": {
+      "method": "GET",
+      "path": "/api/skills/{{skillId}}"
+     },
+     "covers": [
+      "GET /api/skills/:id"
+     ],
+     "expectStatus": 200
+    },
+    {
+     "name": "read an unknown skill",
+     "request": {
+      "method": "GET",
+      "path": "/api/skills/nope"
+     },
+     "expectStatus": 404
+    },
+    {
+     "name": "create a skill with no name",
+     "request": {
+      "method": "POST",
+      "path": "/api/skills",
+      "body": {
+       "description": "x",
+       "instructions": "y"
+      }
+     }
+    },
+    {
+     "name": "its versions",
+     "request": {
+      "method": "GET",
+      "path": "/api/skills/{{skillId}}/versions"
+     },
+     "covers": [
+      "GET /api/skills/:id/versions"
+     ],
+     "expectStatus": 200
+    },
+    {
+     "name": "its first version",
+     "request": {
+      "method": "GET",
+      "path": "/api/skills/{{skillId}}/versions/1"
+     },
+     "covers": [
+      "GET /api/skills/:id/versions/:v"
+     ]
+    },
+    {
+     "name": "its SKILL.md resource",
+     "request": {
+      "method": "GET",
+      "path": "/api/skills/{{skillId}}/resources/SKILL.md"
+     },
+     "covers": [
+      "GET /api/skills/:id/resources/*path"
+     ]
+    },
+    {
+     "name": "write a file",
+     "request": {
+      "method": "PUT",
+      "path": "/api/skills/{{skillId}}/files/notes.md",
+      "body": {
+       "content": "notes",
+       "expectedRevision": "{{revision}}"
+      }
+     },
+     "covers": [
+      "PUT /api/skills/:id/files/*path"
+     ]
+    },
+    {
+     "name": "update it with a stale revision",
+     "request": {
+      "method": "PUT",
+      "path": "/api/skills/{{skillId}}",
+      "body": {
+       "name": "l1-skill",
+       "description": "changed",
+       "instructions": "Say hi.",
+       "expectedRevision": 0
+      }
+     },
+     "covers": [
+      "PUT /api/skills/:id"
+     ]
+    },
+    {
+     "name": "what deleting it would affect",
+     "request": {
+      "method": "GET",
+      "path": "/api/skills/{{skillId}}/deletion-impact"
+     },
+     "covers": [
+      "GET /api/skills/:id/deletion-impact"
+     ]
+    },
+    {
+     "name": "review drafts",
+     "request": {
+      "method": "GET",
+      "path": "/api/skill-review-drafts"
+     },
+     "covers": [
+      "GET /api/skill-review-drafts"
+     ]
+    },
+    {
+     "name": "an unknown review draft",
+     "request": {
+      "method": "GET",
+      "path": "/api/skill-review-drafts/nope"
+     },
+     "covers": [
+      "GET /api/skill-review-drafts/:id"
+     ]
+    },
+    {
+     "name": "confirm an unknown review draft",
+     "request": {
+      "method": "POST",
+      "path": "/api/skill-review-drafts/nope/confirm",
+      "body": {}
+     },
+     "covers": [
+      "POST /api/skill-review-drafts/:id/confirm"
+     ]
+    },
+    {
+     "name": "discard an unknown review draft",
+     "request": {
+      "method": "DELETE",
+      "path": "/api/skill-review-drafts/nope"
+     },
+     "covers": [
+      "DELETE /api/skill-review-drafts/:id"
+     ]
+    },
+    {
+     "name": "merge review drafts with an empty body",
+     "request": {
+      "method": "POST",
+      "path": "/api/skill-review-drafts/merge",
+      "body": {}
+     },
+     "covers": [
+      "POST /api/skill-review-drafts/merge"
+     ]
+    },
+    {
+     "name": "import with an empty body",
+     "request": {
+      "method": "POST",
+      "path": "/api/skills/import",
+      "body": {}
+     },
+     "covers": [
+      "POST /api/skills/import"
+     ]
+    },
+    {
+     "name": "inspect a git source with an empty body",
+     "request": {
+      "method": "POST",
+      "path": "/api/skills/import-git/inspect",
+      "body": {}
+     },
+     "covers": [
+      "POST /api/skills/import-git/inspect"
+     ]
+    },
+    {
+     "name": "review a git import with an empty body",
+     "request": {
+      "method": "POST",
+      "path": "/api/skills/import-git/review",
+      "body": {}
+     },
+     "covers": [
+      "POST /api/skills/import-git/review"
+     ]
+    },
+    {
+     "name": "import from git with an empty body",
+     "request": {
+      "method": "POST",
+      "path": "/api/skills/import-git",
+      "body": {}
+     },
+     "covers": [
+      "POST /api/skills/import-git"
+     ]
+    },
+    {
+     "name": "draft a skill from a dialogue with an empty body",
+     "request": {
+      "method": "POST",
+      "path": "/api/skills/drafts/dialogue",
+      "body": {}
+     },
+     "covers": [
+      "POST /api/skills/drafts/dialogue"
+     ]
+    },
+    {
+     "name": "delete the skill",
+     "request": {
+      "method": "DELETE",
+      "path": "/api/skills/{{skillId}}"
+     },
+     "covers": [
+      "DELETE /api/skills/:id"
+     ],
+     "always": true
+    }
+   ]
+  }
+ ]
+}
