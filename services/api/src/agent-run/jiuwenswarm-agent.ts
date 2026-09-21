@@ -44,6 +44,8 @@ export interface JiuwenSwarmAgentConfig {
   adapterUrl: string;
   /** Bearer token the adapter expects on /agent/*, when it has one. */
   adapterToken?: string;
+  /** How long the bridge waits for the adapter to report a tool call before running it anyway. */
+  toolAnnouncementTimeoutMs?: number;
   /** Replaceable for tests. */
   fetch?: typeof fetch;
 }
@@ -115,15 +117,15 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
     const plugins = await startPluginScope(this.options, durable, this.controller.signal);
     const tools = new Map([...buildTools(this.options), ...pluginTools(plugins)].map((tool) => [tool.name, tool]));
     const bridgeToken = randomUUID();
-    const bridge = await startBridge(tools, bridgeToken, this.controller.signal, (event) => this.emit(event));
+    const announcements = new ToolAnnouncements();
+    const transcript = new Transcript();
+    const bridge = await startBridge(tools, bridgeToken, this.controller.signal, (event) => this.emit(event), announcements, transcript,
+      this.config.toolAnnouncementTimeoutMs);
     const timeout = this.options.runTimeoutMs ? setTimeout(() => this.controller.abort(), this.options.runTimeoutMs) : undefined;
     try {
-      const finalText = await this.stream(text, tools, bridge.url, bridgeToken);
+      const finalText = await this.stream(text, tools, bridge.url, bridgeToken, announcements, transcript);
       return {
-        finalMessages: [
-          { role: "user", content: text },
-          { role: "assistant", content: finalText },
-        ],
+        finalMessages: [{ role: "user", content: text }, ...transcript.finish(finalText)] as never,
       };
     } catch (error) {
       if (this.controller.signal.aborted) throw new Error("Agent run cancelled");
@@ -136,7 +138,10 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
     }
   }
 
-  private async stream(text: string, tools: Map<string, AgentTool>, bridgeUrl: string, bridgeToken: string): Promise<string> {
+  private async stream(
+    text: string, tools: Map<string, AgentTool>, bridgeUrl: string, bridgeToken: string,
+    announcements: ToolAnnouncements, transcript: Transcript,
+  ): Promise<string> {
     const { config: model } = this.options;
     const provider = model.apiProtocol ? PROVIDERS[model.apiProtocol] : undefined;
     const toolNames = new Set(tools.keys());
@@ -164,7 +169,7 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
     if (!response.ok || !response.body) {
       throw new Error(`adapter refused the run: HTTP ${response.status} ${await response.text().catch(() => "")}`.trim());
     }
-    const translator = new EventTranslator((event) => this.emit(event));
+    const translator = new EventTranslator((event) => this.emit(event), announcements, transcript);
     let finalText = "";
     let failure: string | undefined;
     for await (const line of ndjson(response.body)) {
@@ -179,6 +184,84 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
 }
 
 /**
+ * The tool calls the adapter says the model made, in order. The bridge runs a tool only when
+ * JiuwenSwarm calls it over MCP, which can beat the adapter's own report of the same call to
+ * this process. Waiting for that report keeps the run's events in the order the native agent
+ * produces them (the response of the model call first, then the tool) and lets the tool run
+ * under the id the model gave it.
+ */
+class ToolAnnouncements {
+  private readonly pending: Array<{ args: unknown; id: string; input: string; name: string }> = [];
+  private readonly waiters = new Set<() => void>();
+
+  announce(call: { args: unknown; id: string; input: string; name: string }): void {
+    this.pending.push(call);
+    for (const wake of [...this.waiters]) wake();
+  }
+
+  /** Take the first announced call with this name and these arguments; undefined after `timeoutMs`. */
+  async claim(name: string, args: unknown, timeoutMs = 5_000): Promise<{ id: string; input: string } | undefined> {
+    const wanted = JSON.stringify(args ?? {});
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      const index = this.pending.findIndex((call) => call.name === name && JSON.stringify(call.args ?? {}) === wanted);
+      if (index >= 0) return this.pending.splice(index, 1)[0];
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) return undefined;
+      await new Promise<void>((resolve) => {
+        const wake = () => { this.waiters.delete(wake); clearTimeout(timer); resolve(); };
+        const timer = setTimeout(wake, remaining);
+        this.waiters.add(wake);
+      });
+    }
+  }
+}
+
+/** The model-facing transcript of a run, in the shape the native agent leaves behind. */
+class Transcript {
+  readonly messages: Array<Record<string, unknown>> = [];
+  private text = "";
+  private pending: { content: string; tool_calls?: Array<Record<string, unknown>> } | undefined;
+
+  delta(text: string): void {
+    this.text += text;
+  }
+
+  /** A model call ended; what it said is held until we know whether it also called tools. */
+  settled(): void {
+    this.flush();
+    this.pending = { content: this.text };
+    this.text = "";
+  }
+
+  toolCall(id: string, name: string, input: string): void {
+    this.pending ??= { content: "" };
+    (this.pending.tool_calls ??= []).push({ id, type: "function", function: { name, arguments: input } });
+  }
+
+  toolResult(id: string, name: string, content: string): void {
+    this.flush();
+    this.messages.push({ role: "tool", tool_call_id: id, name, content });
+  }
+
+  private flush(): void {
+    if (!this.pending) return;
+    this.messages.push({ role: "assistant", ...this.pending });
+    this.pending = undefined;
+  }
+
+  /** Close the run. A model call that answered without streaming leaves `finalText` as its answer. */
+  finish(finalText: string): Array<Record<string, unknown>> {
+    if (this.text) this.settled();
+    if (!this.pending && finalText && !this.messages.some((message) => message.role === "assistant" && message.content === finalText)) {
+      this.pending = { content: finalText };
+    }
+    this.flush();
+    return this.messages;
+  }
+}
+
+/**
  * Turns the adapter's run events into the agent events the run consumes. Tool
  * events are deliberately not translated: the bridge reports them, from the
  * place the tool really runs, with its real result.
@@ -187,7 +270,11 @@ class EventTranslator {
   private turn = 0;
   private total: { cacheReadTokens: number | null; cacheWriteTokens: number | null; inputTokens: number; outputTokens: number; totalTokens: number } | undefined;
 
-  constructor(private readonly emit: Listener) {}
+  constructor(
+    private readonly emit: Listener,
+    private readonly announcements: ToolAnnouncements,
+    private readonly transcript: Transcript,
+  ) {}
 
   handle(event: { type: string; [key: string]: unknown }): void {
     switch (event.type) {
@@ -201,6 +288,7 @@ class EventTranslator {
         break;
       }
       case "assistant.delta":
+        this.transcript.delta(String(event.delta));
         this.emit({
           type: "message_update",
           assistantMessageEvent: { type: "text_delta", delta: String(event.delta), responseId: String(event.responseId) },
@@ -212,7 +300,17 @@ class EventTranslator {
           assistantMessageEvent: { type: "thinking_delta", delta: String(event.delta), responseId: String(event.responseId) },
         });
         break;
+      case "tool.started": {
+        // Not translated (the bridge reports the tool from where it runs), but the model's call
+        // is recorded and announced so the bridge can run under the model's id, in order.
+        const trace = event.trace as { args?: unknown; id: string; input?: string; name: string };
+        const input = trace.input ?? JSON.stringify(trace.args ?? {});
+        this.transcript.toolCall(trace.id, trace.name, input);
+        this.announcements.announce({ args: trace.args ?? {}, id: trace.id, input, name: trace.name });
+        break;
+      }
       case "assistant.response.settled":
+        this.transcript.settled();
         this.emit({ type: "response_settled", responseId: String(event.responseId), turn: Number(event.turn) });
         break;
       case "model.usage": {
@@ -283,6 +381,9 @@ async function startBridge(
   token: string,
   signal: AbortSignal,
   emit: Listener,
+  announcements: ToolAnnouncements,
+  transcript: Transcript,
+  announcementTimeoutMs?: number,
 ): Promise<{ url: string; close(): Promise<void> }> {
   const server: Server = createServer(async (request, response) => {
     const reply = (status: number, body: unknown) => {
@@ -305,8 +406,11 @@ async function startBridge(
       reply(404, { error: `unknown tool: ${body.name}` });
       return;
     }
-    const toolCallId = randomUUID();
     const args = body.arguments ?? {};
+    // Run under the model's own id, and only after the adapter has reported the call (see ToolAnnouncements).
+    const claimed = await announcements.claim(tool.name, args, announcementTimeoutMs);
+    if (!claimed) console.warn(`[jiuwenswarm-bridge] no model call was reported for ${tool.name}; running it under a generated id`);
+    const toolCallId = claimed?.id ?? randomUUID();
     emit({ type: "tool_execution_start", toolCallId, toolName: tool.name, args });
     let result: AgentToolResult;
     try {
@@ -322,6 +426,7 @@ async function startBridge(
       console.warn(`[jiuwenswarm-bridge] ${tool.name}(${JSON.stringify(args).slice(0, 160)}) -> ${isError ? "ERROR " : ""}${resultText(result).slice(0, 300)}`);
     }
     emit({ type: "tool_execution_end", toolCallId, toolName: tool.name, isError, result });
+    transcript.toolResult(toolCallId, tool.name, resultText(result));
     reply(200, { text: resultText(result), isError });
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
