@@ -45,8 +45,8 @@ async function api(method, path, body) {
   return text ? JSON.parse(text) : undefined;
 }
 
-async function setup(stub) {
-  const model = await api("POST", "/api/models", { vision: false, apiToken: stub.apiToken, baseUrl: stub.baseUrl, model: stub.model, name: `live ${Date.now()}` });
+async function setup(stub, modelExtras = {}) {
+  const model = await api("POST", "/api/models", { vision: false, apiToken: stub.apiToken, baseUrl: stub.baseUrl, model: stub.model, name: `live ${Date.now()}`, ...modelExtras });
   const project = await api("POST", "/api/projects", { name: `live ${Date.now()}` });
   const sessionId = project.firstSession.id;
   await api("PATCH", `/api/sessions/${sessionId}`, { modelId: model.id, title: "live" });
@@ -106,6 +106,31 @@ const checks = {
       const seen = stub.lastMessages?.() ?? [];
       if (!JSON.stringify(seen).includes("4711")) throw new Error(`after the restart the second request did not carry the first turn (${seen.length} messages)`);
       console.log(`history-restart: ok (after restarting JiuwenSwarm the second request still had the first turn among its ${seen.length} messages)`);
+    } finally {
+      await cleanup();
+    }
+  },
+
+  /**
+   * JiuwenSwarm compresses the conversation when the model's window fills. The model's window is set to
+   * 3000 tokens and six turns of about 750 tokens each are sent: by the last request the early turns must
+   * be gone or summarised, while the newest is there in full.
+   */
+  async compression() {
+    const stub = await startStubModel({ main: Array.from({ length: 30 }, (_, index) => ({ text: `Answer ${index + 1}.` })) });
+    const { sessionId, cleanup } = await setup(stub, { facts: { contextWindow: 3000 } });
+    try {
+      const turns = 6;
+      for (let turn = 1; turn <= turns; turn += 1) {
+        const run = await runAndWait(sessionId, `TURN-${turn}-MARK ${"lorem ipsum dolor ".repeat(170)}`);
+        if (run.status !== "completed") throw new Error(`turn ${turn} ${run.status}: ${run.error}`);
+      }
+      const seen = JSON.stringify(stub.lastMessages?.() ?? []);
+      const present = Array.from({ length: turns }, (_, index) => index + 1).filter((turn) => seen.includes(`TURN-${turn}-MARK`));
+      const sent = turns * 3000;
+      console.log(`compression: last request ${seen.length} chars for ${sent} sent; turns still present in full: ${present.join(",") || "none"}`);
+      if (!present.includes(turns)) throw new Error("the newest turn is missing from the last request");
+      if (present.length === turns || seen.length > sent * 0.8) throw new Error("nothing was compressed: every turn is still there");
     } finally {
       await cleanup();
     }
