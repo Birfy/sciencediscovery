@@ -163,6 +163,8 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
         cwd: this.options.workspaceRoot,
         model: { model: model.model, baseUrl: model.baseUrl, apiKey: model.apiToken ?? "", ...(provider ? { provider } : {}) },
         history: openAiHistory(this.options.gatewayHistory ?? []),
+        // JiuwenSwarm gives a tool call 30 s unless told otherwise; the run's own timeout is the limit here.
+        ...(this.options.runTimeoutMs ? { toolTimeoutSeconds: Math.ceil(this.options.runTimeoutMs / 1000) } : {}),
         tools: [...tools.values()].map((tool) => ({
           name: tool.name, description: tool.description, inputSchema: tool.parameters,
         })),

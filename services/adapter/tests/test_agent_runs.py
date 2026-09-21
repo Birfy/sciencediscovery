@@ -268,3 +268,15 @@ async def test_start_up_removes_stale_aliases_left_by_an_earlier_process():
     async with app.router.lifespan_context(app):
         pass
     assert calls == ["models.list", "models.replace_all"]
+
+
+async def test_the_per_run_mcp_server_gets_a_tool_timeout_far_beyond_jiuwenswarms_30_seconds(harness):
+    app, _, rpcs = harness
+    FakeRun.fixture = "jw_chat_mcp_direct.raw"
+    tools = [{"name": "run_shell", "description": "d", "inputSchema": {"type": "object"}}]
+    bridge = {"url": "http://legacy.test/bridge", "token": "t"}
+    await post(app, {"sessionId": "s1", "prompt": "go", "tools": tools, "bridge": bridge})
+    assert next(p for _, m, p in rpcs if m == "mcp.register_custom")["timeout_s"] == 3600
+    rpcs.clear()
+    await post(app, {"sessionId": "s1", "prompt": "go", "tools": tools, "bridge": bridge, "toolTimeoutSeconds": 7200})
+    assert next(p for _, m, p in rpcs if m == "mcp.register_custom")["timeout_s"] == 7200

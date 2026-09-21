@@ -34,6 +34,9 @@ class Settings:
     # Bearer token the legacy API presents on /agent/*; empty leaves them open
     # (the adapter listens on loopback by default).
     agent_token: str = ""
+    # How long JiuwenSwarm waits for one tool call over MCP. Its default is 30 s, which cuts off
+    # a subagent (minutes) or a long shell command; the run's own timeout is what should end them.
+    tool_timeout_s: int = 3600
 
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> "Settings":
@@ -48,4 +51,5 @@ class Settings:
             mgmt_url=env.get("JIUWENSWARM_MGMT_URL", "ws://127.0.0.1:19000/ws"),
             public_url=env.get("SCIENCE_AGENT_ADAPTER_PUBLIC_URL", f"http://127.0.0.1:{port}").rstrip("/"),
             agent_token=env.get("SCIENCE_AGENT_ADAPTER_TOKEN", ""),
+            tool_timeout_s=int(env.get("SCIENCE_AGENT_ADAPTER_TOOL_TIMEOUT_S", "3600")),
         )

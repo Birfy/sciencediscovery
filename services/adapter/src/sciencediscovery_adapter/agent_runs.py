@@ -85,6 +85,8 @@ class AgentRunRequest(BaseModel):
     # is the only history the model sees: it is inserted into every model request of the run and
     # JiuwenSwarm runs the turn in a session of its own, so nothing is remembered twice.
     history: list[dict[str, Any]] | None = None
+    # Longest a single tool call may take, in seconds; the run's own timeout, when the caller has one.
+    toolTimeoutSeconds: int | None = None
 
 
 def bridge_caller(bridge: Bridge, client: httpx.AsyncClient):
@@ -152,6 +154,7 @@ class AgentRunner:
                 ))
                 await self.rpc(self.settings.mgmt_url, "mcp.register_custom", {
                     "name": name, "transport": "streamable-http", "url": f"{self.settings.public_url}/mcp/{token}",
+                    "timeout_s": request.toolTimeoutSeconds or self.settings.tool_timeout_s,
                 })
                 registered = True
                 await self.rpc(self.settings.mgmt_url, "mcp.connect", {"name": name})

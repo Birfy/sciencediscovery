@@ -84,6 +84,7 @@ so a run is reproducible.
 - **Models**: `models.replace_all` applies without a restart and replaces the whole list;
   `chat.send` selects an entry with `model_name`, which is also the id sent to the provider.
   Adding a model triggers an image-modality probe request (tool-less, non-streaming).
+- **Tool call time limit**: JiuwenSwarm's MCP client gives every call 30 s (`[mcp-timeout] default_timeout=30.0s`) and fails a longer one with an empty `[182301] execute invoke failed, error=''`, without retrying a non-idempotent tool. `mcp.register_custom` accepts `timeout_s`, which the adapter sets per run.
 - **Argument handling**: JiuwenSwarm validates MCP tool arguments strictly (pydantic) where
   the native agent never validated, and it **drops empty arrays and objects** from a call
   (`{"plan": []}` arrives as `{}`; `""`, `0` and `false` survive). `schema.py` compensates.
@@ -116,6 +117,7 @@ so a run is reproducible.
 | `JIUWENSWARM_MGMT_URL` | `ws://127.0.0.1:19000/ws` | Web channel used for `mcp.*` and `models.*` |
 | `SCIENCE_AGENT_ADAPTER_PUBLIC_URL` | `http://127.0.0.1:<port>` | How JiuwenSwarm reaches the adapter |
 | `SCIENCE_AGENT_ADAPTER_TOKEN` | unset | Bearer token required on `/agent/*` when set |
+| `SCIENCE_AGENT_ADAPTER_TOOL_TIMEOUT_S` | `3600` | Longest one tool call may take. JiuwenSwarm's own limit for an MCP call is 30 s, which cuts off subagents and long commands; the API passes the run's timeout when it has one |
 | `SCIENCE_AGENT_ADAPTER_DEBUG` | unset | `1` prints every tool event of every run to stderr |
 | `SCIENCE_AGENT_JIUWENSWARM_DEBUG` | unset | `1` (legacy API) logs every bridge tool call |
 

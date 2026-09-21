@@ -742,3 +742,20 @@ test("an earlier call that never reaches the bridge does not hold up the later o
     await adapter.close();
   }
 });
+
+test("the run's timeout is passed on as the longest a single tool call may take", async () => {
+  let sent: any;
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    sent = body;
+    response.writeHead(200);
+    response.end(line({ done: { finalText: "ok" } }));
+  });
+  try {
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ runTimeoutMs: 90_000 })).execute("go");
+    assert.equal(sent.toolTimeoutSeconds, 90);
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options()).execute("go");
+    assert.equal("toolTimeoutSeconds" in sent, false);
+  } finally {
+    await adapter.close();
+  }
+});
