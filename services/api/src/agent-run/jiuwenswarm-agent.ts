@@ -138,10 +138,21 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
     const bridge = await startBridge(registry, tools, bridgeToken, this.controller.signal, (event) => this.emit(event), announcements, transcript,
       this.config.toolAnnouncementTimeoutMs);
     // JiuwenSwarm only speaks OpenAI chat completions; the model itself may not (see the gateway).
-    const modelGateway = await startModelGateway(modelEndpointFor(this.options), resolveModelClientPolicy(), this.controller.signal, this.config.modelStreamer);
+    const policy = resolveModelClientPolicy();
+    const modelGateway = await startModelGateway(modelEndpointFor(this.options), policy, this.controller.signal, this.config.modelStreamer);
     const timeout = this.options.runTimeoutMs ? setTimeout(() => this.controller.abort(), this.options.runTimeoutMs) : undefined;
     try {
       const finalText = await this.stream(text, tools, bridge.url, bridgeToken, announcements, transcript, modelGateway, jiuwenSwarmPlans);
+      // The model was cut at max_tokens and JiuwenSwarm ended the run there. Say so as the native loop does;
+      // a turn that produced no visible text (a reasoning model spending its whole budget on thought) would
+      // otherwise end the run in the middle of a thought with nothing to show for it.
+      const last = modelGateway.lastTurn();
+      if (last?.truncated && last.toolCalls === 0) {
+        this.emit({ type: "turn_truncated" } as never);
+        if (!last.text.trim()) {
+          throw new Error(`The model was cut off at its output limit (max_tokens ${policy.maxTokens}) while thinking and gave no answer. Raise SCIENCE_AGENT_LLM_MAX_TOKENS and try again.`);
+        }
+      }
       return {
         finalMessages: [{ role: "user", content: text }, ...transcript.finish(finalText).map((message) => modelGateway.restore(message))] as never,
       };

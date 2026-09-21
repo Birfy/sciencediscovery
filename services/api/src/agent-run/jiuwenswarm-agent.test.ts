@@ -891,3 +891,56 @@ test("todo planning is chosen by SCIENCE_AGENT_JIUWENSWARM_PLANNING", () => {
   assert.equal(jiuwenSwarmConfigFromEnv(env)?.planning, undefined);
   assert.equal(jiuwenSwarmConfigFromEnv({ ...env, SCIENCE_AGENT_JIUWENSWARM_PLANNING: "todo" })?.planning, "todo");
 });
+
+/** The adapter side of a run that asks the model once, through the run's gateway, as JiuwenSwarm does. */
+function askTheModel(turn: unknown) {
+  const streamer = (async () => turn) as never;
+  const adapter = fakeAdapter(async ({ body }, response) => {
+    response.writeHead(200);
+    await fetch(`${body.model.baseUrl}/chat/completions`, {
+      method: "POST", headers: { authorization: `Bearer ${body.model.apiKey}` },
+      body: JSON.stringify({ stream: true, messages: [{ role: "user", content: "go" }] }),
+    }).then((reply) => reply.text());
+    response.end(line({ done: { finalText: "" } }));
+  });
+  return { adapter, streamer };
+}
+
+test("a model cut off at max_tokens while thinking, with no answer, fails the run and says what to raise", async () => {
+  const { adapter: pending, streamer } = askTheModel({ assistantMessage: { role: "assistant", content: "" }, toolCalls: [], truncated: true });
+  const adapter = await pending;
+  try {
+    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url, modelStreamer: streamer })(options());
+    const events = collect(agent);
+    await assert.rejects(agent.execute("go"), /max_tokens .*SCIENCE_AGENT_LLM_MAX_TOKENS/);
+    assert.equal(events.some((event) => event.type === "turn_truncated"), true);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("a turn cut off after it had said something still reports the cut, and does not fail", async () => {
+  const { adapter: pending, streamer } = askTheModel({ assistantMessage: { role: "assistant", content: "Here is the start" }, toolCalls: [], truncated: true });
+  const adapter = await pending;
+  try {
+    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url, modelStreamer: streamer })(options());
+    const events = collect(agent);
+    await agent.execute("go");
+    assert.equal(events.some((event) => event.type === "turn_truncated"), true);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("a turn that ended normally reports nothing", async () => {
+  const { adapter: pending, streamer } = askTheModel({ assistantMessage: { role: "assistant", content: "done" }, toolCalls: [] });
+  const adapter = await pending;
+  try {
+    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url, modelStreamer: streamer })(options());
+    const events = collect(agent);
+    await agent.execute("go");
+    assert.equal(events.some((event) => event.type === "turn_truncated"), false);
+  } finally {
+    await adapter.close();
+  }
+});

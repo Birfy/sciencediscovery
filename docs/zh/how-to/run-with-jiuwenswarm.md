@@ -62,6 +62,7 @@ SCIENCE_AGENT_ADAPTER=1 SCIENCE_AGENT_EXECUTOR=jiuwenswarm ./scripts/start-stack
 |---|---|
 | `start-stack.sh` 提示 JiuwenSwarm 不可达 | 执行 `scripts/jiuwenswarm.sh start`，再用 `scripts/jiuwenswarm.sh status` 确认。日志：`.sciencediscovery-data/jiuwenswarm/jiuwenswarm.log` 与 `~/.jiuwenswarm-instances/<名称>/agent/.logs/`。 |
 | 子代理或长命令在 30 秒后以空错误结束 | 这是 JiuwenSwarm 自己对单次 MCP 工具调用的限制。适配器按运行提高了它（`SCIENCE_AGENT_ADAPTER_TOOL_TIMEOUT_S`，默认 3600，或用运行的超时）；如果还看到，说明适配器版本早于此修复。 |
+| 运行停在半句思考上，或提示 “cut off at its output limit” | 推理模型把每次调用的输出预算（`max_tokens`，默认 16384）全花在思考上了。在栈上调大 `SCIENCE_AGENT_LLM_MAX_TOKENS` 后重试。内置循环也有同样的上限。 |
 | 模型返回 `429` | 供应商在限流。运行会像内置循环一样退避重试，重试用完才以供应商的原话失败。 |
 | 模型从不调用工具 | 检查实例配置里的 `progressive_tool_enabled: false`；`scripts/jiuwenswarm.sh setup` 会恢复它。 |
 | 仅经该执行器访问时提供方返回 `403` | 部分网关会按 `User-Agent` 过滤。请用同一个 key 直接 `curl` 测试端点，并反馈响应内容。 |

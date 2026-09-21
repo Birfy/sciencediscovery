@@ -46,6 +46,8 @@ export interface ModelGateway {
    * a chat-completions message cannot carry. Other messages come back unchanged.
    */
   restore<T extends Record<string, unknown>>(message: T): T;
+  /** The last model turn served, for what the run's end has to say about it. */
+  lastTurn(): { text: string; toolCalls: number; truncated: boolean } | undefined;
   close(): Promise<void>;
 }
 
@@ -117,6 +119,11 @@ export async function startModelGateway(
 ): Promise<ModelGateway> {
   const token = randomUUID();
   const produced = new Map<string, Record<string, unknown>>();
+  let last: ReturnType<ModelGateway["lastTurn"]>;
+  const remember = (turn: ModelTurn) => {
+    produced.set(turnKey(turn.assistantMessage), turn.assistantMessage);
+    last = { text: textOf(turn.assistantMessage.content), toolCalls: turn.toolCalls.length, truncated: turn.truncated === true };
+  };
   const restore: ModelGateway["restore"] = (message) => {
     const own = message.role === "assistant" ? produced.get(turnKey(message)) : undefined;
     return (own ?? message) as typeof message;
@@ -165,7 +172,7 @@ export async function startModelGateway(
           onThinkingDelta: (delta) => { start(); response.write(chunk({ reasoning_content: delta })); },
         });
         start();
-        produced.set(turnKey(turn.assistantMessage), turn.assistantMessage);
+        remember(turn);
         if (turn.toolCalls.length) response.write(chunk({ tool_calls: toolCallsOf(turn) }));
         const usage = usageOf(turn);
         response.write(chunk({}, finishReason(turn), usage ? { usage } : {}));
@@ -173,7 +180,7 @@ export async function startModelGateway(
         return;
       }
       const turn = await streamer(endpoint, systemPrompt, history, tools, policy, controller.signal);
-      produced.set(turnKey(turn.assistantMessage), turn.assistantMessage);
+      remember(turn);
       const content = typeof turn.assistantMessage.content === "string" ? turn.assistantMessage.content : textOf(turn.assistantMessage.content);
       const usage = usageOf(turn);
       response.writeHead(200, { "content-type": "application/json" });
@@ -202,6 +209,7 @@ export async function startModelGateway(
     url: `http://127.0.0.1:${port}/v1`,
     token,
     restore,
+    lastTurn: () => last,
     close: () => new Promise<void>((resolve) => { server.close(() => resolve()); server.closeAllConnections(); }),
   };
 }
