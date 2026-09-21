@@ -272,3 +272,12 @@ def test_replace_keeps_the_tail_too():
     route = LlmRoute(**{**ROUTE.__dict__, "system_prompt_tail": "T"})
     out = rewrite_request({"messages": [{"role": "system", "content": "JW"}]}, route)["messages"]
     assert out[0]["content"] == "You are the science agent.\n\nT"
+
+
+def test_a_jiuwenswarm_tool_keeps_its_own_schema_even_when_one_of_ours_has_its_name():
+    ours = {"description": "ours", "parameters": {"type": "object", "properties": {"path": {"type": "string"}}}}
+    theirs = {"name": "read_file", "description": "theirs", "parameters": {"type": "object", "properties": {"file_path": {"type": "string"}}}}
+    route = LlmRoute(**{**ROUTE.__dict__, "tool_names": frozenset({"read_file"}), "tool_specs": {"read_file": ours}, "all_native_tools": True})
+    body = {"tools": [{"type": "function", "function": theirs}, {"type": "function", "function": {"name": "mcp_sci_read_file", "description": "x", "parameters": {}}}], "messages": []}
+    tools = rewrite_request(body, route)["tools"]
+    assert len(tools) == 1 and tools[0]["function"] == theirs

@@ -96,6 +96,10 @@ def _unprefixed(name: str, route: LlmRoute) -> str:
 
 
 def _original(function: dict[str, Any], route: LlmRoute) -> dict[str, Any]:
+    if not function["name"].startswith(route.tool_prefix):
+        # One of JiuwenSwarm's own tools: its own description and parameters, even when one of ours has the
+        # same name (JiuwenSwarm's read_file takes `file_path`, ours `path`).
+        return function
     name = _unprefixed(function["name"], route)
     spec = route.tool_specs.get(name)
     if spec is None:
