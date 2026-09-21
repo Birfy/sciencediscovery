@@ -28,10 +28,34 @@ const SYSTEM_ENVIRONMENT = /system-(?:python3|shell)-(?:bwrap|seatbelt)-v\d+/g;
 // Scripted stubs listen on a free port; the sandbox makes a randomly named private temp directory.
 const LOCAL_URL = /http:\/\/127\.0\.0\.1:\d+/g;
 const SANDBOX_TEMP = /(seatbelt|bwrap)-[A-Za-z0-9]{6}\b/g;
+// Build-specific values that can sit inside a string that is itself JSON (a tool result).
+const RUNNER_VERSION = /(\\*"runnerVersion\\*":\\*")[^"\\]*/g;
 const HEX_TOKEN = /\b[0-9a-f]{32,}\b/gi;
 const TIMEY_KEY = /(At|Time|Ts|Timestamp)$/;
 // Keys whose value is a per-run measurement, not part of the contract.
 const VOLATILE_KEYS = new Set(["durationMs", "elapsedMs", "latencyMs", "runnerVersion", "runnerVersionId", "pid"]);
+
+/**
+ * The scrubs that need no numbering: safe to apply again to a recording that was already
+ * normalised, so a rule added later does not invalidate an older baseline (the comparison
+ * scrubs both sides).
+ */
+export function scrubText(value) {
+  return value
+    .replace(DIGEST, "<sha256>")
+    .replace(WORKSPACE_ID, "<workspace>")
+    .replace(SYSTEM_ENVIRONMENT, "<system-environment>")
+    .replace(LOCAL_URL, "http://127.0.0.1:<port>")
+    .replace(SANDBOX_TEMP, "$1-<tmp>")
+    .replace(RUNNER_VERSION, "$1<volatile>");
+}
+
+export function scrubValue(value) {
+  if (typeof value === "string") return scrubText(value);
+  if (Array.isArray(value)) return value.map(scrubValue);
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, scrubValue(v)]));
+  return value;
+}
 
 export function createNormalizer() {
   const ids = new Map();
@@ -40,12 +64,7 @@ export function createNormalizer() {
     if (!ids.has(key)) ids.set(key, ids.size + 1);
     return ids.get(key);
   };
-  const text = (value) => value
-    .replace(DIGEST, "<sha256>")
-    .replace(WORKSPACE_ID, "<workspace>")
-    .replace(SYSTEM_ENVIRONMENT, "<system-environment>")
-    .replace(LOCAL_URL, "http://127.0.0.1:<port>")
-    .replace(SANDBOX_TEMP, "\$1-<tmp>")
+  const text = (value) => scrubText(value)
     .replace(UUID, (match) => `<uuid:${idFor(match)}>`)
     .replace(ISO_TIME, "<time>")
     .replace(HEX_TOKEN, "<hex>");

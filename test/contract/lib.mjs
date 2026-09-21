@@ -21,7 +21,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
-import { createNormalizer, diff } from "./normalize.mjs";
+import { createNormalizer, diff, scrubValue } from "./normalize.mjs";
 import { startStubModel } from "./stub-model.mjs";
 
 export function loadCases(directory) {
@@ -228,6 +228,9 @@ function pathMatches(pattern, path) {
  */
 export function compareRecordings(baseline, actual, accepted = [], report = { accepted: [] }) {
   const problems = [];
+  // Both sides are scrubbed again, so a rule added after the baseline was recorded still applies to it.
+  baseline = scrubValue(baseline);
+  actual = scrubValue(actual);
   for (const [id, expectedSteps] of Object.entries(baseline)) {
     const actualSteps = actual[id];
     if (!actualSteps) { problems.push(`${id}: case was not run`); continue; }

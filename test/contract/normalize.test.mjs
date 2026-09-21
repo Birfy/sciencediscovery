@@ -15,7 +15,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createNormalizer, diff } from "./normalize.mjs";
+import { createNormalizer, diff, scrubValue } from "./normalize.mjs";
 
 test("ids are numbered by first appearance so the same id stays recognisable", () => {
   const normalize = createNormalizer();
@@ -75,4 +75,18 @@ test("a stub's port and the sandbox's random temp directory name are hidden", ()
   const normalize = createNormalizer();
   assert.equal(normalize.text("http://127.0.0.1:56778/v1"), "http://127.0.0.1:<port>/v1");
   assert.equal(normalize.text("/data/runner-runtime/tmp/seatbelt-fW42DG/x"), "/data/runner-runtime/tmp/seatbelt-<tmp>/x");
+});
+
+test("the runner build version is hidden even inside a JSON string, and scrubbing is idempotent", () => {
+  const normalize = createNormalizer();
+  const raw = { chunk: '{"runnerVersion":"f2dbe052-dirty","sandbox":"bubblewrap"}', nested: '{\\"runnerVersion\\":\\"73015b2e\\"}' };
+  const once = normalize.json(raw);
+  assert.equal(once.chunk, '{"runnerVersion":"<volatile>","sandbox":"bubblewrap"}');
+  assert.equal(once.nested, '{\\"runnerVersion\\":\\"<volatile>\\"}');
+  assert.deepEqual(scrubValue(once), once);
+});
+
+test("scrubbing an older recording applies rules that were added after it was made", () => {
+  const old = { body: { chunk: '{"runnerVersion":"aaa1111","x":1}' } };
+  assert.deepEqual(scrubValue(old), { body: { chunk: '{"runnerVersion":"<volatile>","x":1}' } });
 });
