@@ -137,7 +137,8 @@ def rewrite_request(body: dict[str, Any], route: LlmRoute) -> dict[str, Any]:
             for index, message in enumerate(messages):
                 content = message.get("content")
                 text = content if isinstance(content, str) else json.dumps(content, ensure_ascii=False)
-                print(f"[llm-proxy:full] #{index} {message.get('role')} {len(text)} chars: {text[:1500]!r}", file=sys.stderr, flush=True)
+                shown = text if message.get("role") == "system" else text[:1500]  # the system prompt whole
+                print(f"[llm-proxy:full] #{index} {message.get('role')} {len(text)} chars: {shown!r}", file=sys.stderr, flush=True)
             print(f"[llm-proxy:full] tools sent to the model: {[t['function']['name'] for t in out.get('tools', [])]}", file=sys.stderr, flush=True)
     return out
 
