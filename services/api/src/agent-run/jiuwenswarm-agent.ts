@@ -205,11 +205,7 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
         systemPrompt,
         cwd: this.options.workspaceRoot,
         // The adapter's proxy forwards to this loopback gateway, which speaks the model's own protocol.
-        model: {
-          model: model.model, baseUrl: modelGateway.url, apiKey: modelGateway.token, provider: "OpenAI",
-          // JiuwenSwarm compresses a conversation against the model's window; it cannot know a model behind an alias.
-          ...(model.contextWindow ? { contextWindow: model.contextWindow } : {}),
-        },
+        model: { model: model.model, baseUrl: modelGateway.url, apiKey: modelGateway.token, provider: "OpenAI" },
         ...(jiuwenSwarmPlans ? { nativeTools: [...JIUWENSWARM_TODO_TOOLS] } : {}),
         // JiuwenSwarm gives a tool call 30 s unless told otherwise; the run's own timeout is the limit here.
         ...(this.options.runTimeoutMs ? { toolTimeoutSeconds: Math.ceil(this.options.runTimeoutMs / 1000) } : {}),

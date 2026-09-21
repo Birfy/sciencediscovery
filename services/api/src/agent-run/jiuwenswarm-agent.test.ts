@@ -721,7 +721,7 @@ test("the run's timeout is passed on as the longest a single tool call may take"
   }
 });
 
-test("a run names the JiuwenSwarm session that holds its agent's conversation, and gives the model's window", async () => {
+test("a run names the JiuwenSwarm session that holds its agent's conversation", async () => {
   const sent: any[] = [];
   const adapter = await fakeAdapter(async ({ body }, response) => {
     sent.push(body);
@@ -731,12 +731,10 @@ test("a run names the JiuwenSwarm session that holds its agent's conversation, a
   try {
     const factory = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url });
     const base = options();
-    await factory({ ...base, config: { ...base.config, contextWindow: 131072 }, versioning: { agentId: "main:thread-1" } as never }).execute("a");
+    await factory({ ...base, versioning: { agentId: "main:thread-1" } as never }).execute("a");
     await factory({ ...base, versioning: { agentId: "subagent:Sub Agent/7" } as never }).execute("b");
     assert.equal(sent[0].sessionKey, "session-1", "the main agent's conversation is the session's own");
-    assert.equal(sent[0].model.contextWindow, 131072);
     assert.equal(sent[1].sessionKey, "session-1--subagent-Sub-Agent-7");
-    assert.equal("contextWindow" in sent[1].model, false);
   } finally {
     await adapter.close();
   }

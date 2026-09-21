@@ -281,13 +281,6 @@ async def test_a_request_carries_no_history_field(harness):
     assert "history" not in AgentRunRequest.model_fields
 
 
-async def test_the_models_context_window_is_given_to_jiuwenswarm_as_the_entrys_window(harness):
-    _, runner, rpcs = harness
-    FakeRun.fixture = "jw_chat_plain.raw"
-    await post(harness[0], {"sessionId": "s1", "prompt": "hi", "model": {"model": "m", "baseUrl": "http://llm.test/v1", "apiKey": "k", "contextWindow": 131072}})
-    replaced = [p for _, m, p in rpcs if m == "models.replace_all"]
-    assert any(entry.get("context_window_tokens") == 131072 for p in replaced for entry in p["models"])
-
 
 async def get(app, path, headers=None):
     async with app.router.lifespan_context(app):

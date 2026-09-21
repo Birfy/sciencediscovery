@@ -112,13 +112,14 @@ const checks = {
   },
 
   /**
-   * JiuwenSwarm compresses the conversation when the model's window fills. The model's window is set to
-   * 3000 tokens and six turns of about 750 tokens each are sent: by the last request the early turns must
-   * be gone or summarised, while the newest is there in full.
+   * JiuwenSwarm compresses the conversation when its window fills. The stack must have been started with
+   * JIUWENSWARM_CONTEXT_WINDOW_TOKENS=3000 (the only window setting JiuwenSwarm 0.2.6 honours); six turns of
+   * about 750 tokens each are sent: by the last request the early turns must be gone or summarised, while
+   * the newest is there in full.
    */
   async compression() {
     const stub = await startStubModel({ main: Array.from({ length: 30 }, (_, index) => ({ text: `Answer ${index + 1}.` })) });
-    const { sessionId, cleanup } = await setup(stub, { facts: { contextWindow: 3000 } });
+    const { sessionId, cleanup } = await setup(stub);
     try {
       const turns = 6;
       for (let turn = 1; turn <= turns; turn += 1) {

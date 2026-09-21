@@ -69,9 +69,6 @@ class ModelSpec(BaseModel):
     baseUrl: str
     apiKey: str = ""
     provider: str = "OpenAI"
-    # The model's context window, in tokens. JiuwenSwarm compresses a conversation against it; without
-    # it the model is an unknown alias and a default is assumed.
-    contextWindow: int | None = None
 
 
 class AgentRunRequest(BaseModel):
@@ -149,8 +146,7 @@ class AgentRunner:
                 ))
                 model_alias = f"sd-{llm_token[:12]}"
                 params["model_name"] = await self.models.ensure(ModelProfile(
-                    model_alias, f"{self.settings.public_url}/llm/{llm_token}/v1", llm_token, "OpenAI",
-                    context_window=request.model.contextWindow))
+                    model_alias, f"{self.settings.public_url}/llm/{llm_token}/v1", llm_token, "OpenAI",))
             if request.tools:
                 if request.bridge is None:
                     raise ValueError("tools were given without a bridge to run them")

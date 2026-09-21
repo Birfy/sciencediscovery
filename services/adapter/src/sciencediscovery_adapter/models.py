@@ -43,15 +43,9 @@ class ModelProfile:
     base_url: str
     api_key: str
     provider: str = "OpenAI"
-    # In tokens; JiuwenSwarm compresses a conversation against it (its default is 200000).
-    context_window: int | None = None
-
     def entry(self) -> dict[str, Any]:
-        entry = {"model_name": self.model, "api_base": self.base_url, "api_key": self.api_key,
-                 "model_provider": self.provider}
-        if self.context_window:
-            entry["context_window_tokens"] = int(self.context_window)
-        return entry
+        return {"model_name": self.model, "api_base": self.base_url, "api_key": self.api_key,
+                "model_provider": self.provider}
 
 
 class ModelSync:
