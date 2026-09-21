@@ -99,6 +99,6 @@ test("a bare host:port for a local stub is hidden too, with or without the schem
 
 test("exchange rates and their dates are hidden: they come from an outside service", () => {
   const normalize = createNormalizer();
-  const out = normalize.value({ exchangeRates: [{ provider: "Frankfurter", rate: 6.6999, effectiveDate: "2026-09-21" }] });
+  const out = normalize.json({ exchangeRates: [{ provider: "Frankfurter", rate: 6.6999, effectiveDate: "2026-09-21" }] });
   assert.deepEqual(out.exchangeRates[0], { provider: "Frankfurter", rate: "<volatile>", effectiveDate: "<volatile>" });
 });
