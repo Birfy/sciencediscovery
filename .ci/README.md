@@ -76,6 +76,10 @@ requires `CI_ALLOW_NPU=1` and an explicit `SCIENCE_AGENT_NPU_PYTHON` from the
 dedicated NPU environment; it fails closed in this generic image. Its catalog
 entry explains the host requirement.
 
+`CI_E2E_BACKEND=jiuwenswarm` runs the E2E group with the adapter in front and
+agent turns on JiuwenSwarm (issue 84); reports go to `e2e[-group]-jiuwenswarm`.
+The gateway must already be running (`scripts/jiuwenswarm.sh`).
+
 ## The two UT tiers
 
 UT has exactly two tiers and no third bucket. Every UT case belongs to one of

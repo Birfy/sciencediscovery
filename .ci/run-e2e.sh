@@ -41,8 +41,21 @@ if [[ "$prepare_only" -eq 1 && "$prepared" -eq 1 ]]; then
   exit 2
 fi
 
+# CI_E2E_BACKEND=jiuwenswarm runs the same journeys with the adapter in front
+# and agent turns on JiuwenSwarm (issue 84). Nothing else about the run changes,
+# so a diff between the two reports is a diff between the two backends.
+backend="${CI_E2E_BACKEND:-legacy}"
+case "$backend" in
+  legacy|jiuwenswarm) ;;
+  *)
+    printf 'BLOCKED: CI_E2E_BACKEND must be legacy or jiuwenswarm, got %s.\n' "$backend" >&2
+    exit 2
+    ;;
+esac
+
 results_suffix="e2e"
 if [[ "$group" != "mocked" ]]; then results_suffix="e2e-$group"; fi
+if [[ "$backend" != "legacy" ]]; then results_suffix="$results_suffix-$backend"; fi
 results_root="${CI_RESULTS_DIR:-/ci-results}/$results_suffix"
 runtime_root="${CI_RUNTIME_DIR:-/ci-cache/sciencediscovery-e2e}"
 stack_log="$results_root/stack.log"
@@ -173,6 +186,13 @@ export E2E_API_TOKEN="$auth_token"
 export E2E_BASE_URL="http://127.0.0.1:${SCIENCE_AGENT_PORT}"
 export E2E_API_URL="$E2E_BASE_URL"
 export E2E_JOURNEY_REPORTS="$results_root/journey-reports"
+
+if [[ "$backend" == "jiuwenswarm" ]]; then
+  # The gateway is a prerequisite (scripts/jiuwenswarm.sh); say so up front
+  # rather than as a run that fails inside the first agent turn.
+  export SCIENCE_AGENT_ADAPTER=1
+  export SCIENCE_AGENT_EXECUTOR=jiuwenswarm
+fi
 
 stack_arguments=(--mode local)
 # A prepared workspace already carries the installed dependencies and the
