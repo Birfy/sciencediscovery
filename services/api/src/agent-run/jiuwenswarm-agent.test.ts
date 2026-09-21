@@ -23,6 +23,7 @@ import { Type } from "typebox";
 import type { NativeAgentOptions } from "../native-agent/index.js";
 import {
   createJiuwenSwarmAgentFactory,
+  openAiHistory,
   jiuwenSwarmConfigFromEnv,
 } from "./jiuwenswarm-agent.js";
 
@@ -577,6 +578,48 @@ test("a run with no deferred tools is not offered tool_search", async () => {
   try {
     await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options()).execute("go");
     assert.ok(!offered.includes("tool_search"), offered.join(", "));
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("the API's history is sent as OpenAI messages, so a resumed conversation continues", async () => {
+  let sent: any[] = [];
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    sent = body.history;
+    response.writeHead(200);
+    response.end(line({ done: { finalText: "ok" } }));
+  });
+  try {
+    const history = [
+      { role: "user", content: "run it" },
+      { role: "assistant", content: "", tool_calls: [{ id: "c1", name: "echo", args: { word: "a" } }] },
+      { role: "tool", tool_call_id: "c1", name: "echo", content: "echo:a", additional_kwargs: { tool_output: {} } },
+      { role: "system", content: "dropped" },
+      { role: "assistant", content: "done", tool_calls: [{ id: "c2", type: "function", function: { name: "echo", arguments: "{\"word\":\"b\"}" } }] },
+    ];
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ gatewayHistory: history as never })).execute("next");
+    assert.deepEqual(sent, [
+      { role: "user", content: "run it" },
+      { role: "assistant", content: "", tool_calls: [{ id: "c1", type: "function", function: { name: "echo", arguments: "{\"word\":\"a\"}" } }] },
+      { role: "tool", content: "echo:a", tool_call_id: "c1", name: "echo" },
+      { role: "assistant", content: "done", tool_calls: [{ id: "c2", type: "function", function: { name: "echo", arguments: "{\"word\":\"b\"}" } }] },
+    ]);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("a first turn sends an empty history, not none", async () => {
+  let sent: unknown;
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    sent = body.history;
+    response.writeHead(200);
+    response.end(line({ done: { finalText: "ok" } }));
+  });
+  try {
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options()).execute("hi");
+    assert.deepEqual(sent, []);
   } finally {
     await adapter.close();
   }

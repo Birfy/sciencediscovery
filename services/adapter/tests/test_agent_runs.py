@@ -236,3 +236,17 @@ async def test_no_model_leaves_the_gateways_default_in_charge(harness):
     app, *_ = harness
     await post(app, {"sessionId": "s1", "prompt": "hi"})
     assert "model_name" not in FakeRun.instances[0].params
+
+
+async def test_a_run_with_history_gets_a_session_of_its_own(harness):
+    app, *_ = harness
+    history = [{"role": "user", "content": "before"}, {"role": "assistant", "content": "answer"}]
+    await post(app, {"sessionId": "s1", "prompt": "hi", "history": history})
+    session = FakeRun.instances[0].params["session_id"]
+    assert session.startswith("s1-") and session != "s1"
+
+
+async def test_a_run_without_history_keeps_the_callers_session(harness):
+    app, *_ = harness
+    await post(app, {"sessionId": "s1", "prompt": "hi"})
+    assert FakeRun.instances[0].params["session_id"] == "s1"

@@ -162,6 +162,7 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
         systemPrompt,
         cwd: this.options.workspaceRoot,
         model: { model: model.model, baseUrl: model.baseUrl, apiKey: model.apiToken ?? "", ...(provider ? { provider } : {}) },
+        history: openAiHistory(this.options.gatewayHistory ?? []),
         tools: [...tools.values()].map((tool) => ({
           name: tool.name, description: tool.description, inputSchema: tool.parameters,
         })),
@@ -391,6 +392,38 @@ async function readJson(request: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = [];
   for await (const chunk of request) chunks.push(chunk as Buffer);
   return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+}
+
+/**
+ * The conversation so far as OpenAI chat messages. The API's record is the only history the model
+ * sees: the adapter inserts it into every model request and runs the turn in a JiuwenSwarm session
+ * of its own, so a resumed subagent, a session begun on the built-in loop and the API's compaction
+ * all carry over.
+ */
+export function openAiHistory(history: readonly Record<string, unknown>[]): Array<Record<string, unknown>> {
+  const out: Array<Record<string, unknown>> = [];
+  for (const message of history) {
+    const role = message.role;
+    if (role !== "user" && role !== "assistant" && role !== "tool") continue;
+    const content = message.content ?? "";
+    if (role === "tool") {
+      out.push({ role, content, tool_call_id: message.tool_call_id, ...(typeof message.name === "string" ? { name: message.name } : {}) });
+      continue;
+    }
+    const toolCalls = Array.isArray(message.tool_calls) ? message.tool_calls.map(openAiToolCall).filter(Boolean) : [];
+    out.push({ role, content, ...(toolCalls.length ? { tool_calls: toolCalls } : {}) });
+  }
+  return out;
+}
+
+function openAiToolCall(call: unknown): Record<string, unknown> | undefined {
+  if (typeof call !== "object" || call === null) return undefined;
+  const record = call as Record<string, unknown>;
+  const fn = record.function as { name?: unknown; arguments?: unknown } | undefined;
+  const name = typeof fn?.name === "string" ? fn.name : typeof record.name === "string" ? record.name : undefined;
+  if (!name || typeof record.id !== "string") return undefined;
+  const raw = fn?.arguments ?? record.args ?? record.arguments ?? {};
+  return { id: record.id, type: "function", function: { name, arguments: typeof raw === "string" ? raw : JSON.stringify(raw) } };
 }
 
 /**

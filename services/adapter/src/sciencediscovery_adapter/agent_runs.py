@@ -81,6 +81,10 @@ class AgentRunRequest(BaseModel):
     model: ModelSpec | None = None
     # Replaces JiuwenSwarm's own system prompt for this run (needs `model`).
     systemPrompt: str | None = None
+    # The conversation so far, as OpenAI chat messages, from the caller's own record. When given it
+    # is the only history the model sees: it is inserted into every model request of the run and
+    # JiuwenSwarm runs the turn in a session of its own, so nothing is remembered twice.
+    history: list[dict[str, Any]] | None = None
 
 
 def bridge_caller(bridge: Bridge, client: httpx.AsyncClient):
@@ -116,9 +120,10 @@ class AgentRunner:
         llm_token = None
         model_alias = None
         registered = False
+        jw_session = request.sessionId if request.history is None else f"{request.sessionId}-{uuid.uuid4().hex[:8]}"
         mapper = RunEventMapper(session_id=request.sessionId, mcp_prefixes=(f"mcp_{name}_",))
         params: dict[str, Any] = {
-            "session_id": request.sessionId, "content": request.prompt, "query": request.prompt,
+            "session_id": jw_session, "content": request.prompt, "query": request.prompt,
             "mode": request.mode, "cwd": request.cwd, "project_dir": request.cwd, "trusted_dirs": [request.cwd],
             "supports_user_interaction": True, "agent_ref": {"mode": request.mode, "id": "default"},
         }
@@ -132,7 +137,7 @@ class AgentRunner:
                     base_url=request.model.baseUrl.rstrip("/"), api_key=request.model.apiKey, model=request.model.model,
                     tool_prefix=f"mcp_{name}_", tool_names=frozenset(t.name for t in request.tools),
                     tool_specs={t.name: {"description": t.description, "parameters": t.inputSchema} for t in request.tools},
-                    system_prompt=request.systemPrompt,
+                    system_prompt=request.systemPrompt, history=request.history or [],
                 ))
                 model_alias = f"sd-{llm_token[:12]}"
                 params["model_name"] = await self.models.ensure(ModelProfile(

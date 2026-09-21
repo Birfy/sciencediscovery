@@ -54,6 +54,8 @@ class LlmRoute:
     # The tools as the caller defined them. JiuwenSwarm holds a relaxed copy of the schema
     # (see schema.relax_schema); the model gets the original back, constraints included.
     tool_specs: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # Earlier turns of the conversation (OpenAI chat messages), inserted after the system prompt.
+    history: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -118,6 +120,9 @@ def rewrite_request(body: dict[str, Any], route: LlmRoute) -> dict[str, Any]:
         messages.append(message)
     if route.system_prompt is not None and not replaced:
         messages.insert(0, {"role": "system", "content": route.system_prompt})
+    if route.history:
+        at = 1 if messages and messages[0].get("role") == "system" else 0
+        messages[at:at] = [dict(message) for message in route.history]
     out["messages"] = messages
     if _DEBUG:
         tail = [f"{m.get('role')}:{str(m.get('content'))[:90]!r}" for m in messages[-3:]]
