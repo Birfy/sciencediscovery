@@ -4,7 +4,7 @@ ScienceDiscovery 可以把 agent 循环交给 [JiuwenSwarm](https://gitcode.com/
 
 保持不变的部分：Web 界面、会话、消息、运行事件、权限请求、Runner 及其沙箱、产物与溯源。工具仍然在 ScienceDiscovery API 进程内执行，所以每一项权限检查和 Runner 规则都和以前一样。换掉的部分：模型循环及其对话上下文。
 
-```
+```text
 浏览器 ─▶ adapter（公开端口）─▶ 旧 API（端口 + 100）
               │                        │
               └─▶ JiuwenSwarm ◀────────┘   工具在 API 内执行，经每次运行独立的桥接回调
@@ -12,7 +12,7 @@ ScienceDiscovery 可以把 agent 循环交给 [JiuwenSwarm](https://gitcode.com/
 
 ## 前置条件
 
-- 源码模式（见[部署](deployment.md#本地模式宿主进程)）；二进制和 Docker 镜像暂不包含这个执行器。
+- 源码模式（见[部署](../getting-started/deployment.md#本地模式宿主进程)）；二进制和 Docker 镜像暂不包含这个执行器。
 - 宿主机有 `git` 和 `uv`。JiuwenSwarm 装在自己的目录和虚拟环境里，不会装进 ScienceDiscovery 的环境。
 - 能访问 `gitcode.com`（克隆固定版本）和一个 PyPI 源。网络慢或在中国大陆时，把 `SCIENCE_AGENT_PYPI_INDEX` 设为镜像；下载超时可调 `UV_HTTP_TIMEOUT`（脚本默认 300 秒）。
 - 模型端点需使用 **OpenAI chat-completions** 协议。Anthropic Messages 和 OpenAI Responses 的模型会让运行失败并给出明确提示，这类模型请用内置循环。

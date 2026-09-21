@@ -4,7 +4,7 @@ ScienceDiscovery can run its agent loop on [JiuwenSwarm](https://gitcode.com/ope
 
 What stays the same: the web UI, sessions, messages, run events, permission requests, the Runner and its sandbox, artifacts and provenance. Tools still run inside the ScienceDiscovery API process, so every permission check and Runner rule applies as before. What moves: the model loop and its conversation context.
 
-```
+```text
 browser ─▶ adapter (public port) ─▶ legacy API (port + 100)
               │                          │
               └─▶ JiuwenSwarm ◀──────────┘   tools run in the API, called back over a per-run bridge
@@ -12,7 +12,7 @@ browser ─▶ adapter (public port) ─▶ legacy API (port + 100)
 
 ## Requirements
 
-- Source mode (see [Deployment](deployment.md#local-mode-host-processes)); the binary and Docker images do not include this executor yet.
+- Source mode (see [Deployment](../getting-started/deployment.md#local-mode-host-processes)); the binary and Docker images do not include this executor yet.
 - `git` and `uv` on the host. JiuwenSwarm installs into its own directory and virtualenv, never into ScienceDiscovery's environments.
 - Access to `gitcode.com` (to clone the pinned tag) and to a PyPI index. On a slow link or in mainland China, set `SCIENCE_AGENT_PYPI_INDEX` to a mirror and, if downloads time out, `UV_HTTP_TIMEOUT` (the script defaults to 300 seconds).
 - A model endpoint that speaks the **OpenAI chat-completions** protocol. Anthropic Messages and OpenAI Responses models fail the run with a clear message; use the built-in loop for those.
