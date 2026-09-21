@@ -130,8 +130,12 @@ cmd_start() {
   [[ -x "$jw_bin/jiuwenswarm-start" ]] || { echo "Not installed; run: scripts/jiuwenswarm.sh setup" >&2; exit 1; }
   apply_config >/dev/null
   if is_up; then echo "JiuwenSwarm instance $jw_instance is already up." >&2; return; fi
-  (cd "$jw_root" && nohup env JIUWENSWARM_DATA_DIR="$jw_data_dir" "$jw_bin/jiuwenswarm-start" --name "$jw_instance" app \
-    >"$jw_log" 2>&1 &)
+  # Detach completely (stdin, stdout, stderr): a background job that keeps the caller's stdout open
+  # makes `scripts/jiuwenswarm.sh start | tee ...`, or any script capturing its output, wait forever.
+  cd "$jw_root"
+  JIUWENSWARM_DATA_DIR="$jw_data_dir" nohup "$jw_bin/jiuwenswarm-start" --name "$jw_instance" app \
+    >"$jw_log" 2>&1 </dev/null &
+  disown
   local attempt
   for attempt in $(seq 1 90); do
     if is_up; then
