@@ -4358,3 +4358,18 @@ test("Runner selections treat local and remote alike and preserve legacy default
   await assert.rejects(reloaded.updateSession(session.id, { runnerIds: [" "] }), /must not be empty/);
   await assert.rejects(reloaded.registerRemoteHost({ id: "local", alias: "reserved" }), /reserved/);
 });
+
+test("with every skill everywhere (the JiuwenSwarm backend) a Session's skill selection does not narrow its skills", async (context) => {
+  const root = resolve(process.cwd(), ".tmp", `every-skill-${randomUUID()}`);
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const store = new SessionStore(root); await store.load();
+  store.setAvailableSkillIds(["evolve-design", "code-engineer"]);
+  const project = await store.createProject("Skills");
+  const session = await store.createSession(project.id, "Skills", {}, {}, { allowUnconfiguredModel: true });
+  await store.replaceSessionSettings(session.id, { enabledSkillIds: ["code-engineer"], skillSelectionMode: "selected" });
+  assert.deepEqual(store.getSessionSettings(session.id).effective.enabledSkillIds, ["code-engineer"]);
+  store.useEverySkillEverywhere();
+  const effective = store.getSessionSettings(session.id).effective;
+  assert.equal(effective.skillSelectionMode, "all");
+  assert.deepEqual([...effective.enabledSkillIds].sort(), ["code-engineer", "evolve-design"]);
+});

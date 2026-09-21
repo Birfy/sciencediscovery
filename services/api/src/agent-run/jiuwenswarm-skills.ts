@@ -14,6 +14,8 @@
 
 import { join } from "node:path";
 
+import type { JiuwenSwarmSkill } from "@sciencediscovery/schema";
+
 import type { JiuwenSwarmAgentConfig } from "./jiuwenswarm-agent.js";
 
 /**
@@ -73,4 +75,29 @@ export function skillLoadedBy(call: { args: unknown; name: string }, ids: Readon
     return name ? ids.get(name) : undefined;
   }
   return undefined;
+}
+
+async function adapterCall<T>(config: Pick<JiuwenSwarmAgentConfig, "adapterToken" | "adapterUrl" | "fetch">, path: string, body?: unknown): Promise<T> {
+  const response = await (config.fetch ?? fetch)(`${config.adapterUrl}${path}`, {
+    method: body === undefined ? "GET" : "POST",
+    headers: {
+      ...(body === undefined ? {} : { "content-type": "application/json" }),
+      ...(config.adapterToken ? { authorization: `Bearer ${config.adapterToken}` } : {}),
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+  if (!response.ok) throw new Error(`JiuwenSwarm (through the adapter) answered HTTP ${response.status}: ${(await response.text().catch(() => "")).slice(0, 200)}`);
+  return await response.json() as T;
+}
+
+/** Every skill JiuwenSwarm has installed and whether it is on. */
+export async function listJiuwenSwarmSkills(config: Pick<JiuwenSwarmAgentConfig, "adapterToken" | "adapterUrl" | "fetch">): Promise<JiuwenSwarmSkill[]> {
+  return (await adapterCall<{ skills?: JiuwenSwarmSkill[] }>(config, "/agent/skills")).skills ?? [];
+}
+
+/** Switch one of JiuwenSwarm's skills on or off. It is one setting for every session; sessions started afterwards see it. */
+export async function setJiuwenSwarmSkillEnabled(
+  config: Pick<JiuwenSwarmAgentConfig, "adapterToken" | "adapterUrl" | "fetch">, name: string, enabled: boolean,
+): Promise<void> {
+  await adapterCall(config, `/agent/skills/${encodeURIComponent(name)}/enabled`, { enabled });
 }

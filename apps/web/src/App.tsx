@@ -5087,7 +5087,7 @@ export function App({ initialToken }: { initialToken?: string } = {}) {
                 skills={skills}
                 workspaceLaunch={skillWorkspaceLaunch}
               /> : null}
-              {systemSettingsGroup === "specialists" ? <SpecialistManager client={client} connectors={connectors} onChanged={setSpecialists} onError={reportSystemSettingsError} skills={skills} /> : null}
+              {systemSettingsGroup === "specialists" ? <SpecialistManager client={client} connectors={connectors} onChanged={setSpecialists} onError={reportSystemSettingsError} skills={skills} skillsBackend={webSettings?.backend} /> : null}
               {systemSettingsGroup === "permissions" ? <PermissionGrantManager grants={permissionGrants.filter((grant) => grant.scope !== "once")} onRevoke={(grant) => void revokePermission(grant)} /> : null}
               {systemSettingsGroup === "runner-add" ? <RemoteHostManager
                 client={client} addMode onHostsChange={updateSettingsRunners}
@@ -5174,6 +5174,7 @@ export function App({ initialToken }: { initialToken?: string } = {}) {
               skillLibraries={skillLibraries}
               skillScope={settingsTarget.kind === "project" ? "project" : "session"}
               skills={skills}
+              skillsBackend={webSettings?.backend}
             /> : <p className="muted">{t("app.loadingScopedSettings")}</p>}
           </section>
         </div>

@@ -441,6 +441,8 @@ export class SessionStore {
   private settingsMutationQueue: Promise<void> = Promise.resolve();
   private secretKey?: Buffer;
   private skillIds = new Set<string>(BUNDLED_SKILL_IDS);
+  /** Every Session uses every installed skill, whatever its settings say (the JiuwenSwarm backend: its skills are one set). */
+  private everySkillEverywhere = false;
   private connectorIds = knownConnectorIdSet();
   private readonly initialTimeoutSettings: SystemTimeoutSettings;
   private readonly initialQuotaSettings: SystemQuotaSettings;
@@ -1584,6 +1586,15 @@ export class SessionStore {
     await this.saveCatalog();
   }
 
+  /**
+   * With the JiuwenSwarm backend there is no skill selection per Project or Session: JiuwenSwarm has one set of skills
+   * for every session, switched on and off there. Stored selections are kept, and apply again with the built-in backend.
+   */
+  useEverySkillEverywhere(): void {
+    this.everySkillEverywhere = true;
+    this.syncSessionCompatibilityForProject();
+  }
+
   setAvailableSkillIds(ids: Iterable<string>): void {
     this.skillIds = new Set(ids);
     // In `all` mode the effective set is the catalog itself, so installing or
@@ -1647,6 +1658,7 @@ export class SessionStore {
 
     // `all` (the default) means the whole installed catalog; `selected` intersects
     // the stored whitelist with what is still installed.
+    if (this.everySkillEverywhere) effective.skillSelectionMode = "all";
     if (effective.skillSelectionMode === "all") {
       effective.enabledSkillIds = [...this.skillIds];
       sources.enabledSkillIds = sources.skillSelectionMode;

@@ -84,6 +84,32 @@ class SkillSync:
                 found[name] = Path(path).parent
         return found
 
+    async def listed(self) -> list[dict[str, Any]]:
+        """The skills JiuwenSwarm has installed, each with where it came from: `sciencediscovery` (imported from
+        ScienceDiscovery, with its id there), `builtin` (shipped with JiuwenSwarm) or JiuwenSwarm's own source name."""
+        listed = (await self._rpc(self._url, "skills.list", {})).get("skills", [])
+        skills: list[dict[str, Any]] = []
+        for skill in listed:
+            name, path = skill.get("name"), skill.get("path")
+            if not isinstance(name, str) or skill.get("installed") is False:
+                continue
+            marker = _marker(Path(path).parent) if isinstance(path, str) and path else None
+            source = "sciencediscovery" if marker else "builtin" if skill.get("is_builtin_source") else str(skill.get("source") or "local")
+            skills.append({
+                "name": name,
+                "description": str(skill.get("description") or "").strip(),
+                "enabled": skill.get("enabled") is not False,
+                "source": source,
+                **({"skillId": marker.get("id")} if marker and isinstance(marker.get("id"), str) else {}),
+            })
+        return sorted(skills, key=lambda item: (item["source"] != "sciencediscovery", item["name"]))
+
+    async def set_enabled(self, name: str, enabled: bool) -> None:
+        """Switch a skill on or off for every session (JiuwenSwarm applies it to sessions started afterwards)."""
+        answer = await self._rpc(self._url, "skills.toggle", {"name": name, "enabled": enabled})
+        if not answer.get("success", False):
+            raise RuntimeError(str(answer.get("detail") or answer)[:300])
+
     async def sync(self, skills: list[dict[str, str]]) -> dict[str, dict[str, str]]:
         """Import each `{id, path, hash}` that JiuwenSwarm lacks or has at another hash.
 

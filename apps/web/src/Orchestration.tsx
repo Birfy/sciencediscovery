@@ -131,12 +131,15 @@ export function SpecialistManager({
   onChanged,
   onError,
   skills,
+  skillsBackend,
 }: {
   client: ApiClient;
   connectors: ConnectorManifest[];
   onChanged: (specialists: Specialist[]) => void;
   onError: (reason: string | Error) => void;
   skills: SkillDescriptor[];
+  /** With `jiuwenswarm` a specialist's skills are not chosen: JiuwenSwarm has one set for every session. */
+  skillsBackend?: "jiuwenswarm" | "native";
 }) {
   const { t } = useLocale();
   const [specialists, setSpecialists] = useState<Specialist[]>([]);
@@ -316,7 +319,9 @@ export function SpecialistManager({
         <section className="specialist-form-card"><label><span>{t("specialist.fieldName")}</span><input required maxLength={80} value={name} onChange={(event) => setName(event.target.value)} /></label></section>
         <section className="specialist-form-card"><label><span>{t("specialist.fieldDescription")}</span><textarea required rows={4} maxLength={500} value={description} onChange={(event) => setDescription(event.target.value)} /></label></section>
         <section className="specialist-form-card"><label><span>{t("specialist.fieldInstructions")}</span><textarea required rows={9} maxLength={20_000} value={instructions} onChange={(event) => setInstructions(event.target.value)} /></label></section>
-        <fieldset><legend>{t("specialist.fieldSkills")}</legend>{skills.map((skill) => <label key={skill.id}><input type="checkbox" checked={selectedSkills.includes(skill.id)} onChange={() => setSelectedSkills((current) => current.includes(skill.id) ? current.filter((id) => id !== skill.id) : [...current, skill.id])} />{skill.name}</label>)}</fieldset>
+        {skillsBackend === "jiuwenswarm"
+          ? <fieldset><legend>{t("specialist.fieldSkills")}</legend><small className="settings-hint">{t("settings.skillsOnJiuwenSwarm")}</small></fieldset>
+          : <fieldset><legend>{t("specialist.fieldSkills")}</legend>{skills.map((skill) => <label key={skill.id}><input type="checkbox" checked={selectedSkills.includes(skill.id)} onChange={() => setSelectedSkills((current) => current.includes(skill.id) ? current.filter((id) => id !== skill.id) : [...current, skill.id])} />{skill.name}</label>)}</fieldset>}
         <fieldset><legend>{t("specialist.fieldConnectors")}</legend>{connectors.map((connector) => <label key={connector.id}><input type="checkbox" checked={selectedConnectors.includes(connector.id)} onChange={() => setSelectedConnectors((current) => current.includes(connector.id) ? current.filter((id) => id !== connector.id) : [...current, connector.id])} />{connector.id}</label>)}</fieldset>
         <div className="specialist-actions"><button className="primary-button" disabled={busy || !name.trim() || !description.trim() || !instructions.trim()} type="submit">{t(editingId ? "specialist.save" : "specialist.create")}</button><span className="specialist-actions-secondary"><button className="secondary-button" disabled={busy} type="button" onClick={closeEditor}>{t("common.cancel")}</button>{editingId ? <button className="danger-button" disabled={busy} type="button" onClick={() => { const specialist = userSpecialists.find((item) => item.id === editingId); if (specialist) void remove(specialist); }}>{t("common.delete")}</button> : null}</span></div>
       </form> : null}

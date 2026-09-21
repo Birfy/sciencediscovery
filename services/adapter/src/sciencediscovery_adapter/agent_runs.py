@@ -120,6 +120,10 @@ class SkillImport(BaseModel):
     skills: list[SkillPackage] = Field(max_length=200)
 
 
+class SkillEnabled(BaseModel):
+    enabled: bool
+
+
 def model_alias_base(model: str) -> str:
     """A model id as a JiuwenSwarm entry name: letters, digits, `.`, `_` and `-` only, at most 48 characters."""
     return re.sub(r"[^A-Za-z0-9._-]+", "-", model).strip("-")[:48] or "model"
@@ -282,6 +286,29 @@ def agent_router(runner: AgentRunner, settings: Settings) -> APIRouter:
         except Exception as error:
             raise HTTPException(status_code=502, detail=f"JiuwenSwarm could not list its skills: {str(error)[:200]}") from error
         return {"skills": imported}
+
+    @router.get("/agent/skills")
+    async def list_skills(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        """The skills JiuwenSwarm has installed, ScienceDiscovery's and its own, and whether each is on."""
+        if settings.agent_token and authorization != f"Bearer {settings.agent_token}":
+            raise HTTPException(status_code=401, detail="unauthorized")
+        try:
+            return {"skills": await runner.skills.listed()}
+        except Exception as error:
+            raise HTTPException(status_code=502, detail=f"JiuwenSwarm could not list its skills: {str(error)[:200]}") from error
+
+    @router.post("/agent/skills/{name}/enabled")
+    async def set_skill_enabled(name: str, body: SkillEnabled, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        """Switch one of JiuwenSwarm's skills on or off, for every session."""
+        if settings.agent_token and authorization != f"Bearer {settings.agent_token}":
+            raise HTTPException(status_code=401, detail="unauthorized")
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", name):
+            raise HTTPException(status_code=400, detail="not a skill name")
+        try:
+            await runner.skills.set_enabled(name, body.enabled)
+        except Exception as error:
+            raise HTTPException(status_code=502, detail=f"JiuwenSwarm refused: {str(error)[:200]}") from error
+        return {"name": name, "enabled": body.enabled}
 
     @router.get("/agent/info")
     async def info(authorization: str | None = Header(default=None)) -> dict[str, Any]:

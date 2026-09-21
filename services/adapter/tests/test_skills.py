@@ -28,10 +28,17 @@ class FakeJiuwenSwarm:
     def __init__(self, root: Path):
         self.root = root
         self.imports = []
+        self.disabled = set()
 
     async def rpc(self, url, method, params=None, **kwargs):
         if method == "skills.list":
-            return {"skills": [{"name": d.name, "path": str(d / "SKILL.md")} for d in sorted(self.root.iterdir()) if d.is_dir()]}
+            return {"skills": [{"name": d.name, "path": str(d / "SKILL.md"), "description": f"{d.name} things", "installed": True,
+                                "enabled": d.name not in self.disabled, "is_builtin_source": not (d / MARKER).exists(), "source": "builtin"}
+                               for d in sorted(self.root.iterdir()) if d.is_dir()]
+                              + [{"name": "not-installed", "path": "", "installed": False}]}
+        if method == "skills.toggle":
+            (self.disabled.discard if params["enabled"] else self.disabled.add)(params["name"])
+            return {"success": True}
         assert method == "skills.import_local"
         source = Path(params["path"])
         name = re.search(r"^name:\s*(\S+)", (source / "SKILL.md").read_text(), re.MULTILINE).group(1)
@@ -110,3 +117,16 @@ async def test_a_refused_skill_is_reported_and_the_others_still_imported(tmp_pat
         {"id": "evolve-design", "path": str(package(tmp_path, "evolve-design")), "hash": "h1"},
     ])
     assert "error" in result["broken"] and result["evolve-design"] == {"name": "evolve-design"}
+
+
+async def test_the_list_says_which_skills_came_from_sciencediscovery_and_which_are_on(tmp_path):
+    jw = jiuwenswarm(tmp_path, "xlsx", "skill-creator")
+    sync = SkillSync(jw.rpc, URL)
+    await sync.sync([{"id": "skill-creator", "path": str(package(tmp_path, "skill-creator")), "hash": "h1"}])
+    await sync.set_enabled("xlsx", False)
+    listed = await sync.listed()
+    assert listed == [
+        {"name": "sciencediscovery-skill-creator", "description": "sciencediscovery-skill-creator things", "enabled": True, "source": "sciencediscovery", "skillId": "skill-creator"},
+        {"name": "skill-creator", "description": "skill-creator things", "enabled": True, "source": "builtin"},
+        {"name": "xlsx", "description": "xlsx things", "enabled": False, "source": "builtin"},
+    ]

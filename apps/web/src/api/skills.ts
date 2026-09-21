@@ -27,6 +27,7 @@ import type {
   ImportSkillFromGitRequest,
   RollbackSkillLibraryVersionRequest,
   GitSkillRepositoryInspection,
+  JiuwenSwarmSkillsResponse,
   InspectGitSkillRepositoryRequest,
   MergeSkillReviewDraftsRequest,
   SkillDeletionImpact,
@@ -53,6 +54,15 @@ import { SettingsApiClient } from "./settings.js";
 export class SkillsApiClient extends SettingsApiClient {
   listSkills(): Promise<SkillDescriptor[]> {
     return this.request("/api/skills");
+  }
+
+  /** The agent backend, and with JiuwenSwarm the skills installed there (ScienceDiscovery's and its own). */
+  listJiuwenSwarmSkills(): Promise<JiuwenSwarmSkillsResponse> {
+    return this.request("/api/jiuwenswarm/skills");
+  }
+
+  setJiuwenSwarmSkillEnabled(name: string, enabled: boolean): Promise<{ enabled: boolean; name: string }> {
+    return this.request(`/api/jiuwenswarm/skills/${encodeURIComponent(name)}`, { body: JSON.stringify({ enabled }), method: "PUT" });
   }
 
   listSkillLibraries(): Promise<SkillLibrary[]> {

@@ -15,7 +15,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { importSkillsToJiuwenSwarm, skillLoadedBy } from "./jiuwenswarm-skills.js";
+import { importSkillsToJiuwenSwarm, listJiuwenSwarmSkills, setJiuwenSwarmSkillEnabled, skillLoadedBy } from "./jiuwenswarm-skills.js";
 
 const ids = new Map([["evolve-design", "evolve-design"], ["sciencediscovery-skill-creator", "skill-creator"]]);
 
@@ -36,4 +36,24 @@ test("an adapter that cannot install skills leaves them all ours", async () => {
   const failing = (async () => new Response("down", { status: 502 })) as unknown as typeof fetch;
   const imported = await importSkillsToJiuwenSwarm({ adapterUrl: "http://a", fetch: failing }, [{ id: "x", hash: "h" }], "/root");
   assert.equal(imported.size, 0);
+});
+
+test("the skill list and the on/off switch go to the adapter with its token", async () => {
+  const calls: Array<{ url: string; method: string; body?: string; auth?: string }> = [];
+  const fake = (async (url: string, init: RequestInit) => {
+    calls.push({ url, method: String(init.method), body: init.body as string | undefined, auth: (init.headers as Record<string, string>).authorization });
+    return new Response(JSON.stringify(url.endsWith("/agent/skills") ? { skills: [{ name: "xlsx", description: "d", enabled: true, source: "builtin" }] } : { name: "xlsx", enabled: false }));
+  }) as unknown as typeof fetch;
+  const config = { adapterUrl: "http://a", adapterToken: "t", fetch: fake };
+  assert.deepEqual(await listJiuwenSwarmSkills(config), [{ name: "xlsx", description: "d", enabled: true, source: "builtin" }]);
+  await setJiuwenSwarmSkillEnabled(config, "xlsx", false);
+  assert.deepEqual(calls, [
+    { url: "http://a/agent/skills", method: "GET", body: undefined, auth: "Bearer t" },
+    { url: "http://a/agent/skills/xlsx/enabled", method: "POST", body: JSON.stringify({ enabled: false }), auth: "Bearer t" },
+  ]);
+});
+
+test("a refused switch is an error, not silence", async () => {
+  const refusing = (async () => new Response("no", { status: 502 })) as unknown as typeof fetch;
+  await assert.rejects(setJiuwenSwarmSkillEnabled({ adapterUrl: "http://a", fetch: refusing }, "xlsx", false), /HTTP 502/);
 });
