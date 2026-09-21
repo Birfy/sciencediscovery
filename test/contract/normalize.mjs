@@ -19,6 +19,9 @@
  * there" visible in the diff while hiding the value.
  */
 
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
 const ISO_TIME = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})/g;
 const DIGEST = /sha256:[0-9a-f]{64}/g;
@@ -30,6 +33,9 @@ const LOCAL_URL = /(http:\/\/)?127\.0\.0\.1:\d+/g;
 const SANDBOX_TEMP = /(seatbelt|bwrap)-[A-Za-z0-9]{6}\b/g;
 // Build-specific values that can sit inside a string that is itself JSON (a tool result).
 const RUNNER_VERSION = /(\\*"runnerVersion\\*":\\*")[^"\\]*/g;
+// Where this checkout lives differs between machines; a case that passes it to the server (`{{repoRoot}}`)
+// would otherwise record one machine's path.
+export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const HEX_TOKEN = /\b[0-9a-f]{32,}\b/gi;
 const TIMEY_KEY = /(At|Time|Ts|Timestamp)$/;
 // Keys whose value is a per-run measurement, not part of the contract.
@@ -46,6 +52,7 @@ const VOLATILE_KEYS = new Set(["durationMs", "elapsedMs", "latencyMs", "runnerVe
  */
 export function scrubText(value) {
   return value
+    .split(REPO_ROOT).join("<repo>")
     .replace(DIGEST, "<sha256>")
     .replace(WORKSPACE_ID, "<workspace>")
     .replace(SYSTEM_ENVIRONMENT, "<system-environment>")

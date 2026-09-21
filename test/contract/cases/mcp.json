@@ -55,7 +55,8 @@
        "command": "node",
        "args": [
         "test/fixtures/mcp-echo.mjs"
-       ]
+       ],
+       "cwd": "{{repoRoot}}"
       }
      },
      "capture": {
@@ -118,7 +119,8 @@
       "method": "POST",
       "path": "/api/mcp/servers/{{serverId}}/inspect",
       "body": {
-       "tool": "nope",
+       "sessionId": "{{sessionId}}",
+       "toolName": "nope",
        "arguments": {}
       }
      },
@@ -137,19 +139,25 @@
        "command": "node",
        "args": [
         "test/fixtures/mcp-echo.mjs"
-       ]
+       ],
+       "cwd": "{{repoRoot}}"
       }
      },
      "covers": [
       "PUT /api/mcp/servers/:customId"
-     ]
+     ],
+     "capture": {
+      "serverId": "$.id"
+     }
     },
     {
      "name": "start OAuth on a stdio server",
      "request": {
       "method": "POST",
       "path": "/api/mcp/servers/{{serverId}}/oauth/start",
-      "body": {}
+      "body": {
+       "redirectUrl": "http://127.0.0.1/api/mcp/oauth/callback"
+      }
      },
      "covers": [
       "POST /api/mcp/servers/:customId/oauth/start"
@@ -198,7 +206,8 @@
          "command": "node",
          "args": [
           "test/fixtures/mcp-echo.mjs"
-         ]
+         ],
+         "cwd": "{{repoRoot}}"
         }
        }
       }

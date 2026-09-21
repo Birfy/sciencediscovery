@@ -112,3 +112,8 @@ test("the build version a runner reports on either side is hidden", () => {
   const out = createNormalizer().json({ localVersion: "abc-dirty", remoteVersion: "abc-dirty" });
   assert.deepEqual(out, { localVersion: "<volatile>", remoteVersion: "<volatile>" });
 });
+
+test("this checkout's path is hidden, so a recording does not depend on where it was made", async () => {
+  const { REPO_ROOT } = await import("./normalize.mjs");
+  assert.equal(scrubValue(`cwd ${REPO_ROOT}/test/fixtures`), "cwd <repo>/test/fixtures");
+});

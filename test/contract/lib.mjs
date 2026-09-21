@@ -21,7 +21,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
-import { createNormalizer, diff, scrubValue } from "./normalize.mjs";
+import { REPO_ROOT, createNormalizer, diff, scrubValue } from "./normalize.mjs";
 import { startStubModel } from "./stub-model.mjs";
 
 export function loadCases(directory) {
@@ -115,7 +115,7 @@ export function profileRunEvents(events) {
 /** Run one case; returns one record per step. Steps marked always:true run even after a failure. */
 export async function runCase(testCase, { base, token, fetchImpl = fetch }) {
   const normalize = createNormalizer();
-  const variables = {};
+  const variables = { repoRoot: REPO_ROOT };
   // A case that needs a model gets its own scripted stub, so every case starts from step one.
   const stub = testCase.stub ? await startStubModel(testCase.stub) : undefined;
   if (stub) Object.assign(variables, { stubBaseUrl: stub.baseUrl, stubModel: stub.model, stubToken: stub.apiToken });
