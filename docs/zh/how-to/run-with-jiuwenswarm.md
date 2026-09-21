@@ -81,7 +81,7 @@ scripts/jiuwenswarm.sh setup     # 一次性：克隆固定版本（workswarm0.2
 | `SCIENCE_AGENT_ADAPTER_TOKEN` | 未设置 | API 访问 `/agent/*` 时带的 Bearer token；适配器监听在回环之外时请设置 |
 | **一次运行的行为** | | |
 | `SCIENCE_AGENT_ADAPTER_TOOL_TIMEOUT_S` | `3600` | 单次工具调用最长多久（JiuwenSwarm 自己的限制是 30 秒；API 有运行超时时会传运行的超时） |
-| `SCIENCE_AGENT_JIUWENSWARM_PLANNING` | 未设置 | `todo`：模型用 JiuwenSwarm 的 todo 工具做计划，它的清单就是计划。默认是 `update_plan` |
+| `SCIENCE_AGENT_JIUWENSWARM_PLANNING` | `todo` | 谁来维护计划。`todo`：模型用 JiuwenSwarm 自己的 todo 工具，它的清单就是计划。`update_plan`：改用 ScienceDiscovery 自己的工具（模拟浏览器旅程里脚本化的就是它） |
 | `SCIENCE_AGENT_LLM_MAX_TOKENS` | `16384` | 每次模型调用的输出预算（与内置循环共用）；推理模型请调大 |
 | `SCIENCE_AGENT_LLM_MAX_RETRIES`、`SCIENCE_AGENT_LLM_TIMEOUT_SECONDS` | `2`、`600` | 重试次数（429 等瞬时错误）和单次调用超时（共用） |
 | **诊断** | | |

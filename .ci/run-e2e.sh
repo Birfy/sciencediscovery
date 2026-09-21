@@ -217,6 +217,10 @@ if [[ "$backend" == "jiuwenswarm" ]]; then
   # rather than as a run that fails inside the first agent turn.
   export SCIENCE_AGENT_ADAPTER=1
   export SCIENCE_AGENT_EXECUTOR=jiuwenswarm
+  # JiuwenSwarm plans with its own todo tools by default. The mocked journeys script the model's calls
+  # to ScienceDiscovery's `update_plan`, so they run with that tool; the todo path is covered by
+  # test/contract/jw-only/live.mjs todo-plan.
+  export SCIENCE_AGENT_JIUWENSWARM_PLANNING=update_plan
 fi
 
 stack_arguments=(--mode local)

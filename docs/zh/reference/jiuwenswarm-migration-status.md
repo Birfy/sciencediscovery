@@ -32,7 +32,7 @@ issue 84（复用 JiuwenSwarm 后端）做到哪一步、现在能跑什么、�
 | 92 MCP 与数据源 | 已完成 | 21 行都有 L1 用例；5 条 MCP 旅程在此执行器上通过（自定义 MCP、智能体调用自定义 MCP 工具、OAuth、密钥编辑 ×2）；延迟的 MCP 工具启动时一并晋升，并提供 `tool_search` | 没有对真实供应商跑过 MCP OAuth |
 | 93 技能与技能库 | 未开始 | 由 legacy 提供 | L1 0/35；技能在此执行器上的使用未验证 |
 | 94 文件、工作区、轨迹 | 未开始 | 读接口有 L1 用例 | JiuwenSwarm 运行的轨迹视图为空（没有记录 `evidence`） |
-| 95 规划与子代理 | 已完成 | `update_plan`、`task` 经 bridge 运行；L1 覆盖全部行；L2 子代理与两轮对话用例一致；M0 计划、委派旅程通过；恢复的子代理带有此前历史 | 不使用 JiuwenSwarm 自己的 todo/子代理/agent 模板（子代理就是 API 的 `task` 工具） |
+| 95 规划与子代理 | 已完成 | 规划默认用 JiuwenSwarm 自己的 todo 工具（它的 `todo.updated` 清单就是运行的计划；`SCIENCE_AGENT_JIUWENSWARM_PLANNING=update_plan` 可改用我们的）；`task` 子代理经 bridge 运行，每个子代理有自己稳定的 JiuwenSwarm 会话，所以被恢复的子代理接着自己的对话；L1 覆盖全部行；L2 子代理与两轮对话用例一致；计划与委派旅程通过（计划旅程用它脚本化的 `update_plan`） | 不使用 JiuwenSwarm 自己的 `subagent_*`、`task_tool`、`team.*`、`agents.*` 和 agent 模板；每一步的计划快照不注入 |
 | 97 科学工具集 MCP 化 | 已完成 | 等价工具集以 MCP 工具提供，经 bridge 调 legacy 工具，走同一个 ToolRegistry；有测试把提供的工具集与 schema 钉在注册表上；延迟工具启动时一并晋升并提供 `tool_search`；并行调用可运行且一致 | 后续子 issue（idea-tree、evolve、memory、产物审阅）的工具随它们一起到 |
 | 103 用量 | 已完成 | 每次模型调用的 token 数映射成 `model.usage` 并汇总；一次运行后的会话用量、按模型用量与内置循环一致（L2）；每一行都有 L1 用例 | 没有迁到适配器存储；统计仍在 API |
 | 93、94、96、98-102、104-106 | 未开始 | legacy 行为原样在代理之后 | 全部：作为迁移尚未开始。runner/环境/远程主机的读接口有 L1 用例 |

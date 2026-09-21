@@ -81,7 +81,7 @@ Everything is environment variables on the stack (in `.env`, or exported before 
 | `SCIENCE_AGENT_ADAPTER_TOKEN` | unset | Bearer token the API presents on `/agent/*`; set it if the adapter listens beyond loopback |
 | **How a run behaves** | | |
 | `SCIENCE_AGENT_ADAPTER_TOOL_TIMEOUT_S` | `3600` | Longest one tool call may take (JiuwenSwarm's own limit is 30 s; the API passes the run's timeout when it has one) |
-| `SCIENCE_AGENT_JIUWENSWARM_PLANNING` | unset | `todo`: the model plans with JiuwenSwarm's todo tools and its list becomes the plan. Default: `update_plan` |
+| `SCIENCE_AGENT_JIUWENSWARM_PLANNING` | `todo` | Who keeps the plan. `todo`: the model uses JiuwenSwarm's own todo tools and its list becomes the plan. `update_plan`: ScienceDiscovery's own tool instead (what the mocked browser journeys script) |
 | `SCIENCE_AGENT_LLM_MAX_TOKENS` | `16384` | Output budget per model call (shared with the built-in loop); raise it for reasoning models |
 | `SCIENCE_AGENT_LLM_MAX_RETRIES`, `SCIENCE_AGENT_LLM_TIMEOUT_SECONDS` | `2`, `600` | Retries (429 and other transient errors) and per-call timeout (shared) |
 | **Diagnostics** | | |

@@ -158,7 +158,7 @@ test("plugin-contributed tools (update_plan) are offered to the adapter and run 
     response.end(line({ done: { finalText: "planned" } }));
   });
   try {
-    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ planStore: planStore as never }));
+    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url, planning: "update_plan" })(options({ planStore: planStore as never }));
     const events = collect(agent);
     await agent.execute("plan it");
     assert.ok(offered.includes("update_plan"), `offered: ${offered.join(", ")}`);
@@ -607,7 +607,7 @@ test("the tools offered are exactly the native registry's, every one with its ow
     response.end(line({ done: { finalText: "ok" } }));
   });
   try {
-    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(opts).execute("go");
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url, planning: "update_plan" })(opts).execute("go");
     const names = offered.map((tool) => tool.name).sort();
     assert.deepEqual(names, [...expected.keys(), "tool_search"].sort());
     for (const tool of offered) {
@@ -679,7 +679,7 @@ test("two update_plan calls in one response: the earlier one is superseded, as i
   const second = { plan: [{ step: "second", status: "pending" }] };
   const adapter = await respondWithTwoCalls(["update_plan", "update_plan"], [{ name: "update_plan", args: first }, { name: "update_plan", args: second }]);
   try {
-    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ planStore: planStore as never })).execute("plan");
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url, planning: "update_plan" })(options({ planStore: planStore as never })).execute("plan");
     assert.deepEqual(updates, [{ plan: [{ status: "pending", step: "second" }] }]);
   } finally {
     await adapter.close();
@@ -752,13 +752,37 @@ function planRecorder() {
   return { store, updates };
 }
 
-test("by default the model plans with our update_plan and JiuwenSwarm's todo tools are not offered", async () => {
+test("by default the model plans with JiuwenSwarm's todo tools, not our update_plan", async () => {
   let sent: any;
   const adapter = await fakeAdapter(async ({ body }, response) => { sent = body; response.writeHead(200); response.end(line({ done: { finalText: "ok" } })); });
   try {
     await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ planStore: planRecorder().store as never })).execute("go");
+    assert.deepEqual(sent.nativeTools, ["todo_create", "todo_modify", "todo_list", "todo_get"]);
+    assert.equal(sent.tools.some((tool: { name: string }) => tool.name === "update_plan"), false);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("planning can be switched back to our update_plan, and then JiuwenSwarm's todo tools are not offered", async () => {
+  let sent: any;
+  const adapter = await fakeAdapter(async ({ body }, response) => { sent = body; response.writeHead(200); response.end(line({ done: { finalText: "ok" } })); });
+  try {
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url, planning: "update_plan" })(options({ planStore: planRecorder().store as never })).execute("go");
     assert.ok(sent.tools.some((tool: { name: string }) => tool.name === "update_plan"));
     assert.equal("nativeTools" in sent, false);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("a run with no plan store offers no plan tool of either kind", async () => {
+  let sent: any;
+  const adapter = await fakeAdapter(async ({ body }, response) => { sent = body; response.writeHead(200); response.end(line({ done: { finalText: "ok" } })); });
+  try {
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options()).execute("go");
+    assert.equal("nativeTools" in sent, false);
+    assert.equal(sent.tools.some((tool: { name: string }) => tool.name === "update_plan"), false);
   } finally {
     await adapter.close();
   }
@@ -779,7 +803,7 @@ test("in todo planning JiuwenSwarm's todo tools replace update_plan, and its tod
     response.end(line({ done: { finalText: "ok" } }));
   });
   try {
-    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url, planning: "todo" })(options({ planStore: store as never }));
+    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ planStore: store as never }));
     const events = collect(agent);
     const result = await agent.execute("plan it");
     assert.deepEqual(sent.nativeTools, ["todo_create", "todo_modify", "todo_list", "todo_get"]);
@@ -819,10 +843,11 @@ test("a JiuwenSwarm-run tool does not hold up the calls behind it at the bridge"
   }
 });
 
-test("todo planning is chosen by SCIENCE_AGENT_JIUWENSWARM_PLANNING", () => {
+test("planning is JiuwenSwarm's todo unless SCIENCE_AGENT_JIUWENSWARM_PLANNING=update_plan", () => {
   const env = { SCIENCE_AGENT_EXECUTOR: "jiuwenswarm", SCIENCE_AGENT_ADAPTER_URL: "http://a" };
-  assert.equal(jiuwenSwarmConfigFromEnv(env)?.planning, undefined);
-  assert.equal(jiuwenSwarmConfigFromEnv({ ...env, SCIENCE_AGENT_JIUWENSWARM_PLANNING: "todo" })?.planning, "todo");
+  assert.equal(jiuwenSwarmConfigFromEnv(env)?.planning, undefined, "unset means todo");
+  assert.equal(jiuwenSwarmConfigFromEnv({ ...env, SCIENCE_AGENT_JIUWENSWARM_PLANNING: "todo" })?.planning, undefined);
+  assert.equal(jiuwenSwarmConfigFromEnv({ ...env, SCIENCE_AGENT_JIUWENSWARM_PLANNING: "update_plan" })?.planning, "update_plan");
 });
 
 /** The adapter side of a run that asks the model once, through the run's gateway, as JiuwenSwarm does. */

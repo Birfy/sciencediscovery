@@ -55,13 +55,13 @@ export interface JiuwenSwarmAgentConfig {
   /** Replaceable for tests: the native model client the run's model requests are served by. */
   modelStreamer?: typeof streamModelTurn;
   /**
-   * Who keeps the plan. `update_plan` (default): the model calls our tool. `todo`: the model uses
-   * JiuwenSwarm's own todo tools and its todo list becomes the run's plan.
+   * Who keeps the plan. `todo` (default): the model uses JiuwenSwarm's own todo tools and its todo list
+   * becomes the run's plan. `update_plan`: the model calls ScienceDiscovery's own tool instead.
    */
   planning?: "todo" | "update_plan";
 }
 
-/** JiuwenSwarm's own todo tools, left visible to the model in `todo` planning. */
+/** JiuwenSwarm's own todo tools, left visible to the model unless planning is `update_plan`. */
 export const JIUWENSWARM_TODO_TOOLS = ["todo_create", "todo_modify", "todo_list", "todo_get"] as const;
 
 /** Selected by SCIENCE_AGENT_EXECUTOR=jiuwenswarm; the native agent stays the default. */
@@ -72,7 +72,7 @@ export function jiuwenSwarmConfigFromEnv(env: NodeJS.ProcessEnv = process.env): 
   return {
     adapterUrl: adapterUrl.replace(/\/+$/, ""),
     ...(env.SCIENCE_AGENT_ADAPTER_TOKEN?.trim() ? { adapterToken: env.SCIENCE_AGENT_ADAPTER_TOKEN.trim() } : {}),
-    ...(env.SCIENCE_AGENT_JIUWENSWARM_PLANNING?.trim() === "todo" ? { planning: "todo" as const } : {}),
+    ...(env.SCIENCE_AGENT_JIUWENSWARM_PLANNING?.trim() === "update_plan" ? { planning: "update_plan" as const } : {}),
   };
 }
 
@@ -130,7 +130,7 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
     const tools = new Map(registry.values().map((tool) => [tool.name, tool]));
     await offerDeferredTools(registry, tools, this.controller.signal);
     // With JiuwenSwarm's own todo tools the model does not also get ours.
-    const jiuwenSwarmPlans = this.config.planning === "todo" && Boolean(this.options.planStore);
+    const jiuwenSwarmPlans = (this.config.planning ?? "todo") === "todo" && Boolean(this.options.planStore);
     if (jiuwenSwarmPlans) tools.delete("update_plan");
     const bridgeToken = randomUUID();
     const announcements = new ToolAnnouncements();

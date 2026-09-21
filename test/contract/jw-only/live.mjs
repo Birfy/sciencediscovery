@@ -18,7 +18,7 @@
  * SCIENCE_AGENT_EXECUTOR=jiuwenswarm:
  *
  *   E2E_BASE_URL=http://127.0.0.1:4310 E2E_API_TOKEN=... node test/contract/jw-only/live.mjs history
- *   SCIENCE_AGENT_JIUWENSWARM_PLANNING=todo (stack) ... node test/contract/jw-only/live.mjs todo-plan
+ *   node test/contract/jw-only/live.mjs todo-plan
  *
  *   LIVE_RESTART_CMD='scripts/jiuwenswarm.sh stop && scripts/jiuwenswarm.sh start' ... live.mjs history-restart
  *
@@ -111,7 +111,7 @@ const checks = {
     }
   },
 
-  /** JiuwenSwarm's own todo tool drives the plan (needs SCIENCE_AGENT_JIUWENSWARM_PLANNING=todo on the stack). */
+  /** JiuwenSwarm's own todo tool drives the plan (the default; not with SCIENCE_AGENT_JIUWENSWARM_PLANNING=update_plan). */
   async "todo-plan"() {
     const tasks = [
       { id: "search", content: "Search the literature", activeForm: "Searching", description: "find sources" },
