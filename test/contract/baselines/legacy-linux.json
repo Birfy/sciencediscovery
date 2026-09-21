@@ -8330,5 +8330,489 @@
     "deleted": "<uuid:1>"
    }
   }
+ ],
+ "idea-evolve-memory-reads": [
+  {
+   "name": "create a project",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "createdAt": "<time>",
+    "firstSession": {
+     "approvalMode": "ask_for_dangerous",
+     "createdAt": "<time>",
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [],
+     "id": "<uuid:2>",
+     "permissionEpochId": "<uuid:3>",
+     "projectId": "<uuid:1>",
+     "reviewCriteria": [],
+     "reviewerAutomaticReviewEnabled": true,
+     "reviewerSpecialistLevel": "quick",
+     "reviewMode": "auto",
+     "semanticReviewEnabled": true,
+     "settingsOverrides": {},
+     "title": "Untitled session",
+     "updatedAt": "<time>"
+    },
+    "id": "<uuid:1>",
+    "name": "L1 idea evolve memory",
+    "project": {
+     "createdAt": "<time>",
+     "id": "<uuid:1>",
+     "name": "L1 idea evolve memory",
+     "remoteRunnerHostIds": [],
+     "settingsOverrides": {
+      "enabledSkillIds": [],
+      "enabledSkillLibraries": [],
+      "skillSelectionMode": "selected"
+     }
+    },
+    "remoteRunnerHostIds": [],
+    "settingsOverrides": {
+     "enabledSkillIds": [],
+     "enabledSkillLibraries": [],
+     "skillSelectionMode": "selected"
+    }
+   }
+  },
+  {
+   "name": "idea-tree settings",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "assessorActivity": {},
+    "assessorStability": {},
+    "assessorSustainability": {},
+    "candidatesPerRound": 3,
+    "explorationIntensity": "standard",
+    "maxDepth": 5,
+    "maxNodes": 100,
+    "maxRounds": 3,
+    "maxSearchRounds": 10,
+    "maxTokens": null,
+    "maxTokensPerCall": 32768,
+    "scoreDirection": "maximize",
+    "templateId": "scientific-hypothesis-general/v1"
+   }
+  },
+  {
+   "name": "research list of a fresh session",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "items": []
+   }
+  },
+  {
+   "name": "start research with an empty body",
+   "status": 400,
+   "contentType": "application/json",
+   "body": {
+    "error": "Configure a model with an API token before starting research"
+   }
+  },
+  {
+   "name": "events of an unknown research",
+   "status": 502,
+   "contentType": "application/json",
+   "events": []
+  },
+  {
+   "name": "idea-tree graph of a fresh session",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "graph": null,
+    "hasIdeaTreeRun": false,
+    "treeIds": []
+   }
+  },
+  {
+   "name": "evolve runs",
+   "status": 200,
+   "contentType": "application/json",
+   "body": []
+  },
+  {
+   "name": "events of an unknown evolve run",
+   "status": 404,
+   "contentType": "application/json",
+   "events": []
+  },
+  {
+   "name": "candidate of an unknown evolve run",
+   "status": 404,
+   "contentType": "application/json",
+   "body": {
+    "error": "Evolve run not found"
+   }
+  },
+  {
+   "name": "stop an unknown evolve run",
+   "status": 404,
+   "contentType": "application/json",
+   "body": {
+    "error": "Evolve run not found"
+   }
+  },
+  {
+   "name": "memory settings",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "backend": "local",
+    "enabled": false,
+    "hasNeo4jPassword": false,
+    "memoryGraphStatus": "disabled",
+    "neo4jHttp": "http://127.0.0.1:<port>",
+    "neo4jUser": "neo4j"
+   }
+  },
+  {
+   "name": "memory subgraph of a fresh session",
+   "status": 404,
+   "contentType": "application/json",
+   "body": {
+    "error": "Session not found"
+   }
+  },
+  {
+   "name": "an unknown search graph",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "cells": [],
+    "edges": [],
+    "nodes": [],
+    "reason": "memory_graph_disabled",
+    "truncated": false
+   }
+  },
+  {
+   "name": "provenance of an unknown artifact",
+   "status": 400,
+   "contentType": "application/json",
+   "body": {
+    "error": "artifact_id + version required"
+   }
+  },
+  {
+   "name": "memory query match with an empty body",
+   "status": 400,
+   "contentType": "application/json",
+   "body": {
+    "error": "query must be non-empty"
+   }
+  },
+  {
+   "name": "memory query by-node-type with an empty body",
+   "status": 400,
+   "contentType": "application/json",
+   "body": {
+    "error": "node_types must be a non-empty list"
+   }
+  },
+  {
+   "name": "memory query by-edge-type with an empty body",
+   "status": 400,
+   "contentType": "application/json",
+   "body": {
+    "error": "edge_types must be a non-empty list"
+   }
+  },
+  {
+   "name": "memory query chain with an empty body",
+   "status": 400,
+   "contentType": "application/json",
+   "body": {
+    "error": "node_id must be non-empty"
+   }
+  },
+  {
+   "name": "memory query chain-exists with an empty body",
+   "status": 400,
+   "contentType": "application/json",
+   "body": {
+    "error": "node_id must be non-empty"
+   }
+  },
+  {
+   "name": "memory query scope-expansion with an empty body",
+   "status": 400,
+   "contentType": "application/json",
+   "body": {
+    "error": "scope_task_id must be non-empty"
+   }
+  },
+  {
+   "name": "memory query group-expansion with an empty body",
+   "status": 400,
+   "contentType": "application/json",
+   "body": {
+    "error": "group_id must be non-empty"
+   }
+  },
+  {
+   "name": "memory provenance trace with an empty body",
+   "status": 400,
+   "contentType": "application/json",
+   "body": {
+    "error": "node_id must be non-empty"
+   }
+  },
+  {
+   "name": "delete the project",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "deleted": "<uuid:1>"
+   }
+  }
+ ],
+ "runners-environments-reads": [
+  {
+   "name": "runners",
+   "status": 200,
+   "contentType": "application/json",
+   "body": [
+    {
+     "alias": "local",
+     "connectionKind": "direct",
+     "createdAt": "<time>",
+     "id": "local",
+     "location": "local",
+     "runnerCommand": "sciencediscovery-runner",
+     "runnerName": "Local Runner",
+     "runnerStatus": {
+      "hostId": "local",
+      "localVersion": "6abc7fdd-dirty",
+      "remoteVersion": "6abc7fdd-dirty",
+      "resources": "<volatile>",
+      "state": "ready"
+     },
+     "status": "ready",
+     "updatedAt": "<time>",
+     "workspaceRoot": "/root/l1-runtime/projects"
+    }
+   ]
+  },
+  {
+   "name": "the local runner",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "alias": "local",
+    "connectionKind": "direct",
+    "createdAt": "<time>",
+    "id": "local",
+    "location": "local",
+    "runnerCommand": "sciencediscovery-runner",
+    "runnerName": "Local Runner",
+    "runnerStatus": {
+     "hostId": "local",
+     "localVersion": "6abc7fdd-dirty",
+     "remoteVersion": "6abc7fdd-dirty",
+     "resources": "<volatile>",
+     "state": "ready"
+    },
+    "status": "ready",
+    "updatedAt": "<time>",
+    "workspaceRoot": "/root/l1-runtime/projects"
+   }
+  },
+  {
+   "name": "an unknown runner",
+   "status": 404,
+   "contentType": "application/json",
+   "body": {
+    "error": "Runner not found"
+   }
+  },
+  {
+   "name": "npu runners",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "local": null,
+    "selections": {}
+   }
+  },
+  {
+   "name": "workspaces on the local runner",
+   "status": 200,
+   "contentType": "application/json",
+   "body": []
+  },
+  {
+   "name": "files of an unknown workspace",
+   "status": 404,
+   "contentType": "application/json",
+   "body": {
+    "error": "Workspace binding not found"
+   }
+  },
+  {
+   "name": "connect log of the local runner",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "entries": [],
+    "hostId": "local"
+   }
+  },
+  {
+   "name": "environments",
+   "status": 503,
+   "contentType": "application/json",
+   "body": {
+    "error": "Scientific environments are disabled by configuration"
+   }
+  },
+  {
+   "name": "environment setup",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "allowedChannels": [
+     "conda-forge"
+    ],
+    "completedAt": null,
+    "components": {
+     "conda": {
+      "action": null,
+      "completedAt": null,
+      "error": null,
+      "message": "Conda environments are disabled by configuration",
+      "phase": "disabled",
+      "startedAt": null,
+      "state": "disabled",
+      "updatedAt": "<time>"
+     },
+     "micromamba": {
+      "action": null,
+      "completedAt": null,
+      "error": null,
+      "message": "micromamba is disabled by configuration",
+      "phase": "disabled",
+      "startedAt": null,
+      "state": "disabled",
+      "updatedAt": "<time>"
+     }
+    },
+    "error": null,
+    "managedProvisioner": true,
+    "message": "Scientific environments are disabled by configuration",
+    "networkPolicy": "allowed-channels",
+    "phase": "disabled",
+    "provisioner": null,
+    "provisionerVersion": null,
+    "startedAt": null,
+    "starterPackages": {
+     "python": [
+      "python=3.12",
+      "numpy=2.0",
+      "pandas=2.2",
+      "scipy=1.14",
+      "matplotlib=3.9"
+     ],
+     "r": [
+      "r-base=4.4",
+      "r-tidyverse=2.0",
+      "r-data.table=1.16"
+     ]
+    },
+    "state": "disabled",
+    "updatedAt": "<time>"
+   }
+  },
+  {
+   "name": "environment revisions",
+   "status": 200,
+   "contentType": "application/json",
+   "body": [
+    {
+     "channels": [],
+     "createdAt": "<time>",
+     "environmentId": "legacy-system-python",
+     "id": "<system-environment>",
+     "language": "python",
+     "languageVersion": "Python 3.6.8",
+     "packages": [],
+     "packageSpecHash": "<hex>",
+     "platform": "linux-x64",
+     "provisioner": "system",
+     "runnerVersion": "<volatile>",
+     "snapshot": {
+      "hash": "<hex>",
+      "size": 219
+     }
+    },
+    {
+     "channels": [],
+     "createdAt": "<time>",
+     "environmentId": "system-shell",
+     "id": "<system-environment>",
+     "language": "shell",
+     "languageVersion": "GNU bash, version 4.4.20(1)-release (x86_64-koji-linux-gnu)",
+     "packages": [],
+     "packageSpecHash": "<hex>",
+     "platform": "linux-x64",
+     "provisioner": "system",
+     "runnerVersion": "<volatile>",
+     "snapshot": {
+      "hash": "<hex>",
+      "size": 261
+     }
+    }
+   ]
+  },
+  {
+   "name": "remote hosts",
+   "status": 200,
+   "contentType": "application/json",
+   "body": []
+  },
+  {
+   "name": "ssh key files",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "directory": "/root/.ssh",
+    "entries": [
+     {
+      "kind": "file",
+      "name": "authorized_keys",
+      "path": "/root/.ssh/authorized_keys"
+     }
+    ],
+    "nextOffset": null,
+    "parentDirectory": "/root"
+   }
+  },
+  {
+   "name": "ssh config hosts",
+   "status": 200,
+   "contentType": "application/json",
+   "body": []
+  },
+  {
+   "name": "register a remote host with an empty body",
+   "status": 400,
+   "contentType": "application/json",
+   "body": {
+    "error": "A machine name must be an alias, hostname, or IP address using only letters, numbers, dots, underscores, and hyphens"
+   }
+  },
+  {
+   "name": "probe an unknown remote host",
+   "status": 404,
+   "contentType": "application/json",
+   "body": {
+    "error": "Remote host not found"
+   }
+  }
  ]
 }
