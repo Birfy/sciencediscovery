@@ -55,7 +55,7 @@ JiuwenSwarm 自己有一套上下文引擎（占用到模型窗口的 80% 时压
 |---|---|---|
 | 对话放在哪 | API 的记录，每一步重新发 | JiuwenSwarm 的会话，每个智能体一个（持久化在它的检查点数据库里）；不随请求发送，适配器里也没有 |
 | 窗口快满时的压缩 | ScienceDiscovery 自己的压缩器 | JiuwenSwarm 的，依据**一个全局窗口**（`JIUWENSWARM_CONTEXT_WINDOW_TOKENS`，默认 200000；它忽略模型自己的窗口）。已用 3000 token 的窗口验证：早期几轮被总结压缩（`live.mjs compression`）。它的摘要和标题用它的默认模型，适配器把它指向正在运行的那次运行的模型 |
-| 系统提示词 | 每一步用 ScienceDiscovery 的各段（身份、治理、能力、技能）组装 | JiuwenSwarm 自己的完整提示词（约 1.2 万字符：身份、安全、工具规则、记忆、上下文压缩、已安装 Skill），ScienceDiscovery 的接在后面。这个模式下它没有放 todo 那一段。`SCIENCE_AGENT_JIUWENSWARM_PROMPT=replace` 恢复旧行为 |
+| 系统提示词 | 每一步用 ScienceDiscovery 的各段（身份、治理、能力、技能）组装 | 先是 ScienceDiscovery 的产品提示词，再是 JiuwenSwarm 自己的完整提示词（约 1.2 万字符：身份、安全、工具规则、记忆、上下文压缩、已安装 Skill），最后是运行契约。这个模式下它没有放 todo 那一段。`SCIENCE_AGENT_JIUWENSWARM_PROMPT=replace` 恢复旧行为 |
 | 运行契约（受保护） | 每一步都在 | 每一步都在：它是系统提示词的一部分，适配器在每次模型请求里都放上它 |
 | JiuwenSwarm 自己的提示词 | 不适用 | 完整保留；它的每轮包装和动态上下文（运行时状态）也作为用户消息加进去 |
 | 计划快照、持久状态、插件上下文 | 每一步注入 | **没有注入**；JiuwenSwarm 加自己的动态上下文 |
