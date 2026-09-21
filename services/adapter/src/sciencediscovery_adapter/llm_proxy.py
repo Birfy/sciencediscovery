@@ -104,7 +104,7 @@ def rewrite_request(body: dict[str, Any], route: LlmRoute) -> dict[str, Any]:
         out["tools"] = [
             {**tool, "function": _original(tool["function"], route)}
             for tool in body["tools"]
-            if _unprefixed(tool.get("function", {}).get("name", ""), route) in route.tool_names
+            if _is_ours(tool.get("function", {}).get("name", ""), route)
             or tool.get("function", {}).get("name", "") in route.native_tools
         ]
         if not out["tools"]:
@@ -140,6 +140,15 @@ def rewrite_request(body: dict[str, Any], route: LlmRoute) -> dict[str, Any]:
                 print(f"[llm-proxy:full] #{index} {message.get('role')} {len(text)} chars: {text[:1500]!r}", file=sys.stderr, flush=True)
             print(f"[llm-proxy:full] tools sent to the model: {[t['function']['name'] for t in out.get('tools', [])]}", file=sys.stderr, flush=True)
     return out
+
+
+def _is_ours(name: str, route: LlmRoute) -> bool:
+    """A tool of this run's toolset: JiuwenSwarm names those `<prefix><name>`.
+
+    A name without the prefix is JiuwenSwarm's own tool, even when it is spelled like one of ours
+    (`read_file`, `list_files`): letting it through would give the model two tools of one name.
+    """
+    return name.startswith(route.tool_prefix) and name.removeprefix(route.tool_prefix) in route.tool_names
 
 
 def _prefixed(name: str, route: LlmRoute) -> str:

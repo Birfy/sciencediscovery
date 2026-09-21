@@ -208,3 +208,16 @@ async def test_the_default_route_is_not_mistaken_for_a_runs_token():
     async with _client(routes, lambda request: httpx.Response(200, json={})) as client:
         response = await client.post("/llm/default/v1/chat/completions", json={}, headers={"authorization": "Bearer x"})
     assert response.status_code == 401  # not "unknown route" (404) from the per-run handler
+
+
+def test_a_jiuwenswarm_tool_spelled_like_one_of_ours_is_not_offered_as_a_second_copy():
+    """JiuwenSwarm has its own read_file and list_files; the run's toolset has tools of those names too."""
+    route = LlmRoute(**{**ROUTE.__dict__, "tool_names": frozenset({"read_file", "list_files", "run_shell"})})
+    body = {"tools": [tool("read_file"), tool("mcp_sci_read_file"), tool("list_files"), tool("mcp_sci_list_files"), tool("mcp_sci_run_shell")],
+            "messages": []}
+    names = [t["function"]["name"] for t in rewrite_request(body, route)["tools"]]
+    assert names == ["read_file", "list_files", "run_shell"], "one of each, and each one is the run's own"
+
+
+def test_a_prefixed_name_that_is_not_in_the_toolset_is_not_offered():
+    assert rewrite_request({"tools": [tool("mcp_sci_bash")], "messages": []}, ROUTE).get("tools") is None
