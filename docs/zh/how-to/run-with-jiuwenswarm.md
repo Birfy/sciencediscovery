@@ -6,6 +6,9 @@ ScienceDiscovery 可以让智能体循环跑在 [JiuwenSwarm](https://gitcode.co
 
 **工具、沙箱与审批：** JiuwenSwarm 直接在主机上操作的工具（`bash`、`read_file`、`write_file`、`edit_file`、`glob`、`list_files`、`grep`、`read_pdf`）对模型隐藏：命令、脚本和写文件走 ScienceDiscovery 的 `run_shell`，在它的沙箱或 Runner 里执行，保留溯源；读文件用它的文件工具。模型若仍调用被隐藏的工具，调用会被拒绝，什么也不执行。JiuwenSwarm 其余的工具（网页搜索与抓取、todo、记忆、技能、子代理、定时任务）保留。ScienceDiscovery 的工具通过一个 MCP 服务 `sci` 提供给 JiuwenSwarm，名字固定（如 `mcp_sci_run_shell`）。**审批用 JiuwenSwarm 的**：它的权限引擎已开启，每次工具调用前由它判断。我们的每个工具在第一次出现时设定级别：会执行命令、访问主机或 Runner、下载的工具，以及自定义 MCP 连接器工具为*询问*，其余为*允许*。询问显示为 ScienceDiscovery 的审批卡片（会话的审批模式和已有授权仍然生效），答复回传给 JiuwenSwarm（本次 / 本会话 / 总是 / 拒绝）。之后 ScienceDiscovery 自己的审批层放行这次调用，并以来源 `jiuwenswarm` 记录。设 `SCIENCE_AGENT_JIUWENSWARM_TOOLS=ours` 则模型只用 ScienceDiscovery 的工具。
 
+**语言：** JiuwenSwarm 的语言跟随界面语言（设置里的 English / 中文）：它自己的提示词、规则和工具，以及它要求模型使用的回答语言。这是所有会话共用的一个设置（JiuwenSwarm 配置里的 `preferred_language`）；切换后，会话在下一次运行时生效。
+
+
 ```
 浏览器 ─▶ 适配器（公共端口）─▶ API（端口 + 100）
               │                     │

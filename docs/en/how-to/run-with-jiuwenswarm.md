@@ -6,6 +6,9 @@ What stays the same: the web UI, sessions, messages, run events, artifacts and p
 
 **Tools, sandbox and approvals:** JiuwenSwarm's tools that act on the host (`bash`, `read_file`, `write_file`, `edit_file`, `glob`, `list_files`, `grep`, `read_pdf`) are hidden from the model: commands, scripts and file writes go through ScienceDiscovery's `run_shell`, in its sandbox or on a Runner, with its provenance; reads through its file tools. A call to a hidden tool is turned away and runs nothing. The rest of JiuwenSwarm's tools (web search and fetch, todo, memory, skills, sub-agents, schedules) stay. ScienceDiscovery's tools reach JiuwenSwarm through one MCP server, `sci`, so their names are stable (`mcp_sci_run_shell`). **Approvals are JiuwenSwarm's**: its permission engine is switched on and decides before every call. Each of our tools gets a level the first time a run brings it: *ask* for those that execute, reach a host or Runner, or download, and for custom MCP connector tools; *allow* for the rest. A question shows as a ScienceDiscovery approval card (the session's approval mode and standing grants apply) and the answer goes back to JiuwenSwarm (once / this session / always / deny). ScienceDiscovery's own approval layer then allows the call and records it with source `jiuwenswarm`. `SCIENCE_AGENT_JIUWENSWARM_TOOLS=ours` gives the model ScienceDiscovery's tools only.
 
+**Language:** JiuwenSwarm's language follows the UI's (Settings, English / 中文): its own prompt, rails and tools, and the language it asks the model to answer in. It is one setting for every session (`preferred_language` in JiuwenSwarm's config); a session picks up a switch at its next run.
+
+
 ```
 browser ─▶ adapter (public port) ─▶ API (port + 100)
               │                        │
