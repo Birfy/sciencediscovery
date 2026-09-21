@@ -259,6 +259,19 @@
      ]
     },
     {
+     "name": "save proxy policies",
+     "request": {
+      "method": "PUT",
+      "path": "/api/mcp/proxy-policies",
+      "body": {
+       "policies": {}
+      }
+     },
+     "covers": [
+      "PUT /api/mcp/proxy-policies"
+     ]
+    },
+    {
      "name": "connectors",
      "request": {
       "method": "GET",

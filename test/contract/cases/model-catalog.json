@@ -1,0 +1,22 @@
+{
+ "domain": "Models and providers",
+ "cases": [
+  {
+   "id": "model-catalog-refresh",
+   "description": "Refreshing the model catalog. The stack under test reads a committed catalog excerpt and must not depend on the network for the answer.",
+   "steps": [
+    {
+     "name": "refresh the catalog",
+     "request": {
+      "method": "POST",
+      "path": "/api/model-catalog/refresh",
+      "body": {}
+     },
+     "covers": [
+      "POST /api/model-catalog/refresh"
+     ]
+    }
+   ]
+  }
+ ]
+}
