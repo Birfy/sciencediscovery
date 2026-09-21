@@ -56,6 +56,10 @@ class LlmRoute:
     tool_specs: dict[str, dict[str, Any]] = field(default_factory=dict)
     # JiuwenSwarm's own tools the model may keep, by their own names; the model sees their own specs.
     native_tools: frozenset[str] = frozenset()
+    # "replace": `system_prompt` takes the place of JiuwenSwarm's own system prompt. "append": JiuwenSwarm's
+    # prompt (identity, safety, tools, todo, context compression, installed skills) stays whole and
+    # `system_prompt` is added after it.
+    system_prompt_mode: str = "replace"
 
 
 @dataclass
@@ -125,8 +129,13 @@ def rewrite_request(body: dict[str, Any], route: LlmRoute) -> dict[str, Any]:
         message = dict(message)
         if message.get("role") == "system" and route.system_prompt is not None:
             if replaced:
-                continue  # one system prompt: the caller's
-            message["content"] = route.system_prompt
+                continue  # one system prompt
+            if route.system_prompt_mode == "append":
+                own = message.get("content")
+                own = own if isinstance(own, str) else json.dumps(own, ensure_ascii=False)
+                message["content"] = f"{own}\n\n{route.system_prompt}"
+            else:
+                message["content"] = route.system_prompt
             replaced = True
         for call in message.get("tool_calls") or []:
             call["function"] = {**call["function"], "name": _unprefixed(call["function"]["name"], route)}

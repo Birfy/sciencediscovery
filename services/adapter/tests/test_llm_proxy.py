@@ -221,3 +221,23 @@ def test_a_jiuwenswarm_tool_spelled_like_one_of_ours_is_not_offered_as_a_second_
 
 def test_a_prefixed_name_that_is_not_in_the_toolset_is_not_offered():
     assert rewrite_request({"tools": [tool("mcp_sci_bash")], "messages": []}, ROUTE).get("tools") is None
+
+
+def test_append_keeps_jiuwenswarms_own_system_prompt_whole_and_adds_the_callers_after_it():
+    route = LlmRoute(**{**ROUTE.__dict__, "system_prompt_mode": "append"})
+    body = {"messages": [{"role": "system", "content": "# 身份\n你是 JiuwenSwarm 的智能体。"}, {"role": "user", "content": "hi"}]}
+    out = rewrite_request(body, route)["messages"]
+    assert out[0]["content"] == "# 身份\n你是 JiuwenSwarm 的智能体。\n\nYou are the science agent."
+    assert [m["role"] for m in out] == ["system", "user"]
+
+
+def test_append_with_no_system_message_still_gives_the_model_the_callers_prompt():
+    route = LlmRoute(**{**ROUTE.__dict__, "system_prompt_mode": "append"})
+    out = rewrite_request({"messages": [{"role": "user", "content": "hi"}]}, route)["messages"]
+    assert out[0] == {"role": "system", "content": "You are the science agent."}
+
+
+def test_append_leaves_a_second_system_message_out_as_replace_does():
+    route = LlmRoute(**{**ROUTE.__dict__, "system_prompt_mode": "append"})
+    body = {"messages": [{"role": "system", "content": "A"}, {"role": "system", "content": "B"}, {"role": "user", "content": "hi"}]}
+    assert [m["content"] for m in rewrite_request(body, route)["messages"]] == ["A\n\nYou are the science agent.", "hi"]

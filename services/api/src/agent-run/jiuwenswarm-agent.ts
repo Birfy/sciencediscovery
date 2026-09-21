@@ -59,6 +59,12 @@ export interface JiuwenSwarmAgentConfig {
    * becomes the run's plan. `update_plan`: the model calls ScienceDiscovery's own tool instead.
    */
   planning?: "todo" | "update_plan";
+  /**
+   * What becomes of JiuwenSwarm's own system prompt. `append` (default): it stays whole (identity, safety,
+   * tool rules, todo, context compression, installed skills) and ScienceDiscovery's is added after it.
+   * `replace`: ScienceDiscovery's takes its place and JiuwenSwarm's never reaches the model.
+   */
+  prompt?: "append" | "replace";
 }
 
 /**
@@ -84,6 +90,7 @@ export function jiuwenSwarmConfigFromEnv(env: NodeJS.ProcessEnv = process.env): 
     adapterUrl: adapterUrl.replace(/\/+$/, ""),
     ...(env.SCIENCE_AGENT_ADAPTER_TOKEN?.trim() ? { adapterToken: env.SCIENCE_AGENT_ADAPTER_TOKEN.trim() } : {}),
     ...(env.SCIENCE_AGENT_JIUWENSWARM_PLANNING?.trim() === "update_plan" ? { planning: "update_plan" as const } : {}),
+    ...(env.SCIENCE_AGENT_JIUWENSWARM_PROMPT?.trim() === "replace" ? { prompt: "replace" as const } : {}),
   };
 }
 
@@ -203,7 +210,10 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
     const toolNames = new Set(tools.keys());
     // The same system prompt the native loop would send: the model is tuned to it.
     const composed = composeSystemPrompt(this.options, toolNames, toolNames.has("read_skill") ? this.options.skills ?? [] : []).systemPrompt;
-    const systemPrompt = jiuwenSwarmPlans ? `${composed}\n\n${TODO_PLANNING_SECTION}` : composed;
+    // Appended after JiuwenSwarm's own prompt, its todo section already says how to plan; only when its prompt is
+    // replaced does the model need to be told about the todo tools here.
+    const appendPrompt = (this.config.prompt ?? "append") === "append";
+    const systemPrompt = jiuwenSwarmPlans && !appendPrompt ? `${composed}\n\n${TODO_PLANNING_SECTION}` : composed;
     const response = await (this.config.fetch ?? fetch)(`${this.config.adapterUrl}/agent/runs`, {
       method: "POST",
       headers: {
@@ -215,6 +225,7 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
         sessionKey: jiuwenSwarmSessionKey(this.options),
         prompt: text,
         systemPrompt,
+        systemPromptMode: appendPrompt ? "append" : "replace",
         cwd: this.options.workspaceRoot,
         // The adapter's proxy forwards to this loopback gateway, which speaks the model's own protocol.
         model: { model: model.model, baseUrl: modelGateway.url, apiKey: modelGateway.token, provider: "OpenAI" },

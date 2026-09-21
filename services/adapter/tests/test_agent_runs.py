@@ -317,3 +317,19 @@ async def test_info_also_opens_with_the_apis_own_access_token():
     app = create_app(Settings(**{**SETTINGS.__dict__, "api_token": "api-token"}))
     assert (await get(app, "/agent/info")).status_code == 401
     assert (await get(app, "/agent/info", {"authorization": "Bearer api-token"})).status_code == 200
+
+
+async def test_the_system_prompt_mode_reaches_the_route(harness):
+    app, runner, _ = harness
+    modes = []
+    original = runner.routes.add
+
+    def spy(route):
+        modes.append((route.system_prompt, route.system_prompt_mode))
+        return original(route)
+
+    runner.routes.add = spy
+    model = {"model": "m", "baseUrl": "http://llm.test/v1", "apiKey": "k"}
+    await post(app, {"sessionId": "s1", "prompt": "hi", "model": model, "systemPrompt": "ours", "systemPromptMode": "append"})
+    await post(app, {"sessionId": "s1", "prompt": "hi", "model": model, "systemPrompt": "ours"})
+    assert modes == [("ours", "append"), ("ours", "replace")]

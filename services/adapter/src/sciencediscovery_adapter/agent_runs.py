@@ -33,7 +33,7 @@ import re
 import sys
 import uuid
 from collections.abc import AsyncIterator, Callable
-from typing import Any
+from typing import Any, Literal
 
 import httpx
 from fastapi import APIRouter, Header, HTTPException, Request
@@ -79,8 +79,10 @@ class AgentRunRequest(BaseModel):
     tools: list[ToolSpec] = Field(default_factory=list)
     bridge: Bridge | None = None
     model: ModelSpec | None = None
-    # Replaces JiuwenSwarm's own system prompt for this run (needs `model`).
+    # The caller's system prompt for this run (needs `model`). `systemPromptMode` says what becomes of
+    # JiuwenSwarm's own: "append" keeps it whole and adds this one after it; "replace" swaps it out.
     systemPrompt: str | None = None
+    systemPromptMode: Literal["append", "replace"] = "replace"
     # The JiuwenSwarm session that holds this agent's conversation: stable across runs, one per agent
     # (the main agent, and each subagent, of one caller session). JiuwenSwarm keeps and compresses the
     # context there; the adapter neither sends nor rebuilds any history. Defaults to `sessionId`.
@@ -147,7 +149,8 @@ class AgentRunner:
                     base_url=request.model.baseUrl.rstrip("/"), api_key=request.model.apiKey, model=request.model.model,
                     tool_prefix=f"mcp_{name}_", tool_names=frozenset(t.name for t in request.tools),
                     tool_specs={t.name: {"description": t.description, "parameters": t.inputSchema} for t in request.tools},
-                    system_prompt=request.systemPrompt, native_tools=frozenset(request.nativeTools),
+                    system_prompt=request.systemPrompt, system_prompt_mode=request.systemPromptMode,
+                    native_tools=frozenset(request.nativeTools),
                 ))
                 model_alias = f"sd-{llm_token[:12]}"
                 await self.ensure_default_model()

@@ -915,18 +915,24 @@ test("no part of the conversation is sent to the adapter: JiuwenSwarm holds the 
   }
 });
 
-test("in todo planning the system prompt tells the model to plan with JiuwenSwarm's todo tools, and only then", async () => {
-  const prompts: string[] = [];
-  const adapter = await fakeAdapter(async ({ body }, response) => { prompts.push(body.systemPrompt); response.writeHead(200); response.end(line({ done: { finalText: "ok" } })); });
+test("JiuwenSwarm's own prompt is kept and ours appended by default, and replaced only when asked", async () => {
+  const sent: any[] = [];
+  const adapter = await fakeAdapter(async ({ body }, response) => { sent.push(body); response.writeHead(200); response.end(line({ done: { finalText: "ok" } })); });
   try {
     const { store } = planRecorder();
     await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ planStore: store as never })).execute("a");
-    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url, planning: "update_plan" })(options({ planStore: store as never })).execute("b");
-    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options()).execute("c");
-    assert.match(prompts[0]!, /## Planning[\s\S]*todo_create[\s\S]*todo_modify[\s\S]*todo_list/);
-    assert.equal(prompts[1]!.includes("todo_create"), false, "not with our own plan tool");
-    assert.equal(prompts[2]!.includes("todo_create"), false, "not without a plan store");
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url, prompt: "replace" })(options({ planStore: store as never })).execute("b");
+    assert.equal(sent[0].systemPromptMode, "append");
+    assert.equal(sent[1].systemPromptMode, "replace");
+    assert.equal(sent[0].systemPrompt.includes("## Planning"), false, "JiuwenSwarm's own todo section does the teaching");
+    assert.match(sent[1].systemPrompt, /## Planning[\s\S]*todo_create/, "its prompt is gone, so the model is told here");
   } finally {
     await adapter.close();
   }
+});
+
+test("the prompt mode is chosen by SCIENCE_AGENT_JIUWENSWARM_PROMPT", () => {
+  const env = { SCIENCE_AGENT_EXECUTOR: "jiuwenswarm", SCIENCE_AGENT_ADAPTER_URL: "http://a" };
+  assert.equal(jiuwenSwarmConfigFromEnv(env)?.prompt, undefined, "unset means append");
+  assert.equal(jiuwenSwarmConfigFromEnv({ ...env, SCIENCE_AGENT_JIUWENSWARM_PROMPT: "replace" })?.prompt, "replace");
 });
