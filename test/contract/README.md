@@ -96,3 +96,20 @@ executor against them (`baselines/legacy-linux.json`, recorded on Linux with bub
 **Not covered yet**: the native agent's `agent.record` evidence (left out of the profile on purpose),
 parallel tool calls, reasoning/thinking streams, `tool_search` and deferred tools (the JiuwenSwarm
 executor offers every tool up front), long-running tools, and errors other than a 401.
+
+## Coverage left for the sub-issues that own the routes
+
+129 of 254 rows have a recorded case (18 baseline cases have no wider coverage yet). The rest belong to the
+issue that migrates them, and each adds its cases there: skills and skill libraries (35 rows), artifacts,
+review and provenance (38), MCP and data sources (21), and the remaining chat and model rows.
+
+Two things learned while recording that the next cases need:
+
+- Some routes leave state behind that has no delete route (skill libraries). Record and compare each on a
+  **fresh data directory**; comparing on the stack that recorded shows the earlier run's leftovers.
+- Give an SSE step `"stream": {"until": [], "timeoutMs": 2000}` with `accept: text/event-stream`, or the
+  recording waits for a stream that never ends. Values that move on their own (exchange rates, a runner's
+  host measurements) are scrubbed in `normalize.mjs`.
+
+A skill / skill-library case was drafted and dropped before it had a baseline; it is in git history
+(commit `5572e94`, reverted) as a starting point.
