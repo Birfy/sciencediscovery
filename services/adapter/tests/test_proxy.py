@@ -96,3 +96,27 @@ async def test_hop_by_hop_headers_are_not_forwarded():
     await call(handler, headers={"Connection": "keep-alive, x-private", "X-Private": "1", "X-Keep": "2"})
     assert "x-private" not in seen["headers"]
     assert seen["headers"]["x-keep"] == "2"
+
+
+async def test_streams_ndjson_unchanged():
+    payload = b'{"type":"run.started"}\n{"type":"run.completed"}\n'
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return streamed(200, payload, {"content-type": "application/x-ndjson"})
+
+    response = await call(handler, url="/api/sessions/1/trajectory/export")
+    assert response.headers["content-type"] == "application/x-ndjson"
+    assert response.content == payload
+
+
+async def test_a_path_outside_api_reaches_the_legacy_server_too():
+    """The front end's static files are served by the legacy server; the adapter does not own them."""
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = str(request.url)
+        return streamed(200, b"<html></html>", {"content-type": "text/html"})
+
+    response = await call(handler, url="/assets/app.js")
+    assert seen["url"] == "http://legacy.test/assets/app.js"
+    assert response.headers["content-type"] == "text/html"
