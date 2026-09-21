@@ -112,4 +112,5 @@ class ModelSync:
             kept = [{**{k: v for k, v in m.items() if k not in _DERIVED}, "is_default": False}
                     for m in current if m.get("model_name") != profile.model]
             entry = {**{k: v for k, v in (existing or {}).items() if k not in _DERIVED}, **wanted, "is_default": True}
-            await self._rpc(self._url, "models.replace_all", {"models": [*kept, entry]})
+            # First in the list as well as flagged: JiuwenSwarm's own housekeeping may take the first entry.
+            await self._rpc(self._url, "models.replace_all", {"models": [entry, *kept]})

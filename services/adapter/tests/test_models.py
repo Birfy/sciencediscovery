@@ -109,7 +109,7 @@ async def test_prune_keeps_a_default_when_the_default_was_a_leftover():
 async def test_ensure_default_makes_one_default_and_clears_the_others():
     gw = FakeGateway([entry("your-model-name", default=True), entry("sd-run1")])
     await ModelSync(gw.rpc, URL).ensure_default(ModelProfile("sd-default", "http://a/llm/default/v1", "key"))
-    assert [(m["model_name"], m["is_default"]) for m in gw.models] == [("your-model-name", False), ("sd-run1", False), ("sd-default", True)]
+    assert [(m["model_name"], m["is_default"]) for m in gw.models] == [("sd-default", True), ("your-model-name", False), ("sd-run1", False)]
 
 
 async def test_ensure_default_writes_nothing_when_it_already_is_the_only_default():
