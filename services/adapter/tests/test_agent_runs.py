@@ -219,12 +219,12 @@ async def test_the_run_talks_to_a_private_alias_that_routes_to_the_real_model(ha
                      "tools": [{"name": "run_shell"}], "bridge": {"url": "http://legacy.test/b"},
                      "model": {"model": "gpt-x", "baseUrl": "http://llm/v1/", "apiKey": "sk"}})
     entry, route = seen["entry"], seen["route"]
-    assert seen["alias"].startswith("sd-") and seen["alias"] != "gpt-x"
+    assert seen["alias"].startswith("gpt-x-") and len(seen["alias"]) == len("gpt-x-") + 6, "named after the real model"
     assert entry["api_base"] == f"http://adapter.test/llm/{entry['api_key']}/v1"
     assert (route.base_url, route.api_key, route.model, route.system_prompt) == ("http://llm/v1", "sk", "gpt-x", "Be a scientist.")
     assert route.tool_names == frozenset({"run_shell"}) and route.tool_prefix.startswith("mcp_sci")
     # after the run: the alias is gone from the list and the route is closed
-    assert [m["model_name"] for m in listed["models"]] == ["sd-default"], "only the default-model entry is left"
+    assert [m["model_name"] for m in listed["models"]] == ["sciencediscovery-default"], "only the default-model entry is left"
     assert runner.routes.get(entry["api_key"]) is None
 
 
@@ -248,7 +248,7 @@ async def test_start_up_removes_stale_aliases_left_by_an_earlier_process():
     async def rpc(url, method, params=None, **kwargs):
         calls.append(method)
         if method == "models.list":
-            return {"models": [{"model_name": "sd-old", "is_default": False}, {"model_name": "kept", "is_default": True}]}
+            return {"models": [{"model_name": "old", "api_base": "http://adapter.test/llm/x/v1", "is_default": False}, {"model_name": "kept", "is_default": True}]}
         return {}
 
     app = create_app(SETTINGS)
@@ -333,3 +333,11 @@ async def test_the_system_prompt_mode_reaches_the_route(harness):
     await post(app, {"sessionId": "s1", "prompt": "hi", "model": model, "systemPrompt": "ours", "systemPromptMode": "append"})
     await post(app, {"sessionId": "s1", "prompt": "hi", "model": model, "systemPrompt": "ours"})
     assert modes == [("ours", "append"), ("ours", "replace")]
+
+
+def test_a_model_id_becomes_a_safe_entry_name():
+    from sciencediscovery_adapter.agent_runs import model_alias_base
+    assert model_alias_base("DeepSeek-V4-Flash-0731") == "DeepSeek-V4-Flash-0731"
+    assert model_alias_base("openai/gpt 5:latest") == "openai-gpt-5-latest"
+    assert model_alias_base("///") == "model"
+    assert len(model_alias_base("x" * 100)) == 48

@@ -242,7 +242,7 @@ async def _rewrite_stream(upstream: httpx.Response, route: LlmRoute) -> AsyncIte
 # conversation, titling a session, probing a new model) use its default model, not the model of the run;
 # a fresh install's default is a placeholder that answers with an HTML page, so nothing it does with a model
 # works until the default points somewhere real.
-DEFAULT_ALIAS = "sd-default"
+DEFAULT_ALIAS = "sciencediscovery-default"
 
 
 def llm_router(routes: LlmRoutes, client_getter) -> APIRouter:

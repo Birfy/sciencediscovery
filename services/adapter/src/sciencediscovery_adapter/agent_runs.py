@@ -98,6 +98,11 @@ class AgentRunRequest(BaseModel):
     toolTimeoutSeconds: int | None = None
 
 
+def model_alias_base(model: str) -> str:
+    """A model id as a JiuwenSwarm entry name: letters, digits, `.`, `_` and `-` only, at most 48 characters."""
+    return re.sub(r"[^A-Za-z0-9._-]+", "-", model).strip("-")[:48] or "model"
+
+
 def bridge_caller(bridge: Bridge, client: httpx.AsyncClient):
     async def call(name: str, arguments: dict[str, Any]) -> tuple[str, bool]:
         response = await client.post(
@@ -157,7 +162,9 @@ class AgentRunner:
                     system_prompt_tail=request.systemPromptTail,
                     native_tools=frozenset(request.nativeTools), all_native_tools=request.jiuwenSwarmTools == "all",
                 ))
-                model_alias = f"sd-{llm_token[:12]}"
+                # Named after the real model: JiuwenSwarm tells the model its own model's name (runtime state), and
+                # the alias is all it knows. The suffix keeps two runs of one model apart.
+                model_alias = f"{model_alias_base(request.model.model)}-{llm_token[:6]}"
                 await self.ensure_default_model()
                 params["model_name"] = await self.models.ensure(ModelProfile(
                     model_alias, f"{self.settings.public_url}/llm/{llm_token}/v1", llm_token, "OpenAI",))
