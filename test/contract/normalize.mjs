@@ -33,7 +33,9 @@ const RUNNER_VERSION = /(\\*"runnerVersion\\*":\\*")[^"\\]*/g;
 const HEX_TOKEN = /\b[0-9a-f]{32,}\b/gi;
 const TIMEY_KEY = /(At|Time|Ts|Timestamp)$/;
 // Keys whose value is a per-run measurement, not part of the contract.
-const VOLATILE_KEYS = new Set(["durationMs", "elapsedMs", "latencyMs", "runnerVersion", "runnerVersionId", "pid"]);
+const VOLATILE_KEYS = new Set(["durationMs", "elapsedMs", "latencyMs", "runnerVersion", "runnerVersionId", "pid",
+  // Exchange rates come from an outside service (Frankfurter): both the number and its date move.
+  "rate", "effectiveDate"]);
 
 /**
  * The scrubs that need no numbering: safe to apply again to a recording that was already

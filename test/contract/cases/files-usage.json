@@ -60,7 +60,7 @@
      "name": "provenance of an empty workspace",
      "request": {
       "method": "GET",
-      "path": "/api/sessions/{{sessionId}}/workspace/provenance"
+      "path": "/api/sessions/{{sessionId}}/workspace/provenance?paths=a.txt"
      },
      "covers": [
       "GET /api/sessions/:id/workspace/provenance"
@@ -209,7 +209,10 @@
      "name": "delete the project",
      "request": {
       "method": "DELETE",
-      "path": "/api/projects/{{projectId}}"
+      "path": "/api/projects/{{projectId}}",
+      "body": {
+       "confirmationId": "{{projectId}}"
+      }
      },
      "always": true
     }
