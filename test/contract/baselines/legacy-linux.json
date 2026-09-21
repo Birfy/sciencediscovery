@@ -16810,5 +16810,1160 @@
     "deleted": "<uuid:1>"
    }
   }
+ ],
+ "l2-anthropic-tool-call": [
+  {
+   "name": "remember the global settings",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "effective": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [
+      "antibody-protenix-pipeline",
+      "assessment-screening",
+      "citation-reviewer",
+      "code-engineer",
+      "computation-reviewer",
+      "creative-material-design",
+      "evidence-extractor",
+      "evolve-design",
+      "idea-tree-team",
+      "insight-aggregator",
+      "life-science-evidence-brief",
+      "literature-searcher",
+      "report-writer",
+      "result-evaluator",
+      "science-research-team",
+      "skill-creator",
+      "structure-pocket-inspection"
+     ],
+     "enabledSkillLibraries": [],
+     "semanticReviewEnabled": true,
+     "skillSelectionMode": "all"
+    },
+    "overrides": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "semanticReviewEnabled": true
+    },
+    "sources": {
+     "enabledConnectorIds": "global",
+     "enabledSkillIds": "unset",
+     "enabledSkillLibraries": "unset",
+     "modelId": "unset",
+     "plugins": "unset",
+     "reviewModelId": "unset",
+     "semanticReviewEnabled": "global",
+     "skillSelectionMode": "unset",
+     "thinkingEffort": "unset",
+     "thinkingMode": "unset"
+    }
+   }
+  },
+  {
+   "name": "register the stub model",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "apiProtocol": "anthropic-messages",
+    "apiVariant": "anthropic-adaptive",
+    "baseUrl": "http://127.0.0.1:<port>/v1",
+    "createdAt": "<time>",
+    "hasApiToken": true,
+    "id": "<uuid:1>",
+    "model": "contract-stub",
+    "name": "L2 stub model",
+    "proxyPolicy": "inherit",
+    "thinkingEffort": "high",
+    "thinkingMode": "auto",
+    "updatedAt": "<time>",
+    "vision": false
+   }
+  },
+  {
+   "name": "create a project",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "createdAt": "<time>",
+    "firstSession": {
+     "approvalMode": "ask_for_dangerous",
+     "createdAt": "<time>",
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [],
+     "id": "<uuid:3>",
+     "modelId": "<uuid:1>",
+     "permissionEpochId": "<uuid:4>",
+     "projectId": "<uuid:2>",
+     "reviewCriteria": [],
+     "reviewerAutomaticReviewEnabled": true,
+     "reviewerSpecialistLevel": "quick",
+     "reviewMode": "auto",
+     "semanticReviewEnabled": true,
+     "settingsOverrides": {},
+     "title": "Untitled session",
+     "updatedAt": "<time>"
+    },
+    "id": "<uuid:2>",
+    "name": "L2 project",
+    "project": {
+     "createdAt": "<time>",
+     "id": "<uuid:2>",
+     "name": "L2 project",
+     "remoteRunnerHostIds": [],
+     "settingsOverrides": {
+      "enabledSkillIds": [],
+      "enabledSkillLibraries": [],
+      "skillSelectionMode": "selected"
+     }
+    },
+    "remoteRunnerHostIds": [],
+    "settingsOverrides": {
+     "enabledSkillIds": [],
+     "enabledSkillLibraries": [],
+     "skillSelectionMode": "selected"
+    }
+   }
+  },
+  {
+   "name": "choose the model",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "approvalMode": "ask_for_dangerous",
+    "createdAt": "<time>",
+    "enabledConnectorIds": [
+     "web"
+    ],
+    "enabledSkillIds": [],
+    "id": "<uuid:3>",
+    "modelId": "<uuid:1>",
+    "permissionEpochId": "<uuid:4>",
+    "projectId": "<uuid:2>",
+    "reviewCriteria": [],
+    "reviewerAutomaticReviewEnabled": true,
+    "reviewerSpecialistLevel": "quick",
+    "reviewMode": "auto",
+    "semanticReviewEnabled": true,
+    "settingsOverrides": {
+     "modelId": "<uuid:1>"
+    },
+    "title": "L2 session",
+    "updatedAt": "<time>"
+   }
+  },
+  {
+   "name": "choose the approval mode",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "approvalMode": "always_allow",
+    "createdAt": "<time>",
+    "enabledConnectorIds": [
+     "web"
+    ],
+    "enabledSkillIds": [],
+    "id": "<uuid:3>",
+    "modelId": "<uuid:1>",
+    "permissionEpochId": "<uuid:5>",
+    "projectId": "<uuid:2>",
+    "reviewCriteria": [],
+    "reviewerAutomaticReviewEnabled": true,
+    "reviewerSpecialistLevel": "quick",
+    "reviewMode": "auto",
+    "semanticReviewEnabled": true,
+    "settingsOverrides": {
+     "modelId": "<uuid:1>"
+    },
+    "title": "L2 session",
+    "updatedAt": "<time>"
+   }
+  },
+  {
+   "name": "send a message",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "annotationIds": [],
+    "createdAt": "<time>",
+    "id": "<uuid:6>",
+    "prompt": "Run the marker command.",
+    "queueOrder": 1,
+    "references": [],
+    "sessionId": "<uuid:3>",
+    "settingsSnapshot": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [],
+     "enabledSkillLibraries": [],
+     "ideaTreeEnabled": false,
+     "modelId": "<uuid:1>",
+     "semanticReviewEnabled": true,
+     "skillSelectionMode": "selected",
+     "thinkingEffort": "high",
+     "thinkingMode": "auto"
+    },
+    "status": "queued"
+   }
+  },
+  {
+   "name": "run events",
+   "status": 200,
+   "contentType": "text/event-stream",
+   "events": [
+    {
+     "run": {
+      "annotationIds": [],
+      "createdAt": "<time>",
+      "id": "<uuid:6>",
+      "prompt": "Run the marker command.",
+      "queueOrder": 1,
+      "references": [],
+      "sessionId": "<uuid:3>",
+      "settingsSnapshot": {
+       "enabledConnectorIds": [
+        "web"
+       ],
+       "enabledSkillIds": [],
+       "enabledSkillLibraries": [],
+       "ideaTreeEnabled": false,
+       "modelId": "<uuid:1>",
+       "semanticReviewEnabled": true,
+       "skillSelectionMode": "selected",
+       "thinkingEffort": "high",
+       "thinkingMode": "auto"
+      },
+      "status": "queued"
+     },
+     "type": "run.queued"
+    },
+    {
+     "run": {
+      "annotationIds": [],
+      "createdAt": "<time>",
+      "id": "<uuid:6>",
+      "prompt": "Run the marker command.",
+      "queueOrder": 1,
+      "references": [],
+      "sessionId": "<uuid:3>",
+      "settingsSnapshot": {
+       "enabledConnectorIds": [
+        "web"
+       ],
+       "enabledSkillIds": [],
+       "enabledSkillLibraries": [],
+       "ideaTreeEnabled": false,
+       "modelId": "<uuid:1>",
+       "semanticReviewEnabled": true,
+       "skillSelectionMode": "selected",
+       "thinkingEffort": "high",
+       "thinkingMode": "auto"
+      },
+      "startedAt": "<time>",
+      "status": "running"
+     },
+     "status": "running",
+     "type": "run.status"
+    },
+    {
+     "model": {
+      "id": "<uuid:1>",
+      "model": "contract-stub",
+      "name": "L2 stub model"
+     },
+     "runId": "<uuid:6>",
+     "settings": {
+      "enabledConnectorIds": [
+       "web"
+      ],
+      "enabledSkillIds": [],
+      "enabledSkillLibraries": [],
+      "ideaTreeEnabled": false,
+      "modelId": "<uuid:1>",
+      "semanticReviewEnabled": true,
+      "skillSelectionMode": "selected",
+      "thinkingEffort": "high",
+      "thinkingMode": "auto"
+     },
+     "type": "run.started"
+    },
+    {
+     "phase": "thinking",
+     "turn": 1,
+     "type": "agent.phase"
+    },
+    {
+     "responseId": "<uuid:7>",
+     "turn": 1,
+     "type": "assistant.response.started"
+    },
+    {
+     "responseId": "<uuid:7>",
+     "turn": 1,
+     "type": "assistant.response.settled"
+    },
+    {
+     "trace": {
+      "args": {
+       "command": "echo L2-MARK"
+      },
+      "id": "call-main-1-1",
+      "name": "run_shell",
+      "status": "running"
+     },
+     "type": "tool.started"
+    },
+    {
+     "chunk": "{\"sessionId\":\"<uuid:3>\",\"agentId\":\"main\",\"runnerId\":\"local\",\"turnId\":\"<uuid:6>\",\"workspaceId\":\"<workspace>\",\"id\":\"<uuid:8>\",\"state\":\"completed\",\"queuedAt\":\"<time>\",\"accepted\":true,\"provenance\":\"committed\",\"startedAt\":\"<time>\",\"runnerVersionId\":\"<sha256>\",\"finishedAt\":\"<time>\",\"result\":{\"exitCode\":0,\"stderr\":\"\",\"stdout\":\"L2-MARK\\n\",\"cgroupMode\":\"none\",\"createdFiles\":[],\"environmentRevisionId\":\"<system-environment>\",\"environmentVariables\":{\"HOME\":\"/tmp\",\"PATH\":\"/usr/bin:/bin\",\"SSL_CERT_FILE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"CURL_CA_BUNDLE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"REQUESTS_CA_BUNDLE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"SSL_CERT_DIR\":\"/etc/ssl/certs\"},\"executionId\":\"<uuid:8>\",\"finishedAt\":\"<time>\",\"kernelId\":\"ephemeral:<uuid:8>\",\"kernelMode\":\"ephemeral\",\"language\":\"shell\",\"modifiedFiles\":[],\"networkAccessRevision\":\"none\",\"networkPolicy\":\"none\",\"runnerVersion\":\"<volatile>\",\"sandbox\":\"bubblewrap\",\"startedAt\":\"<time>\",\"workingDirectory\":\"/workspace\",\"workspaceSnapshot\":{\"pool\":\"agent-state\",\"digest\":\"<sha256>\",\"size\":83,\"mediaType\":\"application/vnd.sciencediscovery.record.v1+json\"},\"workspaceVersion\":{\"pool\":\"agent-state\",\"digest\":\"<sha256>\",\"size\":1582,\"mediaType\":\"application/vnd.sciencediscovery.record.v1+json\"}}}",
+     "toolCallId": "call-main-1-1",
+     "type": "tool.output"
+    },
+    {
+     "trace": {
+      "details": {
+       "__detailsBoundary": {
+        "maxArrayItems": 100,
+        "maxDepth": 8,
+        "maxObjectKeys": 100,
+        "maxStringChars": 4096,
+        "maxTotalStringChars": 64000,
+        "omittedPayloadFields": true,
+        "truncated": false
+       },
+       "accepted": true,
+       "agentId": "main",
+       "finishedAt": "<time>",
+       "id": "<uuid:8>",
+       "provenance": "committed",
+       "queuedAt": "<time>",
+       "result": {
+        "cgroupMode": "none",
+        "createdFiles": [],
+        "environmentRevisionId": "<system-environment>",
+        "environmentVariables": {
+         "CURL_CA_BUNDLE": "/etc/pki/tls/certs/ca-bundle.crt",
+         "HOME": "/tmp",
+         "PATH": "/usr/bin:/bin",
+         "REQUESTS_CA_BUNDLE": "/etc/pki/tls/certs/ca-bundle.crt",
+         "SSL_CERT_DIR": "/etc/ssl/certs",
+         "SSL_CERT_FILE": "/etc/pki/tls/certs/ca-bundle.crt"
+        },
+        "executionId": "<uuid:8>",
+        "exitCode": 0,
+        "finishedAt": "<time>",
+        "kernelId": "ephemeral:<uuid:8>",
+        "kernelMode": "ephemeral",
+        "language": "shell",
+        "modifiedFiles": [],
+        "networkAccessRevision": "none",
+        "networkPolicy": "none",
+        "runnerVersion": "<volatile>",
+        "sandbox": "bubblewrap",
+        "startedAt": "<time>",
+        "stderr": "[omitted]",
+        "stdout": "[omitted]",
+        "workingDirectory": "/workspace",
+        "workspaceSnapshot": {
+         "digest": "<sha256>",
+         "mediaType": "application/vnd.sciencediscovery.record.v1+json",
+         "pool": "agent-state",
+         "size": 83
+        },
+        "workspaceVersion": {
+         "digest": "<sha256>",
+         "mediaType": "application/vnd.sciencediscovery.record.v1+json",
+         "pool": "agent-state",
+         "size": 1582
+        }
+       },
+       "runnerId": "local",
+       "runnerVersionId": "<volatile>",
+       "sessionId": "<uuid:3>",
+       "startedAt": "<time>",
+       "state": "completed",
+       "turnId": "<uuid:6>",
+       "workspaceId": "<workspace>"
+      },
+      "id": "call-main-1-1",
+      "name": "run_shell",
+      "outputChars": 1724,
+      "outputStream": "tool-call-main-1-1",
+      "status": "completed"
+     },
+     "type": "tool.completed"
+    },
+    {
+     "phase": "thinking",
+     "turn": 2,
+     "type": "agent.phase"
+    },
+    {
+     "responseId": "<uuid:9>",
+     "turn": 2,
+     "type": "assistant.response.started"
+    },
+    {
+     "delta": "The command printed L2-MARK.",
+     "responseId": "<uuid:9>",
+     "type": "assistant.delta"
+    },
+    {
+     "responseId": "<uuid:9>",
+     "turn": 2,
+     "type": "assistant.response.settled"
+    },
+    {
+     "files": [],
+     "message": {
+      "content": "The command printed L2-MARK.",
+      "createdAt": "<time>",
+      "id": "<uuid:10>",
+      "kind": "message",
+      "modelContext": [
+       {
+        "anthropic_content": [
+         {
+          "id": "call-main-1-1",
+          "input": {
+           "command": "echo L2-MARK"
+          },
+          "name": "run_shell",
+          "type": "tool_use"
+         }
+        ],
+        "content": "",
+        "role": "assistant",
+        "tool_calls": [
+         {
+          "function": {
+           "arguments": "{\"command\":\"echo L2-MARK\"}",
+           "name": "run_shell"
+          },
+          "id": "call-main-1-1",
+          "type": "function"
+         }
+        ]
+       },
+       {
+        "content": "{\"sessionId\":\"<uuid:3>\",\"agentId\":\"main\",\"runnerId\":\"local\",\"turnId\":\"<uuid:6>\",\"workspaceId\":\"<workspace>\",\"id\":\"<uuid:8>\",\"state\":\"completed\",\"queuedAt\":\"<time>\",\"accepted\":true,\"provenance\":\"committed\",\"startedAt\":\"<time>\",\"runnerVersionId\":\"<sha256>\",\"finishedAt\":\"<time>\",\"result\":{\"exitCode\":0,\"stderr\":\"\",\"stdout\":\"L2-MARK\\n\",\"cgroupMode\":\"none\",\"createdFiles\":[],\"environmentRevisionId\":\"<system-environment>\",\"environmentVariables\":{\"HOME\":\"/tmp\",\"PATH\":\"/usr/bin:/bin\",\"SSL_CERT_FILE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"CURL_CA_BUNDLE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"REQUESTS_CA_BUNDLE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"SSL_CERT_DIR\":\"/etc/ssl/certs\"},\"executionId\":\"<uuid:8>\",\"finishedAt\":\"<time>\",\"kernelId\":\"ephemeral:<uuid:8>\",\"kernelMode\":\"ephemeral\",\"language\":\"shell\",\"modifiedFiles\":[],\"networkAccessRevision\":\"none\",\"networkPolicy\":\"none\",\"runnerVersion\":\"<volatile>\",\"sandbox\":\"bubblewrap\",\"startedAt\":\"<time>\",\"workingDirectory\":\"/workspace\",\"workspaceSnapshot\":{\"pool\":\"agent-state\",\"digest\":\"<sha256>\",\"size\":83,\"mediaType\":\"application/vnd.sciencediscovery.record.v1+json\"},\"workspaceVersion\":{\"pool\":\"agent-state\",\"digest\":\"<sha256>\",\"size\":1582,\"mediaType\":\"application/vnd.sciencediscovery.record.v1+json\"}}}",
+        "name": "run_shell",
+        "role": "tool",
+        "tool_call_id": "call-main-1-1"
+       },
+       {
+        "anthropic_content": [
+         {
+          "text": "The command printed L2-MARK.",
+          "type": "text"
+         }
+        ],
+        "content": "The command printed L2-MARK.",
+        "role": "assistant"
+       }
+      ],
+      "modelId": "<uuid:1>",
+      "modelName": "L2 stub model",
+      "role": "assistant"
+     },
+     "type": "run.completed"
+    }
+   ]
+  },
+  {
+   "name": "wait for the run to settle",
+   "status": 200,
+   "polled": "completed"
+  },
+  {
+   "name": "the session's runs",
+   "status": 200,
+   "contentType": "application/json",
+   "body": [
+    {
+     "annotationIds": [],
+     "assistantMessageId": "<uuid:10>",
+     "createdAt": "<time>",
+     "finishedAt": "<time>",
+     "id": "<uuid:6>",
+     "prompt": "Run the marker command.",
+     "queueOrder": 1,
+     "references": [],
+     "sessionId": "<uuid:3>",
+     "settingsSnapshot": {
+      "enabledConnectorIds": [
+       "web"
+      ],
+      "enabledSkillIds": [],
+      "enabledSkillLibraries": [],
+      "ideaTreeEnabled": false,
+      "modelId": "<uuid:1>",
+      "semanticReviewEnabled": true,
+      "skillSelectionMode": "selected",
+      "thinkingEffort": "high",
+      "thinkingMode": "auto"
+     },
+     "startedAt": "<time>",
+     "status": "completed",
+     "userMessageId": "<uuid:11>"
+    }
+   ]
+  },
+  {
+   "name": "delete the project",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "deleted": "<uuid:2>"
+   }
+  },
+  {
+   "name": "restore the global settings",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "effective": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [
+      "antibody-protenix-pipeline",
+      "assessment-screening",
+      "citation-reviewer",
+      "code-engineer",
+      "computation-reviewer",
+      "creative-material-design",
+      "evidence-extractor",
+      "evolve-design",
+      "idea-tree-team",
+      "insight-aggregator",
+      "life-science-evidence-brief",
+      "literature-searcher",
+      "report-writer",
+      "result-evaluator",
+      "science-research-team",
+      "skill-creator",
+      "structure-pocket-inspection"
+     ],
+     "enabledSkillLibraries": [],
+     "semanticReviewEnabled": true,
+     "skillSelectionMode": "all"
+    },
+    "overrides": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "semanticReviewEnabled": true
+    },
+    "sources": {
+     "enabledConnectorIds": "global",
+     "enabledSkillIds": "unset",
+     "enabledSkillLibraries": "unset",
+     "modelId": "unset",
+     "plugins": "unset",
+     "reviewModelId": "unset",
+     "semanticReviewEnabled": "global",
+     "skillSelectionMode": "unset",
+     "thinkingEffort": "unset",
+     "thinkingMode": "unset"
+    }
+   }
+  },
+  {
+   "name": "delete the model",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "deleted": "<uuid:1>"
+   }
+  }
+ ],
+ "l2-responses-tool-call": [
+  {
+   "name": "remember the global settings",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "effective": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [
+      "antibody-protenix-pipeline",
+      "assessment-screening",
+      "citation-reviewer",
+      "code-engineer",
+      "computation-reviewer",
+      "creative-material-design",
+      "evidence-extractor",
+      "evolve-design",
+      "idea-tree-team",
+      "insight-aggregator",
+      "life-science-evidence-brief",
+      "literature-searcher",
+      "report-writer",
+      "result-evaluator",
+      "science-research-team",
+      "skill-creator",
+      "structure-pocket-inspection"
+     ],
+     "enabledSkillLibraries": [],
+     "semanticReviewEnabled": true,
+     "skillSelectionMode": "all"
+    },
+    "overrides": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "semanticReviewEnabled": true
+    },
+    "sources": {
+     "enabledConnectorIds": "global",
+     "enabledSkillIds": "unset",
+     "enabledSkillLibraries": "unset",
+     "modelId": "unset",
+     "plugins": "unset",
+     "reviewModelId": "unset",
+     "semanticReviewEnabled": "global",
+     "skillSelectionMode": "unset",
+     "thinkingEffort": "unset",
+     "thinkingMode": "unset"
+    }
+   }
+  },
+  {
+   "name": "register the stub model",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "apiProtocol": "openai-responses",
+    "apiVariant": "responses",
+    "baseUrl": "http://127.0.0.1:<port>/v1",
+    "createdAt": "<time>",
+    "hasApiToken": true,
+    "id": "<uuid:1>",
+    "model": "contract-stub",
+    "name": "L2 stub model",
+    "proxyPolicy": "inherit",
+    "thinkingEffort": "high",
+    "thinkingMode": "auto",
+    "updatedAt": "<time>",
+    "vision": false
+   }
+  },
+  {
+   "name": "create a project",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "createdAt": "<time>",
+    "firstSession": {
+     "approvalMode": "ask_for_dangerous",
+     "createdAt": "<time>",
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [],
+     "id": "<uuid:3>",
+     "modelId": "<uuid:1>",
+     "permissionEpochId": "<uuid:4>",
+     "projectId": "<uuid:2>",
+     "reviewCriteria": [],
+     "reviewerAutomaticReviewEnabled": true,
+     "reviewerSpecialistLevel": "quick",
+     "reviewMode": "auto",
+     "semanticReviewEnabled": true,
+     "settingsOverrides": {},
+     "title": "Untitled session",
+     "updatedAt": "<time>"
+    },
+    "id": "<uuid:2>",
+    "name": "L2 project",
+    "project": {
+     "createdAt": "<time>",
+     "id": "<uuid:2>",
+     "name": "L2 project",
+     "remoteRunnerHostIds": [],
+     "settingsOverrides": {
+      "enabledSkillIds": [],
+      "enabledSkillLibraries": [],
+      "skillSelectionMode": "selected"
+     }
+    },
+    "remoteRunnerHostIds": [],
+    "settingsOverrides": {
+     "enabledSkillIds": [],
+     "enabledSkillLibraries": [],
+     "skillSelectionMode": "selected"
+    }
+   }
+  },
+  {
+   "name": "choose the model",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "approvalMode": "ask_for_dangerous",
+    "createdAt": "<time>",
+    "enabledConnectorIds": [
+     "web"
+    ],
+    "enabledSkillIds": [],
+    "id": "<uuid:3>",
+    "modelId": "<uuid:1>",
+    "permissionEpochId": "<uuid:4>",
+    "projectId": "<uuid:2>",
+    "reviewCriteria": [],
+    "reviewerAutomaticReviewEnabled": true,
+    "reviewerSpecialistLevel": "quick",
+    "reviewMode": "auto",
+    "semanticReviewEnabled": true,
+    "settingsOverrides": {
+     "modelId": "<uuid:1>"
+    },
+    "title": "L2 session",
+    "updatedAt": "<time>"
+   }
+  },
+  {
+   "name": "choose the approval mode",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "approvalMode": "always_allow",
+    "createdAt": "<time>",
+    "enabledConnectorIds": [
+     "web"
+    ],
+    "enabledSkillIds": [],
+    "id": "<uuid:3>",
+    "modelId": "<uuid:1>",
+    "permissionEpochId": "<uuid:5>",
+    "projectId": "<uuid:2>",
+    "reviewCriteria": [],
+    "reviewerAutomaticReviewEnabled": true,
+    "reviewerSpecialistLevel": "quick",
+    "reviewMode": "auto",
+    "semanticReviewEnabled": true,
+    "settingsOverrides": {
+     "modelId": "<uuid:1>"
+    },
+    "title": "L2 session",
+    "updatedAt": "<time>"
+   }
+  },
+  {
+   "name": "send a message",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "annotationIds": [],
+    "createdAt": "<time>",
+    "id": "<uuid:6>",
+    "prompt": "Run the marker command.",
+    "queueOrder": 1,
+    "references": [],
+    "sessionId": "<uuid:3>",
+    "settingsSnapshot": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [],
+     "enabledSkillLibraries": [],
+     "ideaTreeEnabled": false,
+     "modelId": "<uuid:1>",
+     "semanticReviewEnabled": true,
+     "skillSelectionMode": "selected",
+     "thinkingEffort": "high",
+     "thinkingMode": "auto"
+    },
+    "status": "queued"
+   }
+  },
+  {
+   "name": "run events",
+   "status": 200,
+   "contentType": "text/event-stream",
+   "events": [
+    {
+     "run": {
+      "annotationIds": [],
+      "createdAt": "<time>",
+      "id": "<uuid:6>",
+      "prompt": "Run the marker command.",
+      "queueOrder": 1,
+      "references": [],
+      "sessionId": "<uuid:3>",
+      "settingsSnapshot": {
+       "enabledConnectorIds": [
+        "web"
+       ],
+       "enabledSkillIds": [],
+       "enabledSkillLibraries": [],
+       "ideaTreeEnabled": false,
+       "modelId": "<uuid:1>",
+       "semanticReviewEnabled": true,
+       "skillSelectionMode": "selected",
+       "thinkingEffort": "high",
+       "thinkingMode": "auto"
+      },
+      "status": "queued"
+     },
+     "type": "run.queued"
+    },
+    {
+     "run": {
+      "annotationIds": [],
+      "createdAt": "<time>",
+      "id": "<uuid:6>",
+      "prompt": "Run the marker command.",
+      "queueOrder": 1,
+      "references": [],
+      "sessionId": "<uuid:3>",
+      "settingsSnapshot": {
+       "enabledConnectorIds": [
+        "web"
+       ],
+       "enabledSkillIds": [],
+       "enabledSkillLibraries": [],
+       "ideaTreeEnabled": false,
+       "modelId": "<uuid:1>",
+       "semanticReviewEnabled": true,
+       "skillSelectionMode": "selected",
+       "thinkingEffort": "high",
+       "thinkingMode": "auto"
+      },
+      "startedAt": "<time>",
+      "status": "running"
+     },
+     "status": "running",
+     "type": "run.status"
+    },
+    {
+     "model": {
+      "id": "<uuid:1>",
+      "model": "contract-stub",
+      "name": "L2 stub model"
+     },
+     "runId": "<uuid:6>",
+     "settings": {
+      "enabledConnectorIds": [
+       "web"
+      ],
+      "enabledSkillIds": [],
+      "enabledSkillLibraries": [],
+      "ideaTreeEnabled": false,
+      "modelId": "<uuid:1>",
+      "semanticReviewEnabled": true,
+      "skillSelectionMode": "selected",
+      "thinkingEffort": "high",
+      "thinkingMode": "auto"
+     },
+     "type": "run.started"
+    },
+    {
+     "phase": "thinking",
+     "turn": 1,
+     "type": "agent.phase"
+    },
+    {
+     "responseId": "<uuid:7>",
+     "turn": 1,
+     "type": "assistant.response.started"
+    },
+    {
+     "responseId": "<uuid:7>",
+     "turn": 1,
+     "type": "assistant.response.settled"
+    },
+    {
+     "trace": {
+      "args": {
+       "command": "echo L2-MARK"
+      },
+      "id": "call-main-1-1",
+      "name": "run_shell",
+      "status": "running"
+     },
+     "type": "tool.started"
+    },
+    {
+     "chunk": "{\"sessionId\":\"<uuid:3>\",\"agentId\":\"main\",\"runnerId\":\"local\",\"turnId\":\"<uuid:6>\",\"workspaceId\":\"<workspace>\",\"id\":\"<uuid:8>\",\"state\":\"completed\",\"queuedAt\":\"<time>\",\"accepted\":true,\"provenance\":\"committed\",\"startedAt\":\"<time>\",\"runnerVersionId\":\"<sha256>\",\"finishedAt\":\"<time>\",\"result\":{\"exitCode\":0,\"stderr\":\"\",\"stdout\":\"L2-MARK\\n\",\"cgroupMode\":\"none\",\"createdFiles\":[],\"environmentRevisionId\":\"<system-environment>\",\"environmentVariables\":{\"HOME\":\"/tmp\",\"PATH\":\"/usr/bin:/bin\",\"SSL_CERT_FILE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"CURL_CA_BUNDLE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"REQUESTS_CA_BUNDLE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"SSL_CERT_DIR\":\"/etc/ssl/certs\"},\"executionId\":\"<uuid:8>\",\"finishedAt\":\"<time>\",\"kernelId\":\"ephemeral:<uuid:8>\",\"kernelMode\":\"ephemeral\",\"language\":\"shell\",\"modifiedFiles\":[],\"networkAccessRevision\":\"none\",\"networkPolicy\":\"none\",\"runnerVersion\":\"<volatile>\",\"sandbox\":\"bubblewrap\",\"startedAt\":\"<time>\",\"workingDirectory\":\"/workspace\",\"workspaceSnapshot\":{\"pool\":\"agent-state\",\"digest\":\"<sha256>\",\"size\":83,\"mediaType\":\"application/vnd.sciencediscovery.record.v1+json\"},\"workspaceVersion\":{\"pool\":\"agent-state\",\"digest\":\"<sha256>\",\"size\":1582,\"mediaType\":\"application/vnd.sciencediscovery.record.v1+json\"}}}",
+     "toolCallId": "call-main-1-1",
+     "type": "tool.output"
+    },
+    {
+     "trace": {
+      "details": {
+       "__detailsBoundary": {
+        "maxArrayItems": 100,
+        "maxDepth": 8,
+        "maxObjectKeys": 100,
+        "maxStringChars": 4096,
+        "maxTotalStringChars": 64000,
+        "omittedPayloadFields": true,
+        "truncated": false
+       },
+       "accepted": true,
+       "agentId": "main",
+       "finishedAt": "<time>",
+       "id": "<uuid:8>",
+       "provenance": "committed",
+       "queuedAt": "<time>",
+       "result": {
+        "cgroupMode": "none",
+        "createdFiles": [],
+        "environmentRevisionId": "<system-environment>",
+        "environmentVariables": {
+         "CURL_CA_BUNDLE": "/etc/pki/tls/certs/ca-bundle.crt",
+         "HOME": "/tmp",
+         "PATH": "/usr/bin:/bin",
+         "REQUESTS_CA_BUNDLE": "/etc/pki/tls/certs/ca-bundle.crt",
+         "SSL_CERT_DIR": "/etc/ssl/certs",
+         "SSL_CERT_FILE": "/etc/pki/tls/certs/ca-bundle.crt"
+        },
+        "executionId": "<uuid:8>",
+        "exitCode": 0,
+        "finishedAt": "<time>",
+        "kernelId": "ephemeral:<uuid:8>",
+        "kernelMode": "ephemeral",
+        "language": "shell",
+        "modifiedFiles": [],
+        "networkAccessRevision": "none",
+        "networkPolicy": "none",
+        "runnerVersion": "<volatile>",
+        "sandbox": "bubblewrap",
+        "startedAt": "<time>",
+        "stderr": "[omitted]",
+        "stdout": "[omitted]",
+        "workingDirectory": "/workspace",
+        "workspaceSnapshot": {
+         "digest": "<sha256>",
+         "mediaType": "application/vnd.sciencediscovery.record.v1+json",
+         "pool": "agent-state",
+         "size": 83
+        },
+        "workspaceVersion": {
+         "digest": "<sha256>",
+         "mediaType": "application/vnd.sciencediscovery.record.v1+json",
+         "pool": "agent-state",
+         "size": 1582
+        }
+       },
+       "runnerId": "local",
+       "runnerVersionId": "<volatile>",
+       "sessionId": "<uuid:3>",
+       "startedAt": "<time>",
+       "state": "completed",
+       "turnId": "<uuid:6>",
+       "workspaceId": "<workspace>"
+      },
+      "id": "call-main-1-1",
+      "name": "run_shell",
+      "outputChars": 1724,
+      "outputStream": "tool-call-main-1-1",
+      "status": "completed"
+     },
+     "type": "tool.completed"
+    },
+    {
+     "phase": "thinking",
+     "turn": 2,
+     "type": "agent.phase"
+    },
+    {
+     "responseId": "<uuid:9>",
+     "turn": 2,
+     "type": "assistant.response.started"
+    },
+    {
+     "delta": "The command printed L2-MARK.",
+     "responseId": "<uuid:9>",
+     "type": "assistant.delta"
+    },
+    {
+     "responseId": "<uuid:9>",
+     "turn": 2,
+     "type": "assistant.response.settled"
+    },
+    {
+     "files": [],
+     "message": {
+      "content": "The command printed L2-MARK.",
+      "createdAt": "<time>",
+      "id": "<uuid:10>",
+      "kind": "message",
+      "modelContext": [
+       {
+        "content": "",
+        "response_items": [
+         {
+          "arguments": "{\"command\":\"echo L2-MARK\"}",
+          "call_id": "call-main-1-1",
+          "id": "fc-call-main-1-1",
+          "name": "run_shell",
+          "status": "completed",
+          "type": "function_call"
+         }
+        ],
+        "role": "assistant",
+        "tool_calls": [
+         {
+          "function": {
+           "arguments": "{\"command\":\"echo L2-MARK\"}",
+           "name": "run_shell"
+          },
+          "id": "call-main-1-1",
+          "response_item_id": "fc-call-main-1-1",
+          "type": "function"
+         }
+        ]
+       },
+       {
+        "content": "{\"sessionId\":\"<uuid:3>\",\"agentId\":\"main\",\"runnerId\":\"local\",\"turnId\":\"<uuid:6>\",\"workspaceId\":\"<workspace>\",\"id\":\"<uuid:8>\",\"state\":\"completed\",\"queuedAt\":\"<time>\",\"accepted\":true,\"provenance\":\"committed\",\"startedAt\":\"<time>\",\"runnerVersionId\":\"<sha256>\",\"finishedAt\":\"<time>\",\"result\":{\"exitCode\":0,\"stderr\":\"\",\"stdout\":\"L2-MARK\\n\",\"cgroupMode\":\"none\",\"createdFiles\":[],\"environmentRevisionId\":\"<system-environment>\",\"environmentVariables\":{\"HOME\":\"/tmp\",\"PATH\":\"/usr/bin:/bin\",\"SSL_CERT_FILE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"CURL_CA_BUNDLE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"REQUESTS_CA_BUNDLE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"SSL_CERT_DIR\":\"/etc/ssl/certs\"},\"executionId\":\"<uuid:8>\",\"finishedAt\":\"<time>\",\"kernelId\":\"ephemeral:<uuid:8>\",\"kernelMode\":\"ephemeral\",\"language\":\"shell\",\"modifiedFiles\":[],\"networkAccessRevision\":\"none\",\"networkPolicy\":\"none\",\"runnerVersion\":\"<volatile>\",\"sandbox\":\"bubblewrap\",\"startedAt\":\"<time>\",\"workingDirectory\":\"/workspace\",\"workspaceSnapshot\":{\"pool\":\"agent-state\",\"digest\":\"<sha256>\",\"size\":83,\"mediaType\":\"application/vnd.sciencediscovery.record.v1+json\"},\"workspaceVersion\":{\"pool\":\"agent-state\",\"digest\":\"<sha256>\",\"size\":1582,\"mediaType\":\"application/vnd.sciencediscovery.record.v1+json\"}}}",
+        "name": "run_shell",
+        "role": "tool",
+        "tool_call_id": "call-main-1-1"
+       },
+       {
+        "content": "The command printed L2-MARK.",
+        "response_items": [
+         {
+          "content": [
+           {
+            "text": "The command printed L2-MARK.",
+            "type": "output_text"
+           }
+          ],
+          "id": "msg-chatcmpl-contract-2",
+          "role": "assistant",
+          "status": "completed",
+          "type": "message"
+         }
+        ],
+        "role": "assistant"
+       }
+      ],
+      "modelId": "<uuid:1>",
+      "modelName": "L2 stub model",
+      "role": "assistant"
+     },
+     "type": "run.completed"
+    }
+   ]
+  },
+  {
+   "name": "wait for the run to settle",
+   "status": 200,
+   "polled": "completed"
+  },
+  {
+   "name": "the session's runs",
+   "status": 200,
+   "contentType": "application/json",
+   "body": [
+    {
+     "annotationIds": [],
+     "assistantMessageId": "<uuid:10>",
+     "createdAt": "<time>",
+     "finishedAt": "<time>",
+     "id": "<uuid:6>",
+     "prompt": "Run the marker command.",
+     "queueOrder": 1,
+     "references": [],
+     "sessionId": "<uuid:3>",
+     "settingsSnapshot": {
+      "enabledConnectorIds": [
+       "web"
+      ],
+      "enabledSkillIds": [],
+      "enabledSkillLibraries": [],
+      "ideaTreeEnabled": false,
+      "modelId": "<uuid:1>",
+      "semanticReviewEnabled": true,
+      "skillSelectionMode": "selected",
+      "thinkingEffort": "high",
+      "thinkingMode": "auto"
+     },
+     "startedAt": "<time>",
+     "status": "completed",
+     "userMessageId": "<uuid:11>"
+    }
+   ]
+  },
+  {
+   "name": "delete the project",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "deleted": "<uuid:2>"
+   }
+  },
+  {
+   "name": "restore the global settings",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "effective": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [
+      "antibody-protenix-pipeline",
+      "assessment-screening",
+      "citation-reviewer",
+      "code-engineer",
+      "computation-reviewer",
+      "creative-material-design",
+      "evidence-extractor",
+      "evolve-design",
+      "idea-tree-team",
+      "insight-aggregator",
+      "life-science-evidence-brief",
+      "literature-searcher",
+      "report-writer",
+      "result-evaluator",
+      "science-research-team",
+      "skill-creator",
+      "structure-pocket-inspection"
+     ],
+     "enabledSkillLibraries": [],
+     "semanticReviewEnabled": true,
+     "skillSelectionMode": "all"
+    },
+    "overrides": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "semanticReviewEnabled": true
+    },
+    "sources": {
+     "enabledConnectorIds": "global",
+     "enabledSkillIds": "unset",
+     "enabledSkillLibraries": "unset",
+     "modelId": "unset",
+     "plugins": "unset",
+     "reviewModelId": "unset",
+     "semanticReviewEnabled": "global",
+     "skillSelectionMode": "unset",
+     "thinkingEffort": "unset",
+     "thinkingMode": "unset"
+    }
+   }
+  },
+  {
+   "name": "delete the model",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "deleted": "<uuid:1>"
+   }
+  }
  ]
 }
