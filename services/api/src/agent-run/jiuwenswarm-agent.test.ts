@@ -654,7 +654,7 @@ test("the tools offered are exactly the native registry's, every one with its ow
       assert.deepEqual(tool.inputSchema, JSON.parse(JSON.stringify(expected.get(tool.name)!.parameters)), `schema of ${tool.name}`);
     }
     assert.ok(names.includes("update_plan"), "a plugin's tool is among them");
-    assert.ok(names.includes("echo"), "and so is an extra tool");
+    assert.ok(names.includes("mcp__custom-2__d"), "and so is a deferred one");
   } finally {
     await adapter.close();
   }
