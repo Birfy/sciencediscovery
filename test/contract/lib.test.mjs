@@ -16,7 +16,7 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import test from "node:test";
 
-import { compareRecordings, coverage, lookup, profileRunEvents, runCase } from "./lib.mjs";
+import { compareRecordings, coverage, lookup, orderConcurrentTools, profileRunEvents, runCase } from "./lib.mjs";
 
 async function fakeBackend(handler) {
   const seen = [];
@@ -194,4 +194,24 @@ test("a rule for one case or step does not excuse the same path elsewhere, and b
   const actual = { a: [{ name: "s", list: [2] }], b: [{ name: "s", list: [2] }] };
   const rules = [{ case: "a", step: "s", path: "$.list[0]", reason: "only here" }];
   assert.deepEqual(compareRecordings(baseline, actual, rules), ["b / s: $.list[0] expected 1 got 2"]);
+});
+
+test("concurrent tool calls compare equal however their events interleaved", () => {
+  const started = (id) => ({ event: { type: "tool.started", trace: { id } } });
+  const output = (id, chunk) => ({ event: { type: "tool.output", toolCallId: id, chunk } });
+  const done = (id) => ({ event: { type: "tool.completed", trace: { id } } });
+  const sequential = [started("a"), output("a", "1"), done("a"), started("b"), output("b", "2"), done("b")];
+  const side_by_side = [started("a"), started("b"), output("b", "2"), done("b"), output("a", "1"), done("a")];
+  assert.notDeepEqual(profileRunEvents(sequential), profileRunEvents(side_by_side));
+  assert.deepEqual(profileRunEvents(side_by_side, { concurrentTools: true }), profileRunEvents(sequential, { concurrentTools: true }));
+});
+
+test("tool results in a model context are put in call-id order only when asked", () => {
+  const settled = (ids) => ({ event: { type: "assistant.response.settled", message: { modelContext: [{ role: "assistant" }, ...ids.map((id) => ({ role: "tool", tool_call_id: id }))] } } });
+  assert.deepEqual(orderConcurrentTools([settled(["b", "a"])]), [settled(["a", "b"])]);
+});
+
+test("a run with no tool events is left as it was", () => {
+  const events = [{ event: { type: "run.started" } }, { event: { type: "run.completed" } }];
+  assert.deepEqual(orderConcurrentTools(events), events);
 });

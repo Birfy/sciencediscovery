@@ -2248,7 +2248,8 @@
        "run.cancelled"
       ],
       "timeoutMs": 60000,
-      "profile": "run-events"
+      "profile": "run-events",
+      "concurrentTools": true
      },
      "covers": [
       "GET /api/sessions/:id/runs/:runId/events"
