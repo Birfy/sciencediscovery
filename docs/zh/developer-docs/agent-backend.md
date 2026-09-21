@@ -270,7 +270,7 @@ streamModelTurn(endpoint, systemPrompt, history, tools, policy, signal, callback
 
 ## 7. `native-agent/compaction.ts` — 历史压缩
 
-**触发**：兼容用的消息数阈值仍保留；生产路径改为模型感知策略：完整输入达到有效输入窗口的 80% 时，先移除模型可见历史中的旧工具正文，再摘要较旧且已闭合的 LLM Step，并按 token 原样保留最近 16%。两个比例均可配置，详见 `docs/architecture/context-assembly.md`。
+**触发**：兼容用的消息数阈值仍保留；生产路径改为模型感知策略：完整输入达到有效输入窗口的 80% 时，先移除模型可见历史中的旧工具正文，再摘要较旧且已闭合的 LLM Step，并按 token 原样保留最近 16%。两个比例均可配置，详见 `docs/en/developer-docs/context-assembly.md`。
 
 **原子性**：assistant 的工具调用及其后续结果被视为一个 LLM Step；未闭合的调用绝不摘要。一个长任务中已经完成的旧步骤允许被压缩，不再把“最近一次用户请求的全部过程”永久保护起来。
 

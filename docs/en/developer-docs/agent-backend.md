@@ -270,7 +270,7 @@ Three query forms:
 
 ## 7. `native-agent/compaction.ts` — history compaction
 
-**Trigger.** The compatibility message-count trigger remains, but production assembly is model-aware: at 80% of the effective input limit it first projects old tool-result bodies out of model-visible history, then summarizes old closed LLM steps. The recent 16% token suffix remains verbatim. Both percentages are configurable; see `docs/architecture/context-assembly.md`.
+**Trigger.** The compatibility message-count trigger remains, but production assembly is model-aware: at 80% of the effective input limit it first projects old tool-result bodies out of model-visible history, then summarizes old closed LLM steps. The recent 16% token suffix remains verbatim. Both percentages are configurable; see `docs/en/developer-docs/context-assembly.md`.
 
 **Atomicity.** Assistant tool calls and their following results are grouped as one LLM-step unit. Open calls are never summarized. Closed work from the current user request may be compacted; retaining the entire latest round caused long autonomous runs to exceed the model window.
 
