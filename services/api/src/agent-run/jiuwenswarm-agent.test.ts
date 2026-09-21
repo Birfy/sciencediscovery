@@ -914,3 +914,19 @@ test("no part of the conversation is sent to the adapter: JiuwenSwarm holds the 
     await adapter.close();
   }
 });
+
+test("in todo planning the system prompt tells the model to plan with JiuwenSwarm's todo tools, and only then", async () => {
+  const prompts: string[] = [];
+  const adapter = await fakeAdapter(async ({ body }, response) => { prompts.push(body.systemPrompt); response.writeHead(200); response.end(line({ done: { finalText: "ok" } })); });
+  try {
+    const { store } = planRecorder();
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ planStore: store as never })).execute("a");
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url, planning: "update_plan" })(options({ planStore: store as never })).execute("b");
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options()).execute("c");
+    assert.match(prompts[0]!, /## Planning[\s\S]*todo_create[\s\S]*todo_modify[\s\S]*todo_list/);
+    assert.equal(prompts[1]!.includes("todo_create"), false, "not with our own plan tool");
+    assert.equal(prompts[2]!.includes("todo_create"), false, "not without a plan store");
+  } finally {
+    await adapter.close();
+  }
+});

@@ -61,6 +61,17 @@ export interface JiuwenSwarmAgentConfig {
   planning?: "todo" | "update_plan";
 }
 
+/**
+ * What the model is told about JiuwenSwarm's todo tools. The rest of the system prompt says to use only the
+ * registered workspace tools, which these are not, and the plan guidance ScienceDiscovery normally gives
+ * (the `update_plan` description, the plan context added at every step) does not apply to them.
+ */
+export const TODO_PLANNING_SECTION = [
+  "## Planning",
+  "For work with several steps, keep a task list with `todo_create` (creates or replaces the whole list), `todo_modify` (update, insert, cancel or delete items) and `todo_list`. The runtime provides them next to the workspace tools above; they are the way to plan.",
+  "Mark a task in_progress before you start it and completed as soon as it is done; do not finish several at once. Keep the list short, at most 20 items, and change it when new evidence changes the approach.",
+].join("\n");
+
 /** JiuwenSwarm's own todo tools, left visible to the model unless planning is `update_plan`. */
 export const JIUWENSWARM_TODO_TOOLS = ["todo_create", "todo_modify", "todo_list", "todo_get"] as const;
 
@@ -191,7 +202,8 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
     const { config: model } = this.options;
     const toolNames = new Set(tools.keys());
     // The same system prompt the native loop would send: the model is tuned to it.
-    const { systemPrompt } = composeSystemPrompt(this.options, toolNames, toolNames.has("read_skill") ? this.options.skills ?? [] : []);
+    const composed = composeSystemPrompt(this.options, toolNames, toolNames.has("read_skill") ? this.options.skills ?? [] : []).systemPrompt;
+    const systemPrompt = jiuwenSwarmPlans ? `${composed}\n\n${TODO_PLANNING_SECTION}` : composed;
     const response = await (this.config.fetch ?? fetch)(`${this.config.adapterUrl}/agent/runs`, {
       method: "POST",
       headers: {

@@ -94,7 +94,7 @@ scripts/jiuwenswarm.sh setup     # 一次性：克隆固定版本（workswarm0.2
 ## 使用时会看到什么
 
 - 与内置循环相同的对话、工具卡片、权限提示、计划、子代理和产物；里程碑 0 的旅程在这个后端上通过。
-- JiuwenSwarm 把每个智能体（主智能体和每个子代理）的对话保存在自己的会话里，达到 `JIUWENSWARM_CONTEXT_WINDOW_TOKENS` 的 80% 时压缩。JiuwenSwarm 自己的模型调用（压缩时写的摘要、会话标题）用的是它的*默认模型*：适配器把这个条目指向自己（`sd-default`），再把这些调用转给当前正在运行的那次运行的模型。所以这个 JiuwenSwarm 实例是 ScienceDiscovery 专用的，不要和别的工作共用。运行契约和 ScienceDiscovery 每一步的上下文（计划快照、持久状态）**不会**注入。
+- JiuwenSwarm 把每个智能体（主智能体和每个子代理）的对话保存在自己的会话里，达到 `JIUWENSWARM_CONTEXT_WINDOW_TOKENS` 的 80% 时压缩。JiuwenSwarm 自己的模型调用（压缩时写的摘要、会话标题）用的是它的*默认模型*：适配器把这个条目指向自己（`sd-default`），再把这些调用转给当前正在运行的那次运行的模型。所以这个 JiuwenSwarm 实例是 ScienceDiscovery 专用的，不要和别的工作共用。系统提示词是 ScienceDiscovery 自己的（工作区、治理、技能、专家角色，以及有运行契约时的运行契约）：适配器在每次模型请求里用它替换 JiuwenSwarm 自己的。ScienceDiscovery 每一步的上下文（计划快照、持久状态）**不会**注入，JiuwenSwarm 仍会把它自己的每轮包装和动态上下文作为用户消息加进去。
 - 对话、计划和事件的数据仍保存在 ScienceDiscovery 自己的存储里。
 - JiuwenSwarm 的运行没有轨迹和 evidence 记录，图片也不会发给模型。
 - 新增一个模型时，JiuwenSwarm 会向它发一条很小的探测请求（检测是否支持图片输入）；网关会拒绝那张图片，所以日志里出现一条 `400` 是预期的。
