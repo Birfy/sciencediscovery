@@ -53,7 +53,7 @@ async def test_forwards_method_path_query_headers_and_body():
     assert seen["method"] == "POST"
     assert seen["url"] == "http://legacy.test/api/sessions/1/messages?after=3"
     assert seen["auth"] == "Bearer t"
-    assert seen["host"] == "legacy.test"
+    assert seen["host"] == "adapter"  # the client's Host, not the upstream's
     assert seen["body"] == b'{"a":1}'
 
 

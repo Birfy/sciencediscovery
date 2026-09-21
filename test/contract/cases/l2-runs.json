@@ -1778,7 +1778,17 @@
      "capture": {
       "runId": "$[0].id"
      },
-     "expectStatus": 200
+     "expectStatus": 200,
+     "poll": {
+      "path": "$[0].status",
+      "in": [
+       "completed",
+       "failed",
+       "cancelled",
+       "interrupted"
+      ],
+      "timeoutMs": 30000
+     }
     },
     {
      "name": "wait for the run to settle",

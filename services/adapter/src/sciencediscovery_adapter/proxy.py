@@ -49,13 +49,17 @@ def forwardable(headers, *, drop: frozenset[str] = frozenset()) -> list[tuple[st
 
 
 async def proxy_to_legacy(client: httpx.AsyncClient, request: Request) -> Response:
-    """Forward `request` to the legacy API and stream the answer back."""
+    """Forward `request` to the legacy API and stream the answer back.
+
+    The client's Host header is kept: the legacy API derives the application origin from it
+    (MCP OAuth callbacks are checked against it), and the client's origin is the adapter's.
+    """
     has_body = request.method not in ("GET", "HEAD")
     upstream_request = client.build_request(
         request.method,
         httpx.URL(path=request.url.path, query=request.url.query.encode()) if request.url.query
         else httpx.URL(path=request.url.path),
-        headers=forwardable(request.headers, drop=frozenset({"host", "content-length"})),
+        headers=forwardable(request.headers, drop=frozenset({"content-length"})),
         content=request.stream() if has_body else None,
     )
     try:
