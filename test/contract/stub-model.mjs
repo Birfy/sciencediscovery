@@ -146,7 +146,10 @@ export async function startStubModel(steps = {}) {
         send(chunk(id, { role: "assistant", tool_calls: [{ index: 0, id: `call-${route}-${consumed[route]}`, type: "function", function: { name: step.tool, arguments: JSON.stringify(step.arguments ?? {}) } }] }));
         send({ ...chunk(id, {}, "tool_calls"), usage: { completion_tokens: 8, prompt_tokens: 20, total_tokens: 28 } });
       } else {
-        for (const word of String(step.text ?? "").split(/(?<= )/)) send(chunk(id, { role: "assistant", content: word }));
+        // `reasoning` streams first as reasoning_content; `chunkDelayMs` spaces the words out, as a slow model does.
+        const pause = () => step.chunkDelayMs ? new Promise((resolve) => setTimeout(resolve, step.chunkDelayMs)) : undefined;
+        for (const word of String(step.reasoning ?? "").split(/(?<= )/).filter(Boolean)) { await pause(); send(chunk(id, { role: "assistant", reasoning_content: word })); }
+        for (const word of String(step.text ?? "").split(/(?<= )/)) { await pause(); send(chunk(id, { role: "assistant", content: word })); }
         send({ ...chunk(id, {}, "stop"), usage: { completion_tokens: 8, prompt_tokens: 20, total_tokens: 28 } });
       }
       finish();

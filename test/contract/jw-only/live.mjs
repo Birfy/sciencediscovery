@@ -248,6 +248,70 @@ const checks = {
       await cleanup();
     }
   },
+
+  /**
+   * Where the time before the first token goes, with a model that answers at once: from the run's start to the
+   * model's first request, and from there to the first text event. Two runs, since the first of a session sets more up.
+   */
+  async ttft() {
+    const stub = await startStubModel({ main: [{ text: "First." }, { text: "Second." }] });
+    const { sessionId, cleanup } = await setup(stub);
+    try {
+      for (const label of ["first run", "second run"]) {
+        const seen = stub.requests.filter((request) => request.route === "main").length;
+        const t0 = Date.now();
+        const run = await api("POST", `/api/sessions/${sessionId}/runs`, { content: `Say hi (${label}).` });
+        let model, text, done;
+        for (let i = 0; i < 1200 && !done; i += 1) {
+          if (model === undefined && stub.requests.filter((request) => request.route === "main").length > seen) model = Date.now() - t0;
+          const events = await runEvents(sessionId, run.id);
+          if (text === undefined && events.some((event) => event.type === "assistant.delta" || event.type === "assistant.snapshot")) text = Date.now() - t0;
+          const current = await api("GET", `/api/sessions/${sessionId}/runs/${run.id}`);
+          if (["completed", "failed", "cancelled", "interrupted"].includes(current.status)) done = Date.now() - t0;
+          else await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+        console.log(`ttft ${label}: model request at ${model ?? "?"} ms, first text event at ${text ?? "?"} ms, done at ${done ?? "?"} ms`);
+      }
+    } finally {
+      await cleanup();
+    }
+  },
+
+  /**
+   * Thinking and text reach the run as the model streams them: a model that sends 20 thinking words and
+   * 20 text words 300 ms apart must show its first thinking about 0.3 s after its request, not at its end.
+   */
+  streaming() {
+    return (async () => {
+      const words = (tag) => Array.from({ length: 20 }, (_, index) => `${tag}${index}`).join(" ");
+      const stub = await startStubModel({ main: [{ reasoning: words("think"), text: words("word"), chunkDelayMs: 300 }] });
+      const { sessionId, cleanup } = await setup(stub);
+      try {
+        const run = await api("POST", `/api/sessions/${sessionId}/runs`, { content: "Stream please." });
+        const seenAt = {};
+        let requested;
+        const t0 = Date.now();
+        for (let i = 0; i < 1200; i += 1) {
+          if (requested === undefined && stub.requests.some((request) => request.route === "main")) requested = Date.now() - t0;
+          const events = await runEvents(sessionId, run.id);
+          for (const type of ["assistant.thinking.delta", "assistant.delta"]) {
+            const count = events.filter((event) => event.type === type).length;
+            if (count && !seenAt[type]) seenAt[type] = { at: Date.now() - t0, count };
+          }
+          const current = await api("GET", `/api/sessions/${sessionId}/runs/${run.id}`);
+          if (["completed", "failed", "cancelled", "interrupted"].includes(current.status)) {
+            const all = await runEvents(sessionId, run.id);
+            const counts = Object.fromEntries(["assistant.thinking.delta", "assistant.delta"].map((type) => [type, all.filter((event) => event.type === type).length]));
+            console.log(`streaming: model request at ${requested} ms; first seen ${JSON.stringify(seenAt)}; done at ${Date.now() - t0} ms; delta events ${JSON.stringify(counts)} (the model spent ~12 s streaming 40 words)`);
+            break;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+      } finally {
+        await cleanup();
+      }
+    })();
+  },
 };
 
 const wanted = process.argv.slice(2);
