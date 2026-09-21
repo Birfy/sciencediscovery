@@ -15,6 +15,7 @@
 
 - [部署](how-to/deployment.md) — 本地模式、Docker 和源码构建单文件二进制的操作步骤。
 - [在 JiuwenSwarm 上运行 agent](how-to/run-with-jiuwenswarm.md) — 可选的实验性执行器：安装固定版本的 JiuwenSwarm、带 adapter 启动整套服务，以及预期行为。
+- [JiuwenSwarm 迁移：现状与交接](reference/jiuwenswarm-migration-status.md) — 哪些已实现、哪些没有，以及如何开始做某个子 issue。
 - [配置网络代理](how-to/configure-network-proxy.md) — 在设置页添加代理并为 LLM、Web 和 MCP 选择策略。
 - [文献调研案例指南](how-to/literature-research-case-guide.md) — 以一项跨数据库文献调研任务为例，演示从启动服务、配置系统到下发任务、审批与查看结果的全流程。
 - [运行一次演进搜索](how-to/run-an-evolution-search.md) — 提出 `/evolve-design` 搜索、定分片规模、看过程，并读留出结果。

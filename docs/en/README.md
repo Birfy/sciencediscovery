@@ -15,6 +15,7 @@ This is the complete English documentation set.
 
 - [Deployment](how-to/deployment.md) — local mode, Docker, and building a single-file binary from source.
 - [Run agent turns on JiuwenSwarm](how-to/run-with-jiuwenswarm.md) — optional, experimental executor: install a pinned JiuwenSwarm, start the stack with the adapter, and what to expect.
+- [JiuwenSwarm migration: status and hand-over](reference/jiuwenswarm-migration-status.md) — what runs, what does not, and how to start on a sub-issue.
 - [Configure the network proxy](how-to/configure-network-proxy.md) — add a proxy on the settings page and choose a policy for LLM, web, and MCP traffic.
 - [Literature research case guide](how-to/literature-research-case-guide.md) — run an end-to-end cross-database literature survey, from service startup to approvals and results.
 - [Run an evolution search](how-to/run-an-evolution-search.md) — propose a `/evolve-design` search, size its shards, watch it run, and read the held-out result.
