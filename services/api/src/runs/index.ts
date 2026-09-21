@@ -1031,7 +1031,8 @@ async function executeAgentRun(
   const approvalsByJiuwenSwarm = Boolean(jiuwenSwarmConfigFromEnv());
   // A call JiuwenSwarm's permission engine stopped, put to the user as one of ours.
   const requestApproval: NonNullable<WorkspaceAgentOptions["requestApproval"]> = async ({ resource, summary, toolCallId }, signal) => {
-    const check = await store.requestPermission(sessionId, "code", resource, summary, toolCallId ? { toolCallId } : {});
+    // With the run as its execution: an approval given before the run (a preflight) must not answer this question.
+    const check = await store.requestPermission(sessionId, "code", resource, summary, { executionId: runId, ...(toolCallId ? { toolCallId } : {}) });
     if (check.allowed) return "allow_once";
     responseSink.emit({ request: check.request, type: "permission.required" });
     const decided = await waitForPermissionDecision(store, check.request, timeoutSettings.permissionWaitTimeoutMs, signal, { emit, runId, sessionId });
