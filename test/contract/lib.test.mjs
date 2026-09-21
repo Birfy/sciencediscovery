@@ -16,7 +16,7 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import test from "node:test";
 
-import { compareRecordings, coverage, lookup, runCase } from "./lib.mjs";
+import { compareRecordings, coverage, lookup, profileRunEvents, runCase } from "./lib.mjs";
 
 async function fakeBackend(handler) {
   const seen = [];
@@ -160,4 +160,22 @@ test("a poll that never reaches its condition is an error, not a hang", async ()
   } finally {
     await backend.close();
   }
+});
+
+test("the run-event profile joins text fragments, drops agent evidence and collapses step snapshots", () => {
+  const raw = [
+    { event: { type: "agent.record", name: "context.captured" } },
+    { event: { type: "assistant.delta", delta: "Hel", responseId: "r", evidence: { turn: 1 } } },
+    { event: { type: "assistant.delta", delta: "lo", responseId: "r" } },
+    { event: { type: "assistant.delta", delta: "!", responseId: "other" } },
+    { event: { type: "subagent.step", step: { id: "s1", content: "do" } } },
+    { event: { type: "subagent.step", step: { id: "s1", content: "done" } } },
+    { event: { type: "subagent.step", step: { id: "s2", content: "next" } } },
+  ];
+  assert.deepEqual(profileRunEvents(raw), [
+    { type: "assistant.delta", delta: "Hello", responseId: "r" },
+    { type: "assistant.delta", delta: "!", responseId: "other" },
+    { type: "subagent.step", step: { id: "s1", content: "done" } },
+    { type: "subagent.step", step: { id: "s2", content: "next" } },
+  ]);
 });

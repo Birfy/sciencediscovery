@@ -86,7 +86,7 @@ async function readSse(response, stream, onEvent = async () => undefined) {
 /**
  * The run-event profile: what a user could see, in a form that does not depend on timing.
  * Consecutive text/thinking/tool-output fragments of one response are joined (how many
- * fragments arrive is a matter of timing), envelope fields that only count or time events
+ * fragments arrive is a matter of timing, as is how many snapshots of one subagent step), envelope fields that only count or time events
  * are dropped, and the native agent's own evidence (`agent.record` and each event's
  * `evidence`) is left out: it is not part of what another executor has to reproduce.
  */
@@ -98,6 +98,12 @@ export function profileRunEvents(events) {
     if (event.type === "agent.record") continue;
     const field = JOINED[event.type];
     const previous = out[out.length - 1];
+    // A step being streamed is re-sent as a snapshot each time a coalescing timer fires; how many
+    // snapshots arrive is timing, so consecutive ones for the same step collapse to the last.
+    if (event.type === "subagent.step" && previous?.type === "subagent.step" && previous.step?.id === event.step?.id) {
+      out[out.length - 1] = event;
+      continue;
+    }
     const sameStream = previous && previous.type === event.type
       && (previous.responseId ?? previous.toolCallId) === (event.responseId ?? event.toolCallId);
     if (field && sameStream) previous[field] += event[field];
