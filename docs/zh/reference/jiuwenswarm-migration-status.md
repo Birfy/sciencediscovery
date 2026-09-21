@@ -31,7 +31,7 @@ issue 84（复用 JiuwenSwarm 后端）做到哪一步、现在能跑什么、�
 | 91 模型、供应商、设置 | 已完成 | 模型列表、默认值、设置由 legacy 提供（L1 覆盖全部行）；所选模型按次交给 JiuwenSwarm | 三种模型协议都能跑，经 API 里的回环模型网关 |
 | 92 MCP 与数据源 | 已完成 | 21 行都有 L1 用例；5 条 MCP 旅程在此执行器上通过（自定义 MCP、智能体调用自定义 MCP 工具、OAuth、密钥编辑 ×2）；延迟的 MCP 工具启动时一并晋升，并提供 `tool_search` | 没有对真实供应商跑过 MCP OAuth |
 | 93 技能与技能库 | 未开始 | 由 legacy 提供 | L1 0/35；技能在此执行器上的使用未验证 |
-| 94 文件、工作区、轨迹 | 未开始 | 读接口有 L1 用例 | JiuwenSwarm 运行的轨迹视图为空（没有记录 `evidence`） |
+| 94 文件、工作区、轨迹 | 未开始 | 读接口有 L1 用例 | 轨迹已记录（见已知缺口 1） |
 | 95 规划与子代理 | 已完成 | 规划默认用 JiuwenSwarm 自己的 todo 工具（它的 `todo.updated` 清单就是运行的计划；`SCIENCE_AGENT_JIUWENSWARM_PLANNING=update_plan` 可改用我们的）；`task` 子代理经 bridge 运行，每个子代理有自己稳定的 JiuwenSwarm 会话，所以被恢复的子代理接着自己的对话；L1 覆盖全部行；L2 子代理与两轮对话用例一致；计划与委派旅程通过（计划旅程用它脚本化的 `update_plan`） | 不使用 JiuwenSwarm 自己的 `subagent_*`、`task_tool`、`team.*`、`agents.*` 和 agent 模板；每一步的计划快照不注入 |
 | 97 科学工具集 MCP 化 | 已完成 | 等价工具集以 MCP 工具提供，经 bridge 调 legacy 工具，走同一个 ToolRegistry；有测试把提供的工具集与 schema 钉在注册表上；延迟工具启动时一并晋升并提供 `tool_search`；并行调用可运行且一致 | 后续子 issue（idea-tree、evolve、memory、产物审阅）的工具随它们一起到 |
 | 103 用量 | 已完成 | 每次模型调用的 token 数映射成 `model.usage` 并汇总；一次运行后的会话用量、按模型用量与内置循环一致（L2）；每一行都有 L1 用例 | 没有迁到适配器存储；统计仍在 API |
@@ -63,11 +63,12 @@ JiuwenSwarm 自己有一套上下文引擎（占用到模型窗口的 80% 时压
 | 工具路由提示 | 有 | **没有注入** |
 | 工具输出守卫和读取 | 有 | 有（同一个 `ToolRegistry`） |
 | 输入过长的恢复 | 压缩后重试 | JiuwenSwarm 自己的处理；**没有验证** |
-| 轨迹与 evidence | 有 | **没有** |
+| 轨迹与 evidence | 有 | 有（在模型网关记录，见已知缺口 1） |
 
 ## 已知缺口
 
-1. **没有 evidence / 轨迹。** JiuwenSwarm 运行不产生 `agent.record`/`evidence`，轨迹视图为空。
+1. **轨迹：已记录。** JiuwenSwarm 运行的每次模型调用都经过这次运行的模型网关，网关用内置循环同样的 `AgentVersionRecorder` 记录：发出的完整模型输入（含 JiuwenSwarm 的提示词和工具）、模型的回答、工具观测和提交的步骤；运行事件带有关联它们的 evidence（实时检查 `trajectory`）。JiuwenSwarm 自己发出的标题、摘要调用不算轮次，不记录。
+1a. **子代理仍用 ScienceDiscovery 的 `task`。** 每个子代理作为独立的 JiuwenSwarm 会话运行，拥有 ScienceDiscovery 的全部工具、沙箱、审批和子代理卡片。JiuwenSwarm 自己的子代理暂时无法使用（0.2.6，`agent` 模式）：内置的 `general-purpose` 子代理只带父代理的内置工具、不带 MCP 服务，拿不到 ScienceDiscovery 的工具；自定义代理（`agents.create`）无法启动（`'str' object has no attribute 'name'`：它的工具列表是名字，而启动路径需要工具对象）。`test/contract/jw-only/live.mjs subagent-probe` 可以查看其表现。
 2. **历史与上下文。** JiuwenSwarm 是模型上下文的唯一持有者：每个智能体一个稳定会话，由 JiuwenSwarm 压缩；适配器和 API 都不发送、不重建任何历史。所以在内置循环上开始的会话，JiuwenSwarm 不记得（之前的轮次只在界面上），在 API 里编辑或回退的对话也不会反映过去。JiuwenSwarm 重启后这份上下文仍在（已验证：`live.mjs history-restart`）。每一步的动态上下文（计划快照、持久状态）没有注入，见“上下文管理”。
 3. **模型协议：** UI 能配置的三种都可用（API 里的回环网关用原生模型客户端为 JiuwenSwarm 的 chat-completions 请求提供服务）。图片不会发给模型。
 4. **工具集里没有** 工具输出存储。延迟工具启动时一并晋升。同一次模型响应里的工具调用按原生规则调度（没声明并发安全的工具独占、按模型调用的顺序执行；重复调用由批处理策略取代），所以两个执行器的事件与顺序一致。
