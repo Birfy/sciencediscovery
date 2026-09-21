@@ -82,7 +82,9 @@ class AgentRunRequest(BaseModel):
     # The caller's system prompt for this run (needs `model`). `systemPromptMode` says what becomes of
     # JiuwenSwarm's own: "append" keeps it whole and adds this one after it; "replace" swaps it out.
     systemPrompt: str | None = None
-    systemPromptMode: Literal["append", "replace"] = "replace"
+    systemPromptMode: Literal["prepend", "append", "replace"] = "replace"
+    # Added after JiuwenSwarm's prompt in "prepend": the part that changes every turn (the run contract).
+    systemPromptTail: str | None = None
     # The JiuwenSwarm session that holds this agent's conversation: stable across runs, one per agent
     # (the main agent, and each subagent, of one caller session). JiuwenSwarm keeps and compresses the
     # context there; the adapter neither sends nor rebuilds any history. Defaults to `sessionId`.
@@ -152,6 +154,7 @@ class AgentRunner:
                     tool_prefix=f"mcp_{name}_", tool_names=frozenset(t.name for t in request.tools),
                     tool_specs={t.name: {"description": t.description, "parameters": t.inputSchema} for t in request.tools},
                     system_prompt=request.systemPrompt, system_prompt_mode=request.systemPromptMode,
+                    system_prompt_tail=request.systemPromptTail,
                     native_tools=frozenset(request.nativeTools), all_native_tools=request.jiuwenSwarmTools == "all",
                 ))
                 model_alias = f"sd-{llm_token[:12]}"

@@ -915,14 +915,14 @@ test("no part of the conversation is sent to the adapter: JiuwenSwarm holds the 
   }
 });
 
-test("JiuwenSwarm's own prompt is kept and ours appended by default, and replaced only when asked", async () => {
+test("JiuwenSwarm's own prompt is kept with ours before it by default, and replaced only when asked", async () => {
   const sent: any[] = [];
   const adapter = await fakeAdapter(async ({ body }, response) => { sent.push(body); response.writeHead(200); response.end(line({ done: { finalText: "ok" } })); });
   try {
     const { store } = planRecorder();
     await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ planStore: store as never })).execute("a");
     await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url, prompt: "replace" })(options({ planStore: store as never })).execute("b");
-    assert.equal(sent[0].systemPromptMode, "append");
+    assert.equal(sent[0].systemPromptMode, "prepend");
     assert.equal(sent[1].systemPromptMode, "replace");
     assert.equal(sent[0].systemPrompt.includes("## Planning"), false, "JiuwenSwarm's own todo section does the teaching");
     assert.match(sent[1].systemPrompt, /## Planning[\s\S]*todo_create/, "its prompt is gone, so the model is told here");
@@ -970,6 +970,18 @@ test("SCIENCE_AGENT_JIUWENSWARM_TOOLS=ours keeps the model to ScienceDiscovery's
     const env = { SCIENCE_AGENT_EXECUTOR: "jiuwenswarm", SCIENCE_AGENT_ADAPTER_URL: "http://a" };
     assert.equal(jiuwenSwarmConfigFromEnv(env)?.tools, undefined);
     assert.equal(jiuwenSwarmConfigFromEnv({ ...env, SCIENCE_AGENT_JIUWENSWARM_TOOLS: "ours" })?.tools, "ours");
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("the run contract is sent apart, to go after JiuwenSwarm's prompt, and is not in ours", async () => {
+  let sent: any;
+  const adapter = await fakeAdapter(async ({ body }, response) => { sent = body; response.writeHead(200); response.end(line({ done: { finalText: "ok" } })); });
+  try {
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ runContract: "Find the number." })).execute("go");
+    assert.match(sent.systemPromptTail, /<run_contract>[\s\S]*Find the number\.[\s\S]*<\/run_contract>/);
+    assert.equal(sent.systemPrompt.includes("<run_contract>"), false);
   } finally {
     await adapter.close();
   }

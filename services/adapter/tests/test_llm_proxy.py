@@ -259,3 +259,16 @@ def test_without_all_native_tools_only_the_listed_ones_are_offered():
     route = LlmRoute(**{**ROUTE.__dict__, "native_tools": frozenset({"todo_create"})})
     body = {"tools": [tool("bash"), tool("todo_create"), tool("mcp_sci_run_shell")], "messages": []}
     assert [t["function"]["name"] for t in rewrite_request(body, route)["tools"]] == ["todo_create", "run_shell"]
+
+
+def test_prepend_puts_ours_first_jiuwenswarms_whole_in_the_middle_and_the_tail_last():
+    route = LlmRoute(**{**ROUTE.__dict__, "system_prompt_mode": "prepend", "system_prompt_tail": "<run_contract>x</run_contract>"})
+    body = {"messages": [{"role": "system", "content": "# 身份\nJW"}, {"role": "user", "content": "hi"}]}
+    out = rewrite_request(body, route)["messages"]
+    assert out[0]["content"] == "You are the science agent.\n\n# 身份\nJW\n\n<run_contract>x</run_contract>"
+
+
+def test_replace_keeps_the_tail_too():
+    route = LlmRoute(**{**ROUTE.__dict__, "system_prompt_tail": "T"})
+    out = rewrite_request({"messages": [{"role": "system", "content": "JW"}]}, route)["messages"]
+    assert out[0]["content"] == "You are the science agent.\n\nT"

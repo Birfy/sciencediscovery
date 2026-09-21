@@ -56,10 +56,13 @@ class LlmRoute:
     tool_specs: dict[str, dict[str, Any]] = field(default_factory=dict)
     # JiuwenSwarm's own tools the model may keep, by their own names; the model sees their own specs.
     native_tools: frozenset[str] = frozenset()
-    # "replace": `system_prompt` takes the place of JiuwenSwarm's own system prompt. "append": JiuwenSwarm's
-    # prompt (identity, safety, tools, todo, context compression, installed skills) stays whole and
-    # `system_prompt` is added after it.
+    # "replace": `system_prompt` takes the place of JiuwenSwarm's own system prompt. "prepend": JiuwenSwarm's
+    # prompt (identity, safety, tool rules, memory, context compression, installed skills) stays whole, with
+    # `system_prompt` before it and `system_prompt_tail` after it. "append": JiuwenSwarm's first, then ours.
     system_prompt_mode: str = "replace"
+    # Put last, after JiuwenSwarm's prompt: what changes from turn to turn (the run contract), so that
+    # everything before it is the same prefix on every request and can be cached by the provider.
+    system_prompt_tail: str | None = None
     # Offer every one of JiuwenSwarm's own tools, not only `native_tools`. Where one of ours has the same
     # name, JiuwenSwarm's is kept and ours is not offered (`shadowed`, filled in as requests go by).
     all_native_tools: bool = False
@@ -142,12 +145,14 @@ def rewrite_request(body: dict[str, Any], route: LlmRoute) -> dict[str, Any]:
         if message.get("role") == "system" and route.system_prompt is not None:
             if replaced:
                 continue  # one system prompt
-            if route.system_prompt_mode == "append":
-                own = message.get("content")
-                own = own if isinstance(own, str) else json.dumps(own, ensure_ascii=False)
-                message["content"] = f"{own}\n\n{route.system_prompt}"
+            own = message.get("content")
+            own = own if isinstance(own, str) else json.dumps(own, ensure_ascii=False)
+            if route.system_prompt_mode == "prepend":
+                message["content"] = "\n\n".join(p for p in (route.system_prompt, own, route.system_prompt_tail) if p)
+            elif route.system_prompt_mode == "append":
+                message["content"] = "\n\n".join(p for p in (own, route.system_prompt, route.system_prompt_tail) if p)
             else:
-                message["content"] = route.system_prompt
+                message["content"] = "\n\n".join(p for p in (route.system_prompt, route.system_prompt_tail) if p)
             replaced = True
         for call in message.get("tool_calls") or []:
             call["function"] = {**call["function"], "name": _unprefixed(call["function"]["name"], route)}
@@ -155,7 +160,7 @@ def rewrite_request(body: dict[str, Any], route: LlmRoute) -> dict[str, Any]:
             message["name"] = _unprefixed(message["name"], route)
         messages.append(message)
     if route.system_prompt is not None and not replaced:
-        messages.insert(0, {"role": "system", "content": route.system_prompt})
+        messages.insert(0, {"role": "system", "content": "\n\n".join(p for p in (route.system_prompt, route.system_prompt_tail) if p)})
     out["messages"] = messages
     if _DEBUG:
         tail = [f"{m.get('role')}:{str(m.get('content'))[:90]!r}" for m in messages[-3:]]

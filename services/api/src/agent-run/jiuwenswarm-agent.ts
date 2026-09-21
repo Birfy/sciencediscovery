@@ -27,6 +27,7 @@ import { resolveModelClientPolicy, type streamModelTurn } from "@sciencediscover
 
 import {
   composeSystemPrompt,
+  formatRunContract,
   createToolRegistry,
   modelEndpointFor,
   startPluginScope,
@@ -60,11 +61,11 @@ export interface JiuwenSwarmAgentConfig {
    */
   planning?: "todo" | "update_plan";
   /**
-   * What becomes of JiuwenSwarm's own system prompt. `append` (default): it stays whole (identity, safety,
-   * tool rules, todo, context compression, installed skills) and ScienceDiscovery's is added after it.
-   * `replace`: ScienceDiscovery's takes its place and JiuwenSwarm's never reaches the model.
+   * What becomes of JiuwenSwarm's own system prompt. `prepend` (default): it stays whole (identity, safety,
+   * tool rules, memory, context compression, installed skills); ScienceDiscovery's product prompt goes before
+   * it and the run contract after it. `replace`: ScienceDiscovery's takes its place.
    */
-  prompt?: "append" | "replace";
+  prompt?: "prepend" | "replace";
   /**
    * Which tools the model gets. `jiuwenswarm` (default): all of JiuwenSwarm's own (bash, files, web, sub-agents,
    * todo, memory, skills ...) plus ScienceDiscovery's that JiuwenSwarm does not have; on a name clash
@@ -216,14 +217,18 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
     const { config: model } = this.options;
     const toolNames = new Set(tools.keys());
     // The same system prompt the native loop would send: the model is tuned to it.
-    const composed = composeSystemPrompt(this.options, toolNames, toolNames.has("read_skill") ? this.options.skills ?? [] : []).systemPrompt;
+    // The run contract changes every turn; it is sent apart and put last, so that what comes before it is the
+    // same on every request (and can be cached by the provider).
+    const composed = composeSystemPrompt({ ...this.options, runContract: undefined }, toolNames,
+      toolNames.has("read_skill") ? this.options.skills ?? [] : []).systemPrompt;
+    const runContract = this.options.runContract ? formatRunContract(this.options.runContract) : undefined;
     // Appended after JiuwenSwarm's own prompt, its todo section already says how to plan; only when its prompt is
     // replaced does the model need to be told about the todo tools here.
-    const appendPrompt = (this.config.prompt ?? "append") === "append";
+    const keepJiuwenSwarmPrompt = (this.config.prompt ?? "prepend") === "prepend";
     const allJiuwenSwarmTools = (this.config.tools ?? "jiuwenswarm") === "jiuwenswarm";
     // With JiuwenSwarm's tools the model is no longer limited to the ones registered here.
     const ours = allJiuwenSwarmTools ? composed.replace("Use only the registered workspace tools. ", "") : composed;
-    const systemPrompt = jiuwenSwarmPlans && !appendPrompt ? `${ours}\n\n${TODO_PLANNING_SECTION}` : ours;
+    const systemPrompt = jiuwenSwarmPlans && !keepJiuwenSwarmPrompt ? `${ours}\n\n${TODO_PLANNING_SECTION}` : ours;
     const response = await (this.config.fetch ?? fetch)(`${this.config.adapterUrl}/agent/runs`, {
       method: "POST",
       headers: {
@@ -235,7 +240,8 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
         sessionKey: jiuwenSwarmSessionKey(this.options),
         prompt: text,
         systemPrompt,
-        systemPromptMode: appendPrompt ? "append" : "replace",
+        systemPromptMode: keepJiuwenSwarmPrompt ? "prepend" : "replace",
+        ...(runContract ? { systemPromptTail: runContract } : {}),
         cwd: this.options.workspaceRoot,
         // The adapter's proxy forwards to this loopback gateway, which speaks the model's own protocol.
         model: { model: model.model, baseUrl: modelGateway.url, apiKey: modelGateway.token, provider: "OpenAI" },

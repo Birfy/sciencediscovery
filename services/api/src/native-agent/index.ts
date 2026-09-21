@@ -207,7 +207,7 @@ export function modelEndpointFor(options: Pick<NativeAgentOptions, "config">): M
   } as ModelEndpoint;
 }
 
-function formatRunContract(contract: string): string {
+export function formatRunContract(contract: string): string {
   return [
     "<run_contract>",
     "Runtime-preserved request/task contract for this request execution.",
