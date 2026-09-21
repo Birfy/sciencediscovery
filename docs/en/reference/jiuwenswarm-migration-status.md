@@ -55,10 +55,28 @@ On the Aliyun Linux server (bubblewrap sandbox) with `SCIENCE_AGENT_ADAPTER=1 SC
 - L1: the recorded cases match between the built-in loop and the adapter + JiuwenSwarm stack, apart from build version strings, which are scrubbed.
 - Unit tests: adapter (`pytest`, about 108) and the TypeScript agent factory (20).
 
+## Context management
+
+The built-in loop assembles context on every model step and manages its size. On the JiuwenSwarm executor:
+
+| Built-in loop | JiuwenSwarm executor |
+|---|---|
+| System prompt sections (identity, governance, capabilities, skills) | Same text, composed once per run |
+| Run contract, protected, in every step | **Not injected** |
+| Per-step dynamic context: plan snapshot, durable state, plugin contributors, `runtime_context_data` | **Not injected**; the model only sees plan or state through earlier tool results |
+| Tool routing hints | **Not injected** |
+| Tool-output guard and reader (bounded results by reference) | Works: calls go through the same `ToolRegistry` |
+| Context budget from the model's context window | **None** |
+| History compaction (summarise older turns) | **None** |
+| Recovery from an input-too-large error (compact, retry) | **None**: the run fails with the provider's message |
+| Trajectory and evidence records | **None** |
+
+JiuwenSwarm has its own context handling; how it behaves with the models used here has not been measured.
+
 ## Known gaps
 
 1. **No evidence or trajectory.** Runs on JiuwenSwarm produce no `agent.record`/`evidence` events, so the trajectory view is empty.
-2. **History.** The API's record is sent with every run and inserted by the adapter's model proxy; JiuwenSwarm runs each turn in its own session. A session begun on the built-in loop, a resumed subagent and the API's compaction therefore carry over. JiuwenSwarm's own session store is no longer used for conversation state.
+2. **History.** The API's record is sent with every run and inserted by the adapter's model proxy; JiuwenSwarm runs each turn in its own session. A session begun on the built-in loop and a resumed subagent therefore carry over (history the built-in loop already compacted stays compacted). **No new compaction, context budgeting or overflow recovery happens on this executor**, and the run contract and the per-step dynamic context (plan snapshot, durable state, plugin context) are not injected: see "Context management" below. JiuwenSwarm's own session store is not used for conversation state.
 3. **Model protocols:** all three the UI can configure work (a loopback gateway in the API serves JiuwenSwarm's chat-completions requests through the native model client). Images are not sent to the model.
 4. **No tool-output store** in the JiuwenSwarm toolset. Deferred tools are promoted up front. Tool calls of one model response are scheduled by the native rules (a tool not declared concurrency-safe runs alone, in the order the model called it; duplicate calls are superseded by batch policies), so both executors produce the same events in the same order.
 5. **Wake notices.** The mocked E2E `issue-77-wake-notice` fails on this executor (the scripted model recognises the wake turn by a prompt JiuwenSwarm does not present that way). `issue-85` passes. Run the group with `CI_E2E_BACKEND=jiuwenswarm .ci/run-e2e.sh mocked`. The journeys are load-sensitive on a small host: two of them failed once when run back to back on the 2-core server and passed alone (three repeats), so run them one at a time when in doubt.
