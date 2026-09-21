@@ -294,4 +294,22 @@ fi
 node test/check-e2e-meta.mjs 2>&1 | tee -a "$test_log" || exit $?
 test_started=1
 npm --prefix .e2e run "test:$group" 2>&1 | tee -a "$test_log"
-exit ${PIPESTATUS[0]}
+journeys_status=${PIPESTATUS[0]}
+
+# What only the JiuwenSwarm backend does, checked against the same stack: the
+# approvals JiuwenSwarm's permission engine asks and the user answers, the host
+# tools it must not reach, skills imported into it and switched there, the
+# trajectory recorded from its model calls, its language. Each check builds and
+# deletes its own project and scripted model. Left out here: todo-plan (the
+# journeys plan with update_plan), web-search (the internet), compression and
+# history-restart (a small context window, a JiuwenSwarm restart).
+live_status=0
+if [[ "$backend" == "jiuwenswarm" && "$group" == "mocked" ]]; then
+  live_checks="${CI_E2E_JIUWENSWARM_CHECKS:-history history-names run-shell host-tools approvals skills skill-switch trajectory language}"
+  # shellcheck disable=SC2086 # the list is words on purpose
+  node test/contract/jw-only/live.mjs $live_checks 2>&1 | tee "$results_root/jiuwenswarm-checks.log" | tee -a "$test_log"
+  live_status=${PIPESTATUS[0]}
+  printf 'jiuwenswarm_checks=%s\n' "$([[ "$live_status" -eq 0 ]] && echo passed || echo failed)" >> "$results_root/jiuwenswarm-checks.log"
+fi
+if [[ "$journeys_status" -ne 0 ]]; then exit "$journeys_status"; fi
+exit "$live_status"

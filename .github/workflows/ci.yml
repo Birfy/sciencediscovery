@@ -123,7 +123,7 @@ jobs:
           if-no-files-found: warn
 
   e2e:
-    name: E2E (mocked)
+    name: E2E (mocked, JiuwenSwarm)
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -158,6 +158,18 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('test/e2e.package-lock.json') }}
           restore-keys: playwright-${{ runner.os }}-
+
+      # Agent turns run on JiuwenSwarm (Python 3.12, about 1.5 GB with its
+      # virtualenv), which run-e2e.sh installs when missing. Keyed on the script
+      # that pins the release tag, so a new pin installs afresh; uv's managed
+      # Python is kept too, since the virtualenv points into it.
+      - name: Cache the JiuwenSwarm install
+        uses: actions/cache@v4
+        with:
+          path: |
+            .sciencediscovery-data/jiuwenswarm/src
+            ~/.local/share/uv/python
+          key: jiuwenswarm-${{ runner.os }}-${{ hashFiles('scripts/jiuwenswarm.sh') }}
 
       # run-e2e.sh owns the whole lifecycle: it syncs .e2e, installs Chromium,
       # generates an ephemeral token, starts and stops its own isolated stack,
@@ -207,6 +219,18 @@ jobs:
             }
             fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${lines.join("\n")}\n`);
           ' "$results"
+          # The JiuwenSwarm checks run after the journeys against the same stack.
+          checks=.ci-results/e2e/jiuwenswarm-checks.log
+          if [[ -f "$checks" ]]; then
+            {
+              echo
+              echo "### JiuwenSwarm checks"
+              echo
+              echo '```'
+              grep -E '^[a-z-]+: |^FAILED|^jiuwenswarm_checks=' "$checks" || true
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       # Failure evidence — Playwright report, traces, screenshots, journey
       # reports, and the stack log that attributes a stack-side failure.
