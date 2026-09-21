@@ -1798,6 +1798,22 @@
      "expectStatus": 200
     },
     {
+     "name": "session usage after the run",
+     "request": {
+      "method": "GET",
+      "path": "/api/sessions/{{sessionId}}/usage"
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "usage per model after the run",
+     "request": {
+      "method": "GET",
+      "path": "/api/usage/models"
+     },
+     "expectStatus": 200
+    },
+    {
      "name": "wait for the run to settle",
      "request": {
       "method": "GET",
