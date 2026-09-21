@@ -94,7 +94,7 @@ Set per model in the UI, as usual: provider, protocol and variant, API key, thin
 ## What to expect
 
 - The same conversations, tool cards, permission prompts, plans, subagents and artifacts as with the built-in loop; the milestone-0 journeys pass on this backend.
-- JiuwenSwarm keeps each agent's conversation (main agent, and each subagent) in its own session and compresses it as the model's window fills. The run contract and ScienceDiscovery's per-step context (plan snapshot, durable state) are **not** injected.
+- JiuwenSwarm keeps each agent's conversation (main agent, and each subagent) in its own session, and compresses it when it reaches 80% of `JIUWENSWARM_CONTEXT_WINDOW_TOKENS`. JiuwenSwarm's own model calls (the summaries it writes when compressing, titles for sessions) use its *default model*: the adapter makes that entry point at itself (`sd-default`), and it sends those calls to the model of the run in progress. The JiuwenSwarm instance is therefore ScienceDiscovery's own; do not share it with other work. The run contract and ScienceDiscovery's per-step context (plan snapshot, durable state) are **not** injected.
 - Conversation, plan and event data stay in ScienceDiscovery's own stores.
 - No trajectory or evidence records for JiuwenSwarm runs, and images are not sent to the model.
 - Adding a model makes JiuwenSwarm send one small probe request to it (to detect image input); the gateway refuses the picture, so you may see a `400` for it in the log. That is expected.
