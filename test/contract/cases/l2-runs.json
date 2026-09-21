@@ -2117,7 +2117,7 @@
   },
   {
    "id": "l2-parallel-tools",
-   "description": "One model response that calls the shell twice, then the answer. Both executors must run both calls and answer.",
+   "description": "One model response that calls the shell twice, then the answer. Both executors must run the two calls one after the other, in the order the model made them (the shell is not declared concurrency-safe).",
    "stub": {
     "main": [
      {
@@ -2248,8 +2248,7 @@
        "run.cancelled"
       ],
       "timeoutMs": 60000,
-      "profile": "run-events",
-      "concurrentTools": true
+      "profile": "run-events"
      },
      "covers": [
       "GET /api/sessions/:id/runs/:runId/events"

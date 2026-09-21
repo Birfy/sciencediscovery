@@ -659,3 +659,86 @@ test("the tools offered are exactly the native registry's, every one with its ow
     await adapter.close();
   }
 });
+
+/** Tools that log when they start and end, so overlap is visible. */
+function timedTools(log: string[], concurrencySafe: boolean) {
+  const make = (name: string, ms: number) => ({
+    label: name, name, description: name, parameters: Type.Object({}),
+    ...(concurrencySafe ? { isConcurrencySafe: () => true } : {}),
+    execute: async () => {
+      log.push(`${name}:start`);
+      await new Promise((resolve) => setTimeout(resolve, ms));
+      log.push(`${name}:end`);
+      return { content: [{ type: "text" as const, text: name }] };
+    },
+  });
+  return [make("slow_a", 60), make("fast_b", 5)];
+}
+
+/** One model response with two tool calls; JiuwenSwarm calls them side by side, the second one first. */
+async function respondWithTwoCalls(names: [string, string], calls: Array<{ args?: unknown; name: string }>, script?: { reverse?: boolean }) {
+  return await fakeAdapter(async ({ body }, response) => {
+    response.writeHead(200);
+    response.write(line({ event: { type: "assistant.response.started", responseId: "r1", turn: 1 } }));
+    calls.forEach((call, index) => response.write(line({ event: { type: "tool.started", trace: { id: `c${index + 1}`, name: call.name, args: call.args ?? {}, status: "running" } } })));
+    const send = (call: { args?: unknown; name: string }) => fetch(body.bridge.url, {
+      method: "POST", headers: { authorization: `Bearer ${body.bridge.token}` }, body: JSON.stringify({ name: call.name, arguments: call.args ?? {} }),
+    }).then((reply) => reply.json());
+    await Promise.all((script?.reverse === false ? calls : [...calls].reverse()).map(send));
+    response.end(line({ done: { finalText: "ok" } }));
+  });
+}
+
+test("tools not declared concurrency-safe run one at a time, in the order the model called them", async () => {
+  const log: string[] = [];
+  const adapter = await respondWithTwoCalls(["slow_a", "fast_b"], [{ name: "slow_a" }, { name: "fast_b" }]);
+  try {
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ extraTools: timedTools(log, false) as never })).execute("go");
+    assert.deepEqual(log, ["slow_a:start", "slow_a:end", "fast_b:start", "fast_b:end"]);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("tools declared concurrency-safe may overlap", async () => {
+  const log: string[] = [];
+  const adapter = await respondWithTwoCalls(["slow_a", "fast_b"], [{ name: "slow_a" }, { name: "fast_b" }]);
+  try {
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ extraTools: timedTools(log, true) as never })).execute("go");
+    assert.equal(log.indexOf("fast_b:end") < log.indexOf("slow_a:end"), true, log.join(" "));
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("two update_plan calls in one response: the earlier one is superseded, as in the native loop", async () => {
+  const updates: unknown[] = [];
+  const planStore = { latest: async () => undefined, update: async (input: unknown) => { updates.push(input); return { id: "p", steps: [] } as never; } };
+  const first = { plan: [{ step: "first", status: "pending" }] };
+  const second = { plan: [{ step: "second", status: "pending" }] };
+  const adapter = await respondWithTwoCalls(["update_plan", "update_plan"], [{ name: "update_plan", args: first }, { name: "update_plan", args: second }]);
+  try {
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ planStore: planStore as never })).execute("plan");
+    assert.deepEqual(updates, [{ plan: [{ status: "pending", step: "second" }] }]);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("an earlier call that never reaches the bridge does not hold up the later one for ever", async () => {
+  const log: string[] = [];
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    response.writeHead(200);
+    response.write(line({ event: { type: "assistant.response.started", responseId: "r1", turn: 1 } }));
+    response.write(line({ event: { type: "tool.started", trace: { id: "c1", name: "slow_a", args: {}, status: "running" } } }));
+    response.write(line({ event: { type: "tool.started", trace: { id: "c2", name: "fast_b", args: {}, status: "running" } } }));
+    await fetch(body.bridge.url, { method: "POST", headers: { authorization: `Bearer ${body.bridge.token}` }, body: JSON.stringify({ name: "fast_b", arguments: {} }) });
+    response.end(line({ done: { finalText: "ok" } }));
+  });
+  try {
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url, toolAnnouncementTimeoutMs: 100 })(options({ extraTools: timedTools(log, false) as never })).execute("go");
+    assert.deepEqual(log, ["fast_b:start", "fast_b:end"]);
+  } finally {
+    await adapter.close();
+  }
+});

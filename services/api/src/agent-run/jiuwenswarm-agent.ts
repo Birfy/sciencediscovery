@@ -197,8 +197,17 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
 class ToolAnnouncements {
   private readonly pending: Array<{ args: unknown; id: string; input: string; name: string }> = [];
   private readonly waiters = new Set<() => void>();
+  /** Every call announced so far, in the order the model made them, with the response it belongs to. */
+  readonly all: Array<{ args: Record<string, unknown>; batch: number; id: string; name: string; seq: number }> = [];
+  private batch = 0;
+
+  /** A new model response begins: its calls form the next batch. */
+  newResponse(): void {
+    this.batch += 1;
+  }
 
   announce(call: { args: unknown; id: string; input: string; name: string }): void {
+    this.all.push({ args: (call.args ?? {}) as Record<string, unknown>, batch: this.batch, id: call.id, name: call.name, seq: this.all.length });
     this.pending.push(call);
     for (const wake of [...this.waiters]) wake();
   }
@@ -225,6 +234,61 @@ class ToolAnnouncements {
         const timer = setTimeout(wake, remaining);
         this.waiters.add(wake);
       });
+    }
+  }
+}
+
+type Prepared = ReturnType<ReturnType<typeof createToolRegistry>["prepareBatch"]>;
+type Dispatch = Awaited<ReturnType<ReturnType<typeof createToolRegistry>["execute"]>>;
+
+/**
+ * Keeps the native loop's scheduling rules when JiuwenSwarm calls the tools of one model response
+ * side by side. Per response, the registry decides which calls may overlap (`isConcurrencySafe`;
+ * anything not declared safe runs alone) and which are superseded by another call of the same
+ * response (batch policies, e.g. two `update_plan`). A call therefore waits for the calls the model
+ * made before it that it may not overlap with, in the order the model made them.
+ */
+class ToolScheduler {
+  private readonly prepared = new Map<number, Prepared>();
+  private readonly arrived = new Set<string>();
+  private readonly finished = new Set<string>();
+
+  constructor(
+    private readonly registry: ReturnType<typeof createToolRegistry>,
+    private readonly announcements: ToolAnnouncements,
+    /** How long to wait for an earlier call that never reaches the bridge. */
+    private readonly graceMs = 5_000,
+  ) {}
+
+  async run(call: { args: Record<string, unknown>; id: string; name: string }, signal: AbortSignal, started: () => void): Promise<Dispatch> {
+    const own = this.announcements.all.find((item) => item.id === call.id);
+    // A call nobody announced (see claim) has no place in an order: run it as it comes.
+    if (!own) { started(); return await this.registry.execute(call as never, signal); }
+    this.arrived.add(call.id);
+    try {
+      // Announcements of one response arrive back to back; let them all in before deciding.
+      await new Promise((resolve) => setImmediate(resolve));
+      const batchCalls = this.announcements.all.filter((item) => item.batch === own.batch);
+      let prepared = this.prepared.get(own.batch);
+      if (!prepared) {
+        prepared = this.registry.prepareBatch(batchCalls.map(({ args, id, name }) => ({ args, id, name })) as never);
+        this.prepared.set(own.batch, prepared);
+      }
+      const exclusive = (item: { args: Record<string, unknown>; id: string; name: string }) =>
+        // Fail closed like the native loop: only an explicit "parallel" may overlap.
+        prepared!.executionMode?.({ args: item.args, id: item.id, name: item.name } as never) !== "parallel";
+      const mine = exclusive(own);
+      for (const earlier of batchCalls.filter((item) => item.seq < own.seq && (mine || exclusive(item)))) {
+        const deadline = Date.now() + this.graceMs;
+        while (!this.finished.has(earlier.id) && (this.arrived.has(earlier.id) || Date.now() < deadline)) {
+          if (signal.aborted) break;
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+      }
+      started();
+      return await prepared.execute({ args: call.args, id: call.id, name: call.name } as never, signal);
+    } finally {
+      this.finished.add(call.id);
     }
   }
 }
@@ -305,6 +369,7 @@ class EventTranslator {
       case "assistant.response.started": {
         const turn = Number(event.turn);
         if (turn > this.turn) this.startTurn(turn);
+        this.announcements.newResponse();
         this.emit({ type: "response_start", responseId: String(event.responseId), turn });
         break;
       }
@@ -454,6 +519,7 @@ async function startBridge(
   transcript: Transcript,
   announcementTimeoutMs?: number,
 ): Promise<{ url: string; close(): Promise<void> }> {
+  const scheduler = new ToolScheduler(registry, announcements, announcementTimeoutMs);
   const server: Server = createServer(async (request, response) => {
     const reply = (status: number, body: unknown) => {
       response.writeHead(status, { "content-type": "application/json" });
@@ -481,9 +547,11 @@ async function startBridge(
     if (!claimed) console.warn(`[jiuwenswarm-bridge] no model call was reported for ${tool.name}; running it under a generated id`);
     const toolCallId = claimed?.id ?? randomUUID();
     const args = claimed?.args ?? body.arguments ?? {};
-    emit({ type: "tool_execution_start", toolCallId, toolName: tool.name, args });
     // registry.execute never throws for a failing tool: it answers with the standard error shape.
-    const dispatched = await registry.execute({ id: toolCallId, name: tool.name, args } as never, signal);
+    // The scheduler holds the call back until the calls it may not overlap with have finished, so
+    // the start is reported when the tool really starts, as the native loop does.
+    const dispatched = await scheduler.run({ id: toolCallId, name: tool.name, args }, signal, () =>
+      emit({ type: "tool_execution_start", toolCallId, toolName: tool.name, args }));
     const isError = dispatched.isError === true;
     // Tool failures reach the model as text; without this line they are invisible to the operator.
     if (isError) console.warn(`[jiuwenswarm-bridge] tool ${tool.name} failed: ${dispatched.content.slice(0, 300)}`);

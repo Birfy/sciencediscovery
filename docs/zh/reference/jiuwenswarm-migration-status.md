@@ -52,7 +52,7 @@ issue 84（复用 JiuwenSwarm 后端）做到哪一步、现在能跑什么、�
 1. **没有 evidence / 轨迹。** JiuwenSwarm 运行不产生 `agent.record`/`evidence`，轨迹视图为空。
 2. **历史。** 每次运行都会把 API 的记录一并发给适配器，由模型代理插入请求；JiuwenSwarm 每一轮在自己的独立会话里运行。所以在内置循环上开始的会话、恢复的子代理、API 的压缩都能延续。JiuwenSwarm 自己的会话存储不再保存对话状态。
 3. **仅 OpenAI chat-completions。**
-4. **工具集里没有** 工具输出存储。延迟工具启动时一并晋升。并行工具调用并排执行（内置循环是一个接一个）：调用与结果一致，只是事件顺序不同。
+4. **工具集里没有** 工具输出存储。延迟工具启动时一并晋升。同一次模型响应里的工具调用按原生规则调度（没声明并发安全的工具独占、按模型调用的顺序执行；重复调用由批处理策略取代），所以两个执行器的事件与顺序一致。
 5. **唤醒提示。** mocked E2E 的 `issue-77-wake-notice` 在此执行器上失败（脚本化模型靠 JiuwenSwarm 没有那样给出的提示词识别唤醒轮）；`issue-85` 通过。用 `CI_E2E_BACKEND=jiuwenswarm .ci/run-e2e.sh mocked` 运行该组。这些旅程在小机器上对负载敏感：在 2 核服务器上连续运行时有两条失败过一次，单独运行（重复 3 次）都通过，所以有疑问时请逐条运行。
 6. **录制中发现的 legacy 缺陷（未修）：** `PUT /api/sessions/:id/settings` 请求体错误返回 500；`PUT /api/web/settings` 用它自己 GET 的响应体返回 500；对未知 run 做技能进化返回 500；读工作区外的文件（`/file?path=../../etc/passwd`）返回 500 而非 4xx。
 7. **#90 的发现：** `POST /api/sessions/:id/permission-epoch` 之后，会话范围的授权仍然生效（epoch 管沙箱，授权管会话）。issue 文字期望旧授权失效；基线记录的是 legacy 的实际行为。

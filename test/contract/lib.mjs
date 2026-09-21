@@ -84,52 +84,13 @@ async function readSse(response, stream, onEvent = async () => undefined) {
 }
 
 /**
- * Tool calls a model makes in one response may run one after another or side by side, and their
- * events then interleave in whatever order they finish. For a case that is about running them at
- * all (not about their order), each run of consecutive tool events is regrouped by call id, calls in
- * id order and each call's own events in their own order; tool results in a model context are sorted
- * by call id the same way.
- */
-export function orderConcurrentTools(events) {
-  const unwrap = (wrapper) => wrapper.event ?? wrapper;
-  const callId = (event) => event.toolCallId ?? event.trace?.id;
-  const out = [];
-  for (let i = 0; i < events.length;) {
-    if (!String(unwrap(events[i]).type).startsWith("tool.")) { out.push(sortToolContext(events[i])); i += 1; continue; }
-    const groups = new Map();
-    for (; i < events.length && String(unwrap(events[i]).type).startsWith("tool."); i += 1) {
-      const id = callId(unwrap(events[i])) ?? "";
-      groups.set(id, [...(groups.get(id) ?? []), events[i]]);
-    }
-    out.push(...[...groups.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).flatMap(([, group]) => group));
-  }
-  return out;
-}
-
-function sortToolContext(wrapper) {
-  const event = wrapper.event ?? wrapper;
-  const context = event.message?.modelContext;
-  if (!Array.isArray(context)) return wrapper;
-  const sorted = [];
-  for (let i = 0; i < context.length;) {
-    if (context[i]?.role !== "tool") { sorted.push(context[i]); i += 1; continue; }
-    const run = [];
-    for (; i < context.length && context[i]?.role === "tool"; i += 1) run.push(context[i]);
-    sorted.push(...run.sort((a, b) => String(a.tool_call_id).localeCompare(String(b.tool_call_id))));
-  }
-  const message = { ...event.message, modelContext: sorted };
-  return wrapper.event ? { ...wrapper, event: { ...event, message } } : { ...event, message };
-}
-
-/**
  * The run-event profile: what a user could see, in a form that does not depend on timing.
  * Consecutive text/thinking/tool-output fragments of one response are joined (how many
  * fragments arrive is a matter of timing, as is how many snapshots of one subagent step), envelope fields that only count or time events
  * are dropped, and the native agent's own evidence (`agent.record` and each event's
  * `evidence`) is left out: it is not part of what another executor has to reproduce.
  */
-export function profileRunEvents(events, { concurrentTools = false } = {}) {
-  if (concurrentTools) events = orderConcurrentTools(events);
+export function profileRunEvents(events) {
   const out = [];
   const JOINED = { "assistant.delta": "delta", "assistant.thinking.delta": "delta", "tool.output": "chunk" };
   for (const wrapper of events) {
@@ -220,7 +181,7 @@ async function runSteps(testCase, { base, token, fetchImpl, normalize, variables
         });
         for (const [name, expression] of Object.entries(step.capture ?? {})) variables[name] = lookup({ events: raw, last: raw[raw.length - 1] }, expression);
         if (reactionErrors.length) record.error = `reaction failed: ${reactionErrors.join("; ")}`;
-        const shown = step.stream.profile === "run-events" ? profileRunEvents(raw, { concurrentTools: step.stream.concurrentTools === true }) : raw;
+        const shown = step.stream.profile === "run-events" ? profileRunEvents(raw) : raw;
         record.events = shown.map((event) => normalize.json(event));
       } else {
         const raw = await response.text();
