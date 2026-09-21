@@ -63,9 +63,9 @@ JiuwenSwarm has a context engine of its own (it compresses at 80% of the model's
 |---|---|---|
 | Where the conversation lives | The API's record, re-sent every step | JiuwenSwarm's session, one per agent (persisted in its checkpoint database); nothing is sent along and the adapter holds none |
 | Compression when the window fills | ScienceDiscovery's own compactor | JiuwenSwarm's, against **one global window** (`JIUWENSWARM_CONTEXT_WINDOW_TOKENS`, default 200000; it ignores a model's own). Verified with a 3000-token window: the early turns are summarised (`live.mjs compression`). Its summaries and titles use its default model, which the adapter points at the model of the run in progress |
-| System prompt sections (identity, governance, capabilities, skills) | Assembled per step | Same text, composed once per run |
+| System prompt | Assembled per step from ScienceDiscovery's sections (identity, governance, capabilities, skills) | JiuwenSwarm's own prompt whole (12k characters: identity, safety, tool rules, memory, context compression, installed skills) with ScienceDiscovery's added after it. Its todo section is not in it in this mode. `SCIENCE_AGENT_JIUWENSWARM_PROMPT=replace` gives the old behaviour |
 | Run contract, protected | Every step | Every step: it is part of the system prompt, which the adapter puts on every model request |
-| JiuwenSwarm's own persona prompt | n/a | Replaced by ours on every request; its per-turn wrapper and dynamic context are still added as user messages |
+| JiuwenSwarm's own prompt | n/a | Kept whole; its per-turn wrapper and dynamic context (runtime state) are also added as user messages |
 | Plan snapshot, durable state, plugin context | Every step | **Not injected**; JiuwenSwarm adds its own dynamic context |
 | Tool routing hints | Yes | **Not injected** |
 | Tool-output guard and reader | Yes | Yes (same `ToolRegistry`) |
