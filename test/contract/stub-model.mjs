@@ -21,6 +21,7 @@
  * system prompt, as the journeys' stub does. A step is one of:
  *   { text: "..." }                       stream that text
  *   { tool: "run_shell", arguments: {} }  stream one tool call
+ *   { tools: [{ tool, arguments }, ...] }   stream several tool calls in one response (parallel calls)
  *   { fail: 429 }                         answer with that HTTP status
  * and may carry delayMs (wait before answering).
  */
@@ -77,7 +78,13 @@ export async function startStubModel(steps = {}) {
         return;
       }
       response.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
-      if (step.tool) {
+      if (step.tools) {
+        send(chunk(id, { role: "assistant", tool_calls: step.tools.map((call, index) => ({
+          index, id: `call-${route}-${consumed[route]}-${index + 1}`, type: "function",
+          function: { name: call.tool, arguments: JSON.stringify(call.arguments ?? {}) },
+        })) }));
+        send({ ...chunk(id, {}, "tool_calls"), usage: { completion_tokens: 8, prompt_tokens: 20, total_tokens: 28 } });
+      } else if (step.tool) {
         send(chunk(id, { role: "assistant", tool_calls: [{ index: 0, id: `call-${route}-${consumed[route]}`, type: "function", function: { name: step.tool, arguments: JSON.stringify(step.arguments ?? {}) } }] }));
         send({ ...chunk(id, {}, "tool_calls"), usage: { completion_tokens: 8, prompt_tokens: 20, total_tokens: 28 } });
       } else {
