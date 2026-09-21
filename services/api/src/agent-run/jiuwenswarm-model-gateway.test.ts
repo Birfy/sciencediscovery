@@ -178,3 +178,41 @@ test("text parts of a message are joined and several system messages become one 
   assert.equal(request.systemPrompt, "A\n\nB");
   assert.deepEqual(request.history, [{ role: "user", content: "hello" }, { role: "tool", tool_call_id: "c1", name: "echo", content: "out" }]);
 });
+
+test("what a provider needs sent back is restored: JiuwenSwarm's rebuilt assistant message is replaced by the model client's own", async () => {
+  const nativeMessage = {
+    role: "assistant", content: "", anthropic_content: [{ type: "thinking", thinking: "plan", signature: "sig-1" }, { type: "tool_use", id: "call-1", name: "echo", input: {} }],
+    tool_calls: [{ id: "call-1", type: "function", function: { name: "echo", arguments: "{}" } }],
+  };
+  const { calls, streamer } = fakeStreamer(answer({ assistantMessage: nativeMessage as never, toolCalls: [{ id: "call-1", name: "echo", args: {} }] }));
+  const g = await gateway(streamer);
+  try {
+    await post(g, { messages: [{ role: "user", content: "go" }] });
+    // The next model call of the same run: JiuwenSwarm sends back what it rebuilt from the first answer.
+    await post(g, { messages: [
+      { role: "user", content: "go" },
+      { role: "assistant", content: "", tool_calls: [{ id: "call-1", type: "function", function: { name: "echo", arguments: "{}" } }] },
+      { role: "tool", tool_call_id: "call-1", name: "echo", content: "out" },
+    ] });
+    const history = calls[1]!.history as Array<Record<string, unknown>>;
+    assert.deepEqual(history[1], nativeMessage, "the thinking block and its signature are back");
+    assert.deepEqual(history[0], { role: "user", content: "go" });
+    assert.equal(history[2]!.role, "tool");
+  } finally {
+    await g.close();
+  }
+});
+
+test("restore also serves the run's final messages, and leaves other messages and unknown turns alone", async () => {
+  const nativeMessage = { role: "assistant", content: "done", response_items: [{ type: "message" }] };
+  const { streamer } = fakeStreamer(answer({ assistantMessage: nativeMessage as never }));
+  const g = await gateway(streamer);
+  try {
+    await post(g, { stream: true, messages: [{ role: "user", content: "hi" }] });
+    assert.deepEqual(g.restore({ role: "assistant", content: "done" }), nativeMessage);
+    assert.deepEqual(g.restore({ role: "assistant", content: "something else" }), { role: "assistant", content: "something else" });
+    assert.deepEqual(g.restore({ role: "user", content: "done" }), { role: "user", content: "done" });
+  } finally {
+    await g.close();
+  }
+});

@@ -39,6 +39,13 @@ export interface ModelGateway {
   /** Base URL to give JiuwenSwarm, up to and including `/v1`. */
   url: string;
   token: string;
+  /**
+   * The assistant message the model client produced for a turn, in place of the plain chat-completions
+   * copy JiuwenSwarm rebuilt from it. The native message keeps what the provider needs sent back
+   * verbatim (Anthropic thinking blocks with their signatures, Responses reasoning items), which
+   * a chat-completions message cannot carry. Other messages come back unchanged.
+   */
+  restore<T extends Record<string, unknown>>(message: T): T;
   close(): Promise<void>;
 }
 
@@ -69,10 +76,16 @@ function textOf(content: unknown): string {
 const hasNonText = (message: Record<string, unknown>) =>
   Array.isArray(message.content) && message.content.some((part) => (part as { type?: string })?.type !== "text");
 
-export function toModelRequest(body: ChatRequest): { history: HistoryMessage[]; systemPrompt: string; tools: WireToolSpec[] } {
+/** What identifies an assistant turn: the tool calls it made, or else its text. */
+const turnKey = (message: Record<string, unknown>) => {
+  const calls = Array.isArray(message.tool_calls) ? message.tool_calls as Array<{ id?: unknown }> : [];
+  return calls.length ? `calls:${calls.map((call) => String(call.id)).join(",")}` : `text:${textOf(message.content)}`;
+};
+
+export function toModelRequest(body: ChatRequest, restore: ModelGateway["restore"] = (message) => message): { history: HistoryMessage[]; systemPrompt: string; tools: WireToolSpec[] } {
   const messages = body.messages ?? [];
   const systemPrompt = messages.filter((message) => message.role === "system").map((message) => textOf(message.content)).join("\n\n");
-  const history = messages.filter((message) => message.role !== "system").map((message) => ({
+  const history = messages.filter((message) => message.role !== "system").map((message) => restore({
     ...message,
     ...(Array.isArray(message.content) ? { content: textOf(message.content) } : {}),
   })) as HistoryMessage[];
@@ -103,6 +116,11 @@ export async function startModelGateway(
   streamer: Streamer = streamModelTurn,
 ): Promise<ModelGateway> {
   const token = randomUUID();
+  const produced = new Map<string, Record<string, unknown>>();
+  const restore: ModelGateway["restore"] = (message) => {
+    const own = message.role === "assistant" ? produced.get(turnKey(message)) : undefined;
+    return (own ?? message) as typeof message;
+  };
   const server: Server = createServer(async (request: IncomingMessage, response: ServerResponse) => {
     const fail = (status: number, message: string) => {
       if (!response.headersSent) response.writeHead(status, { "content-type": "application/json" });
@@ -124,7 +142,7 @@ export async function startModelGateway(
       fail(400, "images are not supported by this gateway");
       return;
     }
-    const { history, systemPrompt, tools } = toModelRequest(body);
+    const { history, systemPrompt, tools } = toModelRequest(body, restore);
     const controller = new AbortController();
     const abort = () => controller.abort();
     signal.addEventListener("abort", abort, { once: true });
@@ -147,6 +165,7 @@ export async function startModelGateway(
           onThinkingDelta: (delta) => { start(); response.write(chunk({ reasoning_content: delta })); },
         });
         start();
+        produced.set(turnKey(turn.assistantMessage), turn.assistantMessage);
         if (turn.toolCalls.length) response.write(chunk({ tool_calls: toolCallsOf(turn) }));
         const usage = usageOf(turn);
         response.write(chunk({}, finishReason(turn), usage ? { usage } : {}));
@@ -154,6 +173,7 @@ export async function startModelGateway(
         return;
       }
       const turn = await streamer(endpoint, systemPrompt, history, tools, policy, controller.signal);
+      produced.set(turnKey(turn.assistantMessage), turn.assistantMessage);
       const content = typeof turn.assistantMessage.content === "string" ? turn.assistantMessage.content : textOf(turn.assistantMessage.content);
       const usage = usageOf(turn);
       response.writeHead(200, { "content-type": "application/json" });
@@ -181,6 +201,7 @@ export async function startModelGateway(
   return {
     url: `http://127.0.0.1:${port}/v1`,
     token,
+    restore,
     close: () => new Promise<void>((resolve) => { server.close(() => resolve()); server.closeAllConnections(); }),
   };
 }

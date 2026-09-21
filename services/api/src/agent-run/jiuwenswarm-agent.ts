@@ -131,7 +131,7 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
     try {
       const finalText = await this.stream(text, tools, bridge.url, bridgeToken, announcements, transcript, modelGateway);
       return {
-        finalMessages: [{ role: "user", content: text }, ...transcript.finish(finalText)] as never,
+        finalMessages: [{ role: "user", content: text }, ...transcript.finish(finalText).map((message) => modelGateway.restore(message))] as never,
       };
     } catch (error) {
       if (this.controller.signal.aborted) throw new Error("Agent run cancelled");
@@ -476,13 +476,17 @@ export function openAiHistory(history: readonly Record<string, unknown>[]): Arra
   for (const message of history) {
     const role = message.role;
     if (role !== "user" && role !== "assistant" && role !== "tool") continue;
+    // `additional_kwargs` carries the full tool output for the API's own bookkeeping; nothing else is dropped,
+    // so what a provider needs sent back verbatim (see ModelGateway.restore) survives from turn to turn.
+    const { additional_kwargs: _bookkeeping, ...rest } = message as Record<string, unknown>;
     const content = message.content ?? "";
     if (role === "tool") {
-      out.push({ role, content, tool_call_id: message.tool_call_id, ...(typeof message.name === "string" ? { name: message.name } : {}) });
+      out.push({ ...rest, role, content, tool_call_id: message.tool_call_id });
       continue;
     }
     const toolCalls = Array.isArray(message.tool_calls) ? message.tool_calls.map(openAiToolCall).filter(Boolean) : [];
-    out.push({ role, content, ...(toolCalls.length ? { tool_calls: toolCalls } : {}) });
+    const { tool_calls: _calls, ...others } = rest;
+    out.push({ ...others, role, content, ...(toolCalls.length ? { tool_calls: toolCalls } : {}) });
   }
   return out;
 }
@@ -494,7 +498,10 @@ function openAiToolCall(call: unknown): Record<string, unknown> | undefined {
   const name = typeof fn?.name === "string" ? fn.name : typeof record.name === "string" ? record.name : undefined;
   if (!name || typeof record.id !== "string") return undefined;
   const raw = fn?.arguments ?? record.args ?? record.arguments ?? {};
-  return { id: record.id, type: "function", function: { name, arguments: typeof raw === "string" ? raw : JSON.stringify(raw) } };
+  return {
+    ...(record.response_item_id !== undefined ? { response_item_id: record.response_item_id } : {}),
+    id: record.id, type: "function", function: { name, arguments: typeof raw === "string" ? raw : JSON.stringify(raw) },
+  };
 }
 
 /**

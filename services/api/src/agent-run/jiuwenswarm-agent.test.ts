@@ -762,3 +762,27 @@ test("the run's timeout is passed on as the longest a single tool call may take"
     await adapter.close();
   }
 });
+
+test("provider fields in the API's history (thinking blocks, reasoning items) go to the adapter untouched", async () => {
+  let sent: any[] = [];
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    sent = body.history;
+    response.writeHead(200);
+    response.end(line({ done: { finalText: "ok" } }));
+  });
+  try {
+    const history = [
+      { role: "user", content: "run it" },
+      { role: "assistant", content: "", anthropic_content: [{ type: "thinking", thinking: "t", signature: "s" }], tool_calls: [{ id: "c1", type: "function", function: { name: "echo", arguments: "{}" }, response_item_id: "fc-1" }],
+        response_items: [{ type: "reasoning", id: "rs-1" }] },
+      { role: "tool", tool_call_id: "c1", name: "echo", content: "out", additional_kwargs: { tool_output: { big: true } } },
+    ];
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ gatewayHistory: history as never })).execute("next");
+    assert.deepEqual(sent[1].anthropic_content, [{ type: "thinking", thinking: "t", signature: "s" }]);
+    assert.deepEqual(sent[1].response_items, [{ type: "reasoning", id: "rs-1" }]);
+    assert.equal(sent[1].tool_calls[0].response_item_id, "fc-1");
+    assert.equal("additional_kwargs" in sent[2], false, "bookkeeping of the API's own is not sent");
+  } finally {
+    await adapter.close();
+  }
+});
