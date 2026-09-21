@@ -91,7 +91,7 @@ PUCT 和 OpenEvolve 共用同一套骨架（Domain 接缝、事件流、沙箱�
 
 四个端点，全部靠一个共享的内部 token 鉴权（`SCIENCE_AGENT_EVOLVE_INTERNAL_TOKEN`；未配置时视为本地开发，回环绑定是唯一边界）。
 
-```
+```http
 GET  /health                 → {engine, running, sandbox_local, status}
 POST /probe                  → 判别力探针，返回 {baseline, worsened, flat, label}
 POST /runs                   → NDJSON 事件流（长连接）
@@ -128,7 +128,7 @@ POST /runs/{search_id}/stop  → 停止
 
 控制面把每个 run 的分片物化到一个目录，侧车按 manifest 读：
 
-```
+```text
 manifest.json
 <criterionId>/train.csv          每个分片的候选拿来训练的行
 <criterionId>/<shard>/test.csv   只有特征，不含目标列

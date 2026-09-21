@@ -11,8 +11,7 @@ This is the complete English documentation set.
 
 ## How-to guides
 
-- [Configure custom MCP servers](how-to/configure-custom-mcp.md): local/remote connections, secret editing, OAuth, Inspector and Session tool selection.
-
+- [Configure custom MCP servers](how-to/configure-custom-mcp.md) — local/remote connections, secret editing, OAuth, Inspector and Session tool selection.
 - [Deployment](how-to/deployment.md) — local mode, Docker, and building a single-file binary from source.
 - [Run agent turns on JiuwenSwarm](how-to/run-with-jiuwenswarm.md) — optional, experimental executor: install a pinned JiuwenSwarm, start the stack with the adapter, and what to expect.
 - [Configure the network proxy](how-to/configure-network-proxy.md) — add a proxy on the settings page and choose a policy for LLM, web, and MCP traffic.

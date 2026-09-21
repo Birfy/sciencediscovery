@@ -11,8 +11,7 @@
 
 ## How-to（操作指南）
 
-- [配置自定义 MCP](how-to/configure-custom-mcp.md)：本地/远程连接、秘密值编辑、OAuth、Inspector 与会话工具选择。
-
+- [配置自定义 MCP](how-to/configure-custom-mcp.md) — 本地/远程连接、秘密值编辑、OAuth、Inspector 与会话工具选择。
 - [部署](how-to/deployment.md) — 本地模式、Docker 和源码构建单文件二进制的操作步骤。
 - [在 JiuwenSwarm 上运行 agent](how-to/run-with-jiuwenswarm.md) — 可选的实验性执行器：安装固定版本的 JiuwenSwarm、带 adapter 启动整套服务，以及预期行为。
 - [配置网络代理](how-to/configure-network-proxy.md) — 在设置页添加代理并为 LLM、Web 和 MCP 选择策略。

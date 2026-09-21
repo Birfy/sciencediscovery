@@ -26,7 +26,7 @@ Runner 版本使用构建时 Git commit 的前 8 位，而不是内部里程碑�
 
 本节说明如何从当前源码构建、校验并运行产物。打包输出是每个架构一个文件，另附 `VERSION` 与 `SHA256SUMS`：
 
-```
+```text
 ScienceDiscovery-<版本>-linux-x86_64
 ScienceDiscovery-<版本>-linux-aarch64
 ```
@@ -84,7 +84,7 @@ sudo apk add bubblewrap              # Alpine
 
 ### 命令与选项
 
-```
+```text
 ScienceDiscovery serve [选项]        启动 Web UI、控制 API 与沙箱 runner
 ScienceDiscovery run [输入] [选项]    作为命令行客户端连一个已运行的 serve，跑一个 agent 任务
 ScienceDiscovery extract --to <目录>  只解包内嵌运行时，不启动
@@ -249,7 +249,7 @@ docker compose exec sciencediscovery sh -c '
 docker compose logs | grep -A 2 'Open to sign in'
 ```
 
-```
+```text
 Open to sign in: http://127.0.0.1:4310/#token=<令牌>
 Local service access token (generated on first start): <令牌>
   Stored in /app/data/secrets/auth-token.

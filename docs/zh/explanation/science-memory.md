@@ -20,7 +20,7 @@
 
 四层交互流向（写与读两条独立路径，都经 Node API）：
 
-```
+```text
 【写】执行事件 / LLM 工具回调 ──触发──> Node API ──fire-and-forget 写──> Python 侧车 ──Cypher──> 本地文件 / Neo4j
 【读】浏览器 ────────────────────────> Node API ──反向代理──────────> Python 侧车 ──Cypher──> 本地文件 / Neo4j
 
@@ -87,7 +87,8 @@
 两条 cite 路径（同一 claim 可混用）：
 
 **路径 A — 文献证据（`[evidence1]`）**
-```
+
+```text
 declare_evidence(content, source_paper_link, locator, evidence_type, …)
   → sidecar 校验 Paper 存在 → CREATE Evidence + extracts→Paper → 返回 evidence_id
 declare_claim(content, cites_evidence_aliases={"evidence1": evidence_id}, …)
@@ -96,7 +97,8 @@ declare_claim(content, cites_evidence_aliases={"evidence1": evidence_id}, …)
 ```
 
 **路径 B — 代码产出（`[artifact1]`，无文献）**
-```
+
+```text
 run_shell → 写工作区文件并记录 Derivation/CAS
 declare_artifact(path) → 注册 Project 产物版本并返回 artifact_id
   → 将已声明的该版本镜像为 Code -produces-> Artifact

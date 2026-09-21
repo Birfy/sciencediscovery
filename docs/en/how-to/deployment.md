@@ -227,7 +227,7 @@ The startup output contains a sign-in URL and the local service access token:
 docker compose logs | grep -A 2 'Open to sign in'
 ```
 
-```
+```text
 Open to sign in: http://127.0.0.1:4310/#token=<token>
 Local service access token (generated on first start): <token>
   Stored in /app/data/secrets/auth-token.

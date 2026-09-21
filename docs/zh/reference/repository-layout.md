@@ -6,7 +6,7 @@
 
 Monorepo（pnpm workspace + 若干 Python 子项目）：
 
-```
+```text
 sciencediscovery/
 ├── apps/web/                 # React 浏览器 UI（Vite）
 ├── services/
@@ -35,7 +35,6 @@ sciencediscovery/
 ├── README.md / README_zh.md
 └── LICENSE                   # Apache-2.0
 ```
-
 
 ### 1.1 进程与默认端口
 

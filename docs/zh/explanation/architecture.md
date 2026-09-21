@@ -18,7 +18,7 @@ ScienceDiscovery 是面向 **Linux 本地、单用户** 的科学分析 Agent：
 | 2 | **Runner** | `node services/runner/dist/server.js` | `127.0.0.1:4311` | 接收 API 的执行请求，在 bubblewrap 里跑 Python/R/shell；启用时管理白名单 Host NPU job |
 | 3 | **API** | `pnpm api` → `node services/api/dist/server.js` | `127.0.0.1:4310` | 浏览器入口：REST + SSE + 静态 UI；**agent 循环、模型调用、工具执行、MCP 客户端都在这个进程内** |
 
-```
+```text
                     浏览器（不是本仓库起的服务进程）
                               │  HTTP :4310
                               ▼

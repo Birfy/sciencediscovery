@@ -20,7 +20,7 @@ ScienceMemory spans four layers, each with its own responsibility:
 
 Four-layer flow (separate write and read paths, both via the Node API):
 
-```
+```text
 [write] execution event / LLM tool callback ──trigger──> Node API ──fire-and-forget write──> Python sidecar ──Cypher──> local files / Neo4j
 [read]  browser ────────────────────────────> Node API ──reverse proxy──────────> Python sidecar ──Cypher──> local files / Neo4j
 
@@ -87,7 +87,8 @@ The citation chain is built only when the LLM writes the **final summary report*
 Two cite paths (a single claim may mix both):
 
 **Path A — literature evidence (`[evidence1]`)**
-```
+
+```text
 declare_evidence(content, source_paper_link, locator, evidence_type, …)
   → sidecar checks the Paper exists → CREATE Evidence + extracts→Paper → return evidence_id
 declare_claim(content, cites_evidence_aliases={"evidence1": evidence_id}, …)
@@ -96,7 +97,8 @@ report body writes [evidence1]
 ```
 
 **Path B — code output (`[artifact1]`, no literature)**
-```
+
+```text
 run_shell → writes a workspace file and records Derivation/CAS
 declare_artifact(path) → registers a Project artifact version and returns artifact_id
   → mirrors the declared version as Code -produces-> Artifact
