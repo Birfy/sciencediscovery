@@ -135,3 +135,29 @@ test("a variable that is the whole value keeps its type, so a captured object is
     await backend.close();
   }
 });
+
+test("a poll step waits for the condition and records only the final value", async () => {
+  let calls = 0;
+  const backend = await fakeBackend((request, response) => json(response, 200, { status: ++calls < 3 ? "running" : "completed" }));
+  try {
+    const [record] = await runCase({ id: "c", steps: [{
+      name: "settle", request: { method: "GET", path: "/run" }, poll: { path: "\$.status", in: ["completed"], timeoutMs: 5000 },
+    }] }, { base: backend.base, token: "t" });
+    assert.deepEqual(record, { name: "settle", status: 200, polled: "completed" });
+    assert.equal(calls, 3);
+  } finally {
+    await backend.close();
+  }
+});
+
+test("a poll that never reaches its condition is an error, not a hang", async () => {
+  const backend = await fakeBackend((request, response) => json(response, 200, { status: "running" }));
+  try {
+    const [record] = await runCase({ id: "c", steps: [{
+      name: "settle", request: { method: "GET", path: "/run" }, poll: { path: "\$.status", in: ["completed"], timeoutMs: 400 },
+    }] }, { base: backend.base, token: "t" });
+    assert.match(record.error, /still "running"/);
+  } finally {
+    await backend.close();
+  }
+});

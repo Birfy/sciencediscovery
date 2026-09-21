@@ -113,6 +113,24 @@
      }
     },
     {
+     "name": "wait for the run to settle",
+     "request": {
+      "method": "GET",
+      "path": "/api/sessions/{{sessionId}}/runs/{{runId}}"
+     },
+     "poll": {
+      "path": "$.status",
+      "in": [
+       "completed",
+       "failed",
+       "cancelled",
+       "interrupted"
+      ],
+      "timeoutMs": 30000
+     },
+     "always": true
+    },
+    {
      "name": "delete the project",
      "request": {
       "method": "DELETE",
@@ -258,6 +276,24 @@
       "timeoutMs": 60000,
       "profile": "run-events"
      }
+    },
+    {
+     "name": "wait for the run to settle",
+     "request": {
+      "method": "GET",
+      "path": "/api/sessions/{{sessionId}}/runs/{{runId}}"
+     },
+     "poll": {
+      "path": "$.status",
+      "in": [
+       "completed",
+       "failed",
+       "cancelled",
+       "interrupted"
+      ],
+      "timeoutMs": 30000
+     },
+     "always": true
     },
     {
      "name": "delete the project",
@@ -422,6 +458,24 @@
      }
     },
     {
+     "name": "wait for the run to settle",
+     "request": {
+      "method": "GET",
+      "path": "/api/sessions/{{sessionId}}/runs/{{runId}}"
+     },
+     "poll": {
+      "path": "$.status",
+      "in": [
+       "completed",
+       "failed",
+       "cancelled",
+       "interrupted"
+      ],
+      "timeoutMs": 30000
+     },
+     "always": true
+    },
+    {
      "name": "delete the project",
      "request": {
       "method": "DELETE",
@@ -584,6 +638,24 @@
      }
     },
     {
+     "name": "wait for the run to settle",
+     "request": {
+      "method": "GET",
+      "path": "/api/sessions/{{sessionId}}/runs/{{runId}}"
+     },
+     "poll": {
+      "path": "$.status",
+      "in": [
+       "completed",
+       "failed",
+       "cancelled",
+       "interrupted"
+      ],
+      "timeoutMs": 30000
+     },
+     "always": true
+    },
+    {
      "name": "delete the project",
      "request": {
       "method": "DELETE",
@@ -736,6 +808,24 @@
      }
     },
     {
+     "name": "wait for the run to settle",
+     "request": {
+      "method": "GET",
+      "path": "/api/sessions/{{sessionId}}/runs/{{runId}}"
+     },
+     "poll": {
+      "path": "$.status",
+      "in": [
+       "completed",
+       "failed",
+       "cancelled",
+       "interrupted"
+      ],
+      "timeoutMs": 30000
+     },
+     "always": true
+    },
+    {
      "name": "delete the project",
      "request": {
       "method": "DELETE",
@@ -875,6 +965,24 @@
       "timeoutMs": 60000,
       "profile": "run-events"
      }
+    },
+    {
+     "name": "wait for the run to settle",
+     "request": {
+      "method": "GET",
+      "path": "/api/sessions/{{sessionId}}/runs/{{runId}}"
+     },
+     "poll": {
+      "path": "$.status",
+      "in": [
+       "completed",
+       "failed",
+       "cancelled",
+       "interrupted"
+      ],
+      "timeoutMs": 30000
+     },
+     "always": true
     },
     {
      "name": "delete the project",
@@ -1029,6 +1137,24 @@
       "timeoutMs": 60000,
       "profile": "run-events"
      }
+    },
+    {
+     "name": "wait for the run to settle",
+     "request": {
+      "method": "GET",
+      "path": "/api/sessions/{{sessionId}}/runs/{{runId}}"
+     },
+     "poll": {
+      "path": "$.status",
+      "in": [
+       "completed",
+       "failed",
+       "cancelled",
+       "interrupted"
+      ],
+      "timeoutMs": 30000
+     },
+     "always": true
     },
     {
      "name": "delete the project",
@@ -1187,6 +1313,24 @@
       "timeoutMs": 60000,
       "profile": "run-events"
      }
+    },
+    {
+     "name": "wait for the run to settle",
+     "request": {
+      "method": "GET",
+      "path": "/api/sessions/{{sessionId}}/runs/{{runId}}"
+     },
+     "poll": {
+      "path": "$.status",
+      "in": [
+       "completed",
+       "failed",
+       "cancelled",
+       "interrupted"
+      ],
+      "timeoutMs": 30000
+     },
+     "always": true
     },
     {
      "name": "delete the project",

@@ -133,6 +133,23 @@ async function runSteps(testCase, { base, token, fetchImpl, normalize, variables
         headers: { authorization: `Bearer ${token}`, ...(request.body !== undefined ? { "content-type": "application/json" } : {}), ...(request.headers ?? {}) },
         ...(request.body !== undefined ? { body: JSON.stringify(request.body) } : {}),
       });
+      if (step.poll) {
+        // Wait for a condition in the answer (e.g. a run reaching a terminal state); only the
+        // final value is recorded, since how many polls it took is timing.
+        const deadline = Date.now() + (step.poll.timeoutMs ?? 30_000);
+        let current = response;
+        let parsed = await current.json().catch(() => undefined);
+        while (!step.poll.in.includes(lookup(parsed, step.poll.path)) && Date.now() < deadline) {
+          await new Promise((resolve) => setTimeout(resolve, 250));
+          current = await fetchImpl(`${base}${request.path}`, { method: request.method, headers: { authorization: `Bearer ${token}` } });
+          parsed = await current.json().catch(() => undefined);
+        }
+        record.status = current.status;
+        record.polled = lookup(parsed, step.poll.path);
+        if (!step.poll.in.includes(record.polled)) record.error = `still ${JSON.stringify(record.polled)} after ${step.poll.timeoutMs ?? 30_000} ms`;
+        records.push(record);
+        continue;
+      }
       record.status = response.status;
       record.contentType = (response.headers.get("content-type") ?? "").split(";")[0];
       if (step.stream) {
