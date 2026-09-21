@@ -986,3 +986,19 @@ test("the run contract is sent apart, to go after JiuwenSwarm's prompt, and is n
     await adapter.close();
   }
 });
+
+test("with JiuwenSwarm's tools, web search and fetching are JiuwenSwarm's, in the tools and in the prompt", async () => {
+  const sent: any[] = [];
+  const adapter = await fakeAdapter(async ({ body }, response) => { sent.push(body); response.writeHead(200); response.end(line({ done: { finalText: "ok" } })); });
+  const opts = () => options({ webSearch: (async () => []) as never, webFetch: (async () => ({})) as never });
+  try {
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(opts()).execute("a");
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url, tools: "ours" })(opts()).execute("b");
+    const names = (body: any) => body.tools.map((tool: { name: string }) => tool.name);
+    assert.equal(names(sent[0]).includes("web_search") || names(sent[0]).includes("web_fetch"), false);
+    assert.equal(/\bweb_search\b|\bweb_fetch\b/.test(sent[0].systemPrompt), false, "the prompt names JiuwenSwarm's tools");
+    assert.ok(names(sent[1]).includes("web_search") && names(sent[1]).includes("web_fetch"), "ours with SCIENCE_AGENT_JIUWENSWARM_TOOLS=ours");
+  } finally {
+    await adapter.close();
+  }
+});

@@ -85,6 +85,9 @@ export const TODO_PLANNING_SECTION = [
   "Mark a task in_progress before you start it and completed as soon as it is done; do not finish several at once. Keep the list short, at most 20 items, and change it when new evidence changes the approach.",
 ].join("\n");
 
+/** ScienceDiscovery's web tools and the JiuwenSwarm tools that take their place. */
+export const JIUWENSWARM_WEB_TOOLS: Record<string, string> = { web_search: "mcp_free_search", web_fetch: "fetch_webpage" };
+
 /** JiuwenSwarm's own todo tools, left visible to the model unless planning is `update_plan`. */
 export const JIUWENSWARM_TODO_TOOLS = ["todo_create", "todo_modify", "todo_list", "todo_get"] as const;
 
@@ -158,6 +161,9 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
     // With JiuwenSwarm's own todo tools the model does not also get ours.
     const jiuwenSwarmPlans = (this.config.planning ?? "todo") === "todo" && Boolean(this.options.planStore);
     if (jiuwenSwarmPlans) tools.delete("update_plan");
+    // Web search and page fetching are JiuwenSwarm's own when its tools are in use.
+    const allJiuwenSwarmTools = (this.config.tools ?? "jiuwenswarm") === "jiuwenswarm";
+    if (allJiuwenSwarmTools) for (const name of Object.keys(JIUWENSWARM_WEB_TOOLS)) tools.delete(name);
     const bridgeToken = randomUUID();
     const announcements = new ToolAnnouncements();
     const transcript = new Transcript();
@@ -226,8 +232,12 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
     // replaced does the model need to be told about the todo tools here.
     const keepJiuwenSwarmPrompt = (this.config.prompt ?? "prepend") === "prepend";
     const allJiuwenSwarmTools = (this.config.tools ?? "jiuwenswarm") === "jiuwenswarm";
-    // With JiuwenSwarm's tools the model is no longer limited to the ones registered here.
-    const ours = allJiuwenSwarmTools ? composed.replace("Use only the registered workspace tools. ", "") : composed;
+    // With JiuwenSwarm's tools the model is no longer limited to the ones registered here, and the rules about
+    // web content name JiuwenSwarm's web tools.
+    const ours = allJiuwenSwarmTools
+      ? Object.entries(JIUWENSWARM_WEB_TOOLS).reduce((text, [mine, theirs]) => text.replaceAll(mine, theirs),
+        composed.replace("Use only the registered workspace tools. ", ""))
+      : composed;
     const systemPrompt = jiuwenSwarmPlans && !keepJiuwenSwarmPrompt ? `${ours}\n\n${TODO_PLANNING_SECTION}` : ours;
     const response = await (this.config.fetch ?? fetch)(`${this.config.adapterUrl}/agent/runs`, {
       method: "POST",
