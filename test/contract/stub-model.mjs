@@ -75,6 +75,7 @@ export async function startStubModel(steps = {}) {
   const queues = { main: [...(steps.main ?? [])], subagent: [...(steps.subagent ?? [])] };
   const requests = [];
   const consumed = { main: 0, subagent: 0 };
+  let lastMessages = [];
   const server = createServer((request, response) => {
     if (request.method === "GET" && /\/models$/.test(request.url ?? "")) {
       // Provider model discovery.
@@ -113,6 +114,7 @@ export async function startStubModel(steps = {}) {
       };
       const system = systemOf();
       const route = system.includes(SUBAGENT_MARKER) ? "subagent" : "main";
+      lastMessages = body.messages ?? body.input ?? [];
       const step = queues[route].shift();
       if (step) consumed[route] += 1;
       requests.push({ route, step });
@@ -156,6 +158,7 @@ export async function startStubModel(steps = {}) {
     model: "contract-stub",
     apiToken: "contract-stub-token",
     requests,
+    lastMessages: () => lastMessages,
     remaining: () => ({ main: queues.main.length, subagent: queues.subagent.length }),
     stop: () => new Promise((resolve) => { server.closeAllConnections(); server.close(resolve); }),
   };
