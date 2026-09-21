@@ -131,3 +131,10 @@ async def test_ensure_default_repairs_an_entry_whose_endpoint_changed():
     gw = FakeGateway([entry("sd-default", base="http://old/v1", default=True)])
     await ModelSync(gw.rpc, URL).ensure_default(ModelProfile("sd-default", "http://new/v1", "key"))
     assert gw.models[0]["api_base"] == "http://new/v1" and gw.models[0]["is_default"] is True
+
+
+async def test_prune_keeps_the_entries_it_is_told_to_keep_even_when_they_are_ours():
+    gw = FakeGateway([entry("sciencediscovery-default", base=f"{ADAPTER}/llm/default/v1", default=True),
+                      entry("your-model-name", base="https://example.com/v1")])
+    assert await ModelSync(gw.rpc, URL).prune(ADAPTER, keep=frozenset({"sciencediscovery-default"})) == 1
+    assert [m["model_name"] for m in gw.models] == ["sciencediscovery-default"]

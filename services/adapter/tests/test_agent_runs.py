@@ -255,7 +255,7 @@ async def test_start_up_removes_stale_aliases_left_by_an_earlier_process():
     app.state.agent_runner.models._rpc = rpc
     async with app.router.lifespan_context(app):
         pass
-    assert calls == ["models.list", "models.replace_all", "models.list", "models.replace_all"], "prune, then the default model"
+    assert calls == ["models.list", "models.replace_all", "models.list", "models.replace_all"], "the default model, then prune"
 
 
 async def test_the_per_run_mcp_server_gets_a_tool_timeout_far_beyond_jiuwenswarms_30_seconds(harness):

@@ -81,7 +81,7 @@ class ModelSync:
                 kept[0]["is_default"] = True
             await self._rpc(self._url, "models.replace_all", {"models": kept})
 
-    async def prune(self, adapter_url: str) -> int:
+    async def prune(self, adapter_url: str, keep: frozenset[str] = frozenset()) -> int:
         """Drop the entries this adapter left behind and JiuwenSwarm's placeholder; return how many.
 
         Ours are recognised by their endpoint (`<adapter_url>/llm/...`), whatever their name: a run that ended
@@ -93,6 +93,8 @@ class ModelSync:
             current = (await self._rpc(self._url, "models.list")).get("models", [])
 
             def stale(m: dict[str, Any]) -> bool:
+                if m.get("model_name") in keep:
+                    return False
                 base = str(m.get("api_base", ""))
                 return base.startswith(f"{adapter_url}/llm/") or base.startswith("https://example.com")
 
