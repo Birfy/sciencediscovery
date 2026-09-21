@@ -286,6 +286,40 @@ const checks = {
   },
 
   /**
+   * A skill switched off in Settings > Skills (JiuwenSwarm's one on/off switch) cannot be loaded in a session started
+   * afterwards; switched back on, it can. The switch is left as it was found.
+   */
+  async "skill-switch"() {
+    const name = "code-engineer";
+    const before = (await api("GET", "/api/jiuwenswarm/skills")).skills.find((skill) => skill.name === name);
+    if (!before) throw new Error(`${name} is not installed in JiuwenSwarm; run the skills check first`);
+    const loadIn = async (enabled) => {
+      await api("PUT", `/api/jiuwenswarm/skills/${name}`, { enabled });
+      const listed = (await api("GET", "/api/jiuwenswarm/skills")).skills.find((skill) => skill.name === name);
+      if (listed?.enabled !== enabled) throw new Error(`the list says ${name} is ${listed?.enabled ? "on" : "off"}`);
+      const stub = await startStubModel({ main: [{ tool: "skill_tool", arguments: { skill_name: name } }, { text: "Done." }] });
+      const { sessionId, cleanup } = await setup(stub);
+      try {
+        const run = await runAndWait(sessionId, `Load ${name}.`);
+        if (run.status !== "completed") throw new Error(`run ${run.status}: ${run.error}`);
+        const done = (await runEvents(sessionId, run.id)).find((event) => event.type === "tool.completed" && event.trace?.name === "skill_tool");
+        const stream = done?.trace?.outputStream
+          ? await api("GET", `/api/sessions/${sessionId}/runs/${run.id}/streams/${done.trace.outputStream}/events?after=0`) : "";
+        return /execute\.py|code-engineer/.test(JSON.stringify(stream)) && (done?.trace?.outputChars ?? 0) > 1000;
+      } finally {
+        await cleanup();
+      }
+    };
+    try {
+      if (await loadIn(false)) throw new Error(`${name} was switched off but skill_tool still returned it`);
+      if (!(await loadIn(true))) throw new Error(`${name} was switched back on but skill_tool did not return it`);
+      console.log(`skill-switch: ok (${name} off: skill_tool could not load it in a new session; on again: it could)`);
+    } finally {
+      await api("PUT", `/api/jiuwenswarm/skills/${name}`, { enabled: before.enabled });
+    }
+  },
+
+  /**
    * Where the time before the first token goes, with a model that answers at once: from the run's start to the
    * model's first request, and from there to the first text event. Two runs, since the first of a session sets more up.
    */
