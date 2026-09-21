@@ -281,3 +281,20 @@ def test_a_jiuwenswarm_tool_keeps_its_own_schema_even_when_one_of_ours_has_its_n
     body = {"tools": [{"type": "function", "function": theirs}, {"type": "function", "function": {"name": "mcp_sci_read_file", "description": "x", "parameters": {}}}], "messages": []}
     tools = rewrite_request(body, route)["tools"]
     assert len(tools) == 1 and tools[0]["function"] == theirs
+
+
+def test_an_earlier_runs_tool_names_in_the_history_become_the_plain_names():
+    body = {"messages": [
+        {"role": "assistant", "content": "", "tool_calls": [{"id": "a", "type": "function", "function": {"name": "mcp_sci0096f4fcd7_run_shell", "arguments": "{}"}}]},
+        {"role": "tool", "tool_call_id": "a", "name": "mcp_sci0096f4fcd7_run_shell", "content": "ok"},
+        {"role": "assistant", "content": "", "tool_calls": [{"id": "b", "type": "function", "function": {"name": "mcp_sci0096f4fcd7_not_ours", "arguments": "{}"}}]},
+    ]}
+    out = [m for m in rewrite_request(body, ROUTE)["messages"] if m["role"] != "system"]
+    assert out[0]["tool_calls"][0]["function"]["name"] == "run_shell"
+    assert out[1]["name"] == "run_shell"
+    assert out[2]["tool_calls"][0]["function"]["name"] == "mcp_sci0096f4fcd7_not_ours", "a name that is not one of this run's tools is left alone"
+
+
+def test_a_model_that_calls_an_earlier_runs_name_is_sent_to_this_runs_server():
+    chunk = {"choices": [{"delta": {"tool_calls": [{"function": {"name": "mcp_sci0096f4fcd7_run_shell"}}]}}]}
+    assert rewrite_response(chunk, ROUTE)["choices"][0]["delta"]["tool_calls"][0]["function"]["name"] == "mcp_sci_run_shell"

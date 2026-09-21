@@ -138,6 +138,31 @@ const checks = {
     }
   },
 
+  /**
+   * Each run registers its tools under a new server name, and JiuwenSwarm keeps the session's history across
+   * runs. By the second run's model request, the first run's tool call must be there under its plain name.
+   */
+  async "history-names"() {
+    const stub = await startStubModel({ main: [
+      { tool: "run_shell", arguments: { command: "echo FIRST" } }, { text: "First done." },
+      { tool: "run_shell", arguments: { command: "echo SECOND" } }, { text: "Second done." },
+    ] });
+    const { sessionId, cleanup } = await setup(stub);
+    try {
+      for (const text of ["Run the first command.", "Run the second command."]) {
+        const run = await runAndWait(sessionId, text);
+        if (run.status !== "completed") throw new Error(`run ${run.status}: ${run.error}`);
+      }
+      const seen = JSON.stringify(stub.lastMessages?.() ?? []);
+      const stale = seen.match(/mcp_sci[0-9a-z]{10}_\w+/g) ?? [];
+      if (stale.length) throw new Error(`prefixed tool names reached the model: ${[...new Set(stale)].join(", ")}`);
+      if (!seen.includes("echo FIRST")) throw new Error("the first run's tool call is not in the history");
+      console.log("history-names: ok (the first run's tool call reached the second run's model under its plain name)");
+    } finally {
+      await cleanup();
+    }
+  },
+
   /** One of JiuwenSwarm's own tools (bash) runs, and the run shows it as a tool call with its output. */
   async "native-tools"() {
     const stub = await startStubModel({ main: [{ tool: "bash", arguments: { command: "echo JW-BASH-OK" } }, { text: "Ran it." }] });

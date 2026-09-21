@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import secrets
 import sys
 from collections.abc import AsyncIterator
@@ -91,8 +92,20 @@ class LlmRoutes:
         return next(reversed(self._routes.values()), None)
 
 
+# The prefix JiuwenSwarm gives the tools of any run's MCP server (`mcp_` + the server name `sci` + 10 characters,
+# see agent_runs). Each run has its own server, and a session's history, which JiuwenSwarm keeps across runs,
+# holds the calls of earlier runs under their prefixes. Those servers are gone once their run ended.
+_ANY_RUN_PREFIX = re.compile(r"^mcp_sci[0-9a-z]{10}_")
+
+
 def _unprefixed(name: str, route: LlmRoute) -> str:
-    return name.removeprefix(route.tool_prefix) if name.startswith(route.tool_prefix) else name
+    """The tool's own name, whichever run's server the prefix came from."""
+    if name.startswith(route.tool_prefix):
+        return name.removeprefix(route.tool_prefix)
+    earlier = _ANY_RUN_PREFIX.match(name)
+    if earlier and name[earlier.end():] in route.tool_names:
+        return name[earlier.end():]
+    return name
 
 
 def _original(function: dict[str, Any], route: LlmRoute) -> dict[str, Any]:
@@ -189,6 +202,8 @@ def _is_ours(name: str, route: LlmRoute) -> bool:
 
 
 def _prefixed(name: str, route: LlmRoute) -> str:
+    # A model that copies an earlier run's name from the history is sent to this run's server.
+    name = _unprefixed(name, route)
     return route.tool_prefix + name if name in route.tool_names and name not in route.shadowed else name
 
 
