@@ -98,6 +98,17 @@ class AgentRunRequest(BaseModel):
     toolTimeoutSeconds: int | None = None
 
 
+# JiuwenSwarm's configuration for web search (`config.set` keys): its two free engines and its paid-search keys.
+JIUWENSWARM_WEB_CONFIG_KEYS = frozenset({
+    "free_search_ddg_enabled", "free_search_bing_enabled",
+    "jina_api_key", "bocha_api_key", "serper_api_key", "perplexity_api_key",
+})
+
+
+class JiuwenSwarmConfig(BaseModel):
+    values: dict[str, str]
+
+
 def model_alias_base(model: str) -> str:
     """A model id as a JiuwenSwarm entry name: letters, digits, `.`, `_` and `-` only, at most 48 characters."""
     return re.sub(r"[^A-Za-z0-9._-]+", "-", model).strip("-")[:48] or "model"
@@ -234,6 +245,20 @@ def agent_router(runner: AgentRunner, settings: Settings) -> APIRouter:
         if settings.agent_token and authorization != f"Bearer {settings.agent_token}":
             raise HTTPException(status_code=401, detail="unauthorized")
         return StreamingResponse(runner.stream(body), media_type="application/x-ndjson")
+
+    @router.post("/agent/jiuwenswarm-config")
+    async def jiuwenswarm_config(body: JiuwenSwarmConfig, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        """Apply the web settings to JiuwenSwarm (`config.set`). Only the keys it has for web search are accepted."""
+        if settings.agent_token and authorization != f"Bearer {settings.agent_token}":
+            raise HTTPException(status_code=401, detail="unauthorized")
+        unknown = sorted(set(body.values) - JIUWENSWARM_WEB_CONFIG_KEYS)
+        if unknown:
+            raise HTTPException(status_code=400, detail=f"not a web search setting: {', '.join(unknown)}")
+        try:
+            result = await runner.rpc(settings.mgmt_url, "config.set", dict(body.values))
+        except Exception as error:
+            raise HTTPException(status_code=502, detail=f"JiuwenSwarm refused the settings: {str(error)[:200]}") from error
+        return {"applied": sorted(body.values), "jiuwenswarm": result}
 
     @router.get("/agent/info")
     async def info(authorization: str | None = Header(default=None)) -> dict[str, Any]:

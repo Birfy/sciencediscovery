@@ -147,9 +147,7 @@ cmd_start() {
   # Detach completely (stdin, stdout, stderr): a background job that keeps the caller's stdout open
   # makes `scripts/jiuwenswarm.sh start | tee ...`, or any script capturing its output, wait forever.
   cd "$jw_root"
-  # Web search is JiuwenSwarm's own (mcp_free_search, mcp_paid_search). Its free engines are off unless enabled;
-  # a BOCHA_, PERPLEXITY_, SERPER_ or JINA_API_KEY in the environment adds the paid search as well.
-  export FREE_SEARCH_DDG_ENABLED="${FREE_SEARCH_DDG_ENABLED:-true}" FREE_SEARCH_BING_ENABLED="${FREE_SEARCH_BING_ENABLED:-true}"
+  # Web search is configured from ScienceDiscovery's web settings, which the API applies with config.set.
   JIUWENSWARM_DATA_DIR="$jw_data_dir" nohup "$jw_bin/jiuwenswarm-start" --name "$jw_instance" app \
     >"$jw_log" 2>&1 </dev/null &
   disown

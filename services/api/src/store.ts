@@ -159,6 +159,8 @@ import {
   DEFAULT_SYSTEM_TIMEOUT_SETTINGS,
   DEFAULT_MEMORY_GRAPH_SETTINGS,
   DEFAULT_WEB_SETTINGS,
+  WEB_KEY_PROVIDERS,
+  type WebKeyProvider,
   REVIEWER_SPECIALIST_LEVELS,
   REVIEWER_FEEDBACK_POLICIES,
   SKILL_SELECTION_FIELDS,
@@ -1813,14 +1815,14 @@ export class SessionStore {
     );
     return {
       ...structuredClone(this.catalog.webSettings),
-      providers: (["jina", "tavily", "exa", "brave"] as const).map((provider) => ({
+      providers: WEB_KEY_PROVIDERS.map((provider) => ({
         hasApiKey: configured.has(provider),
         provider,
       })),
     };
   }
 
-  getWebProviderApiKey(provider: "brave" | "exa" | "jina" | "tavily"): string | undefined {
+  getWebProviderApiKey(provider: WebKeyProvider): string | undefined {
     if (!this.database) return undefined;
     const row = this.database.prepare("SELECT encrypted_token FROM web_provider_secrets WHERE provider = ?")
       .get(provider) as { encrypted_token: string } | undefined;
@@ -1831,9 +1833,9 @@ export class SessionStore {
     const { providerApiKeys, ...settingsInput } = input;
     const nextSettings = normalizeWebSettings({ ...this.catalog.webSettings, ...settingsInput });
     this.assertProxyPolicyKnown(nextSettings.proxyPolicy, "proxyPolicy");
-    const normalizedApiKeys = new Map<"brave" | "exa" | "jina" | "tavily", string | null>();
+    const normalizedApiKeys = new Map<WebKeyProvider, string | null>();
     if (providerApiKeys) {
-      for (const provider of ["brave", "exa", "jina", "tavily"] as const) {
+      for (const provider of WEB_KEY_PROVIDERS) {
         if (!(provider in providerApiKeys)) continue;
         const value = providerApiKeys[provider];
         normalizedApiKeys.set(provider, value === null ? null : normalizeApiToken(value) ?? null);

@@ -19,6 +19,8 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { CasStore, VersionStore, withWorkspaceMutation } from "@sciencediscovery/cas";
 import { sessionTrajectory } from "../trajectory.js";
+import { jiuwenSwarmConfigFromEnv } from "../agent-run/jiuwenswarm-agent.js";
+import { syncWebSettingsToJiuwenSwarm } from "../agent-run/jiuwenswarm-web-settings.js";
 import { dirname, resolve } from "node:path";
 import { listSshKeyFiles } from "../ssh-key-files.js";
 
@@ -619,6 +621,22 @@ export function createApiServer(config = loadServerConfig(), dependencies: ApiSe
     .then(() => reviewerAuditCoordinator.resume())
     .then(() => undefined);
 
+  // With the JiuwenSwarm backend its web search is configured from the web settings: pushed once the store has
+  // loaded (a few tries, the adapter may still be starting) and again on every change.
+  const jiuwenSwarm = jiuwenSwarmConfigFromEnv();
+  const webBackend = jiuwenSwarm ? "jiuwenswarm" as const : "native" as const;
+  const syncJiuwenSwarmWeb = async () => jiuwenSwarm
+    ? await syncWebSettingsToJiuwenSwarm(jiuwenSwarm, store.getWebSettings(), (provider) => store.getWebProviderApiKey(provider))
+    : { ok: true };
+  if (jiuwenSwarm) {
+    void ready.then(async () => {
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        if ((await syncJiuwenSwarmWeb()).ok) return;
+        await new Promise((resolve) => setTimeout(resolve, 3_000));
+      }
+    }).catch(() => undefined);
+  }
+
   /**
    * Register or re-probe one execution machine.
    *
@@ -1069,11 +1087,13 @@ export function createApiServer(config = loadServerConfig(), dependencies: ApiSe
         return;
       }
       if (url.pathname === "/api/web/settings" && request.method === "GET") {
-        sendJson(response, 200, store.getWebSettings());
+        sendJson(response, 200, { ...store.getWebSettings(), backend: webBackend });
         return;
       }
       if (url.pathname === "/api/web/settings" && request.method === "PUT") {
-        sendJson(response, 200, await store.updateWebSettings(await readJson<UpdateWebSettingsRequest>(request)));
+        const updated = await store.updateWebSettings(await readJson<UpdateWebSettingsRequest>(request));
+        await syncJiuwenSwarmWeb();
+        sendJson(response, 200, { ...updated, backend: webBackend });
         return;
       }
       if (url.pathname === "/api/memory/settings" && request.method === "GET") {

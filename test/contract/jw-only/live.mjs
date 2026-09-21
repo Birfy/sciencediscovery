@@ -163,6 +163,30 @@ const checks = {
     }
   },
 
+  /**
+   * Web search is JiuwenSwarm's, configured from the web settings: with DuckDuckGo and Bing on in the settings,
+   * its free search tool is offered and a call to it comes back with results.
+   */
+  async "web-search"() {
+    const web = await api("GET", "/api/web/settings");
+    if (web.backend !== "jiuwenswarm") throw new Error(`the web settings do not say jiuwenswarm: ${web.backend}`);
+    await api("PUT", "/api/web/settings", { freeSearchEngines: { ...web.freeSearchEngines, duckduckgo: true, bing: true } });
+    const stub = await startStubModel({ main: [{ tool: "mcp_free_search", arguments: { query: "perovskite solar cell stability", max_results: 3 } }, { text: "Searched." }] });
+    const { sessionId, cleanup } = await setup(stub);
+    try {
+      const run = await runAndWait(sessionId, "Search the web.");
+      if (run.status !== "completed") throw new Error(`run ${run.status}: ${run.error}`);
+      const events = await runEvents(sessionId, run.id);
+      const completed = events.find((event) => event.type === "tool.completed");
+      if (completed?.trace?.name !== "mcp_free_search") throw new Error(`no mcp_free_search call: ${events.map((e) => e.type).join(" ")}`);
+      const output = JSON.stringify(await api("GET", `/api/sessions/${sessionId}/runs/${run.id}/streams/${completed.trace.outputStream}/events`));
+      console.log(`web-search: ${completed.trace.status} (${output.length} characters of output): ${output.slice(0, 200)}`);
+      if (completed.trace.status !== "completed") throw new Error("the search failed");
+    } finally {
+      await cleanup();
+    }
+  },
+
   /** One of JiuwenSwarm's own tools (bash) runs, and the run shows it as a tool call with its output. */
   async "native-tools"() {
     const stub = await startStubModel({ main: [{ tool: "bash", arguments: { command: "echo JW-BASH-OK" } }, { text: "Ran it." }] });

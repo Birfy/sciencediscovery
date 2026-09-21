@@ -341,3 +341,29 @@ def test_a_model_id_becomes_a_safe_entry_name():
     assert model_alias_base("openai/gpt 5:latest") == "openai-gpt-5-latest"
     assert model_alias_base("///") == "model"
     assert len(model_alias_base("x" * 100)) == 48
+
+
+async def post_config(app, values, headers=None):
+    async with app.router.lifespan_context(app):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://adapter") as client:
+            return await client.post("/agent/jiuwenswarm-config", json={"values": values}, headers=headers or {})
+
+
+async def test_web_settings_are_applied_to_jiuwenswarm_with_config_set(harness):
+    app, _, rpcs = harness
+    values = {"free_search_ddg_enabled": "true", "bocha_api_key": "k"}
+    response = await post_config(app, values)
+    assert response.status_code == 200
+    assert [(m, p) for _, m, p in rpcs if m == "config.set"] == [("config.set", values)]
+
+
+async def test_only_web_search_settings_are_accepted(harness):
+    app, _, rpcs = harness
+    response = await post_config(app, {"free_search_ddg_enabled": "true", "model_name": "x"})
+    assert response.status_code == 400 and "model_name" in response.json()["detail"]
+    assert not [m for _, m, _ in rpcs if m == "config.set"]
+
+
+async def test_the_config_route_needs_the_agent_token_when_there_is_one():
+    app = create_app(Settings(**{**SETTINGS.__dict__, "agent_token": "secret"}))
+    assert (await post_config(app, {"free_search_ddg_enabled": "true"})).status_code == 401
