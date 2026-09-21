@@ -1,6 +1,6 @@
-# Explanation Index
+# Developer Documentation
 
-These pages explain why the system is designed this way and how components cooperate. For concrete parameters, routes, and paths, use [Reference](../README.md#reference).
+These pages describe architecture, module boundaries, protocols, and current feature designs. For user-facing behavior and precise configuration, use the [documentation index](../README.md).
 
 - [Runtime architecture](architecture.md) — resident processes, module boundaries, and cross-process timing.
 - [Control plane](control-plane.md) — responsibilities, storage, and run lifecycle of `services/api`.
@@ -11,9 +11,14 @@ These pages explain why the system is designed this way and how components coope
 - [Science connectors](science-connectors.md) — governance chain, audit, and citation for scientific MCP sources.
 - [MCP tool and protocol design](mcp-tool-protocol.md) — Source Manifest, tool protocol, Agent Loop, permissions, audit, and control-plane interface.
 - [Network proxy](network-proxy.md) — proxy policy resolution, outbound access, and security boundary.
-- [Program evolution](evolve.md) — `/evolve-design`: what a search is, the four scoring modes, the two engines, the shard split and the discrimination probe.
 - [Review and provenance](review-provenance.md) — integrity checks, semantic review, claims/evidence, and Prompt Manifest.
 - [ScienceMemory](science-memory.md) — task chain, citation chain, module boundary, and storage.
 - [Skill progressive disclosure](skill-progressive-disclosure.md) — catalog search and frozen-snapshot reads.
 - [Subagent orchestration](subagent-orchestration.md) — parent/child Agent contract, guardrails, and trade-offs.
 - [Content-addressable storage](cas.md) — CAS addressing, workspace change detection, writers, and lifecycle.
+- [Dynamic context assembly](context-assembly.md) — context modes, contributors, budgets, tracing, and validation.
+- [Context assembly examples](context-assembly-examples.md) — model inputs generated through the production assembly path.
+- [Runtime Core boundaries](runtime-core.md) — domain-neutral runtime responsibilities and registered ports.
+- [Repository layout](repository-layout.md) — directories, modules, default ports, and data locations.
+- [PDF worker](paper-worker.md) — PDF extraction protocol, pipeline, and limits.
+- [Web frontend](web-frontend.md) — frontend stack, event mapping, and development/test entry points.

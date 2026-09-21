@@ -4,18 +4,26 @@
 
 This is the complete English documentation set.
 
-## Tutorials
+## Getting started
 
-- [Quick start](tutorial/01-quick-start.md) — install, start the stack, configure a model, and complete a first agent task.
-- [Evolve a solution](tutorial/02-evolve-a-solution.md) — run a program-evolution search end to end and judge whether the improvement is real.
+- [Quick start](getting-started/quick-start.md) — install, start the stack, configure a model, and complete a first agent task.
+- [Deployment](getting-started/deployment.md) — local mode, Docker, and building a single-file binary from source.
+
+## Core capabilities
+
+- [Program evolution](core/evolve.md) — understand searches, scoring modes, engines, data splits, and result trustworthiness.
+- [Shell, environments, and workspaces](core/execution-workspaces.md) — understand execution, files, environments, completion, and stopping.
+
+## Domain guides
+
+- [Evolve a solution](domains/evolve-a-solution.md) — run a program-evolution search end to end and judge whether the improvement is real.
+- [Literature research](domains/literature-research.md) — run an end-to-end cross-database literature survey, from service startup to approvals and results.
 
 ## How-to guides
 
 - [Configure custom MCP servers](how-to/configure-custom-mcp.md) — local/remote connections, secret editing, OAuth, Inspector and Session tool selection.
-- [Deployment](how-to/deployment.md) — local mode, Docker, and building a single-file binary from source.
-- [Run agent turns on JiuwenSwarm](how-to/run-with-jiuwenswarm.md) — optional, experimental executor: install a pinned JiuwenSwarm, start the stack with the adapter, and what to expect.
+- [Run agent turns on JiuwenSwarm](how-to/run-with-jiuwenswarm.md) — optional, experimental executor: install a pinned JiuwenSwarm, start the stack with the adapter, and understand the expected behavior.
 - [Configure the network proxy](how-to/configure-network-proxy.md) — add a proxy on the settings page and choose a policy for LLM, web, and MCP traffic.
-- [Literature research case guide](how-to/literature-research-case-guide.md) — run an end-to-end cross-database literature survey, from service startup to approvals and results.
 - [Run an evolution search](how-to/run-an-evolution-search.md) — propose a `/evolve-design` search, size its shards, watch it run, and read the held-out result.
 - [Install Neo4j and configure ScienceMemory](how-to/science-memory-setup.md) — install an external Neo4j, enable ScienceMemory in system settings, and explore chains in the frontend graph.
 
@@ -26,10 +34,7 @@ This is the complete English documentation set.
 - [Runtime behavior and limits](reference/runtime-behavior.md) — models, settings inheritance, skills, permissions, timeouts, and execution limits.
 - [Built-in tools](reference/builtin-tools.md) — parameters, boundaries, and exposure conditions for model-visible tools.
 - [Web tools](reference/web-tools.md) — web search/fetch providers, configuration, permissions, caching, and audit.
-- [Repository layout](reference/repository-layout.md) — directories, modules, default ports, and data locations.
-- [Paper Worker](reference/paper-worker.md) — PDF extraction protocol, pipeline, and limits.
-- [Web frontend](reference/web-frontend.md) — frontend stack, event mapping, and development/test entry points.
 
-## Explanation
+## Developer documentation
 
-See the [explanation index](explanation/README.md), which covers the overall architecture, control plane, agent backend, sandbox, Ascend NPU host broker, rate limiting, connectors, MCP tool protocol, network proxy, review and provenance, ScienceMemory, skill progressive disclosure, subagent orchestration, and content-addressable storage.
+See the [developer documentation index](developer-docs/README.md) for architecture, module boundaries, protocols, and current feature designs.

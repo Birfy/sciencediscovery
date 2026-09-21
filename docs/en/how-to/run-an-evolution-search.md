@@ -2,8 +2,8 @@
 
 How to drive `/evolve-design` from a session: proposing a search, sizing it, watching it, and reading
 what comes back. For what a search is and when it works at all, see
-[Program evolution](../explanation/evolve.md); for a first run you can complete end to end, see
-the [tutorial](../tutorial/02-evolve-a-solution.md).
+[Program evolution](../core/evolve.md); for a first run you can complete end to end, see
+the [tutorial](../domains/evolve-a-solution.md).
 
 ## Before you start
 
@@ -106,7 +106,7 @@ A further search can be started from either version.
 search and is optimistic by construction; the test shard never took part. A large gap between the
 two means the search fitted the shards it could see.
 
-With [ScienceMemory](../explanation/science-memory.md) enabled, the run is also in the graph:
+With [ScienceMemory](../developer-docs/science-memory.md) enabled, the run is also in the graph:
 the search node links to its starting point with an `input` edge and to its result with
 `produces`, and its detail carries the baseline and held-out figures.
 
@@ -122,6 +122,6 @@ the search node links to its starting point with an `input` edge and to its resu
 
 ## Related
 
-- [Program evolution](../explanation/evolve.md) — what a search is, the shards, the probe, freezing.
-- [Evolve a solution](../tutorial/02-evolve-a-solution.md) — a worked first run.
-- [Sandbox execution](../explanation/sandbox-execution.md) — where candidates are evaluated.
+- [Program evolution](../core/evolve.md) — what a search is, the shards, the probe, freezing.
+- [Evolve a solution](../domains/evolve-a-solution.md) — a worked first run.
+- [Sandbox execution](../developer-docs/sandbox-execution.md) — where candidates are evaluated.

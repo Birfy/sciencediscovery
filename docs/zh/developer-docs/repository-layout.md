@@ -1,6 +1,6 @@
 # 仓库布局参考
 
-本文列出目录、模块、默认端口及数据落点。组件为何这样分工见[整体运行时架构](../explanation/architecture.md)。
+本文列出目录、模块、默认端口及数据落点。组件为何这样分工见[整体运行时架构](architecture.md)。
 
 ## 1. 代码仓目录排布
 
@@ -83,7 +83,7 @@ sciencediscovery/
 
 ### 2.3 `services/gateway` — 随包 Python MCP server
 
-- **不再跑 agent 循环**：agent loop 已原生化到 `services/api` 的 `native-agent/`（见 [Agent 后端](../explanation/agent-backend.md)）
+- **不再跑 agent 循环**：agent loop 已原生化到 `services/api` 的 `native-agent/`（见 [Agent 后端](agent-backend.md)）
 - 无 HTTP 服务：web provider 已原生化到 `services/api/src/web-providers/native/`
 - 该 venv 同时为随包的 Python MCP server（biomed、UniProt）提供解释器，由 Node 以 stdio 子进程拉起
 - `_engine/`、FastAPI 应用、`deerflow-harness` 依赖及其 submodule 已整体删除；包内依赖收敛为 `mcp` + `httpx`
@@ -137,7 +137,7 @@ sciencediscovery/
 | `.sciencediscovery-data/scientific-envs/` | 托管 Python/R 前缀 |
 | `.sciencediscovery-data/envs/gateway`、`paper` | 服务用 Python 环境（可重建） |
 
-环境变量与完整存储布局见[配置参考](configuration.md)。
+环境变量与完整存储布局见[配置参考](../reference/configuration.md)。
 
 ## 4. 模块数量小结
 
@@ -152,16 +152,16 @@ sciencediscovery/
 
 **合计约 11 个一等模块**（不含 `test/`、`scripts/`、`docs/`）。
 
-业务能力上还可概括为：**工作台 · Agent 循环 · 沙箱执行 · 科学连接器 · 论文阅读 · 技能/评审/权限 · 托管科学环境** 等功能面；详细科学数据源见[科研连接器](../explanation/science-connectors.md)。
+业务能力上还可概括为：**工作台 · Agent 循环 · 沙箱执行 · 科学连接器 · 论文阅读 · 技能/评审/权限 · 托管科学环境** 等功能面；详细科学数据源见[科研连接器](science-connectors.md)。
 
 ## 5. 相关文档
 
-- [控制面](../explanation/control-plane.md) — `services/api` 内部结构
-- [Agent 后端](../explanation/agent-backend.md) — Node 原生 Agent 循环的实现细节
-- [内置工具](builtin-tools.md) — 模型可见的内置工具清单
-- [沙箱执行](../explanation/sandbox-execution.md) — Runner 沙箱与科学环境
-- [评审与溯源](../explanation/review-provenance.md) — 评审与溯源机制
-- [科研连接器](../explanation/science-connectors.md) — 连接器与外部库
+- [控制面](control-plane.md) — `services/api` 内部结构
+- [Agent 后端](agent-backend.md) — Node 原生 Agent 循环的实现细节
+- [内置工具](../reference/builtin-tools.md) — 模型可见的内置工具清单
+- [沙箱执行](sandbox-execution.md) — Runner 沙箱与科学环境
+- [评审与溯源](review-provenance.md) — 评审与溯源机制
+- [科研连接器](science-connectors.md) — 连接器与外部库
 - [paper-worker.md](paper-worker.md) — PDF 抽取 worker
 - [web-frontend.md](web-frontend.md) — 前端结构
 - [README_zh.md](../../../README_zh.md) — 安装、运行与快速开始

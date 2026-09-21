@@ -6,7 +6,7 @@ In this tutorial you start a program-evolution search, answer the four design ch
 it run, and judge whether the result is real. You will end with two versions of one artifact — the
 starting point and a better version of it — and a held-out number that says how much better.
 
-Before starting: finish the [Quick Start](01-quick-start.md), configure a task model, and use a
+Before starting: finish the [Quick Start](../getting-started/quick-start.md), configure a task model, and use a
 stack with sandboxed execution available (not `--skip-sandbox-check`).
 
 ## 1. Ask for a search
@@ -115,5 +115,5 @@ score means the search fitted the shards it could see, and the honest number is 
 
 - [Run an evolution search](../how-to/run-an-evolution-search.md) — sizing, the other scoring
   modes, and what to do when a run goes wrong.
-- [Program evolution](../explanation/evolve.md) — the two engines, the three shards, the probe,
+- [Program evolution](../core/evolve.md) — the two engines, the three shards, the probe,
   and why the scorer is frozen.

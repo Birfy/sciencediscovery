@@ -160,7 +160,7 @@ The first start prepares a Python 3.12 gateway environment under `.sciencediscov
 
 If macOS reports that Seatbelt is unavailable, first verify that `test -x /usr/bin/sandbox-exec` succeeds and check whether the current terminal or a parent sandbox prevents applying a Seatbelt profile. Startup does not silently fall back to unsandboxed execution. macOS support applies only to local source mode; the Linux single-file binary and Docker paths do not run directly on macOS.
 
-Ascend host NPU workloads use the same local-mode entry point. The Runner exposes `run_npu_job` only after an administrator explicitly sets `SCIENCE_AGENT_NPU_BROKER=1` and configures the workload entry points in `.env`. Before enabling it, create and verify a managed Python scientific environment revision for the Ascend stack; built-in NPU workloads, including smoke tests, submit against that revision rather than `SCIENCE_AGENT_NPU_PYTHON`. See [Configuration reference](../reference/configuration.md#environment-variables-local-mode) for variables and [Ascend NPU Host Broker](../explanation/ascend-npu-runner.md) for the design boundary.
+Ascend host NPU workloads use the same local-mode entry point. The Runner exposes `run_npu_job` only after an administrator explicitly sets `SCIENCE_AGENT_NPU_BROKER=1` and configures the workload entry points in `.env`. Before enabling it, create and verify a managed Python scientific environment revision for the Ascend stack; built-in NPU workloads, including smoke tests, submit against that revision rather than `SCIENCE_AGENT_NPU_PYTHON`. See [Configuration reference](../reference/configuration.md#environment-variables-local-mode) for variables and [Ascend NPU Host Broker](../developer-docs/ascend-npu-runner.md) for the design boundary.
 
 ## Docker deployment
 
@@ -247,7 +247,7 @@ ssh -N -L 4310:127.0.0.1:4310 <user>@<remote-host>   # then open http://127.0.0.
 
 ### Step 5: configure a model and start the first task
 
-The image ships no model. The "Configure a model" entry on the home page leads to **System configuration → Model registry**: create a model connection, enter the provider's API key, save it, and select it as the task model under **Global defaults**. Then create a project and start the first session; see the [Quick Start tutorial](../tutorial/01-quick-start.md). The container reaches the model provider directly; see [Frequently asked questions](#frequently-asked-questions) when it must go through a proxy or when the model server runs on the host itself.
+The image ships no model. The "Configure a model" entry on the home page leads to **System configuration → Model registry**: create a model connection, enter the provider's API key, save it, and select it as the task model under **Global defaults**. Then create a project and start the first session; see the [Quick Start tutorial](quick-start.md). The container reaches the model provider directly; see [Frequently asked questions](#frequently-asked-questions) when it must go through a proxy or when the model server runs on the host itself.
 
 ### Day-to-day management
 
@@ -331,7 +331,7 @@ Docker variables live in three layers; a variable set in the wrong layer silentl
 | `SCIENCE_AGENT_PACKAGE_CACHE_DIR` | empty | Pre-populated offline package cache; once set, environment creation stays offline |
 | `SCIENCE_AGENT_EXEC_TIMEOUT_MS` | `7200000` | Wall-clock limit of one sandboxed execution |
 | `SCIENCE_AGENT_LOG_LEVEL` | `INFO` | Operational log level; logs land in `./data/logs/` |
-| `SCIENCE_AGENT_CONTEXT_*` | built-in defaults | Context-assembly mode and budgets, see [Context assembly](../../architecture/context-assembly.md) |
+| `SCIENCE_AGENT_CONTEXT_*` | built-in defaults | Context-assembly mode and budgets, see [Context assembly](../developer-docs/context-assembly.md) |
 | `SCIENCE_AGENT_SSH_CONFIG_PATH` | empty | SSH configuration for remote runners (a container path; placing it under `./data/ssh` needs no extra mount) |
 | `SCIENCE_AGENT_USAGE_EXCHANGE_RATES_ENABLED` | `true` | Currency conversion on the usage dashboard; disable it where the public rate source is unreachable |
 
@@ -395,7 +395,7 @@ Work through these in order; do not skip the first two and change a kernel switc
 
 **The runner startup log says it fell back to binding the container's `/proc`.** `systempaths=unconfined` is missing from the Compose service (typical for hand-written `docker run` commands or Kubernetes manifests). Executions still run, but the sandbox sees the container's process list; adding the entry back restores the private procfs.
 
-**The model cannot be reached: timeouts, `ECONNREFUSED`, or a mandatory proxy.** Three options: add a `custom_url` proxy under **System configuration → Network proxies** and make it the global default, which needs no container restart; or inject `HTTPS_PROXY` and friends through the `docker-compose.override.yml` shown above, run `up -d`, and choose the `environment` proxy type in the same settings (see [Configure a network proxy](configure-network-proxy.md)). When the model server runs on the host itself (a local Ollama, for example), `127.0.0.1` inside the container is the container: add `extra_hosts: ["host.docker.internal:host-gateway"]` to the service in the override file and use `http://host.docker.internal:<port>` as the model address, or use the host's LAN IP.
+**The model cannot be reached: timeouts, `ECONNREFUSED`, or a mandatory proxy.** Three options: add a `custom_url` proxy under **System configuration → Network proxies** and make it the global default, which needs no container restart; or inject `HTTPS_PROXY` and friends through the `docker-compose.override.yml` shown above, run `up -d`, and choose the `environment` proxy type in the same settings (see [Configure a network proxy](../how-to/configure-network-proxy.md)). When the model server runs on the host itself (a local Ollama, for example), `127.0.0.1` inside the container is the container: add `extra_hosts: ["host.docker.internal:host-gateway"]` to the service in the override file and use `http://host.docker.internal:<port>` as the model address, or use the host's LAN IP.
 
 **After the first start the CPU stays busy, `./data` grows to about 2 GB, and `micromamba` shows up in the process list.** Expected: the starter Python scientific environment is being created in the background; `runner.scientificEnvs.startersReady` in `/health` turns `true` when it is done. When conda-forge is slow, point `SCIENCE_AGENT_SCIENTIFIC_CHANNELS` at a mirror; for an offline host, pre-populate `SCIENCE_AGENT_PACKAGE_CACHE_DIR`; when managed environments are not needed at all, set `SCIENTIFIC_ENVS=0`.
 

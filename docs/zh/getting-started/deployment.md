@@ -182,7 +182,7 @@ SSH 自动部署使用自带 Node runtime 的 Runner SEA 单文件，不要求�
 
 如果 macOS 启动时报 Seatbelt 不可用，先确认 `test -x /usr/bin/sandbox-exec` 成功，并检查当前终端或上层沙箱是否禁止应用 Seatbelt profile；启动过程不会在 Seatbelt 不可用时静默降级为无沙箱执行。macOS 支持仅适用于本地源码模式，Linux 单文件二进制和 Docker 路径不能直接在 macOS 上运行。
 
-需要在 Ascend 主机上运行宿主 NPU workload 时，启动方式仍是本地模式入口；管理员在 `.env` 中显式设置 `SCIENCE_AGENT_NPU_BROKER=1` 及对应 workload 入口后，Runner 才会向 Agent 暴露 `run_npu_job`。启用前应先创建并验证一个面向 Ascend 栈的托管 Python scientific environment revision；内置 NPU workload（包括 smoke test）会提交到该 revision，而不是读取 `SCIENCE_AGENT_NPU_PYTHON`。完整参数见[配置参考](../reference/configuration.md#环境变量本地模式)，设计边界见 [Ascend NPU 宿主 Broker](../explanation/ascend-npu-runner.md)。
+需要在 Ascend 主机上运行宿主 NPU workload 时，启动方式仍是本地模式入口；管理员在 `.env` 中显式设置 `SCIENCE_AGENT_NPU_BROKER=1` 及对应 workload 入口后，Runner 才会向 Agent 暴露 `run_npu_job`。启用前应先创建并验证一个面向 Ascend 栈的托管 Python scientific environment revision；内置 NPU workload（包括 smoke test）会提交到该 revision，而不是读取 `SCIENCE_AGENT_NPU_PYTHON`。完整参数见[配置参考](../reference/configuration.md#环境变量本地模式)，设计边界见 [Ascend NPU 宿主 Broker](../developer-docs/ascend-npu-runner.md)。
 
 ## Docker 部署
 
@@ -269,7 +269,7 @@ ssh -N -L 4310:127.0.0.1:4310 <用户>@<远程主机>   # 然后在本地浏览�
 
 ### 第 5 步：配置模型并开始第一次任务
 
-镜像不内置任何模型。首页的「配置模型」入口指向 **系统设置 → 模型注册表**：新建一个模型连接、填入服务商 API Key 并保存，再在 **全局默认值** 中把它设为任务模型。之后创建项目、发起第一次会话，见[快速开始教程](../tutorial/01-quick-start.md)。容器直接向模型服务商出站；需要经代理访问或模型服务跑在宿主机上时，见[常见问题](#常见问题)。
+镜像不内置任何模型。首页的「配置模型」入口指向 **系统设置 → 模型注册表**：新建一个模型连接、填入服务商 API Key 并保存，再在 **全局默认值** 中把它设为任务模型。之后创建项目、发起第一次会话，见[快速开始教程](quick-start.md)。容器直接向模型服务商出站；需要经代理访问或模型服务跑在宿主机上时，见[常见问题](#常见问题)。
 
 ### 日常管理
 
@@ -353,7 +353,7 @@ Docker 部署的变量分三层；放错层就会「设了没效果」。
 | `SCIENCE_AGENT_PACKAGE_CACHE_DIR` | 空 | 预置的离线包缓存；设置后环境创建不再联网 |
 | `SCIENCE_AGENT_EXEC_TIMEOUT_MS` | `7200000` | 单次沙箱执行的墙钟上限 |
 | `SCIENCE_AGENT_LOG_LEVEL` | `INFO` | 运行日志级别；日志落在 `./data/logs/` |
-| `SCIENCE_AGENT_CONTEXT_*` | 内置默认 | 上下文装配的模式与预算，见[上下文装配](../../architecture/context-assembly.md) |
+| `SCIENCE_AGENT_CONTEXT_*` | 内置默认 | 上下文装配的模式与预算，见[上下文装配](../../en/developer-docs/context-assembly.md) |
 | `SCIENCE_AGENT_SSH_CONFIG_PATH` | 空 | 远程 runner 的 SSH 配置文件（容器内路径，放在 `./data/ssh` 下即可） |
 | `SCIENCE_AGENT_USAGE_EXCHANGE_RATES_ENABLED` | `true` | 用量看板的汇率换算；无法访问公网汇率源的部署可关闭 |
 
@@ -417,7 +417,7 @@ services:
 
 **runner 启动日志说回退为绑定容器的 `/proc`。** Compose 里缺了 `systempaths=unconfined`（常见于自己改写的 `docker run` 或 K8s 清单）。执行仍能进行，但沙箱能看到容器的进程列表；加回该项即可恢复独立 procfs。
 
-**模型连不上：超时、`ECONNREFUSED`，或必须经代理。** 三种做法：在 **系统设置 → 网络代理** 添加一条 `custom_url` 代理并设为全局默认，不用重启容器；或者用上面的 `docker-compose.override.yml` 给容器注入 `HTTPS_PROXY` 等变量，`up -d` 后在代理设置里选 `environment` 类型（详见[配置网络代理](configure-network-proxy.md)）。模型服务跑在宿主机本身（例如本机的 Ollama）时，容器里的 `127.0.0.1` 指向容器自己：在 override 文件里给服务加 `extra_hosts: ["host.docker.internal:host-gateway"]`，模型地址填 `http://host.docker.internal:<端口>`，或者直接填宿主的局域网 IP。
+**模型连不上：超时、`ECONNREFUSED`，或必须经代理。** 三种做法：在 **系统设置 → 网络代理** 添加一条 `custom_url` 代理并设为全局默认，不用重启容器；或者用上面的 `docker-compose.override.yml` 给容器注入 `HTTPS_PROXY` 等变量，`up -d` 后在代理设置里选 `environment` 类型（详见[配置网络代理](../how-to/configure-network-proxy.md)）。模型服务跑在宿主机本身（例如本机的 Ollama）时，容器里的 `127.0.0.1` 指向容器自己：在 override 文件里给服务加 `extra_hosts: ["host.docker.internal:host-gateway"]`，模型地址填 `http://host.docker.internal:<端口>`，或者直接填宿主的局域网 IP。
 
 **首次启动后 CPU 一直很高，`./data` 涨到约 2 GB，进程里有 `micromamba`。** 正常：starter Python 科学环境正在后台创建，完成后 `/health` 的 `runner.scientificEnvs.startersReady` 变为 `true`。conda-forge 访问慢时把 `SCIENCE_AGENT_SCIENTIFIC_CHANNELS` 指向镜像站（内置的清华、中科大镜像地址 Runner 始终接受）；离线环境预先填充 `SCIENCE_AGENT_PACKAGE_CACHE_DIR`；完全不需要托管环境就设 `SCIENTIFIC_ENVS=0`。
 

@@ -20,7 +20,7 @@ A browser UI communicates with a Node control API. Each agent run is driven by a
 
 ## Related documents
 
-- [Documentation](docs/README.md) — complete English and Chinese Tutorial / How-to / Reference / Explanation indexes.
+- [Documentation](docs/README.md) — complete English and Chinese getting-started, core, domain, how-to, reference, and developer-documentation indexes.
 - [Contributing](CONTRIBUTING.md) — development setup and test commands.
 
 ## Requirements
@@ -37,7 +37,7 @@ The Gateway requires Python 3.12 in source mode; `uv` installs it into the servi
 
 ## Installation
 
-Prepare a ScienceDiscovery executable for the host architecture. Binary packaging, source mode, and Docker procedures are documented in the [deployment guide](docs/en/how-to/deployment.md).
+Prepare a ScienceDiscovery executable for the host architecture. Binary packaging, source mode, and Docker procedures are documented in the [deployment guide](docs/en/getting-started/deployment.md).
 
 ## Quick start
 
@@ -48,7 +48,7 @@ chmod +x ./ScienceDiscovery
 ./ScienceDiscovery serve
 ```
 
-In another terminal, run `curl -fsS http://127.0.0.1:4310/health`. Then open the `Open to sign in` URL from the startup output; the browser saves the local service access token automatically. This is separate from an external model API Key. Keep that URL private. Next, configure a task model under **System configuration → Global defaults**. See the [Quick Start tutorial](docs/en/tutorial/01-quick-start.md) for the first task; see the [deployment guide](docs/en/how-to/deployment.md) for binary packaging, source mode, and Docker.
+In another terminal, run `curl -fsS http://127.0.0.1:4310/health`. Then open the `Open to sign in` URL from the startup output; the browser saves the local service access token automatically. This is separate from an external model API Key. Keep that URL private. Next, configure a task model under **System configuration → Global defaults**. See the [Quick Start](docs/en/getting-started/quick-start.md) for the first task; see the [deployment guide](docs/en/getting-started/deployment.md) for binary packaging, source mode, and Docker.
 
 ## License
 

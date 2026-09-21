@@ -6,9 +6,9 @@ scores higher, and hands back the best version alongside the one it started from
 
 > This page explains what a search is, when it works, and why it is built this way. To run one,
 > see [Run an evolution search](../how-to/run-an-evolution-search.md); for a first search you can
-> complete end to end, see the [tutorial](../tutorial/02-evolve-a-solution.md). Engine internals
+> complete end to end, see the [tutorial](../domains/evolve-a-solution.md). Engine internals
 > and standalone deployment of the sidecar are in
-> [the evolution sidecar note](../../zh/explanation/evolve-standalone.md) (Chinese).
+> [the evolution sidecar note](../../zh/developer-docs/evolve-standalone.md) (Chinese).
 
 ## What a search actually is
 
@@ -123,7 +123,7 @@ is a diff rather than a loose file, and a further search can be started from eit
 
 ![Diffing the starting point against the winning candidate](../../images/evolve/result-diff.png)
 
-The run is also mirrored into [ScienceMemory](science-memory.md) when that is enabled: the search
+The run is also mirrored into [ScienceMemory](../developer-docs/science-memory.md) when that is enabled: the search
 node links to its starting point through an `input` edge and to its result through `produces`, and
 the node detail carries the baseline and held-out numbers.
 
@@ -158,6 +158,6 @@ would have liked the candidates to take.
 ## Related
 
 - [Run an evolution search](../how-to/run-an-evolution-search.md) — the operational path.
-- [Evolve a solution](../tutorial/02-evolve-a-solution.md) — a first run, end to end.
-- [ScienceMemory](science-memory.md) — where a finished search is recorded.
-- [Sandbox execution](sandbox-execution.md) — how candidates are isolated while they are scored.
+- [Evolve a solution](../domains/evolve-a-solution.md) — a first run, end to end.
+- [ScienceMemory](../developer-docs/science-memory.md) — where a finished search is recorded.
+- [Sandbox execution](../developer-docs/sandbox-execution.md) — how candidates are isolated while they are scored.

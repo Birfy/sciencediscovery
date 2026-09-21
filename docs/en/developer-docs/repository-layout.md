@@ -1,6 +1,6 @@
 # Repository Layout Reference
 
-This page maps directories, modules, default ports, and data locations. See [Runtime architecture](../explanation/architecture.md) for the responsibility split.
+This page maps directories, modules, default ports, and data locations. See [Runtime architecture](architecture.md) for the responsibility split.
 
 ## 1. Repository tree
 
@@ -67,7 +67,7 @@ Its external capabilities cover Project management, agent runs, connectors/paper
 
 ### 2.3 `services/gateway` — web-provider sidecar
 
-It **is no longer a service**. The agent loop moved into `services/api`'s `native-agent/` and the web providers into `web-providers/native/` (see [Agent backend](../explanation/agent-backend.md)), so the FastAPI app, the web router, and the `_engine/` adapter are all deleted, along with the vendor harness dependency and the submodule it came from. What remains is the bundled Python MCP servers (biomed, UniProt), which Node spawns as stdio subprocesses using this venv's interpreter.
+It **is no longer a service**. The agent loop moved into `services/api`'s `native-agent/` and the web providers into `web-providers/native/` (see [Agent backend](agent-backend.md)), so the FastAPI app, the web router, and the `_engine/` adapter are all deleted, along with the vendor harness dependency and the submodule it came from. What remains is the bundled Python MCP servers (biomed, UniProt), which Node spawns as stdio subprocesses using this venv's interpreter.
 
 ### 2.4 `services/runner` — isolated execution
 
@@ -125,7 +125,7 @@ stack isolation, browser setup and API/stack journey contract.
 | `.sciencediscovery-data/scientific-envs/` | Managed Python/R prefixes |
 | `.sciencediscovery-data/envs/gateway`, `.sciencediscovery-data/envs/paper` | Rebuildable service environments |
 
-See [Configuration reference](configuration.md) for the full layout.
+See [Configuration reference](../reference/configuration.md) for the full layout.
 
 ## 4. Module count
 
@@ -140,12 +140,12 @@ That is about 11 first-class deployable/buildable modules, excluding tests, scri
 
 ## 5. Related documentation
 
-- [Control plane](../explanation/control-plane.md)
-- [Agent backend](../explanation/agent-backend.md)
-- [Built-in tools](builtin-tools.md)
-- [Sandbox execution](../explanation/sandbox-execution.md)
-- [Review and provenance](../explanation/review-provenance.md)
-- [Science connectors](../explanation/science-connectors.md)
+- [Control plane](control-plane.md)
+- [Agent backend](agent-backend.md)
+- [Built-in tools](../reference/builtin-tools.md)
+- [Sandbox execution](sandbox-execution.md)
+- [Review and provenance](review-provenance.md)
+- [Science connectors](science-connectors.md)
 - [PDF worker](paper-worker.md)
 - [Web frontend](web-frontend.md)
 - [README](../../../README.md)

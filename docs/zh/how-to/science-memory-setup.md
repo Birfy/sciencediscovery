@@ -2,7 +2,7 @@
 
 科学记忆（ScienceMemory）是 ScienceDiscovery 的可选功能，把一个会话的研究目标、每一步任务、运行的代码、产出的文件，到最终报告里每条带引用的断言及其证据，存成一张 Neo4j 图谱，让"这个结论是怎么来的"可被点击回溯。它默认关闭，对 Web 与对话主路径无任何影响。
 
-> 本文讲内置的本地文件存储、怎么装 Neo4j 并在系统设置里配置、怎么在前端用。功能本身的架构、节点/边类型、API 接口见[科学记忆说明](../explanation/science-memory.md)；环境变量与端口见[配置参考](../reference/configuration.md)。
+> 本文讲内置的本地文件存储、怎么装 Neo4j 并在系统设置里配置、怎么在前端用。功能本身的架构、节点/边类型、API 接口见[科学记忆说明](../developer-docs/science-memory.md)；环境变量与端口见[配置参考](../reference/configuration.md)。
 
 ## 0. 零配置：本地文件存储
 
@@ -196,6 +196,6 @@ Neo4j 跑起来后（并把“存储后端”设为“Neo4j 服务”），配�
 
 ## 6. 下一步
 
-- 功能架构、节点/边类型、完整 API：[科学记忆说明](../explanation/science-memory.md)
-- 端到端文献调研案例（含科学记忆实战）：[文献调研案例指南](literature-research-case-guide.md)
+- 功能架构、节点/边类型、完整 API：[科学记忆说明](../developer-docs/science-memory.md)
+- 端到端文献调研案例（含科学记忆实战）：[文献调研案例指南](../domains/literature-research.md)
 - 环境变量、端口、数据布局：[配置参考](../reference/configuration.md)

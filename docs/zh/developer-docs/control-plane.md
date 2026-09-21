@@ -37,7 +37,7 @@ Node 控制 API 是系统的核心进程：所有浏览器请求、Agent 运行�
 | `/api/{models,specialists,skills,remote-hosts,environments}` | 全局资源管理 |
 | `/api/settings`、`/api/timeout-settings`、`/api/quota-settings`、`/api/sandbox-network-settings`、`/api/runtime-status` | 全局设置、超时、配额、沙箱网络访问、运行状态页 |
 
-SSE 传输为 fetch 流（`data: <json>\n\n` 帧），前端消费方式见[Web 前端参考](../reference/web-frontend.md)。
+SSE 传输为 fetch 流（`data: <json>\n\n` 帧），前端消费方式见[Web 前端参考](web-frontend.md)。
 
 ## 3. 存储
 
@@ -73,7 +73,7 @@ SSE 传输为 fetch 流（`data: <json>\n\n` 帧），前端消费方式见[Web 
 ## 7. 由本进程直接发出的模型调用
 
 - **Agent 主循环**（`native-agent/model-client.ts`）直接向用户配置的模型 endpoint 发流式请求，支持 OpenAI 兼容与 Anthropic Messages 两种方言。
-- **论文视觉分析**（`papers.ts`）直接 `fetch` OpenAI 兼容端点；细节见 [PDF worker 参考](../reference/paper-worker.md)。
+- **论文视觉分析**（`papers.ts`）直接 `fetch` OpenAI 兼容端点；细节见 [PDF worker 参考](paper-worker.md)。
 
 ## 相关文档
 

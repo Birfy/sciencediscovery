@@ -2,7 +2,7 @@
 
 This tutorial starts with a ready-to-run ScienceDiscovery executable, then configures a model and submits a first task.
 
-> See the root [README](../../../README.md) for product scope and risk boundaries, the [deployment guide](../how-to/deployment.md) for complete deployment procedures, and the [configuration reference](../reference/configuration.md) for parameters and quotas.
+> See the root [README](../../../README.md) for product scope and risk boundaries, the [deployment guide](deployment.md) for complete deployment procedures, and the [configuration reference](../reference/configuration.md) for parameters and quotas.
 
 ## 1. Prepare the environment
 
@@ -37,7 +37,7 @@ curl --fail http://127.0.0.1:4310/api/health
 
 The top-level `status` is `ok` after a normal startup and `degraded` when the Runner is unavailable. See [REST API reference](../reference/rest-api.md#health) for field details.
 
-Binary packaging, source mode, and Docker are separate deployment paths; their prerequisites and complete commands are in the [deployment guide](../how-to/deployment.md).
+Binary packaging, source mode, and Docker are separate deployment paths; their prerequisites and complete commands are in the [deployment guide](deployment.md).
 
 ## 3. Configure a task model
 
@@ -55,8 +55,8 @@ Responses, tool calls, and generated artifacts depend on the configured model, e
 
 ## 5. Next steps
 
-- Deployment and process operations: [Deployment guide](../how-to/deployment.md)
+- Deployment and process operations: [Deployment guide](deployment.md)
 - Environment variables, ports, quotas, and storage paths: [Configuration reference](../reference/configuration.md)
 - Day-to-day runtime behavior: [Runtime behavior reference](../reference/runtime-behavior.md)
 - Tool parameters: [Built-in tools reference](../reference/builtin-tools.md)
-- System principles: [Overall runtime architecture](../explanation/architecture.md)
+- System principles: [Overall runtime architecture](../developer-docs/architecture.md)

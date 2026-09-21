@@ -20,7 +20,7 @@ ScienceDiscovery是专为科学研究打造的一站式AI科研工作台。依�
 
 ## 相关文档
 
-- [文档导航](docs/README.md) — 完整的中英文 Tutorial / How-to / Reference / Explanation 入口。
+- [文档导航](docs/README.md) — 完整的中英文快速开始、核心能力、领域指南、操作指南、参考和开发者文档入口。
 - [贡献指南](CONTRIBUTING.md) — 开发环境与测试命令。
 
 ## 环境要求
@@ -37,7 +37,7 @@ ScienceDiscovery是专为科学研究打造的一站式AI科研工作台。依�
 
 ## 安装
 
-准备与宿主架构匹配的 ScienceDiscovery 可执行文件。二进制打包、本地源码模式与 Docker 流程见[部署指南](docs/zh/how-to/deployment.md)。
+准备与宿主架构匹配的 ScienceDiscovery 可执行文件。二进制打包、本地源码模式与 Docker 流程见[部署指南](docs/zh/getting-started/deployment.md)。
 
 ## 快速开始
 
@@ -48,7 +48,7 @@ chmod +x ./ScienceDiscovery
 ./ScienceDiscovery serve
 ```
 
-另开终端执行 `curl -fsS http://127.0.0.1:4310/health`。随后打开启动日志中的 `Open to sign in` 链接，浏览器会自动保存本地服务访问令牌；它与外部模型 API Key 不同，请勿分享该链接。然后在 **系统配置 → Global defaults** 配置任务模型。第一次任务见[快速开始教程](docs/zh/tutorial/01-quick-start.md)；二进制打包、本地源码模式与 Docker 见[部署指南](docs/zh/how-to/deployment.md)。
+另开终端执行 `curl -fsS http://127.0.0.1:4310/health`。随后打开启动日志中的 `Open to sign in` 链接，浏览器会自动保存本地服务访问令牌；它与外部模型 API Key 不同，请勿分享该链接。然后在 **系统配置 → Global defaults** 配置任务模型。第一次任务见[快速开始](docs/zh/getting-started/quick-start.md)；二进制打包、本地源码模式与 Docker 见[部署指南](docs/zh/getting-started/deployment.md)。
 
 ## 许可证
 

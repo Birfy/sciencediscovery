@@ -2,7 +2,7 @@
 
 本教程从已准备好的 ScienceDiscovery 可执行文件开始，说明如何启动服务、配置模型并创建第一次 Agent 任务。
 
-> 系统定位与风险边界见 [README_zh.md](../../../README_zh.md)；部署的完整操作步骤见[部署指南](../how-to/deployment.md)；参数和配额见[配置参考](../reference/configuration.md)。
+> 系统定位与风险边界见 [README_zh.md](../../../README_zh.md)；部署的完整操作步骤见[部署指南](deployment.md)；参数和配额见[配置参考](../reference/configuration.md)。
 
 ## 1. 准备环境
 
@@ -39,7 +39,7 @@ curl -fsS http://127.0.0.1:4310/health
 
 正常启动时响应中的顶层 `status` 为 `ok`；如果 Runner 不可用，则为 `degraded`。字段说明见 [REST API 参考](../reference/rest-api.md#健康检查)。
 
-二进制打包、源码模式和 Docker 是独立的部署路径，其前置条件与完整命令都在[部署指南](../how-to/deployment.md)中。
+二进制打包、源码模式和 Docker 是独立的部署路径，其前置条件与完整命令都在[部署指南](deployment.md)中。
 
 ## 3. 配置任务模型
 
@@ -57,8 +57,8 @@ curl -fsS http://127.0.0.1:4310/health
 
 ## 5. 下一步
 
-- 部署和进程操作：[部署指南](../how-to/deployment.md)
+- 部署和进程操作：[部署指南](deployment.md)
 - 环境变量、端口、配额和存储路径：[配置参考](../reference/configuration.md)
 - 日常运行时行为：[运行时行为参考](../reference/runtime-behavior.md)
 - 工具参数：[内置工具参考](../reference/builtin-tools.md)
-- 系统原理：[整体运行时架构](../explanation/architecture.md)
+- 系统原理：[整体运行时架构](../developer-docs/architecture.md)

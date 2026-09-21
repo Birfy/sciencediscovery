@@ -2,7 +2,7 @@
 
 ScienceMemory is an optional ScienceDiscovery feature that stores a session's research goal, each task, the code run, the files produced, and each cited assertion in the final report with its supporting evidence as a Neo4j graph, making "where did this conclusion come from" traceable and clickable. It is disabled by default and has no effect on the web or conversation path.
 
-> This guide covers the built-in local store, how to install Neo4j and configure it in system settings, and how to use ScienceMemory in the frontend. For the feature's architecture, node/edge types, and API, see [ScienceMemory](../explanation/science-memory.md); for environment variables and ports, see the [configuration reference](../reference/configuration.md).
+> This guide covers the built-in local store, how to install Neo4j and configure it in system settings, and how to use ScienceMemory in the frontend. For the feature's architecture, node/edge types, and API, see [ScienceMemory](../developer-docs/science-memory.md); for environment variables and ports, see the [configuration reference](../reference/configuration.md).
 
 ## 0. Zero setup: the local file store
 
@@ -196,6 +196,6 @@ With ScienceMemory on, the agent's final summary report carries clickable `[alia
 
 ## 6. Next
 
-- Architecture, node/edge types, full API: [ScienceMemory](../explanation/science-memory.md)
-- End-to-end literature survey case (with ScienceMemory in action): [Literature research case guide](literature-research-case-guide.md)
+- Architecture, node/edge types, full API: [ScienceMemory](../developer-docs/science-memory.md)
+- End-to-end literature survey case (with ScienceMemory in action): [Literature research case guide](../domains/literature-research.md)
 - Environment variables, ports, data layout: [Configuration reference](../reference/configuration.md)

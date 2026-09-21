@@ -292,7 +292,7 @@ SCIENCE_AGENT_CONTEXT_EXAMPLE_DIR=.tmp/context-examples \
   node --test services/api/dist/native-agent/context-assembly.integration.test.js
 ```
 
-See [context assembly examples](./context-assembly-examples.md).
+See [context assembly examples](context-assembly-examples.md).
 
 ## Delivery boundary
 

@@ -1,6 +1,6 @@
 # 配置、端口、配额与存储参考
 
-本文集中列出本地模式和 Docker 的环境变量、默认端口、工作区相关配额及存储布局。实际部署步骤见[部署指南](../how-to/deployment.md)。
+本文集中列出本地模式和 Docker 的环境变量、默认端口、工作区相关配额及存储布局。实际部署步骤见[部署指南](../getting-started/deployment.md)。
 
 ## 环境变量（本地模式）
 
@@ -53,7 +53,7 @@ set -a && source .env && set +a
 | `SCIENCE_AGENT_PROVISIONER_PATH` | — | 可选管理员提供的 provisioner 覆盖；正常 setup 安装应用自有固定二进制 |
 | `SCIENCE_AGENT_MICROMAMBA_BASE_URL` | — | 可选镜像目录 URL，托管 micromamba 固定版本的同名发布件；留空使用上游发布地址。无论从哪里下载，固定的 SHA-256 校验都不放宽 |
 | `SCIENCE_AGENT_NPU_PYTHON_PATH` | 自动探测 | 读取 NPU 状态时调用驱动 DCMI 接口所用的宿主 Python；留空按 `/usr/bin/python3`、`/usr/local/bin/python3` 顺序探测，都没有则回退到 `npu-smi` |
-| `SCIENCE_AGENT_PACKAGE_CACHE_DIR` | — | 可选预置缓存；设置后 provision 离线运行，不再拉取允许渠道。pip `indexUrl` 与 conda channel 仍执行安全校验，但安装时不访问这些网络源（见 [sandbox-execution.md](../explanation/sandbox-execution.md) §6 受控软件源） |
+| `SCIENCE_AGENT_PACKAGE_CACHE_DIR` | — | 可选预置缓存；设置后 provision 离线运行，不再拉取允许渠道。pip `indexUrl` 与 conda channel 仍执行安全校验，但安装时不访问这些网络源（见 [sandbox-execution.md](../developer-docs/sandbox-execution.md) §6 受控软件源） |
 | `SCIENCE_AGENT_SCIENTIFIC_CHANNELS` | `conda-forge` | 逗号分隔的包渠道白名单；内置镜像预设（TUNA/USTC）对应的频道 URL 始终被 Runner 接受，自定义频道仍须显式列入 |
 | `SCIENCE_AGENT_KERNEL_IDLE_MS` | `0` | 初始持久内核空闲超时（`0` = 无限） |
 | `SCIENCE_AGENT_WEB_DIR` | `apps/web/dist` | 静态 UI 资源 |
@@ -81,7 +81,7 @@ Ascend NPU Broker 面向需要访问宿主 Ascend 设备的部署，且需要管
 
 ## Docker 环境变量
 
-Compose 读取仓库根目录 `.env`（模板为 `.env.docker.example`），把下面的键插值到 `docker-compose.yml`。它们分两层：编排层只影响 Compose 如何启动容器；容器层由服务的 `environment` 块逐个转发进容器，留空等于使用内置默认值。操作步骤与分层说明见[Docker 部署](../how-to/deployment.md#docker-部署)。
+Compose 读取仓库根目录 `.env`（模板为 `.env.docker.example`），把下面的键插值到 `docker-compose.yml`。它们分两层：编排层只影响 Compose 如何启动容器；容器层由服务的 `environment` 块逐个转发进容器，留空等于使用内置默认值。操作步骤与分层说明见[Docker 部署](../getting-started/deployment.md#docker-部署)。
 
 ### 编排层
 
@@ -104,7 +104,7 @@ Compose 读取仓库根目录 `.env`（模板为 `.env.docker.example`），把�
 | `SCIENCE_AGENT_LOG_MAX_BYTES` | `10485760` | 单个类别日志滚动前的最大字节数 |
 | `SCIENCE_AGENT_LOG_BACKUP_COUNT` | `5` | 每个类别保留的滚动历史文件数 |
 | `SCIENCE_AGENT_CONTEXT_MODE` | `dynamic` | 上下文装配模式；`legacy` 与 `shadow` 仅用于调试和回归对比 |
-| `SCIENCE_AGENT_CONTEXT_PROMPT_BUDGET_CHARS`、`…_SECTION_MAX_CHARS`、`…_DATA_BUDGET_CHARS`、`…_ATTACHMENT_MAX_CHARS`、`…_CONTRIBUTED_MESSAGE_BUDGET_CHARS`、`…_MAX_CONTRIBUTED_MESSAGES`、`…_WINDOW_MESSAGES`、`…_WINDOW_ROUNDS`、`…_WINDOW_TOKENS` | 见 `.env.docker.example` | 上下文装配的预算与窗口，含义见[上下文装配](../../architecture/context-assembly.md) |
+| `SCIENCE_AGENT_CONTEXT_PROMPT_BUDGET_CHARS`、`…_SECTION_MAX_CHARS`、`…_DATA_BUDGET_CHARS`、`…_ATTACHMENT_MAX_CHARS`、`…_CONTRIBUTED_MESSAGE_BUDGET_CHARS`、`…_MAX_CONTRIBUTED_MESSAGES`、`…_WINDOW_MESSAGES`、`…_WINDOW_ROUNDS`、`…_WINDOW_TOKENS` | 见 `.env.docker.example` | 上下文装配的预算与窗口，含义见[上下文装配](../../en/developer-docs/context-assembly.md) |
 | `SCIENCE_AGENT_CONTEXT_TRACE` / `SCIENCE_AGENT_CONTEXT_TRACE_DIR` | `0` / `/app/data/context-traces` | 上下文装配追踪开关与输出目录 |
 | `SCIENCE_AGENT_RUNNER_TOKEN` | `sciencediscovery-runner-local` | API→runner token（仅容器回环） |
 | `SCIENTIFIC_ENVS` | `1` | 托管 Python/R 环境与持久内核；首次启动自动创建 starter Python |
@@ -145,6 +145,6 @@ Compose 读取仓库根目录 `.env`（模板为 `.env.docker.example`），把�
 | `.sciencediscovery-data/logs/{api,run,gateway,runner,memory-graph}.log` | 分级、按类别和大小滚动的运行日志；memory-graph 文件仅在功能启用时使用 |
 | 浏览器 local storage | 仅本地服务访问令牌——模型凭证从不离开后端 |
 
-数据目录是唯一运行时根：通过设置 `SCIENCE_DISCOVERY_DATA_DIR` 可同时迁移状态与服务环境（例如 `SCIENCE_DISCOVERY_DATA_DIR=/srv/science-discovery ./scripts/run-local.sh`）。原 `SCIENCE_AGENT_DATA_DIR` 仍作为兼容回退读取并打印日志；新旧同时设置时 `SCIENCE_DISCOVERY_DATA_DIR` 优先，且会记录该选择。对于仓库启动器，已有默认 `data` 目录会一次性移动到 `.sciencediscovery-data`。对于单文件 launcher，已有默认 `./science-discovery-data` 或更早的 `./science-agent-data` 会按由新到旧的顺序一次性导入 `./.sciencediscovery-data`；目标已存在时绝不覆盖并打印跳过原因。删除当前生效的数据目录会清除所有项目、会话、凭证与审计记录。在 [Docker 部署](../how-to/deployment.md#docker-部署)中，同一目录就是宿主上的 bind mount `./data`，区别只在于 `envs/` 位于镜像内。`services/paper/.venv` 与 `services/gateway/.venv` 仅在独立开发或 smoke 命令中出现；应用本身使用 `.sciencediscovery-data/envs/` 下的环境。
+数据目录是唯一运行时根：通过设置 `SCIENCE_DISCOVERY_DATA_DIR` 可同时迁移状态与服务环境（例如 `SCIENCE_DISCOVERY_DATA_DIR=/srv/science-discovery ./scripts/run-local.sh`）。原 `SCIENCE_AGENT_DATA_DIR` 仍作为兼容回退读取并打印日志；新旧同时设置时 `SCIENCE_DISCOVERY_DATA_DIR` 优先，且会记录该选择。对于仓库启动器，已有默认 `data` 目录会一次性移动到 `.sciencediscovery-data`。对于单文件 launcher，已有默认 `./science-discovery-data` 或更早的 `./science-agent-data` 会按由新到旧的顺序一次性导入 `./.sciencediscovery-data`；目标已存在时绝不覆盖并打印跳过原因。删除当前生效的数据目录会清除所有项目、会话、凭证与审计记录。在 [Docker 部署](../getting-started/deployment.md#docker-部署)中，同一目录就是宿主上的 bind mount `./data`，区别只在于 `envs/` 位于镜像内。`services/paper/.venv` 与 `services/gateway/.venv` 仅在独立开发或 smoke 命令中出现；应用本身使用 `.sciencediscovery-data/envs/` 下的环境。
 
 单文件 payload 覆盖变量遵循同一命名和优先级：用 `SCIENCE_DISCOVERY_PAYLOAD_CACHE_DIR` 指定解包缓存，或用 `SCIENCE_DISCOVERY_PAYLOAD_DIR` 指定已解包 payload；对应的 `SCIENCE_AGENT_*` 名称继续作为带日志的兼容回退。

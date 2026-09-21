@@ -81,5 +81,5 @@ The standalone Paper reader panel, Provenance statistics card and persistent iso
 
 ## Related documentation
 
-- [Control plane](../explanation/control-plane.md)
-- [Runtime architecture](../explanation/architecture.md)
+- [Control plane](control-plane.md)
+- [Runtime architecture](architecture.md)

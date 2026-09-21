@@ -31,7 +31,7 @@ Representative groups, not an exhaustive route list:
 | `/api/{models,specialists,skills,remote-hosts,environments}` | Global resources |
 | `/api/settings`, `/api/timeout-settings`, `/api/quota-settings`, `/api/sandbox-network-settings`, `/api/runtime-status` | Global controls, timeouts, quotas, sandbox network access, and live state |
 
-SSE uses fetch-stream `data: <json>\n\n` frames; see [Web frontend](../reference/web-frontend.md).
+SSE uses fetch-stream `data: <json>\n\n` frames; see [Web frontend](web-frontend.md).
 
 ## 3. Storage
 
@@ -55,7 +55,7 @@ Tools are invoked in-process by the loop through `AgentTool.execute`; there is n
 
 ## 7. Model calls made directly by API
 
-The agent loop itself (`native-agent/model-client.ts`) streams directly to the configured model endpoint in either the OpenAI-compatible or Anthropic Messages dialect. Paper vision analysis in `papers.ts` calls an OpenAI-compatible endpoint directly. See [PDF worker](../reference/paper-worker.md).
+The agent loop itself (`native-agent/model-client.ts`) streams directly to the configured model endpoint in either the OpenAI-compatible or Anthropic Messages dialect. Paper vision analysis in `papers.ts` calls an OpenAI-compatible endpoint directly. See [PDF worker](paper-worker.md).
 
 ## Related documentation
 

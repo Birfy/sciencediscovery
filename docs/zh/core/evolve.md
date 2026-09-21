@@ -2,7 +2,7 @@
 
 `/evolve-design` 靠反复搜索而不是一次修改来把东西做得更好。你把"更好"定义成一个数，产品写出几十个变体、逐个打分、留下分更高的，最后把最优版本和起点一起交回来。
 
-> 本文说明搜索是什么、什么时候有效、为什么这样设计。要跑一次见[运行一次演进搜索](../how-to/run-an-evolution-search.md)；要一个能完整跑完的第一次搜索见[教程](../tutorial/02-evolve-a-solution.md)。引擎内部与侧车独立部署见[演进侧车：架构、引擎与独立部署](evolve-standalone.md)。
+> 本文说明搜索是什么、什么时候有效、为什么这样设计。要跑一次见[运行一次演进搜索](../how-to/run-an-evolution-search.md)；要一个能完整跑完的第一次搜索见[教程](../domains/evolve-a-solution.md)。引擎内部与侧车独立部署见[演进侧车：架构、引擎与独立部署](../developer-docs/evolve-standalone.md)。
 
 ## 搜索到底是什么
 
@@ -81,7 +81,7 @@ OpenEvolve 运行还多两个视图。图视图按迭代号排列候选，每个
 
 ![起点与最优候选的对比](../../images/evolve/result-diff.png)
 
-开启[科学记忆](science-memory.md)时运行也会写入图谱：搜索节点通过 `input` 边关联起点、`produces` 边关联结果，节点详情带基线分与留出测试分。
+开启[科学记忆](../developer-docs/science-memory.md)时运行也会写入图谱：搜索节点通过 `input` 边关联起点、`produces` 边关联结果，节点详情带基线分与留出测试分。
 
 ![记忆图谱中完成的搜索，及其 input 与 produces 边](../../images/evolve/memory-graph.png)
 
@@ -102,7 +102,7 @@ OpenEvolve 运行还多两个视图。图视图按迭代号排列候选，每个
 ## 相关文档
 
 - [运行一次演进搜索](../how-to/run-an-evolution-search.md) —— 操作路径。
-- [演进出一个更优解](../tutorial/02-evolve-a-solution.md) —— 完整跑完的第一次搜索。
-- [演进侧车：架构、引擎与独立部署](evolve-standalone.md) —— 引擎内部与独立部署。
-- [科学记忆](science-memory.md) —— 完成的搜索记录在哪里。
-- [沙箱执行](sandbox-execution.md) —— 候选打分期间如何隔离。
+- [演进出一个更优解](../domains/evolve-a-solution.md) —— 完整跑完的第一次搜索。
+- [演进侧车：架构、引擎与独立部署](../developer-docs/evolve-standalone.md) —— 引擎内部与独立部署。
+- [科学记忆](../developer-docs/science-memory.md) —— 完成的搜索记录在哪里。
+- [沙箱执行](../developer-docs/sandbox-execution.md) —— 候选打分期间如何隔离。

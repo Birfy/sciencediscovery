@@ -84,5 +84,5 @@ React 浏览器 UI，构建后由控制 API 作为静态资源托管；开发时
 
 ## 相关文档
 
-- [控制面](../explanation/control-plane.md) — SSE 端点与事件来源
-- [整体运行时架构](../explanation/architecture.md) — 前端在进程模型中的位置
+- [控制面](control-plane.md) — SSE 端点与事件来源
+- [整体运行时架构](architecture.md) — 前端在进程模型中的位置

@@ -1,6 +1,6 @@
 # PDF Extraction: `services/paper`
 
-This isolated, non-resident Python worker is launched once per request by the control API and converts a PDF into bounded Markdown, tables, figures, and page previews. User-visible limits are listed in [Runtime behavior](runtime-behavior.md#paper-reader-limits).
+This isolated, non-resident Python worker is launched once per request by the control API and converts a PDF into bounded Markdown, tables, figures, and page previews. User-visible limits are listed in [Runtime behavior](../reference/runtime-behavior.md#paper-reader-limits).
 
 ## 1. Invocation protocol
 
@@ -42,5 +42,5 @@ pages/page-0001.png …  tables/table-0001-p3.{csv,png} …  images/figure-0001-
 
 ## Related documentation
 
-- [Science connectors](../explanation/science-connectors.md)
-- [Control plane](../explanation/control-plane.md)
+- [Science connectors](science-connectors.md)
+- [Control plane](control-plane.md)

@@ -1,6 +1,6 @@
 # PDF 抽取：services/paper
 
-隔离的 PDF 抽取 worker：一个无常驻进程的 Python 脚本，由控制 API 按次拉起，把 PDF 变成有界的 Markdown、表格、插图与页面预览。用户视角的上限清单见[运行时行为参考](runtime-behavior.md#论文阅读器限制)。
+隔离的 PDF 抽取 worker：一个无常驻进程的 Python 脚本，由控制 API 按次拉起，把 PDF 变成有界的 Markdown、表格、插图与页面预览。用户视角的上限清单见[运行时行为参考](../reference/runtime-behavior.md#论文阅读器限制)。
 
 ## 1. 调用协议
 
@@ -40,5 +40,5 @@ pages/page-0001.png …  tables/table-0001-p3.{csv,png} …  images/figure-0001-
 
 ## 相关文档
 
-- [科研连接器](../explanation/science-connectors.md) — 下载与抽取在治理链路中的位置
-- [控制面](../explanation/control-plane.md) — papers 相关端点
+- [科研连接器](science-connectors.md) — 下载与抽取在治理链路中的位置
+- [控制面](control-plane.md) — papers 相关端点
