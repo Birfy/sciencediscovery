@@ -35,6 +35,7 @@
 - [运行时行为](reference/runtime-behavior.md) — 模型、设置继承、技能、权限、超时和执行限制。
 - [内置工具](reference/builtin-tools.md) — 模型可见工具的参数、边界和暴露条件。
 - [Web 工具](reference/web-tools.md) — Web Search/Fetch provider、配置、权限、缓存与审计。
+- [JiuwenSwarm 迁移状态](reference/jiuwenswarm-migration-status.md) — 已实现范围、已知缺口与后续交接方式。
 
 ## 开发者文档
 

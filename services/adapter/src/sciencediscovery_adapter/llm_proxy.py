@@ -30,7 +30,9 @@ Only the OpenAI chat-completions protocol is handled.
 from __future__ import annotations
 
 import json
+import os
 import secrets
+import sys
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any
@@ -52,6 +54,8 @@ class LlmRoute:
     # The tools as the caller defined them. JiuwenSwarm holds a relaxed copy of the schema
     # (see schema.relax_schema); the model gets the original back, constraints included.
     tool_specs: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # JiuwenSwarm's own tools the model may keep, by their own names; the model sees their own specs.
+    native_tools: frozenset[str] = frozenset()
 
 
 @dataclass
@@ -82,6 +86,9 @@ def _original(function: dict[str, Any], route: LlmRoute) -> dict[str, Any]:
     return {**function, "name": name, "description": spec["description"], "parameters": spec["parameters"]}
 
 
+_DEBUG = os.environ.get("SCIENCE_AGENT_ADAPTER_DEBUG") == "1"
+
+
 def rewrite_request(body: dict[str, Any], route: LlmRoute) -> dict[str, Any]:
     out = dict(body)
     out["model"] = route.model
@@ -90,6 +97,7 @@ def rewrite_request(body: dict[str, Any], route: LlmRoute) -> dict[str, Any]:
             {**tool, "function": _original(tool["function"], route)}
             for tool in body["tools"]
             if _unprefixed(tool.get("function", {}).get("name", ""), route) in route.tool_names
+            or tool.get("function", {}).get("name", "") in route.native_tools
         ]
         if not out["tools"]:
             del out["tools"]
@@ -114,6 +122,9 @@ def rewrite_request(body: dict[str, Any], route: LlmRoute) -> dict[str, Any]:
     if route.system_prompt is not None and not replaced:
         messages.insert(0, {"role": "system", "content": route.system_prompt})
     out["messages"] = messages
+    if _DEBUG:
+        tail = [f"{m.get('role')}:{str(m.get('content'))[:90]!r}" for m in messages[-3:]]
+        print(f"[llm-proxy] {len(messages)} messages, last: {tail}", file=sys.stderr, flush=True)
     return out
 
 

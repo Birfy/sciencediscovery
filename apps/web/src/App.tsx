@@ -2564,9 +2564,12 @@ export function App({ initialToken }: { initialToken?: string } = {}) {
     setTokenEdit(undefined);
   }
 
-  function openSystemSettings(group?: SystemSettingsGroup): void {
+  const [modelWizardRequested, setModelWizardRequested] = useState(false);
+
+  function openSystemSettings(group?: SystemSettingsGroup, options?: { wizard?: boolean }): void {
     reportSystemSettingsError();
     if (group) setSystemSettingsGroup(group);
+    setModelWizardRequested(options?.wizard === true);
     setShowConfig(true);
   }
 
@@ -2579,6 +2582,7 @@ export function App({ initialToken }: { initialToken?: string } = {}) {
     clearSystemSettingsDrafts();
     reportSystemSettingsError();
     setSkillWorkspaceLaunch(undefined);
+    setModelWizardRequested(false);
     setShowConfig(false);
   }
 
@@ -4582,7 +4586,7 @@ export function App({ initialToken }: { initialToken?: string } = {}) {
                     event.currentTarget.form?.requestSubmit();
                   }} placeholder={sessionArchived ? t("composer.restorePlaceholder") : artifacts.length ? t("composer.askPlaceholder") : t("composer.uploadPlaceholder")} rows={1} />
                   {composerRunAction.noModelReason ? <ComposerNoModelNotice
-                    onOpenModelSettings={() => openSystemSettings("models")}
+                    onOpenModelSettings={() => openSystemSettings("models", { wizard: true })}
                     reason={composerRunAction.noModelReason}
                   /> : null}
                   {activeThinkingControls.legacyBudget ? <div className="composer-thinking-notice" role="note">
@@ -4594,7 +4598,7 @@ export function App({ initialToken }: { initialToken?: string } = {}) {
                       controls={activeThinkingControls}
                       disabled={isRunning || sessionArchived}
                       models={models}
-                      onOpenSettings={() => openSystemSettings("models")}
+                      onOpenSettings={() => openSystemSettings("models", { wizard: true })}
                       onSelect={(modelId) => void updateConversationModel(modelId)}
                       onThinkingChange={(update) => void updateSessionSettings(update)}
                       providers={modelProviders}
@@ -5000,8 +5004,24 @@ export function App({ initialToken }: { initialToken?: string } = {}) {
                 <ProviderModelSettings
                   catalog={modelCatalog}
                   client={client}
+                  defaultModelId={globalSettings?.effective.modelId}
+                  initialWizardOpen={modelWizardRequested}
                   models={models}
                   onCatalogChange={applyModelCatalog}
+                  onDefaultModelSet={async (modelId) => {
+                    // One setting, written from the wizard and from the
+                    // registry's default-model row alike; keep every other
+                    // global override instead of replacing the whole object.
+                    const overrides = { ...(globalSettings?.overrides ?? {}) };
+                    if (modelId) overrides.modelId = modelId;
+                    else delete overrides.modelId;
+                    const updated = await client.replaceGlobalSettings(overrides);
+                    setGlobalSettings(updated);
+                    if (activeProjectId) {
+                      setProjectSettings(await client.getProjectSettings(activeProjectId));
+                      await refreshVisibleSessions();
+                    }
+                  }}
                   onDraftStateChange={setProviderDraftDirty}
                   onError={reportSystemSettingsError}
                   onModelsChange={setModels}

@@ -69,6 +69,9 @@ class ModelSpec(BaseModel):
     baseUrl: str
     apiKey: str = ""
     provider: str = "OpenAI"
+    # The model's context window, in tokens. JiuwenSwarm compresses a conversation against it; without
+    # it the model is an unknown alias and a default is assumed.
+    contextWindow: int | None = None
 
 
 class AgentRunRequest(BaseModel):
@@ -81,6 +84,15 @@ class AgentRunRequest(BaseModel):
     model: ModelSpec | None = None
     # Replaces JiuwenSwarm's own system prompt for this run (needs `model`).
     systemPrompt: str | None = None
+    # The JiuwenSwarm session that holds this agent's conversation: stable across runs, one per agent
+    # (the main agent, and each subagent, of one caller session). JiuwenSwarm keeps and compresses the
+    # context there; the adapter neither sends nor rebuilds any history. Defaults to `sessionId`.
+    sessionKey: str | None = None
+    # Names of JiuwenSwarm's own tools that stay visible to the model besides the toolset above
+    # (for example `todo_create`). They run inside JiuwenSwarm, not over the bridge.
+    nativeTools: list[str] = Field(default_factory=list)
+    # Longest a single tool call may take, in seconds; the run's own timeout, when the caller has one.
+    toolTimeoutSeconds: int | None = None
 
 
 def bridge_caller(bridge: Bridge, client: httpx.AsyncClient):
@@ -116,9 +128,10 @@ class AgentRunner:
         llm_token = None
         model_alias = None
         registered = False
+        jw_session = request.sessionKey or request.sessionId
         mapper = RunEventMapper(session_id=request.sessionId, mcp_prefixes=(f"mcp_{name}_",))
         params: dict[str, Any] = {
-            "session_id": request.sessionId, "content": request.prompt, "query": request.prompt,
+            "session_id": jw_session, "content": request.prompt, "query": request.prompt,
             "mode": request.mode, "cwd": request.cwd, "project_dir": request.cwd, "trusted_dirs": [request.cwd],
             "supports_user_interaction": True, "agent_ref": {"mode": request.mode, "id": "default"},
         }
@@ -132,11 +145,12 @@ class AgentRunner:
                     base_url=request.model.baseUrl.rstrip("/"), api_key=request.model.apiKey, model=request.model.model,
                     tool_prefix=f"mcp_{name}_", tool_names=frozenset(t.name for t in request.tools),
                     tool_specs={t.name: {"description": t.description, "parameters": t.inputSchema} for t in request.tools},
-                    system_prompt=request.systemPrompt,
+                    system_prompt=request.systemPrompt, native_tools=frozenset(request.nativeTools),
                 ))
                 model_alias = f"sd-{llm_token[:12]}"
                 params["model_name"] = await self.models.ensure(ModelProfile(
-                    model_alias, f"{self.settings.public_url}/llm/{llm_token}/v1", llm_token, "OpenAI"))
+                    model_alias, f"{self.settings.public_url}/llm/{llm_token}/v1", llm_token, "OpenAI",
+                    context_window=request.model.contextWindow))
             if request.tools:
                 if request.bridge is None:
                     raise ValueError("tools were given without a bridge to run them")
@@ -147,6 +161,7 @@ class AgentRunner:
                 ))
                 await self.rpc(self.settings.mgmt_url, "mcp.register_custom", {
                     "name": name, "transport": "streamable-http", "url": f"{self.settings.public_url}/mcp/{token}",
+                    "timeout_s": request.toolTimeoutSeconds or self.settings.tool_timeout_s,
                 })
                 registered = True
                 await self.rpc(self.settings.mgmt_url, "mcp.connect", {"name": name})
@@ -202,5 +217,26 @@ def agent_router(runner: AgentRunner, settings: Settings) -> APIRouter:
         if settings.agent_token and authorization != f"Bearer {settings.agent_token}":
             raise HTTPException(status_code=401, detail="unauthorized")
         return StreamingResponse(runner.stream(body), media_type="application/x-ndjson")
+
+    @router.get("/agent/info")
+    async def info(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        """Which backend runs agent turns, and whether JiuwenSwarm answers: the way to check a deployment."""
+        accepted = {f"Bearer {token}" for token in (settings.agent_token, settings.api_token) if token}
+        if accepted and authorization not in accepted:
+            raise HTTPException(status_code=401, detail="unauthorized")
+        reachable, detail = True, None
+        try:
+            await runner.rpc(settings.mgmt_url, "models.list", timeout=5)
+        except Exception as error:  # gateway down, refused, timed out
+            reachable, detail = False, str(error)[:200]
+        return {
+            "adapter": True,
+            "executor": settings.executor,
+            "jiuwenswarm": {
+                "gatewayUrl": settings.gateway_url, "managementUrl": settings.mgmt_url,
+                "reachable": reachable, **({"error": detail} if detail else {}),
+            },
+            "toolTimeoutSeconds": settings.tool_timeout_s,
+        }
 
     return router

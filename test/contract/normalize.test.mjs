@@ -15,7 +15,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createNormalizer, diff } from "./normalize.mjs";
+import { createNormalizer, diff, scrubValue } from "./normalize.mjs";
 
 test("ids are numbered by first appearance so the same id stays recognisable", () => {
   const normalize = createNormalizer();
@@ -75,4 +75,64 @@ test("a stub's port and the sandbox's random temp directory name are hidden", ()
   const normalize = createNormalizer();
   assert.equal(normalize.text("http://127.0.0.1:56778/v1"), "http://127.0.0.1:<port>/v1");
   assert.equal(normalize.text("/data/runner-runtime/tmp/seatbelt-fW42DG/x"), "/data/runner-runtime/tmp/seatbelt-<tmp>/x");
+});
+
+test("the runner build version is hidden even inside a JSON string, and scrubbing is idempotent", () => {
+  const normalize = createNormalizer();
+  const raw = { chunk: '{"runnerVersion":"f2dbe052-dirty","sandbox":"bubblewrap"}', nested: '{\\"runnerVersion\\":\\"73015b2e\\"}' };
+  const once = normalize.json(raw);
+  assert.equal(once.chunk, '{"runnerVersion":"<volatile>","sandbox":"bubblewrap"}');
+  assert.equal(once.nested, '{\\"runnerVersion\\":\\"<volatile>\\"}');
+  assert.deepEqual(scrubValue(once), once);
+});
+
+test("scrubbing an older recording applies rules that were added after it was made", () => {
+  const old = { body: { chunk: '{"runnerVersion":"aaa1111","x":1}' } };
+  assert.deepEqual(scrubValue(old), { body: { chunk: '{"runnerVersion":"<volatile>","x":1}' } });
+});
+
+test("a bare host:port for a local stub is hidden too, with or without the scheme", () => {
+  const normalize = createNormalizer();
+  assert.equal(normalize.text("127.0.0.1:59652"), "127.0.0.1:<port>");
+  assert.equal(normalize.text("http://127.0.0.1:59652/v1"), "http://127.0.0.1:<port>/v1");
+});
+
+test("the rate and its date are hidden wherever they appear: they come from an outside service", () => {
+  const out = createNormalizer().json({ quote: { provider: "Frankfurter", rate: 6.6999, effectiveDate: "2026-09-21" } });
+  assert.deepEqual(out.quote, { provider: "Frankfurter", rate: "<volatile>", effectiveDate: "<volatile>" });
+});
+
+test("a runner's host measurements are hidden as one value", () => {
+  const out = createNormalizer().json({ runnerStatus: { state: "ready", resources: { cpuCores: 2, uptimeSeconds: 9.5 } } });
+  assert.deepEqual(out.runnerStatus, { state: "ready", resources: "<volatile>" });
+});
+
+test("the build version a runner reports on either side is hidden", () => {
+  const out = createNormalizer().json({ localVersion: "abc-dirty", remoteVersion: "abc-dirty" });
+  assert.deepEqual(out, { localVersion: "<volatile>", remoteVersion: "<volatile>" });
+});
+
+test("this checkout's path is hidden, so a recording does not depend on where it was made", async () => {
+  const { REPO_ROOT } = await import("./normalize.mjs");
+  assert.equal(scrubValue(`cwd ${REPO_ROOT}/test/fixtures`), "cwd <repo>/test/fixtures");
+});
+
+test("a custom MCP server's generated id is numbered like a uuid", () => {
+  const normalize = createNormalizer();
+  assert.equal(normalize.text("custom-683c5afc5d06 and custom-0b782b84a4f9 and custom-683c5afc5d06"),
+    "<custom-mcp:1> and <custom-mcp:2> and <custom-mcp:1>");
+});
+
+test("a home directory is hidden, wherever the recording was made", () => {
+  assert.equal(scrubValue("/root/.ssh/authorized_keys"), "<home>/.ssh/authorized_keys");
+  assert.equal(scrubValue("/home/alice/data/x"), "<home>/data/x");
+  assert.equal(scrubValue("/Users/bob/Downloads"), "<home>/Downloads");
+  assert.equal(scrubValue("/rootless/keep"), "/rootless/keep");
+  assert.equal(scrubValue("https://www.ncbi.nlm.nih.gov/home/about/policies/"), "https://www.ncbi.nlm.nih.gov/home/about/policies/", "a URL path is not a home directory");
+  assert.equal(scrubValue("cwd /root/work"), "cwd <home>/work");
+});
+
+test("exchange rates are one volatile value: the service may not have answered", () => {
+  const out = createNormalizer().json({ exchangeRates: [{ rate: 1 }], filters: { timeZone: "Asia/Shanghai" } });
+  assert.deepEqual(out, { exchangeRates: "<volatile>", filters: { timeZone: "Asia/Shanghai" } });
 });

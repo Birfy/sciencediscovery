@@ -21,7 +21,7 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
-import { createNormalizer, diff } from "./normalize.mjs";
+import { REPO_ROOT, createNormalizer, diff, scrubValue } from "./normalize.mjs";
 import { startStubModel } from "./stub-model.mjs";
 
 export function loadCases(directory) {
@@ -86,7 +86,7 @@ async function readSse(response, stream, onEvent = async () => undefined) {
 /**
  * The run-event profile: what a user could see, in a form that does not depend on timing.
  * Consecutive text/thinking/tool-output fragments of one response are joined (how many
- * fragments arrive is a matter of timing), envelope fields that only count or time events
+ * fragments arrive is a matter of timing, as is how many snapshots of one subagent step), envelope fields that only count or time events
  * are dropped, and the native agent's own evidence (`agent.record` and each event's
  * `evidence`) is left out: it is not part of what another executor has to reproduce.
  */
@@ -98,6 +98,12 @@ export function profileRunEvents(events) {
     if (event.type === "agent.record") continue;
     const field = JOINED[event.type];
     const previous = out[out.length - 1];
+    // A step being streamed is re-sent as a snapshot each time a coalescing timer fires; how many
+    // snapshots arrive is timing, so consecutive ones for the same step collapse to the last.
+    if (event.type === "subagent.step" && previous?.type === "subagent.step" && previous.step?.id === event.step?.id) {
+      out[out.length - 1] = event;
+      continue;
+    }
     const sameStream = previous && previous.type === event.type
       && (previous.responseId ?? previous.toolCallId) === (event.responseId ?? event.toolCallId);
     if (field && sameStream) previous[field] += event[field];
@@ -109,7 +115,7 @@ export function profileRunEvents(events) {
 /** Run one case; returns one record per step. Steps marked always:true run even after a failure. */
 export async function runCase(testCase, { base, token, fetchImpl = fetch }) {
   const normalize = createNormalizer();
-  const variables = {};
+  const variables = { repoRoot: REPO_ROOT, baseUrl: base };
   // A case that needs a model gets its own scripted stub, so every case starts from step one.
   const stub = testCase.stub ? await startStubModel(testCase.stub) : undefined;
   if (stub) Object.assign(variables, { stubBaseUrl: stub.baseUrl, stubModel: stub.model, stubToken: stub.apiToken });
@@ -133,6 +139,23 @@ async function runSteps(testCase, { base, token, fetchImpl, normalize, variables
         headers: { authorization: `Bearer ${token}`, ...(request.body !== undefined ? { "content-type": "application/json" } : {}), ...(request.headers ?? {}) },
         ...(request.body !== undefined ? { body: JSON.stringify(request.body) } : {}),
       });
+      if (step.poll) {
+        // Wait for a condition in the answer (e.g. a run reaching a terminal state); only the
+        // final value is recorded, since how many polls it took is timing.
+        const deadline = Date.now() + (step.poll.timeoutMs ?? 30_000);
+        let current = response;
+        let parsed = await current.json().catch(() => undefined);
+        while (!step.poll.in.includes(lookup(parsed, step.poll.path)) && Date.now() < deadline) {
+          await new Promise((resolve) => setTimeout(resolve, 250));
+          current = await fetchImpl(`${base}${request.path}`, { method: request.method, headers: { authorization: `Bearer ${token}` } });
+          parsed = await current.json().catch(() => undefined);
+        }
+        record.status = current.status;
+        record.polled = lookup(parsed, step.poll.path);
+        if (!step.poll.in.includes(record.polled)) record.error = `still ${JSON.stringify(record.polled)} after ${step.poll.timeoutMs ?? 30_000} ms`;
+        records.push(record);
+        continue;
+      }
       record.status = response.status;
       record.contentType = (response.headers.get("content-type") ?? "").split(";")[0];
       if (step.stream) {
@@ -190,9 +213,24 @@ export async function runAll(cases, options) {
   return result;
 }
 
-/** Differences between a baseline recording and a fresh one, as readable lines. */
-export function compareRecordings(baseline, actual) {
+/** `$.events[*].error` matches `$.events[7].error`; a rule names the case and the step it is about. */
+function pathMatches(pattern, path) {
+  const source = pattern.split("[*]")
+    .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*"))
+    .join("\\[\\d+\\]");
+  return new RegExp(`^${source}$`).test(path);
+}
+
+/**
+ * Differences between a baseline recording and a fresh one, as readable lines. A difference that
+ * an `accepted` rule covers ({ case, step, path, reason }) is not a problem; it is returned in
+ * `accepted` with its reason, so the list of tolerated divergences stays visible.
+ */
+export function compareRecordings(baseline, actual, accepted = [], report = { accepted: [] }) {
   const problems = [];
+  // Both sides are scrubbed again, so a rule added after the baseline was recorded still applies to it.
+  baseline = scrubValue(baseline);
+  actual = scrubValue(actual);
   for (const [id, expectedSteps] of Object.entries(baseline)) {
     const actualSteps = actual[id];
     if (!actualSteps) { problems.push(`${id}: case was not run`); continue; }
@@ -200,6 +238,8 @@ export function compareRecordings(baseline, actual) {
       const got = actualSteps[index];
       if (!got) { problems.push(`${id} / ${expected.name}: step missing`); return; }
       for (const difference of diff(expected, got)) {
+        const rule = accepted.find((item) => item.case === id && item.step === expected.name && pathMatches(item.path, difference.path));
+        if (rule) { report.accepted.push(`${id} / ${expected.name}: ${difference.path} (${rule.reason})`); continue; }
         problems.push(`${id} / ${expected.name}: ${difference.path} expected ${JSON.stringify(difference.expected)} got ${JSON.stringify(difference.actual)}`);
       }
     });

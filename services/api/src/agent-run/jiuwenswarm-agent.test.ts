@@ -20,9 +20,12 @@ import test from "node:test";
 import type { AgentEvent } from "@sciencediscovery/orchestration";
 import { Type } from "typebox";
 
-import type { NativeAgentOptions } from "../native-agent/index.js";
+import { DurableContextStore } from "@sciencediscovery/context";
+
+import { createToolRegistry, startPluginScope, type NativeAgentOptions } from "../native-agent/index.js";
 import {
   createJiuwenSwarmAgentFactory,
+  jiuwenSwarmSessionKey,
   jiuwenSwarmConfigFromEnv,
 } from "./jiuwenswarm-agent.js";
 
@@ -91,7 +94,10 @@ test("sends the prompt, model and the run's tools to the adapter and returns the
     assert.equal(body.cwd, "/workspace");
     assert.equal(typeof body.systemPrompt, "string");
     assert.ok(body.systemPrompt.length > 200, "the run gets the workspace system prompt, not an empty one");
-    assert.deepEqual(body.model, { model: "gpt-x", baseUrl: "http://llm.test/v1", apiKey: "sk-test", provider: "OpenAI" });
+    assert.equal(body.model.model, "gpt-x");
+    assert.match(body.model.baseUrl, /^http:\/\/127\.0\.0\.1:\d+\/v1$/, "the adapter is pointed at the run's loopback model gateway, not the provider");
+    assert.notEqual(body.model.apiKey, "sk-test", "the provider's key never leaves this process");
+    assert.equal(body.model.provider, "OpenAI");
     const echo = body.tools.find((tool: { name: string }) => tool.name === "echo");
     assert.equal(echo.description, "Echo a word.");
     assert.deepEqual(echo.inputSchema.required, ["word"]);
@@ -142,12 +148,13 @@ test("plugin-contributed tools (update_plan) are offered to the adapter and run 
   let reply: any;
   const adapter = await fakeAdapter(async ({ body }, response) => {
     offered = body.tools.map((tool: { name: string }) => tool.name);
+    response.writeHead(200);
+    response.write(line({ event: { type: "tool.started", trace: { id: "call-plan", name: "update_plan", args: { plan: [{ step: "Do it", status: "in_progress" }] }, status: "running" } } }));
     const call = await fetch(body.bridge.url, {
       method: "POST", headers: { authorization: `Bearer ${body.bridge.token}` },
       body: JSON.stringify({ name: "update_plan", arguments: { plan: [{ step: "Do it", status: "in_progress" }] } }),
     });
     reply = await call.json();
-    response.writeHead(200);
     response.end(line({ done: { finalText: "planned" } }));
   });
   try {
@@ -164,20 +171,38 @@ test("plugin-contributed tools (update_plan) are offered to the adapter and run 
   }
 });
 
-test("reported token usage becomes a model_usage event the run can record", async () => {
+test("reported token usage becomes model_usage events and one summed usage event at the end", async () => {
   const adapter = await fakeAdapter((_request, response) => {
     response.writeHead(200);
-    response.write(line({ event: { type: "model.usage", usage: { inputTokens: 731, outputTokens: 87, totalTokens: 818, cacheReadTokens: 0, cacheWriteTokens: null }, reasoningTokens: 71 } }));
+    response.write(line({ event: { type: "model.usage", usage: { inputTokens: 700, outputTokens: 80, totalTokens: 780, cacheReadTokens: 0, cacheWriteTokens: null }, reasoningTokens: 71 } }));
+    response.write(line({ event: { type: "model.usage", usage: { inputTokens: 31, outputTokens: 7, totalTokens: 38, cacheReadTokens: 10, cacheWriteTokens: null } } }));
     response.end(line({ done: { finalText: "" } }));
   });
   try {
     const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options());
     const events = collect(agent);
     await agent.execute("go");
-    assert.deepEqual(events, [{
+    assert.deepEqual(events.map((event) => event.type), ["model_usage", "model_usage", "usage"]);
+    assert.deepEqual(events[0], {
       type: "model_usage", usageReported: true,
-      usage: { inputTokens: 731, outputTokens: 87, totalTokens: 818, cacheReadTokens: 0, cacheWriteTokens: null },
-    }]);
+      usage: { inputTokens: 700, outputTokens: 80, totalTokens: 780, cacheReadTokens: 0, cacheWriteTokens: null },
+    });
+    const summary = (events[2] as { usage: unknown }).usage;
+    assert.deepEqual(summary, { cacheReadTokens: 10, cacheWriteTokens: null, inputTokens: 731, outputTokens: 87, totalTokens: 818 });
+    // The same key order the native agent's summary has: it is serialised into subagent results.
+    assert.deepEqual(Object.keys(summary as object), ["inputTokens", "outputTokens", "totalTokens", "cacheReadTokens", "cacheWriteTokens"]);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("a run that reported no usage emits no usage summary", async () => {
+  const adapter = await fakeAdapter((_request, response) => { response.writeHead(200); response.end(line({ done: { finalText: "x" } })); });
+  try {
+    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options());
+    const events = collect(agent);
+    await agent.execute("go");
+    assert.equal(events.some((event) => event.type === "usage"), false);
   } finally {
     await adapter.close();
   }
@@ -187,6 +212,9 @@ test("a tool call from the adapter runs the real tool here and is reported as to
   let bridgeStatus = 0;
   let bridgeReply: any;
   const adapter = await fakeAdapter(async ({ body }, response) => {
+    // As the real adapter does: report the model's call, then JiuwenSwarm calls the tool over MCP.
+    response.writeHead(200);
+    response.write(line({ event: { type: "tool.started", trace: { id: "call-echo-1", name: "echo", args: { word: "ping" }, status: "running" } } }));
     const call = await fetch(body.bridge.url, {
       method: "POST",
       headers: { authorization: `Bearer ${body.bridge.token}`, "content-type": "application/json" },
@@ -194,7 +222,6 @@ test("a tool call from the adapter runs the real tool here and is reported as to
     });
     bridgeStatus = call.status;
     bridgeReply = await call.json();
-    response.writeHead(200);
     response.end(line({ done: { finalText: "ok" } }));
   });
   try {
@@ -207,6 +234,7 @@ test("a tool call from the adapter runs the real tool here and is reported as to
     const end = events.find((event) => event.type === "tool_execution_end") as any;
     assert.equal(start.toolName, "echo");
     assert.deepEqual(start.args, { word: "ping" });
+    assert.equal(start.toolCallId, "call-echo-1", "the tool runs under the id the model gave it");
     assert.equal(end.toolCallId, start.toolCallId);
     assert.equal(end.isError, false);
     assert.equal(end.result.content[0].text, "echo:ping");
@@ -222,21 +250,26 @@ test("a throwing tool is a tool error, not a failed run", async () => {
   };
   let reply: any;
   const adapter = await fakeAdapter(async ({ body }, response) => {
+    response.writeHead(200);
+    response.write(line({ event: { type: "tool.started", trace: { id: "call-boom", name: "boom", args: {}, status: "running" } } }));
     const call = await fetch(body.bridge.url, {
       method: "POST", headers: { authorization: `Bearer ${body.bridge.token}` },
       body: JSON.stringify({ name: "boom", arguments: {} }),
     });
     reply = await call.json();
-    response.writeHead(200);
     response.end(line({ done: { finalText: "carried on" } }));
   });
   try {
     const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ extraTools: [failing as never] }));
     const events = collect(agent);
     const result = await agent.execute("go");
-    assert.deepEqual(reply, { text: "disk on fire", isError: true });
+    // The standard error shape the native registry produces, so the model sees the same JSON either way.
+    assert.equal(reply.isError, true);
+    assert.deepEqual(JSON.parse(reply.text), {
+      ok: false, error: { attempts: 1, code: "TOOL_EXECUTION_FAILED", message: "disk on fire", retryable: false },
+    });
     assert.equal((events.find((event) => event.type === "tool_execution_end") as any).isError, true);
-    assert.equal(result.finalMessages[1]!.content, "carried on");
+    assert.equal(result.finalMessages.at(-1)!.content, "carried on");
   } finally {
     await adapter.close();
   }
@@ -345,4 +378,516 @@ test("the executor is chosen by SCIENCE_AGENT_EXECUTOR and needs the adapter URL
     }),
     { adapterUrl: "http://127.0.0.1:4310", adapterToken: "t" },
   );
+});
+
+test("a tool is not run until the adapter has reported the model's call, so the response comes first", async () => {
+  const order: string[] = [];
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    response.writeHead(200);
+    // JiuwenSwarm's MCP call arrives *before* the adapter's report of the same call ...
+    const call = fetch(body.bridge.url, {
+      method: "POST", headers: { authorization: `Bearer ${body.bridge.token}` },
+      body: JSON.stringify({ name: "echo", arguments: { word: "late" } }),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    // ... which then reports the model call's (empty) response and the call itself.
+    response.write(line({ event: { type: "agent.phase", phase: "thinking", turn: 1 } }));
+    response.write(line({ event: { type: "assistant.response.started", responseId: "r1", turn: 1 } }));
+    response.write(line({ event: { type: "assistant.response.settled", responseId: "r1", turn: 1 } }));
+    response.write(line({ event: { type: "tool.started", trace: { id: "call-late", name: "echo", args: { word: "late" }, status: "running" } } }));
+    await call;
+    response.end(line({ done: { finalText: "" } }));
+  });
+  try {
+    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options());
+    agent.subscribe((event) => order.push(event.type));
+    await agent.execute("go");
+    assert.deepEqual(order, ["turn_start", "response_start", "response_settled", "tool_execution_start", "tool_execution_end"]);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("two calls to the same tool with different arguments are matched to their own model call ids", async () => {
+  const started: Array<{ id: string; word: string }> = [];
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    response.writeHead(200);
+    for (const [id, word] of [["call-a", "one"], ["call-b", "two"]]) {
+      response.write(line({ event: { type: "tool.started", trace: { id, name: "echo", args: { word }, status: "running" } } }));
+    }
+    // JiuwenSwarm may call them in either order.
+    await Promise.all(["two", "one"].map((word) => fetch(body.bridge.url, {
+      method: "POST", headers: { authorization: `Bearer ${body.bridge.token}` },
+      body: JSON.stringify({ name: "echo", arguments: { word } }),
+    })));
+    response.end(line({ done: { finalText: "" } }));
+  });
+  try {
+    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options());
+    agent.subscribe((event) => {
+      if (event.type === "tool_execution_start") started.push({ id: event.toolCallId, word: String((event.args as { word: string }).word) });
+    });
+    await agent.execute("go");
+    assert.deepEqual(started.sort((a, b) => a.word.localeCompare(b.word)), [{ id: "call-a", word: "one" }, { id: "call-b", word: "two" }]);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("the run leaves the model-facing transcript of its tool round, as the native agent does", async () => {
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    response.writeHead(200);
+    response.write(line({ event: { type: "assistant.response.started", responseId: "r1", turn: 1 } }));
+    response.write(line({ event: { type: "assistant.response.settled", responseId: "r1", turn: 1 } }));
+    response.write(line({ event: { type: "tool.started", trace: { id: "call-1", name: "echo", input: "{\"word\": \"hi\"}", args: { word: "hi" }, status: "running" } } }));
+    await fetch(body.bridge.url, {
+      method: "POST", headers: { authorization: `Bearer ${body.bridge.token}` },
+      body: JSON.stringify({ name: "echo", arguments: { word: "hi" } }),
+    });
+    response.write(line({ event: { type: "assistant.response.started", responseId: "r2", turn: 2 } }));
+    response.write(line({ event: { type: "assistant.delta", delta: "It said hi.", responseId: "r2" } }));
+    response.write(line({ event: { type: "assistant.response.settled", responseId: "r2", turn: 2 } }));
+    response.end(line({ done: { finalText: "It said hi." } }));
+  });
+  try {
+    const result = await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options()).execute("say hi");
+    assert.deepEqual(result.finalMessages, [
+      { role: "user", content: "say hi" },
+      { role: "assistant", content: "", tool_calls: [{ id: "call-1", type: "function", function: { name: "echo", arguments: "{\"word\":\"hi\"}" } }] },
+      { role: "tool", tool_call_id: "call-1", name: "echo", content: "echo:hi" },
+      { role: "assistant", content: "It said hi." },
+    ]);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("a tool nobody reported still runs (under a generated id) instead of hanging the run", async () => {
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    response.writeHead(200);
+    const call = await fetch(body.bridge.url, {
+      method: "POST", headers: { authorization: `Bearer ${body.bridge.token}` },
+      body: JSON.stringify({ name: "echo", arguments: { word: "orphan" } }),
+    });
+    assert.equal(call.status, 200);
+    response.end(line({ done: { finalText: "" } }));
+  });
+  const warn = console.warn;
+  console.warn = () => undefined;
+  try {
+    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url, toolAnnouncementTimeoutMs: 200 } as never)(options());
+    const events = collect(agent);
+    await agent.execute("go");
+    assert.equal(events.some((event) => event.type === "tool_execution_end"), true);
+  } finally {
+    console.warn = warn;
+    await adapter.close();
+  }
+});
+
+test("the tool runs with the model's own arguments even though JiuwenSwarm added defaults and dropped empties", async () => {
+  const seen: unknown[] = [];
+  const probe = {
+    label: "Probe", name: "probe", description: "Records what it was called with.",
+    parameters: Type.Object({ word: Type.String(), extra: Type.Optional(Type.Number()), list: Type.Optional(Type.Array(Type.String())) }),
+    execute: async (_id: string, params: unknown) => { seen.push(params); return { content: [{ type: "text" as const, text: "ok" }] }; },
+  };
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    response.writeHead(200);
+    // the model sent {word, list: []}; JiuwenSwarm calls the tool with {word, extra: 7200} (default added, empty list dropped)
+    response.write(line({ event: { type: "tool.started", trace: { id: "call-p", name: "probe", args: { word: "w", list: [] }, status: "running" } } }));
+    await fetch(body.bridge.url, {
+      method: "POST", headers: { authorization: `Bearer ${body.bridge.token}` },
+      body: JSON.stringify({ name: "probe", arguments: { word: "w", extra: 7200 } }),
+    });
+    response.end(line({ done: { finalText: "" } }));
+  });
+  try {
+    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ extraTools: [probe as never] }));
+    const events = collect(agent);
+    await agent.execute("go");
+    assert.deepEqual(seen, [{ word: "w", list: [] }]);
+    const start = events.find((event) => event.type === "tool_execution_start") as { args: unknown; toolCallId: string };
+    assert.deepEqual(start.args, { word: "w", list: [] });
+    assert.equal(start.toolCallId, "call-p");
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("tool details in the run's events are sanitised and bounded like the native agent's", async () => {
+  const leaky = {
+    label: "Leaky", name: "leaky", description: "Returns details with a secret and a payload.", parameters: Type.Object({}),
+    execute: async () => ({ content: [{ type: "text" as const, text: "done" }], details: { apiKey: "sk-secret-value", stdout: "fine", note: "kept" } }),
+  };
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    response.writeHead(200);
+    response.write(line({ event: { type: "tool.started", trace: { id: "call-l", name: "leaky", args: {}, status: "running" } } }));
+    await fetch(body.bridge.url, { method: "POST", headers: { authorization: `Bearer ${body.bridge.token}` }, body: JSON.stringify({ name: "leaky", arguments: {} }) });
+    response.end(line({ done: { finalText: "" } }));
+  });
+  try {
+    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ extraTools: [leaky as never] }));
+    const events = collect(agent);
+    await agent.execute("go");
+    const end = events.find((event) => event.type === "tool_execution_end") as { result: { details: Record<string, unknown> } };
+    assert.equal(end.result.details.apiKey, "[redacted]", "secrets are redacted before they reach a run event");
+    assert.equal(end.result.details.stdout, "[omitted]", "payload fields are left out of run events");
+    assert.equal((end.result.details.__detailsBoundary as { omittedPayloadFields: boolean }).omittedPayloadFields, true);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("deferred tools (custom MCP) are callable at once, and tool_search is offered and answers", async () => {
+  const bulky = {
+    label: "Bulky", name: "mcp__custom-1__bulky", description: "A deferred MCP tool.", deferred: true,
+    parameters: Type.Object({ text: Type.String() }),
+    execute: async (_id: string, params: { text: string }) => ({ content: [{ type: "text" as const, text: `bulky:${params.text}` }] }),
+  };
+  let offered: string[] = [];
+  let direct: any;
+  let searched: any;
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    offered = body.tools.map((tool: { name: string }) => tool.name);
+    response.writeHead(200);
+    const call = (name: string, args: unknown) => fetch(body.bridge.url, {
+      method: "POST", headers: { authorization: `Bearer ${body.bridge.token}` }, body: JSON.stringify({ name, arguments: args }),
+    }).then((reply) => reply.json());
+    response.write(line({ event: { type: "tool.started", trace: { id: "c-search", name: "tool_search", args: { query: "select:mcp__custom-1__bulky" }, status: "running" } } }));
+    searched = await call("tool_search", { query: "select:mcp__custom-1__bulky" });
+    response.write(line({ event: { type: "tool.started", trace: { id: "c-bulky", name: "mcp__custom-1__bulky", args: { text: "hi" }, status: "running" } } }));
+    direct = await call("mcp__custom-1__bulky", { text: "hi" });
+    response.end(line({ done: { finalText: "ok" } }));
+  });
+  try {
+    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ extraTools: [bulky as never] }));
+    await agent.execute("use it");
+    assert.ok(offered.includes("mcp__custom-1__bulky"), `offered: ${offered.join(", ")}`);
+    assert.ok(offered.includes("tool_search"));
+    assert.equal(searched.isError, false, searched.text);
+    assert.match(searched.text, /mcp__custom-1__bulky/);
+    assert.deepEqual(direct, { text: "bulky:hi", isError: false });
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("a run with no deferred tools is not offered tool_search", async () => {
+  let offered: string[] = [];
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    offered = body.tools.map((tool: { name: string }) => tool.name);
+    response.writeHead(200);
+    response.end(line({ done: { finalText: "ok" } }));
+  });
+  try {
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options()).execute("go");
+    assert.ok(!offered.includes("tool_search"), offered.join(", "));
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("the tools offered are exactly the native registry's, every one with its own schema (plus tool_search when some are deferred)", async () => {
+  const planStore = { latest: async () => undefined, update: async () => ({ id: "p", steps: [] }) as never };
+  const deferredTool = {
+    label: "D", name: "mcp__custom-2__d", description: "deferred", deferred: true,
+    parameters: Type.Object({ q: Type.String() }), execute: async () => ({ content: [{ type: "text" as const, text: "" }] }),
+  };
+  const opts = options({ planStore: planStore as never, extraTools: [deferredTool as never] });
+  const durable = new DurableContextStore({ history: [] });
+  const plugins = await startPluginScope(opts, durable, new AbortController().signal);
+  const registry = createToolRegistry(opts, plugins, durable);
+  const expected = new Map(registry.values().map((tool) => [tool.name, tool]));
+  await plugins.dispose();
+  let offered: Array<{ name: string; inputSchema: unknown }> = [];
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    offered = body.tools;
+    response.writeHead(200);
+    response.end(line({ done: { finalText: "ok" } }));
+  });
+  try {
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(opts).execute("go");
+    const names = offered.map((tool) => tool.name).sort();
+    assert.deepEqual(names, [...expected.keys(), "tool_search"].sort());
+    for (const tool of offered) {
+      if (tool.name === "tool_search") continue;
+      assert.deepEqual(tool.inputSchema, JSON.parse(JSON.stringify(expected.get(tool.name)!.parameters)), `schema of ${tool.name}`);
+    }
+    assert.ok(names.includes("update_plan"), "a plugin's tool is among them");
+    assert.ok(names.includes("mcp__custom-2__d"), "and so is a deferred one");
+  } finally {
+    await adapter.close();
+  }
+});
+
+/** Tools that log when they start and end, so overlap is visible. */
+function timedTools(log: string[], concurrencySafe: boolean) {
+  const make = (name: string, ms: number) => ({
+    label: name, name, description: name, parameters: Type.Object({}),
+    ...(concurrencySafe ? { isConcurrencySafe: () => true } : {}),
+    execute: async () => {
+      log.push(`${name}:start`);
+      await new Promise((resolve) => setTimeout(resolve, ms));
+      log.push(`${name}:end`);
+      return { content: [{ type: "text" as const, text: name }] };
+    },
+  });
+  return [make("slow_a", 60), make("fast_b", 5)];
+}
+
+/** One model response with two tool calls; JiuwenSwarm calls them side by side, the second one first. */
+async function respondWithTwoCalls(names: [string, string], calls: Array<{ args?: unknown; name: string }>, script?: { reverse?: boolean }) {
+  return await fakeAdapter(async ({ body }, response) => {
+    response.writeHead(200);
+    response.write(line({ event: { type: "assistant.response.started", responseId: "r1", turn: 1 } }));
+    calls.forEach((call, index) => response.write(line({ event: { type: "tool.started", trace: { id: `c${index + 1}`, name: call.name, args: call.args ?? {}, status: "running" } } })));
+    const send = (call: { args?: unknown; name: string }) => fetch(body.bridge.url, {
+      method: "POST", headers: { authorization: `Bearer ${body.bridge.token}` }, body: JSON.stringify({ name: call.name, arguments: call.args ?? {} }),
+    }).then((reply) => reply.json());
+    await Promise.all((script?.reverse === false ? calls : [...calls].reverse()).map(send));
+    response.end(line({ done: { finalText: "ok" } }));
+  });
+}
+
+test("tools not declared concurrency-safe run one at a time, in the order the model called them", async () => {
+  const log: string[] = [];
+  const adapter = await respondWithTwoCalls(["slow_a", "fast_b"], [{ name: "slow_a" }, { name: "fast_b" }]);
+  try {
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ extraTools: timedTools(log, false) as never })).execute("go");
+    assert.deepEqual(log, ["slow_a:start", "slow_a:end", "fast_b:start", "fast_b:end"]);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("tools declared concurrency-safe may overlap", async () => {
+  const log: string[] = [];
+  const adapter = await respondWithTwoCalls(["slow_a", "fast_b"], [{ name: "slow_a" }, { name: "fast_b" }]);
+  try {
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ extraTools: timedTools(log, true) as never })).execute("go");
+    assert.equal(log.indexOf("fast_b:end") < log.indexOf("slow_a:end"), true, log.join(" "));
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("two update_plan calls in one response: the earlier one is superseded, as in the native loop", async () => {
+  const updates: unknown[] = [];
+  const planStore = { latest: async () => undefined, update: async (input: unknown) => { updates.push(input); return { id: "p", steps: [] } as never; } };
+  const first = { plan: [{ step: "first", status: "pending" }] };
+  const second = { plan: [{ step: "second", status: "pending" }] };
+  const adapter = await respondWithTwoCalls(["update_plan", "update_plan"], [{ name: "update_plan", args: first }, { name: "update_plan", args: second }]);
+  try {
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ planStore: planStore as never })).execute("plan");
+    assert.deepEqual(updates, [{ plan: [{ status: "pending", step: "second" }] }]);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("an earlier call that never reaches the bridge does not hold up the later one for ever", async () => {
+  const log: string[] = [];
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    response.writeHead(200);
+    response.write(line({ event: { type: "assistant.response.started", responseId: "r1", turn: 1 } }));
+    response.write(line({ event: { type: "tool.started", trace: { id: "c1", name: "slow_a", args: {}, status: "running" } } }));
+    response.write(line({ event: { type: "tool.started", trace: { id: "c2", name: "fast_b", args: {}, status: "running" } } }));
+    await fetch(body.bridge.url, { method: "POST", headers: { authorization: `Bearer ${body.bridge.token}` }, body: JSON.stringify({ name: "fast_b", arguments: {} }) });
+    response.end(line({ done: { finalText: "ok" } }));
+  });
+  try {
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url, toolAnnouncementTimeoutMs: 100 })(options({ extraTools: timedTools(log, false) as never })).execute("go");
+    assert.deepEqual(log, ["fast_b:start", "fast_b:end"]);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("the run's timeout is passed on as the longest a single tool call may take", async () => {
+  let sent: any;
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    sent = body;
+    response.writeHead(200);
+    response.end(line({ done: { finalText: "ok" } }));
+  });
+  try {
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ runTimeoutMs: 90_000 })).execute("go");
+    assert.equal(sent.toolTimeoutSeconds, 90);
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options()).execute("go");
+    assert.equal("toolTimeoutSeconds" in sent, false);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("a run names the JiuwenSwarm session that holds its agent's conversation, and gives the model's window", async () => {
+  const sent: any[] = [];
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    sent.push(body);
+    response.writeHead(200);
+    response.end(line({ done: { finalText: "ok" } }));
+  });
+  try {
+    const factory = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url });
+    const base = options();
+    await factory({ ...base, config: { ...base.config, contextWindow: 131072 }, versioning: { agentId: "main:thread-1" } as never }).execute("a");
+    await factory({ ...base, versioning: { agentId: "subagent:Sub Agent/7" } as never }).execute("b");
+    assert.equal(sent[0].sessionKey, "session-1", "the main agent's conversation is the session's own");
+    assert.equal(sent[0].model.contextWindow, 131072);
+    assert.equal(sent[1].sessionKey, "session-1--subagent-Sub-Agent-7");
+    assert.equal("contextWindow" in sent[1].model, false);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("session keys: a run without an agent id is the main agent", () => {
+  assert.equal(jiuwenSwarmSessionKey({ sessionId: "s" } as never), "s");
+});
+
+function planRecorder() {
+  const updates: Array<{ input: any; toolCallId: string }> = [];
+  const store = { latest: async () => undefined, update: async (input: unknown, toolCallId: string) => { updates.push({ input, toolCallId }); return { id: "p", steps: [] } as never; } };
+  return { store, updates };
+}
+
+test("by default the model plans with our update_plan and JiuwenSwarm's todo tools are not offered", async () => {
+  let sent: any;
+  const adapter = await fakeAdapter(async ({ body }, response) => { sent = body; response.writeHead(200); response.end(line({ done: { finalText: "ok" } })); });
+  try {
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ planStore: planRecorder().store as never })).execute("go");
+    assert.ok(sent.tools.some((tool: { name: string }) => tool.name === "update_plan"));
+    assert.equal("nativeTools" in sent, false);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("in todo planning JiuwenSwarm's todo tools replace update_plan, and its todo list is recorded as the plan", async () => {
+  const { store, updates } = planRecorder();
+  let sent: any;
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    sent = body;
+    response.writeHead(200);
+    // The adapter's report of a JiuwenSwarm-run tool: it starts, its list changes, it completes.
+    response.write(line({ event: { type: "tool.started", trace: { id: "call-todo", name: "todo_create", args: { tasks: [{ id: "a", content: "Step A" }] }, status: "running" } } }));
+    response.write(line({ event: { type: "plan.updated", items: [
+      { id: "a", content: "Step A", status: "in_progress" }, { id: "b", content: "Step B", status: "pending" },
+      { id: "c", content: "Dropped", status: "cancelled" }, { id: "d", content: "  ", status: "pending" }] } }));
+    response.write(line({ event: { type: "tool.completed", trace: { id: "call-todo", name: "todo_create", args: {}, status: "completed", output: "created 2" } } }));
+    response.end(line({ done: { finalText: "ok" } }));
+  });
+  try {
+    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url, planning: "todo" })(options({ planStore: store as never }));
+    const events = collect(agent);
+    const result = await agent.execute("plan it");
+    assert.deepEqual(sent.nativeTools, ["todo_create", "todo_modify", "todo_list", "todo_get"]);
+    assert.equal(sent.tools.some((tool: { name: string }) => tool.name === "update_plan"), false, "the model is not also given our tool");
+    assert.deepEqual(updates, [{ input: { plan: [{ step: "Step A", status: "in_progress" }, { step: "Step B", status: "pending" }] }, toolCallId: "call-todo" }]);
+    const start = events.find((event) => event.type === "tool_execution_start") as any;
+    const end = events.find((event) => event.type === "tool_execution_end") as any;
+    assert.equal(start.toolName, "todo_create");
+    assert.equal(end.result.content[0].text, "created 2");
+    // The tool round is in the run's saved transcript, as for any tool.
+    const messages = result.finalMessages as any[];
+    assert.equal(messages.some((message) => message.role === "assistant" && message.tool_calls?.[0]?.id === "call-todo"), true);
+    assert.equal(messages.some((message) => message.role === "tool" && message.tool_call_id === "call-todo" && message.content === "created 2"), true);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("a JiuwenSwarm-run tool does not hold up the calls behind it at the bridge", async () => {
+  const log: string[] = [];
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    response.writeHead(200);
+    response.write(line({ event: { type: "assistant.response.started", responseId: "r1", turn: 1 } }));
+    response.write(line({ event: { type: "tool.started", trace: { id: "n1", name: "todo_create", args: {}, status: "running" } } }));
+    response.write(line({ event: { type: "tool.started", trace: { id: "c1", name: "slow_a", args: {}, status: "running" } } }));
+    await fetch(body.bridge.url, { method: "POST", headers: { authorization: `Bearer ${body.bridge.token}` }, body: JSON.stringify({ name: "slow_a", arguments: {} }) });
+    response.end(line({ done: { finalText: "ok" } }));
+  });
+  try {
+    const started = Date.now();
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url, planning: "todo", toolAnnouncementTimeoutMs: 2_000 })(
+      options({ extraTools: timedTools(log, false) as never, planStore: planRecorder().store as never })).execute("go");
+    assert.deepEqual(log, ["slow_a:start", "slow_a:end"]);
+    assert.ok(Date.now() - started < 1_500, "no wait for a call that never comes to the bridge");
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("todo planning is chosen by SCIENCE_AGENT_JIUWENSWARM_PLANNING", () => {
+  const env = { SCIENCE_AGENT_EXECUTOR: "jiuwenswarm", SCIENCE_AGENT_ADAPTER_URL: "http://a" };
+  assert.equal(jiuwenSwarmConfigFromEnv(env)?.planning, undefined);
+  assert.equal(jiuwenSwarmConfigFromEnv({ ...env, SCIENCE_AGENT_JIUWENSWARM_PLANNING: "todo" })?.planning, "todo");
+});
+
+/** The adapter side of a run that asks the model once, through the run's gateway, as JiuwenSwarm does. */
+function askTheModel(turn: unknown) {
+  const streamer = (async () => turn) as never;
+  const adapter = fakeAdapter(async ({ body }, response) => {
+    response.writeHead(200);
+    await fetch(`${body.model.baseUrl}/chat/completions`, {
+      method: "POST", headers: { authorization: `Bearer ${body.model.apiKey}` },
+      body: JSON.stringify({ stream: true, messages: [{ role: "user", content: "go" }] }),
+    }).then((reply) => reply.text());
+    response.end(line({ done: { finalText: "" } }));
+  });
+  return { adapter, streamer };
+}
+
+test("a model cut off at max_tokens while thinking, with no answer, fails the run and says what to raise", async () => {
+  const { adapter: pending, streamer } = askTheModel({ assistantMessage: { role: "assistant", content: "" }, toolCalls: [], truncated: true });
+  const adapter = await pending;
+  try {
+    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url, modelStreamer: streamer })(options());
+    const events = collect(agent);
+    await assert.rejects(agent.execute("go"), /max_tokens .*SCIENCE_AGENT_LLM_MAX_TOKENS/);
+    assert.equal(events.some((event) => event.type === "turn_truncated"), true);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("a turn cut off after it had said something still reports the cut, and does not fail", async () => {
+  const { adapter: pending, streamer } = askTheModel({ assistantMessage: { role: "assistant", content: "Here is the start" }, toolCalls: [], truncated: true });
+  const adapter = await pending;
+  try {
+    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url, modelStreamer: streamer })(options());
+    const events = collect(agent);
+    await agent.execute("go");
+    assert.equal(events.some((event) => event.type === "turn_truncated"), true);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("a turn that ended normally reports nothing", async () => {
+  const { adapter: pending, streamer } = askTheModel({ assistantMessage: { role: "assistant", content: "done" }, toolCalls: [] });
+  const adapter = await pending;
+  try {
+    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url, modelStreamer: streamer })(options());
+    const events = collect(agent);
+    await agent.execute("go");
+    assert.equal(events.some((event) => event.type === "turn_truncated"), false);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("no part of the conversation is sent to the adapter: JiuwenSwarm holds the context", async () => {
+  let sent: any;
+  const adapter = await fakeAdapter(async ({ body }, response) => { sent = body; response.writeHead(200); response.end(line({ done: { finalText: "ok" } })); });
+  try {
+    const history = [{ role: "user", content: "earlier question" }, { role: "assistant", content: "earlier answer" }];
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ gatewayHistory: history as never })).execute("next");
+    assert.equal("history" in sent, false);
+    assert.equal(sent.prompt, "next");
+    assert.equal(JSON.stringify(sent).includes("earlier answer"), false);
+  } finally {
+    await adapter.close();
+  }
 });

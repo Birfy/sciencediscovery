@@ -15,13 +15,17 @@
 
 // node test/contract/run.mjs --record baseline.json          record against $E2E_BASE_URL
 // node test/contract/run.mjs --compare baseline.json         replay and diff against a recording
+//                                                            (--strict: also fail on differences accepted-differences.json tolerates)
 // node test/contract/run.mjs --coverage                      which interface rows have no case yet
 // Options: --base URL (default $E2E_BASE_URL), --token T (default $E2E_API_TOKEN), --case ID (repeatable)
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { compareRecordings, coverage, loadCases, runAll } from "./lib.mjs";
+
+const acceptedFile = join(dirname(fileURLToPath(import.meta.url)), "accepted-differences.json");
+const loadAccepted = () => (existsSync(acceptedFile) ? JSON.parse(readFileSync(acceptedFile, "utf8")).rules : []);
 
 const here = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -62,8 +66,10 @@ if (option("--record")) { writeFileSync(option("--record"), JSON.stringify(recor
 if (option("--compare")) {
   const baseline = JSON.parse(readFileSync(option("--compare"), "utf8"));
   const wanted = Object.fromEntries(Object.entries(baseline).filter(([id]) => selected.some((testCase) => testCase.id === id)));
-  const problems = compareRecordings(wanted, recording);
-  console.log(problems.length ? problems.join("\n") : `${Object.keys(wanted).length} cases match the baseline.`);
+  const report = { accepted: [] };
+  const problems = compareRecordings(wanted, recording, args.includes("--strict") ? [] : loadAccepted(), report);
+  console.log(problems.length ? problems.join("\n") : `${Object.keys(wanted).length} cases match the baseline${report.accepted.length ? ` apart from ${report.accepted.length} accepted difference(s):` : "."}`);
+  for (const line of report.accepted) console.log(`  accepted: ${line}`);
   if (problems.length) process.exitCode = 1;
 }
 if (errors.length) { console.error(errors.join("\n")); process.exitCode = 1; }

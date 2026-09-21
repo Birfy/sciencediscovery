@@ -191,6 +191,22 @@ function normalizeHistoryMessage(message: WireMessage): WireMessage {
   return normalized;
 }
 
+/** The model endpoint a run talks to; shared by every executor so a model is reached the same way. */
+export function modelEndpointFor(options: Pick<NativeAgentOptions, "config">): ModelEndpoint {
+  const thinking = process.env.SCIENCE_AGENT_AGENT_THINKING?.trim();
+  return {
+    ...(options.config.apiProtocol ? { apiProtocol: options.config.apiProtocol } : {}),
+    ...(options.config.apiVariant ? { apiVariant: options.config.apiVariant } : {}),
+    baseUrl: options.config.baseUrl,
+    ...(options.config.apiToken ? { apiToken: options.config.apiToken } : {}),
+    model: options.config.model,
+    ...(options.config.thinkingEffort ? { thinkingEffort: options.config.thinkingEffort } : {}),
+    ...(options.config.thinkingMode ? { thinkingMode: options.config.thinkingMode } : {}),
+    ...(options.config.proxy ? { proxy: options.config.proxy } : {}),
+    ...(thinking === "disabled" || thinking === "enabled" ? { thinking } : {}),
+  } as ModelEndpoint;
+}
+
 function formatRunContract(contract: string): string {
   return [
     "<run_contract>",
@@ -229,6 +245,53 @@ export async function startPluginScope(
 /** Every execution tool one run gets: the workspace tools plus what plugins contribute. */
 export function pluginTools(plugins: Awaited<ReturnType<typeof startPluginScope>>): AgentTool[] {
   return plugins.contributions.flatMap((item) => item.tools);
+}
+
+/**
+ * The registry every run dispatches tool calls through: the workspace and plugin tools plus the
+ * tool-output reader, with the output guard (size bounds, references for oversized results),
+ * detail sanitisation, neutralisation of untrusted remote content and loop protection. Shared by
+ * every executor so a tool behaves the same wherever the model loop runs.
+ */
+export function createToolRegistry(
+  options: NativeAgentOptions,
+  plugins: Awaited<ReturnType<typeof startPluginScope>>,
+  durable: DurableContextStore,
+  hooks: { recordResult?: (input: Parameters<NonNullable<ConstructorParameters<typeof ToolRegistry<WireMessage>>[1]["recordResult"]>>[0]) => Promise<void> } = {},
+): ToolRegistry<WireMessage> {
+  const executionTools = buildTools(options);
+  // Retained per Session, not per AgentRun: a bounded result stays in the
+  // replayed history of later runs, so its ref has to keep resolving for as
+  // long as that history does. Session deletion removes this directory.
+  const toolOutputStore = new ToolOutputStore({
+    root: toolOutputStoreRoot(options.config.dataDir, options.sessionId),
+  });
+  const toolOutputSettings = resolveToolOutputSettings();
+  return new ToolRegistry([
+    ...executionTools, ...plugins.contributions.flatMap((item) => item.tools),
+    ...createToolOutputTools(toolOutputStore, {
+      tracker: new ToolOutputReadTracker(toolOutputSettings.readPolicy),
+    }),
+  ], {
+    batchPolicies: plugins.contributions.flatMap((item) => item.batchPolicies),
+    createResultMessage: (call, content, output) => ({
+      role: "tool", tool_call_id: call.id, name: call.name, content,
+      ...(output ? { additional_kwargs: { tool_output: output } } : {}),
+    }),
+    commitResult: async ({ call, content, isError, sequence }) => {
+      durable.observe(call, { content, isError }, sequence);
+      for (const contribution of plugins.contributions) {
+        await contribution.commitResult?.({ call, content, isError, sequence });
+      }
+    },
+    recordResult: hooks.recordResult,
+    outputGuard: new ToolOutputGuard({
+      maxBytes: toolOutputSettings.maxBytes,
+      maxLines: toolOutputSettings.maxLines,
+      retentionBytes: toolOutputSettings.retentionBytes,
+      sink: toolOutputStore,
+    }),
+  });
 }
 
 /**
@@ -304,38 +367,8 @@ class NativeAgent implements NativeAgentHandle {
       this.versionRecorder?.childCompleted(`subagent:${result.id}`);
       return result;
     } : undefined);
-    const executionTools = buildTools(options);
-    // Retained per Session, not per AgentRun: a bounded result stays in the
-    // replayed history of later runs, so its ref has to keep resolving for as
-    // long as that history does. Session deletion removes this directory.
-    const toolOutputStore = new ToolOutputStore({
-      root: toolOutputStoreRoot(options.config.dataDir, options.sessionId),
-    });
-    const toolOutputSettings = resolveToolOutputSettings();
-    this.toolRegistry = new ToolRegistry([
-      ...executionTools, ...this.plugins.contributions.flatMap((item) => item.tools),
-      ...createToolOutputTools(toolOutputStore, {
-        tracker: new ToolOutputReadTracker(toolOutputSettings.readPolicy),
-      }),
-    ], {
-      batchPolicies: this.plugins.contributions.flatMap((item) => item.batchPolicies),
-      createResultMessage: (call, content, output) => ({
-        role: "tool", tool_call_id: call.id, name: call.name, content,
-        ...(output ? { additional_kwargs: { tool_output: output } } : {}),
-      }),
-      commitResult: async ({ call, content, isError, sequence }) => {
-        this.durableContext.observe(call, { content, isError }, sequence);
-        for (const contribution of this.plugins!.contributions) {
-          await contribution.commitResult?.({ call, content, isError, sequence });
-        }
-      },
+    this.toolRegistry = createToolRegistry(options, this.plugins, this.durableContext, {
       recordResult: options.versioning ? async (input) => { await this.versionRecorder?.recordObservation(input); } : undefined,
-      outputGuard: new ToolOutputGuard({
-        maxBytes: toolOutputSettings.maxBytes,
-        maxLines: toolOutputSettings.maxLines,
-        retentionBytes: toolOutputSettings.retentionBytes,
-        sink: toolOutputStore,
-      }),
     });
     const toolNames = new Set(this.toolRegistry.values().map((tool) => tool.name));
     this.promptSkills = toolNames.has("read_skill")
@@ -352,18 +385,7 @@ class NativeAgent implements NativeAgentHandle {
     // toggle itself. Left unset by default: for most models the loop's own
     // reasoning is what makes it work. This belongs on the model profile
     // eventually; until then it is one switch for the deployment.
-    const thinking = process.env.SCIENCE_AGENT_AGENT_THINKING?.trim();
-    this.endpoint = {
-      ...(options.config.apiProtocol ? { apiProtocol: options.config.apiProtocol } : {}),
-      ...(options.config.apiVariant ? { apiVariant: options.config.apiVariant } : {}),
-      baseUrl: options.config.baseUrl,
-      ...(options.config.apiToken ? { apiToken: options.config.apiToken } : {}),
-      model: options.config.model,
-      ...(options.config.thinkingEffort ? { thinkingEffort: options.config.thinkingEffort } : {}),
-      ...(options.config.thinkingMode ? { thinkingMode: options.config.thinkingMode } : {}),
-      ...(options.config.proxy ? { proxy: options.config.proxy } : {}),
-      ...(thinking === "disabled" || thinking === "enabled" ? { thinking } : {}),
-    };
+    this.endpoint = modelEndpointFor(options);
     this.policy = resolveModelClientPolicy();
   }
 

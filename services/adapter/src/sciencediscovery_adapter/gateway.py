@@ -53,13 +53,20 @@ class ChatRun:
     connection, as the JiuwenSwarm CLI does.
     """
 
-    def __init__(self, url: str, params: dict[str, Any], *, idle_timeout: float | None = None) -> None:
+    def __init__(self, url: str, params: dict[str, Any], *, idle_timeout: float | None = None,
+                 reconnects: int = 3, reconnect_delay: float = 0.5) -> None:
         self._url = url
         self._params = params
         self._idle_timeout = idle_timeout
         self._connection: Any = None
+        self._reconnects = reconnects
+        self._reconnect_delay = reconnect_delay
+        #: How many times the connection was lost mid-run and taken up again (frames in between are gone).
+        self.resumed = 0
+        # Reconnects in a row that brought no frame; a frame from the run starts the count again.
+        self._misses = 0
 
-    async def __aenter__(self) -> "ChatRun":
+    async def _connect(self) -> None:
         try:
             self._connection = await websockets.connect(self._url, max_size=None)
         except OSError as error:
@@ -68,8 +75,34 @@ class ChatRun:
         if ack.get("event") != "connection.ack":
             await self._connection.close()
             raise GatewayError(f"expected connection.ack, got {ack.get('type')}/{ack.get('event')}")
+
+    async def __aenter__(self) -> "ChatRun":
+        await self._connect()
         await self._send("chat", "chat.send", self._params)
         return self
+
+    async def _reattach(self) -> bool:
+        """Take the run up again on a new connection with `chat.resume`.
+
+        Measured on JiuwenSwarm 0.2.6: a run keeps going when its client's connection drops; `chat.resume`
+        from a new connection answers `chat.interrupt_result` "task resumed" and the run's frames flow to
+        it again, but nothing sent in the gap is replayed. It answers "task completed" when there is no
+        run to take up. Returns whether a live run was found.
+        """
+        while self._misses < self._reconnects:
+            self._misses += 1
+            await asyncio.sleep(self._reconnect_delay * self._misses)
+            try:
+                await self._connect()
+            except (GatewayError, websockets.WebSocketException, OSError):
+                continue
+            await self._send("resume", "chat.resume", {
+                "session_id": self._params["session_id"], "query": "", "mode": self._params.get("mode"),
+                "supports_user_interaction": True,
+            })
+            self.resumed += 1
+            return True
+        return False
 
     async def __aexit__(self, *exc_info: object) -> None:
         if self._connection is not None:
@@ -106,11 +139,38 @@ class ChatRun:
             try:
                 raw = await asyncio.wait_for(self._connection.recv(), self._idle_timeout)
             except websockets.ConnectionClosed as error:
-                raise GatewayError("gateway closed the connection mid-run") from error
+                if not await self._reattach():
+                    raise GatewayError("gateway closed the connection mid-run") from error
+                continue
             frame = json.loads(raw)
+            if self.resumed:
+                if _no_run_to_resume(frame):
+                    # The run ended while we were away: what it said in the gap is gone.
+                    raise GatewayError("the run ended while the connection to the gateway was down")
+                if _resume_answer(frame):
+                    continue
+            self._misses = 0
             yield frame
             if _ends_run(frame):
                 return
+
+
+def _notice(frame: dict[str, Any]) -> str:
+    """The text of a `chat.interrupt_result` frame ("" for any other frame)."""
+    if frame.get("event") != "chat.interrupt_result":
+        return ""
+    payload = frame.get("payload") or {}
+    return str(payload.get("message") or payload.get("content") or "")
+
+
+def _no_run_to_resume(frame: dict[str, Any]) -> bool:
+    """`chat.resume` found nothing running: JiuwenSwarm answers with a completed-task notice."""
+    return "已完成" in _notice(frame)
+
+
+def _resume_answer(frame: dict[str, Any]) -> bool:
+    """The gateway's own answer to a `chat.resume` (`res`, then "task resumed"); not part of the run."""
+    return (frame.get("type") == "res" and str(frame.get("id", "")).startswith("resume-")) or "已恢复" in _notice(frame)
 
 
 async def chat(url: str, params: dict[str, Any], *, idle_timeout: float | None = None) -> AsyncIterator[dict[str, Any]]:

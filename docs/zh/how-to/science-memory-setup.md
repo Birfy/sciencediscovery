@@ -95,7 +95,7 @@ Neo4j 跑起来后（并把“存储后端”设为“Neo4j 服务”），配�
 ### 2.1 打开设置
 
 1. 打开 ScienceDiscovery Web UI（默认 <http://127.0.0.1:4310>）并登录。
-2. 点右上角 系统配置（System configuration）按钮，打开系统设置对话框。
+2. 点左侧栏底部的 系统配置（System configuration）按钮，打开系统设置对话框。
 3. 左侧分组列表里选 记忆（Memory）。
 
 ### 2.2 填写四项
