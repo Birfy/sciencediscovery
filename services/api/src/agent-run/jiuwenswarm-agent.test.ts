@@ -164,20 +164,37 @@ test("plugin-contributed tools (update_plan) are offered to the adapter and run 
   }
 });
 
-test("reported token usage becomes a model_usage event the run can record", async () => {
+test("reported token usage becomes model_usage events and one summed usage event at the end", async () => {
   const adapter = await fakeAdapter((_request, response) => {
     response.writeHead(200);
-    response.write(line({ event: { type: "model.usage", usage: { inputTokens: 731, outputTokens: 87, totalTokens: 818, cacheReadTokens: 0, cacheWriteTokens: null }, reasoningTokens: 71 } }));
+    response.write(line({ event: { type: "model.usage", usage: { inputTokens: 700, outputTokens: 80, totalTokens: 780, cacheReadTokens: 0, cacheWriteTokens: null }, reasoningTokens: 71 } }));
+    response.write(line({ event: { type: "model.usage", usage: { inputTokens: 31, outputTokens: 7, totalTokens: 38, cacheReadTokens: 10, cacheWriteTokens: null } } }));
     response.end(line({ done: { finalText: "" } }));
   });
   try {
     const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options());
     const events = collect(agent);
     await agent.execute("go");
-    assert.deepEqual(events, [{
+    assert.deepEqual(events.map((event) => event.type), ["model_usage", "model_usage", "usage"]);
+    assert.deepEqual(events[0], {
       type: "model_usage", usageReported: true,
-      usage: { inputTokens: 731, outputTokens: 87, totalTokens: 818, cacheReadTokens: 0, cacheWriteTokens: null },
-    }]);
+      usage: { inputTokens: 700, outputTokens: 80, totalTokens: 780, cacheReadTokens: 0, cacheWriteTokens: null },
+    });
+    assert.deepEqual((events[2] as { usage: unknown }).usage, {
+      cacheReadTokens: 10, cacheWriteTokens: null, inputTokens: 731, outputTokens: 87, totalTokens: 818,
+    });
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("a run that reported no usage emits no usage summary", async () => {
+  const adapter = await fakeAdapter((_request, response) => { response.writeHead(200); response.end(line({ done: { finalText: "x" } })); });
+  try {
+    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options());
+    const events = collect(agent);
+    await agent.execute("go");
+    assert.equal(events.some((event) => event.type === "usage"), false);
   } finally {
     await adapter.close();
   }

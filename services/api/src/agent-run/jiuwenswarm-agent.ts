@@ -173,6 +173,7 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
       else translator.handle(line.event);
     }
     if (failure !== undefined) throw new Error(failure);
+    translator.finish();
     return finalText;
   }
 }
@@ -184,6 +185,7 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
  */
 class EventTranslator {
   private turn = 0;
+  private total: { cacheReadTokens: number | null; cacheWriteTokens: number | null; inputTokens: number; outputTokens: number; totalTokens: number } | undefined;
 
   constructor(private readonly emit: Listener) {}
 
@@ -216,11 +218,30 @@ class EventTranslator {
       case "model.usage": {
         const usage = event.usage as { cacheReadTokens?: number | null; cacheWriteTokens?: number | null; inputTokens: number; outputTokens: number; totalTokens: number };
         this.emit({ type: "model_usage", usage, usageReported: true });
+        this.add(usage);
         break;
       }
       default:
         break;
     }
+  }
+
+  /** Sum of the model calls of the run; null stays null unless some call reported a number. */
+  private add(usage: { cacheReadTokens?: number | null; cacheWriteTokens?: number | null; inputTokens: number; outputTokens: number; totalTokens: number }): void {
+    const plus = (a: number | null, b: number | null | undefined) => (b === null || b === undefined ? a : (a ?? 0) + b);
+    const total = this.total ?? { cacheReadTokens: null, cacheWriteTokens: null, inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+    this.total = {
+      cacheReadTokens: plus(total.cacheReadTokens, usage.cacheReadTokens),
+      cacheWriteTokens: plus(total.cacheWriteTokens, usage.cacheWriteTokens),
+      inputTokens: total.inputTokens + usage.inputTokens,
+      outputTokens: total.outputTokens + usage.outputTokens,
+      totalTokens: total.totalTokens + usage.totalTokens,
+    };
+  }
+
+  /** The `usage` event the native agent emits once, after the last model call. */
+  finish(): void {
+    if (this.total) this.emit({ type: "usage", usage: this.total });
   }
 
   private startTurn(turn: number): void {

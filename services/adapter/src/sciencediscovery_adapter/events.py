@@ -114,6 +114,9 @@ class RunEventMapper:
     unmapped: list[str] = field(default_factory=list)
     session_id: str = ""
     _response_id: str | None = None
+    # Whether the current model call has produced a response yet. The native agent announces a
+    # response for every model call, even one that only ends in a tool call or an error.
+    _turn_has_response: bool = False
     _permissions: dict[str, list[str]] = field(default_factory=dict)
     _pending_requests: dict[str, dict[str, Any]] = field(default_factory=dict)
     _denied: set[str] = field(default_factory=set)
@@ -145,8 +148,15 @@ class RunEventMapper:
     def _open_response(self) -> list[dict[str, Any]]:
         if self._response_id is not None:
             return []
-        self._response_id = uuid.uuid4().hex
+        self._response_id = str(uuid.uuid4())  # the same shape the native agent uses
+        self._turn_has_response = True
         return [{"type": "assistant.response.started", "responseId": self._response_id, "turn": self.turn}]
+
+    def _empty_response(self) -> list[dict[str, Any]]:
+        """The started/settled pair of a model call that produced no text."""
+        if self._turn_has_response or self.turn == 0:
+            return []
+        return [*self._open_response(), *self._settle_response()]
 
     def _settle_response(self) -> list[dict[str, Any]]:
         if self._response_id is None:
@@ -157,7 +167,7 @@ class RunEventMapper:
 
     def _fail(self, message: str) -> list[dict[str, Any]]:
         self.finished = True
-        events = self._settle_response()
+        events = [*self._empty_response(), *self._settle_response()]
         events.append({"type": "run.failed", "error": message, "errorCode": classify_failure(message)})
         return events
 
@@ -228,7 +238,7 @@ class RunEventMapper:
         if call.get("display_name"):
             trace["summary"] = str(call["display_name"])
         self._tools[tool_id] = trace
-        return [*self._settle_response(), {"type": "tool.started", "trace": dict(trace)}]
+        return [*self._empty_response(), *self._settle_response(), {"type": "tool.started", "trace": dict(trace)}]
 
     def _on_chat_tool_result(self, payload: dict[str, Any]) -> list[dict[str, Any]]:
         tool_id = str(payload.get("tool_call_id") or "")
@@ -258,6 +268,7 @@ class RunEventMapper:
             return []
         trace.update({"status": "completed" if ok else "failed", "output": text, "outputChars": len(text)})
         self.turn += 1
+        self._turn_has_response = False  # the next model call is a new turn
         return [
             {"type": "tool.output", "toolCallId": tool_id, "chunk": text},
             {"type": "tool.completed", "trace": trace},

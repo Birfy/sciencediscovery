@@ -79,7 +79,8 @@ async def test_real_gateway_tool_round_maps_to_tool_events():
     async for frame in chat(URL, params(f"live-{uuid.uuid4().hex[:8]}", "run it"), idle_timeout=60):
         events.extend(mapper.feed(frame))
     kinds = [e["type"] for e in events]
-    assert kinds[:4] == ["agent.phase", "tool.started", "tool.output", "tool.completed"]
+    assert kinds[:6] == ["agent.phase", "assistant.response.started", "assistant.response.settled",
+                         "tool.started", "tool.output", "tool.completed"]
     completed = next(e for e in events if e["type"] == "tool.completed")["trace"]
     assert completed["status"] == "completed" and "J-MARK-1" in completed["output"]
     assert mapper.final_text == "tool finished ok"
