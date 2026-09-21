@@ -65,6 +65,8 @@ def harness(monkeypatch):
     rpcs = []
 
     async def fake_rpc(url, method, params=None, **kwargs):
+        if method == "models.list" and not rpcs and not FakeRun.instances:
+            return {}  # the clean-up at start-up (see test_start_up_removes_stale_aliases), not part of a run
         rpcs.append((url, method, params))
         return {}
 
@@ -250,3 +252,19 @@ async def test_a_run_without_history_keeps_the_callers_session(harness):
     app, *_ = harness
     await post(app, {"sessionId": "s1", "prompt": "hi"})
     assert FakeRun.instances[0].params["session_id"] == "s1"
+
+
+async def test_start_up_removes_stale_aliases_left_by_an_earlier_process():
+    calls = []
+
+    async def rpc(url, method, params=None, **kwargs):
+        calls.append(method)
+        if method == "models.list":
+            return {"models": [{"model_name": "sd-old", "is_default": False}, {"model_name": "kept", "is_default": True}]}
+        return {}
+
+    app = create_app(SETTINGS)
+    app.state.agent_runner.models._rpc = rpc
+    async with app.router.lifespan_context(app):
+        pass
+    assert calls == ["models.list", "models.replace_all"]
