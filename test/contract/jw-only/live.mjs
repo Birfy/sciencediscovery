@@ -412,6 +412,32 @@ const checks = {
     }
   },
 
+  /**
+   * The trajectory view has a JiuwenSwarm run: its model inputs (as sent, JiuwenSwarm's prompt included), the
+   * states around each turn and the tool call, linked to the input that asked for it.
+   */
+  async trajectory() {
+    const stub = await startStubModel({ main: [{ tool: "run_shell", arguments: { command: "echo TRAJ-OK" } }, { text: "Done." }] });
+    const { sessionId, cleanup } = await setup(stub);
+    try {
+      const run = await runAndWait(sessionId, "Run it.");
+      if (run.status !== "completed") throw new Error(`run ${run.status}: ${run.error}`);
+      const index = await api("GET", `/api/sessions/${sessionId}/trajectory`);
+      const entries = index.entries ?? index;
+      const kinds = entries.reduce((count, entry) => ({ ...count, [entry.kind]: (count[entry.kind] ?? 0) + 1 }), {});
+      const inputs = entries.filter((entry) => entry.kind === "input");
+      if (inputs.length < 2) throw new Error(`expected a model input per turn (2), saw ${inputs.length}: ${JSON.stringify(kinds)}`);
+      const detail = await api("GET", `/api/sessions/${sessionId}/trajectory/detail?id=${encodeURIComponent(inputs[0].id)}`);
+      const text = JSON.stringify(detail);
+      if (!text.includes("JiuwenSwarm") || !text.includes("run_shell")) throw new Error(`the model input is not what was sent: ${text.slice(0, 300)}`);
+      const linkedTool = entries.find((entry) => /tool/.test(entry.kind) && entry.contextId);
+      if (!linkedTool) throw new Error(`no tool entry linked to a model input: ${JSON.stringify(kinds)}`);
+      console.log(`trajectory: ok (${JSON.stringify(kinds)}; the model input holds JiuwenSwarm's prompt and the tools; the tool call is linked to its input)`);
+    } finally {
+      await cleanup();
+    }
+  },
+
   /** Not a check: prints what a JiuwenSwarm subagent (task_tool) looks like from here, to design the mapping. */
   async "subagent-probe"() {
     const stub = await startStubModel({

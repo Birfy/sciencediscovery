@@ -23,6 +23,7 @@ import { DurableContextStore } from "@sciencediscovery/context";
 
 import { startModelGateway } from "./jiuwenswarm-model-gateway.js";
 import { importSkillsToJiuwenSwarm, skillLoadedBy } from "./jiuwenswarm-skills.js";
+import { JiuwenSwarmTrajectory } from "./jiuwenswarm-trajectory.js";
 import { jiuwenSwarmWebResult } from "./jiuwenswarm-web-settings.js";
 
 import { resolveModelClientPolicy, type streamModelTurn } from "@sciencediscovery/model";
@@ -161,6 +162,8 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
   private readonly skillIds = new Map<string, string>();
   /** Loads a skill the ScienceDiscovery way, so that what depends on a loaded skill (create_skill) sees it. */
   private loadSkill?: (id: string) => void;
+  /** The run's trajectory (model inputs, answers, tool observations), recorded as the built-in loop records it. */
+  private trajectory?: JiuwenSwarmTrajectory;
 
   constructor(private readonly config: JiuwenSwarmAgentConfig, private readonly options: NativeAgentOptions) {}
 
@@ -183,7 +186,9 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
   }
 
   private emit(event: AgentEvent): void {
-    for (const listener of this.listeners) listener(event);
+    const evidence = this.trajectory?.evidence(event as { type: string; responseId?: unknown; turn?: unknown });
+    const tagged = evidence ? { ...event, evidence } as AgentEvent : event;
+    for (const listener of this.listeners) listener(tagged);
   }
 
   async execute(text: string): Promise<{ finalMessages: Awaited<ReturnType<NativeAgentHandle["execute"]>>["finalMessages"] }> {
@@ -194,9 +199,13 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
       ...(this.options.runContract ? { runContract: this.options.runContract } : {}),
     });
     const plugins = await startPluginScope(this.options, durable, this.controller.signal);
+    const trajectory = new JiuwenSwarmTrajectory(this.options);
+    this.trajectory = trajectory;
     // The same registry the native loop dispatches through: output guard, detail sanitisation,
     // neutralised untrusted content, loop protection, the standard error shape.
-    const registry = createToolRegistry(this.options, plugins, durable);
+    const registry = createToolRegistry(this.options, plugins, durable, {
+      ...(trajectory.enabled ? { recordResult: (input) => trajectory.observe(input as never) } : {}),
+    });
     const tools = new Map(registry.values().map((tool) => [tool.name, tool]));
     await offerDeferredTools(registry, tools, this.controller.signal);
     // With JiuwenSwarm's own todo tools the model does not also get ours.
@@ -217,7 +226,15 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
       this.config.toolAnnouncementTimeoutMs);
     // JiuwenSwarm only speaks OpenAI chat completions; the model itself may not (see the gateway).
     const policy = resolveModelClientPolicy();
-    const modelGateway = await startModelGateway(modelEndpointFor(this.options), policy, this.controller.signal, this.config.modelStreamer);
+    const endpoint = modelEndpointFor(this.options);
+    await trajectory.start({
+      executor: "jiuwenswarm",
+      model: { model: endpoint.model, apiProtocol: endpoint.apiProtocol, apiVariant: endpoint.apiVariant },
+      tools: [...tools.values()].map((tool) => ({ name: tool.name, description: tool.description, parameters: tool.parameters })),
+      config: { planning: this.config.planning ?? "todo", prompt: this.config.prompt ?? "prepend", tools: this.config.tools ?? "jiuwenswarm", skills: this.config.skills ?? "jiuwenswarm" },
+    }).catch((error: unknown) => console.warn(`[jiuwenswarm-agent] trajectory not recorded: ${error instanceof Error ? error.message : String(error)}`));
+    const modelGateway = await startModelGateway(endpoint, policy, this.controller.signal, this.config.modelStreamer,
+      trajectory.enabled ? { request: (input) => trajectory.modelRequest(input), completed: (turn, history) => trajectory.modelCompleted(turn, history) } : undefined);
     const timeout = this.options.runTimeoutMs ? setTimeout(() => this.controller.abort(), this.options.runTimeoutMs) : undefined;
     try {
       const finalText = await this.stream(text, tools, bridge.url, bridgeToken, announcements, transcript, modelGateway, jiuwenSwarmPlans);
@@ -242,6 +259,7 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
       if (timeout) clearTimeout(timeout);
       await bridge.close();
       await modelGateway.close();
+      await trajectory.finish().catch((error: unknown) => console.warn(`[jiuwenswarm-agent] trajectory not committed: ${error instanceof Error ? error.message : String(error)}`));
       await plugins.dispose();
     }
   }
@@ -389,7 +407,11 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
     const translator = new EventTranslator((event) => this.emit(event), announcements, transcript,
       new Set(jiuwenSwarmPlans ? JIUWENSWARM_TODO_TOOLS : []),
       planStore ? (items, toolCallId) => this.recordPlan(planStore, items, toolCallId) : undefined,
-      (call) => { this.recordWeb(call); this.recordSkillLoad(call); });
+      (call) => {
+        this.recordWeb(call);
+        this.recordSkillLoad(call);
+        void this.trajectory?.observe({ call: { args: call.args ?? {}, id: call.id, name: call.name }, content: call.output, isError: call.failed }).catch(() => undefined);
+      });
     let finalText = "";
     let failure: string | undefined;
     for await (const line of ndjson(response.body)) {

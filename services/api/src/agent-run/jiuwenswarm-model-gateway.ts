@@ -106,16 +106,31 @@ function usageOf(turn: ModelTurn) {
   };
 }
 
+/** Recording the trajectory must never fail the model call. */
+const warnTrajectory = (error: unknown) => {
+  console.warn(`[jiuwenswarm] could not record the model call in the trajectory: ${error instanceof Error ? error.message : String(error)}`);
+};
+
 const finishReason = (turn: ModelTurn) => turn.truncated ? "length" : turn.toolCalls.length ? "tool_calls" : "stop";
 const toolCallsOf = (turn: ModelTurn) => turn.toolCalls.map((call, index) => ({
   index, id: call.id, type: "function", function: { name: call.name, arguments: JSON.stringify(call.args) },
 }));
+
+/**
+ * Told about each model call of the run (a call with tools: a title or a summary JiuwenSwarm asks for is not one):
+ * its exact input before it is made, the answer after. The run's trajectory is recorded from these.
+ */
+export interface ModelCallObserver {
+  request(input: { history: unknown[]; systemPrompt: string; tools: WireToolSpec[] }): Promise<void>;
+  completed(turn: ModelTurn, history: unknown[]): Promise<void>;
+}
 
 export async function startModelGateway(
   endpoint: ModelEndpoint,
   policy: ModelClientPolicy,
   signal: AbortSignal,
   streamer: Streamer = streamModelTurn,
+  observer?: ModelCallObserver,
 ): Promise<ModelGateway> {
   const token = randomUUID();
   const produced = new Map<string, Record<string, unknown>>();
@@ -150,6 +165,8 @@ export async function startModelGateway(
       return;
     }
     const { history, systemPrompt, tools } = toModelRequest(body, restore);
+    const observed = observer && tools.length ? observer : undefined;
+    const record = async (turn: ModelTurn) => { await observed?.completed(turn, history).catch(warnTrajectory); };
     const controller = new AbortController();
     const abort = () => controller.abort();
     signal.addEventListener("abort", abort, { once: true });
@@ -167,20 +184,24 @@ export async function startModelGateway(
           response.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
           response.write(chunk({ role: "assistant" }));
         };
+        await observed?.request({ history, systemPrompt, tools }).catch(warnTrajectory);
         const turn = await streamer(endpoint, systemPrompt, history, tools, policy, controller.signal, {
           onTextDelta: (delta) => { start(); response.write(chunk({ content: delta })); },
           onThinkingDelta: (delta) => { start(); response.write(chunk({ reasoning_content: delta })); },
         });
         start();
         remember(turn);
+        await record(turn);
         if (turn.toolCalls.length) response.write(chunk({ tool_calls: toolCallsOf(turn) }));
         const usage = usageOf(turn);
         response.write(chunk({}, finishReason(turn), usage ? { usage } : {}));
         response.end("data: [DONE]\n\n");
         return;
       }
+      await observed?.request({ history, systemPrompt, tools }).catch(warnTrajectory);
       const turn = await streamer(endpoint, systemPrompt, history, tools, policy, controller.signal);
       remember(turn);
+      await record(turn);
       const content = typeof turn.assistantMessage.content === "string" ? turn.assistantMessage.content : textOf(turn.assistantMessage.content);
       const usage = usageOf(turn);
       response.writeHead(200, { "content-type": "application/json" });

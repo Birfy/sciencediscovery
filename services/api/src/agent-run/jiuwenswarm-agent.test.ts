@@ -1170,3 +1170,45 @@ test("a JiuwenSwarm approval question is put to the user as ours and the answer 
     await adapter.close();
   }
 });
+
+test("the run's trajectory is recorded from the model calls JiuwenSwarm makes, and the run's events carry its evidence", async () => {
+  const { mkdtemp, rm: remove } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const dataDir = await mkdtemp(join(tmpdir(), "jw-trajectory-"));
+  const workspaceRoot = await mkdtemp(join(tmpdir(), "jw-workspace-"));
+  const turn = { assistantMessage: { role: "assistant", content: "Answer." }, toolCalls: [] };
+  const streamer = (async () => turn) as never;
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    response.writeHead(200);
+    // One call with tools (a turn of the run) and one without (a title), as JiuwenSwarm makes them.
+    for (const tools of [[{ type: "function", function: { name: "echo", description: "e", parameters: { type: "object" } } }], []]) {
+      await fetch(`${body.model.baseUrl}/chat/completions`, {
+        method: "POST", headers: { authorization: `Bearer ${body.model.apiKey}` },
+        body: JSON.stringify({ stream: false, tools, messages: [{ role: "system", content: "sys" }, { role: "user", content: "go" }] }),
+      }).then((reply) => reply.text());
+    }
+    response.write(line({ event: { type: "assistant.response.started", responseId: "r1", turn: 1 } }));
+    response.write(line({ event: { type: "assistant.delta", responseId: "r1", delta: "Answer.", turn: 1 } }));
+    response.end(line({ done: { finalText: "Answer." } }));
+  });
+  try {
+    const records: any[] = [];
+    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url, modelStreamer: streamer })(options({
+      config: { baseUrl: "http://llm.test/v1", dataDir, model: "gpt-x", apiToken: "sk-test", apiProtocol: "openai-chat-completions" },
+      workspaceRoot,
+      versioning: { agentId: "main:session-1", trajectoryId: "run-1", requestExecutionId: "run-1", recordEvent: async (event: unknown) => { records.push(event); } },
+    } as never));
+    const events = collect(agent);
+    await agent.execute("go");
+    const names = records.map((record) => record.name);
+    assert.deepEqual(names.filter((name) => name !== "context_recovery"), ["context.captured", "model.completed", "state.committed"], "one turn: the title call is not one");
+    assert.ok(records[0].evidence.contextRef?.digest, "the captured context is in the version store");
+    const started = events.find((event) => event.type === "response_start") as any;
+    assert.equal(started.evidence?.contextRef?.digest, records[0].evidence.contextRef.digest, "the response is tied to the model input it answered");
+  } finally {
+    await adapter.close();
+    await remove(dataDir, { recursive: true, force: true });
+    await remove(workspaceRoot, { recursive: true, force: true });
+  }
+});
