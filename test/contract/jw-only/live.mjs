@@ -25,10 +25,12 @@
  * Each check builds its own project, model and scripted model, and deletes them.
  */
 
-import { execSync } from "node:child_process";
+import { exec } from "node:child_process";
+import { promisify } from "node:util";
 
 import { startStubModel } from "../stub-model.mjs";
 
+const run = promisify(exec);
 const base = process.env.E2E_BASE_URL;
 const token = process.env.E2E_API_TOKEN;
 if (!base || !token) throw new Error("Need E2E_BASE_URL and E2E_API_TOKEN");
@@ -97,7 +99,8 @@ const checks = {
     const { sessionId, cleanup } = await setup(stub);
     try {
       await runAndWait(sessionId, "My favourite number is 4711.");
-      execSync(restart, { stdio: "inherit", shell: "/bin/bash", timeout: 300_000 });
+      // Asynchronously: the scripted model lives in this process and must keep answering while JiuwenSwarm restarts.
+      await run(restart, { shell: "/bin/bash", timeout: 300_000 });
       const second = await runAndWait(sessionId, "What did I say my favourite number was?");
       if (second.status !== "completed") throw new Error(`second run ${second.status}: ${second.error}`);
       const seen = stub.lastMessages?.() ?? [];
@@ -137,7 +140,12 @@ const checks = {
 };
 
 const wanted = process.argv.slice(2);
-for (const name of wanted.length ? wanted : Object.keys(checks)) {
-  if (!checks[name]) throw new Error(`unknown check ${name}; known: ${Object.keys(checks).join(", ")}`);
-  await checks[name]();
+try {
+  for (const name of wanted.length ? wanted : Object.keys(checks)) {
+    if (!checks[name]) throw new Error(`unknown check ${name}; known: ${Object.keys(checks).join(", ")}`);
+    await checks[name]();
+  }
+} catch (error) {
+  console.error(`FAILED: ${error instanceof Error ? error.message : error}${error?.cause?.message ? ` (${error.cause.message})` : ""}`);
+  process.exit(1);
 }
