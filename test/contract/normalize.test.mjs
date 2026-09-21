@@ -107,3 +107,8 @@ test("a runner's host measurements are hidden as one value", () => {
   const out = createNormalizer().json({ runnerStatus: { state: "ready", resources: { cpuCores: 2, uptimeSeconds: 9.5 } } });
   assert.deepEqual(out.runnerStatus, { state: "ready", resources: "<volatile>" });
 });
+
+test("the build version a runner reports on either side is hidden", () => {
+  const out = createNormalizer().json({ localVersion: "abc-dirty", remoteVersion: "abc-dirty" });
+  assert.deepEqual(out, { localVersion: "<volatile>", remoteVersion: "<volatile>" });
+});
