@@ -78,6 +78,42 @@
      "expectStatus": 200
     },
     {
+     "name": "a wrong token cannot list permission requests",
+     "request": {
+      "method": "GET",
+      "path": "/api/permission-requests",
+      "headers": {
+       "authorization": "Bearer wrong"
+      }
+     },
+     "expectStatus": 401
+    },
+    {
+     "name": "a wrong token cannot decide a request",
+     "request": {
+      "method": "POST",
+      "path": "/api/permission-requests/{{requestId}}/decision",
+      "headers": {
+       "authorization": "Bearer wrong"
+      },
+      "body": {
+       "decision": "allow_once"
+      }
+     },
+     "expectStatus": 401
+    },
+    {
+     "name": "a wrong token cannot revoke a grant",
+     "request": {
+      "method": "DELETE",
+      "path": "/api/permission-grants/{{grantId}}",
+      "headers": {
+       "authorization": "Bearer wrong"
+      }
+     },
+     "expectStatus": 401
+    },
+    {
      "name": "revoke the grant",
      "request": {
       "method": "DELETE",
