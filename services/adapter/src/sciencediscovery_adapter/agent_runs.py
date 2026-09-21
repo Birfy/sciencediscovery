@@ -92,6 +92,9 @@ class AgentRunRequest(BaseModel):
     # The conversation so far, as OpenAI chat messages, from the caller's own record. Used only to
     # start a session that has no context in JiuwenSwarm yet (see seed.py); ignored otherwise.
     history: list[dict[str, Any]] | None = None
+    # Names of JiuwenSwarm's own tools that stay visible to the model besides the toolset above
+    # (for example `todo_create`). They run inside JiuwenSwarm, not over the bridge.
+    nativeTools: list[str] = Field(default_factory=list)
     # Longest a single tool call may take, in seconds; the run's own timeout, when the caller has one.
     toolTimeoutSeconds: int | None = None
 
@@ -155,7 +158,7 @@ class AgentRunner:
                     base_url=request.model.baseUrl.rstrip("/"), api_key=request.model.apiKey, model=request.model.model,
                     tool_prefix=f"mcp_{name}_", tool_names=frozenset(t.name for t in request.tools),
                     tool_specs={t.name: {"description": t.description, "parameters": t.inputSchema} for t in request.tools},
-                    system_prompt=request.systemPrompt,
+                    system_prompt=request.systemPrompt, native_tools=frozenset(request.nativeTools),
                 ))
                 model_alias = f"sd-{llm_token[:12]}"
                 params["model_name"] = await self.models.ensure(ModelProfile(

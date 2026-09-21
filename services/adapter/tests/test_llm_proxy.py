@@ -150,3 +150,16 @@ async def test_an_unreachable_endpoint_is_a_502_and_an_unknown_token_a_404():
     app, token = make_app(boom)
     assert (await post(app, token, {"messages": []})).status_code == 502
     assert (await post(app, "nope", {"messages": []})).status_code == 404
+
+
+def test_jiuwenswarms_own_tools_named_for_the_run_stay_visible_with_their_own_spec():
+    route = LlmRoute(**{**ROUTE.__dict__, "native_tools": frozenset({"todo_create"})})
+    todo = {"type": "function", "function": {"name": "todo_create", "description": "JiuwenSwarm's own", "parameters": {"type": "object", "properties": {"tasks": {}}}}}
+    body = {"tools": [tool("mcp_sci_run_shell"), todo, tool("bash"), tool("todo_list")], "messages": []}
+    tools = rewrite_request(body, route)["tools"]
+    assert [t["function"]["name"] for t in tools] == ["run_shell", "todo_create"]
+    assert tools[1]["function"]["description"] == "JiuwenSwarm's own"
+
+
+def test_without_native_tools_none_of_them_is_visible():
+    assert [t["function"]["name"] for t in rewrite_request({"tools": [tool("todo_create"), tool("mcp_sci_run_shell")], "messages": []}, ROUTE)["tools"]] == ["run_shell"]

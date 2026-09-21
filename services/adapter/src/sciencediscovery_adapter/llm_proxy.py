@@ -54,6 +54,8 @@ class LlmRoute:
     # The tools as the caller defined them. JiuwenSwarm holds a relaxed copy of the schema
     # (see schema.relax_schema); the model gets the original back, constraints included.
     tool_specs: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # JiuwenSwarm's own tools the model may keep, by their own names; the model sees their own specs.
+    native_tools: frozenset[str] = frozenset()
 
 
 @dataclass
@@ -95,6 +97,7 @@ def rewrite_request(body: dict[str, Any], route: LlmRoute) -> dict[str, Any]:
             {**tool, "function": _original(tool["function"], route)}
             for tool in body["tools"]
             if _unprefixed(tool.get("function", {}).get("name", ""), route) in route.tool_names
+            or tool.get("function", {}).get("name", "") in route.native_tools
         ]
         if not out["tools"]:
             del out["tools"]

@@ -214,6 +214,12 @@ class RunEventMapper:
                 return name[len(prefix):]
         return name
 
+    def _on_todo_updated(self, payload: dict[str, Any]) -> list[dict[str, Any]]:
+        """JiuwenSwarm's todo list, whole, after one of its todo tools ran."""
+        items = [{"id": str(todo.get("id", "")), "content": str(todo.get("content", "")), "status": str(todo.get("status", "pending"))}
+                 for todo in payload.get("todos") or [] if isinstance(todo, dict)]
+        return [{"type": "plan.updated", "items": items}]
+
     def _on_chat_tool_call(self, payload: dict[str, Any]) -> list[dict[str, Any]]:
         call = payload.get("tool_call") or {}
         tool_id = str(call.get("tool_call_id") or uuid.uuid4().hex)

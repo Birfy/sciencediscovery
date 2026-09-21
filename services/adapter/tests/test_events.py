@@ -328,3 +328,13 @@ def test_response_ids_are_uuids_like_the_native_agents():
 ])
 def test_real_gateway_model_errors_are_classified(text, code):
     assert classify_failure(text) == code
+
+
+def test_jiuwenswarms_todo_list_becomes_a_plan_update_with_its_whole_list():
+    mapper = RunEventMapper()
+    events = mapper.feed({"type": "event", "event": "todo.updated", "payload": {"todos": [
+        {"id": "a", "content": "Step A", "activeForm": "Doing A", "status": "in_progress"},
+        {"id": "b", "content": "Step B", "activeForm": "Doing B", "status": "pending"}]}})
+    assert events == [{"type": "plan.updated", "items": [
+        {"id": "a", "content": "Step A", "status": "in_progress"}, {"id": "b", "content": "Step B", "status": "pending"}]}]
+    assert mapper.unmapped == []

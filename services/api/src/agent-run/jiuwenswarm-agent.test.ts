@@ -812,3 +812,82 @@ test("a run names the JiuwenSwarm session that holds its agent's conversation, a
 test("session keys: a run without an agent id is the main agent", () => {
   assert.equal(jiuwenSwarmSessionKey({ sessionId: "s" } as never), "s");
 });
+
+function planRecorder() {
+  const updates: Array<{ input: any; toolCallId: string }> = [];
+  const store = { latest: async () => undefined, update: async (input: unknown, toolCallId: string) => { updates.push({ input, toolCallId }); return { id: "p", steps: [] } as never; } };
+  return { store, updates };
+}
+
+test("by default the model plans with our update_plan and JiuwenSwarm's todo tools are not offered", async () => {
+  let sent: any;
+  const adapter = await fakeAdapter(async ({ body }, response) => { sent = body; response.writeHead(200); response.end(line({ done: { finalText: "ok" } })); });
+  try {
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ planStore: planRecorder().store as never })).execute("go");
+    assert.ok(sent.tools.some((tool: { name: string }) => tool.name === "update_plan"));
+    assert.equal("nativeTools" in sent, false);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("in todo planning JiuwenSwarm's todo tools replace update_plan, and its todo list is recorded as the plan", async () => {
+  const { store, updates } = planRecorder();
+  let sent: any;
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    sent = body;
+    response.writeHead(200);
+    // The adapter's report of a JiuwenSwarm-run tool: it starts, its list changes, it completes.
+    response.write(line({ event: { type: "tool.started", trace: { id: "call-todo", name: "todo_create", args: { tasks: [{ id: "a", content: "Step A" }] }, status: "running" } } }));
+    response.write(line({ event: { type: "plan.updated", items: [
+      { id: "a", content: "Step A", status: "in_progress" }, { id: "b", content: "Step B", status: "pending" },
+      { id: "c", content: "Dropped", status: "cancelled" }, { id: "d", content: "  ", status: "pending" }] } }));
+    response.write(line({ event: { type: "tool.completed", trace: { id: "call-todo", name: "todo_create", args: {}, status: "completed", output: "created 2" } } }));
+    response.end(line({ done: { finalText: "ok" } }));
+  });
+  try {
+    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url, planning: "todo" })(options({ planStore: store as never }));
+    const events = collect(agent);
+    const result = await agent.execute("plan it");
+    assert.deepEqual(sent.nativeTools, ["todo_create", "todo_modify", "todo_list", "todo_get"]);
+    assert.equal(sent.tools.some((tool: { name: string }) => tool.name === "update_plan"), false, "the model is not also given our tool");
+    assert.deepEqual(updates, [{ input: { plan: [{ step: "Step A", status: "in_progress" }, { step: "Step B", status: "pending" }] }, toolCallId: "call-todo" }]);
+    const start = events.find((event) => event.type === "tool_execution_start") as any;
+    const end = events.find((event) => event.type === "tool_execution_end") as any;
+    assert.equal(start.toolName, "todo_create");
+    assert.equal(end.result.content[0].text, "created 2");
+    // The tool round is in the run's saved transcript, as for any tool.
+    const messages = result.finalMessages as any[];
+    assert.equal(messages.some((message) => message.role === "assistant" && message.tool_calls?.[0]?.id === "call-todo"), true);
+    assert.equal(messages.some((message) => message.role === "tool" && message.tool_call_id === "call-todo" && message.content === "created 2"), true);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("a JiuwenSwarm-run tool does not hold up the calls behind it at the bridge", async () => {
+  const log: string[] = [];
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    response.writeHead(200);
+    response.write(line({ event: { type: "assistant.response.started", responseId: "r1", turn: 1 } }));
+    response.write(line({ event: { type: "tool.started", trace: { id: "n1", name: "todo_create", args: {}, status: "running" } } }));
+    response.write(line({ event: { type: "tool.started", trace: { id: "c1", name: "slow_a", args: {}, status: "running" } } }));
+    await fetch(body.bridge.url, { method: "POST", headers: { authorization: `Bearer ${body.bridge.token}` }, body: JSON.stringify({ name: "slow_a", arguments: {} }) });
+    response.end(line({ done: { finalText: "ok" } }));
+  });
+  try {
+    const started = Date.now();
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url, planning: "todo", toolAnnouncementTimeoutMs: 2_000 })(
+      options({ extraTools: timedTools(log, false) as never, planStore: planRecorder().store as never })).execute("go");
+    assert.deepEqual(log, ["slow_a:start", "slow_a:end"]);
+    assert.ok(Date.now() - started < 1_500, "no wait for a call that never comes to the bridge");
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("todo planning is chosen by SCIENCE_AGENT_JIUWENSWARM_PLANNING", () => {
+  const env = { SCIENCE_AGENT_EXECUTOR: "jiuwenswarm", SCIENCE_AGENT_ADAPTER_URL: "http://a" };
+  assert.equal(jiuwenSwarmConfigFromEnv(env)?.planning, undefined);
+  assert.equal(jiuwenSwarmConfigFromEnv({ ...env, SCIENCE_AGENT_JIUWENSWARM_PLANNING: "todo" })?.planning, "todo");
+});

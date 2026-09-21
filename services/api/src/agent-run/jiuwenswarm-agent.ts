@@ -54,7 +54,15 @@ export interface JiuwenSwarmAgentConfig {
   fetch?: typeof fetch;
   /** Replaceable for tests: the native model client the run's model requests are served by. */
   modelStreamer?: typeof streamModelTurn;
+  /**
+   * Who keeps the plan. `update_plan` (default): the model calls our tool. `todo`: the model uses
+   * JiuwenSwarm's own todo tools and its todo list becomes the run's plan.
+   */
+  planning?: "todo" | "update_plan";
 }
+
+/** JiuwenSwarm's own todo tools, left visible to the model in `todo` planning. */
+export const JIUWENSWARM_TODO_TOOLS = ["todo_create", "todo_modify", "todo_list", "todo_get"] as const;
 
 /** Selected by SCIENCE_AGENT_EXECUTOR=jiuwenswarm; the native agent stays the default. */
 export function jiuwenSwarmConfigFromEnv(env: NodeJS.ProcessEnv = process.env): JiuwenSwarmAgentConfig | undefined {
@@ -64,6 +72,7 @@ export function jiuwenSwarmConfigFromEnv(env: NodeJS.ProcessEnv = process.env): 
   return {
     adapterUrl: adapterUrl.replace(/\/+$/, ""),
     ...(env.SCIENCE_AGENT_ADAPTER_TOKEN?.trim() ? { adapterToken: env.SCIENCE_AGENT_ADAPTER_TOKEN.trim() } : {}),
+    ...(env.SCIENCE_AGENT_JIUWENSWARM_PLANNING?.trim() === "todo" ? { planning: "todo" as const } : {}),
   };
 }
 
@@ -120,6 +129,9 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
     const registry = createToolRegistry(this.options, plugins, durable);
     const tools = new Map(registry.values().map((tool) => [tool.name, tool]));
     await offerDeferredTools(registry, tools, this.controller.signal);
+    // With JiuwenSwarm's own todo tools the model does not also get ours.
+    const jiuwenSwarmPlans = this.config.planning === "todo" && Boolean(this.options.planStore);
+    if (jiuwenSwarmPlans) tools.delete("update_plan");
     const bridgeToken = randomUUID();
     const announcements = new ToolAnnouncements();
     const transcript = new Transcript();
@@ -129,7 +141,7 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
     const modelGateway = await startModelGateway(modelEndpointFor(this.options), resolveModelClientPolicy(), this.controller.signal, this.config.modelStreamer);
     const timeout = this.options.runTimeoutMs ? setTimeout(() => this.controller.abort(), this.options.runTimeoutMs) : undefined;
     try {
-      const finalText = await this.stream(text, tools, bridge.url, bridgeToken, announcements, transcript, modelGateway);
+      const finalText = await this.stream(text, tools, bridge.url, bridgeToken, announcements, transcript, modelGateway, jiuwenSwarmPlans);
       return {
         finalMessages: [{ role: "user", content: text }, ...transcript.finish(finalText).map((message) => modelGateway.restore(message))] as never,
       };
@@ -145,9 +157,25 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
     }
   }
 
+  /** JiuwenSwarm's todo list, as the run's plan: what the plan panel and the API's plan events read. */
+  private async recordPlan(store: NonNullable<NativeAgentOptions["planStore"]>, items: Array<{ content: string; status: string }>, toolCallId: string): Promise<void> {
+    const plan = items.flatMap(({ content, status }) => {
+      const step = content.trim().slice(0, 1_000);
+      // A cancelled todo is not part of the plan; the plan knows pending, in progress and completed.
+      return step && (status === "pending" || status === "in_progress" || status === "completed")
+        ? [{ step, status: status as "pending" | "in_progress" | "completed" }] : [];
+    }).slice(0, 20);
+    try {
+      await store.update({ plan }, toolCallId, this.controller.signal);
+    } catch (error) {
+      console.warn(`[jiuwenswarm-agent] could not record the plan: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
   private async stream(
     text: string, tools: Map<string, AgentTool>, bridgeUrl: string, bridgeToken: string,
     announcements: ToolAnnouncements, transcript: Transcript, modelGateway: { token: string; url: string },
+    jiuwenSwarmPlans = false,
   ): Promise<string> {
     const { config: model } = this.options;
     const toolNames = new Set(tools.keys());
@@ -172,6 +200,7 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
           ...(model.contextWindow ? { contextWindow: model.contextWindow } : {}),
         },
         history: openAiHistory(this.options.gatewayHistory ?? []),
+        ...(jiuwenSwarmPlans ? { nativeTools: [...JIUWENSWARM_TODO_TOOLS] } : {}),
         // JiuwenSwarm gives a tool call 30 s unless told otherwise; the run's own timeout is the limit here.
         ...(this.options.runTimeoutMs ? { toolTimeoutSeconds: Math.ceil(this.options.runTimeoutMs / 1000) } : {}),
         tools: [...tools.values()].map((tool) => ({
@@ -184,7 +213,10 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
     if (!response.ok || !response.body) {
       throw new Error(`adapter refused the run: HTTP ${response.status} ${await response.text().catch(() => "")}`.trim());
     }
-    const translator = new EventTranslator((event) => this.emit(event), announcements, transcript);
+    const planStore = this.options.planStore;
+    const translator = new EventTranslator((event) => this.emit(event), announcements, transcript,
+      new Set(jiuwenSwarmPlans ? JIUWENSWARM_TODO_TOOLS : []),
+      planStore ? (items, toolCallId) => this.recordPlan(planStore, items, toolCallId) : undefined);
     let finalText = "";
     let failure: string | undefined;
     for await (const line of ndjson(response.body)) {
@@ -370,7 +402,13 @@ class EventTranslator {
     private readonly emit: Listener,
     private readonly announcements: ToolAnnouncements,
     private readonly transcript: Transcript,
+    /** JiuwenSwarm's own tools the model may call; they run there, so their events come from here. */
+    private readonly nativeTools: ReadonlySet<string> = new Set(),
+    private readonly onPlan?: (items: Array<{ content: string; status: string }>, toolCallId: string) => void,
   ) {}
+
+  private lastNativeCall = "";
+  private readonly nativeCalls = new Map<string, { args: unknown; name: string }>();
 
   handle(event: { type: string; [key: string]: unknown }): void {
     switch (event.type) {
@@ -404,9 +442,30 @@ class EventTranslator {
         const input = trace.input ?? JSON.stringify(trace.args ?? {});
         // Compact JSON like the model sent it; JiuwenSwarm re-serialises arguments with spaces.
         this.transcript.toolCall(trace.id, trace.name, JSON.stringify(trace.args ?? {}));
-        this.announcements.announce({ args: trace.args ?? {}, id: trace.id, input, name: trace.name });
+        if (this.nativeTools.has(trace.name)) {
+          // Runs inside JiuwenSwarm: nothing will claim it at the bridge, so report it from here.
+          this.lastNativeCall = trace.id;
+          this.nativeCalls.set(trace.id, { args: trace.args ?? {}, name: trace.name });
+          this.emit({ type: "tool_execution_start", toolCallId: trace.id, toolName: trace.name, args: (trace.args ?? {}) as Record<string, unknown> });
+        } else {
+          this.announcements.announce({ args: trace.args ?? {}, id: trace.id, input, name: trace.name });
+        }
         break;
       }
+      case "tool.completed": {
+        const trace = event.trace as { id: string; name: string; output?: string; status?: string };
+        if (!this.nativeCalls.has(trace.id)) break;
+        const text = trace.output ?? "";
+        this.emit({
+          type: "tool_execution_end", toolCallId: trace.id, toolName: trace.name, isError: trace.status === "failed",
+          result: { content: [{ type: "text", text }] },
+        });
+        this.transcript.toolResult(trace.id, trace.name, text);
+        break;
+      }
+      case "plan.updated":
+        this.onPlan?.(event.items as Array<{ content: string; status: string }>, this.lastNativeCall);
+        break;
       case "assistant.response.settled":
         this.transcript.settled();
         this.emit({ type: "response_settled", responseId: String(event.responseId), turn: Number(event.turn) });
