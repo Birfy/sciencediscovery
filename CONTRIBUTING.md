@@ -437,4 +437,16 @@ These do not carry a header:
 
 ## Architecture and docs
 
-Module boundaries, the agent backend, and connector internals are documented under [docs/](docs/) (Chinese). Start with [docs/README.md](docs/README.md).
+Module boundaries, the agent backend, and connector internals are documented under [docs/](docs/) in English and Chinese. Start with [docs/README.md](docs/README.md).
+
+Before submitting documentation changes, run:
+
+```bash
+pnpm docs:check
+```
+
+The same command runs in the host UT tier. It checks heading progression,
+blank-line and fenced-code structure, image alternative text, and the existence
+of repository-local link and image targets. External URLs are deliberately not
+requested by the gate, so an unavailable third-party site cannot make an
+otherwise unrelated pull request fail.

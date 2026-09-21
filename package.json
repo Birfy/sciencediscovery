@@ -30,6 +30,9 @@
     "ci:ut:guest": "node .ci/run-layer.mjs ut-guest",
     "ci:ut:host": "node .ci/run-layer.mjs ut-host",
     "dev": "pnpm --filter @sciencediscovery/api dev",
+    "docs:check": "pnpm docs:lint && pnpm docs:links",
+    "docs:links": "node scripts/check-doc-links.mjs",
+    "docs:lint": "markdownlint-cli2",
     "paper:setup": "uv sync --project services/paper --locked",
     "paper:test": "uv run --project services/paper --locked python -m unittest discover -s services/paper/tests",
     "gateway:test": "uv run --project services/gateway python -m unittest discover -s services/gateway/tests -p 'test_*.py'",
@@ -46,6 +49,8 @@
   "devDependencies": {
     "@babel/parser": "7.28.5",
     "@types/node": "26.1.1",
+    "markdown-it": "^15.0.2",
+    "markdownlint-cli2": "^0.23.3",
     "tsx": "4.23.1",
     "typescript": "7.0.2"
   }

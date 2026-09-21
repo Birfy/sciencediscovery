@@ -99,7 +99,7 @@ A minimal Run requires only `content`:
 
 Read-only views of `/evolve-design` runs, plus stopping one. Searches are started by the agent through
 the `create_evolve_run` tool, not by this API. See
-[Program evolution](../explanation/evolve.md).
+[Program evolution](../core/evolve.md).
 
 | Method and path | Request/query | Success |
 |---|---|---|

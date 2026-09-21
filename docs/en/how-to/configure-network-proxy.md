@@ -1,6 +1,6 @@
 # Configure the Network Proxy
 
-This guide shows how to register a proxy on the settings page and make an LLM, a web tool, or an MCP server inherit the default, force a direct connection, or use a specified record. For policy resolution and outbound access, see [Network proxy](../explanation/network-proxy.md); for the API fields, see the [REST API reference](../reference/rest-api.md#proxy-configuration).
+This guide shows how to register a proxy on the settings page and make an LLM, a web tool, or an MCP server inherit the default, force a direct connection, or use a specified record. For policy resolution and outbound access, see [Network proxy](../developer-docs/network-proxy.md); for the API fields, see the [REST API reference](../reference/rest-api.md#proxy-configuration).
 
 ## Configure the model
 

@@ -1,6 +1,6 @@
 # Configuration, Ports, Quotas, and Storage Reference
 
-This page lists local and Docker environment variables, default ports, workspace-related quotas, and storage locations. See [Deployment](../how-to/deployment.md) for operational steps.
+This page lists local and Docker environment variables, default ports, workspace-related quotas, and storage locations. See [Deployment](../getting-started/deployment.md) for operational steps.
 
 ## Environment variables (local mode)
 
@@ -81,7 +81,7 @@ In `GET /health`, `workspace.maxFileBytes`, `maxRequestBytes`, and `maxWorkspace
 
 ## Docker environment variables
 
-Compose reads the root `.env` (template: `.env.docker.example`) and interpolates the keys below into `docker-compose.yml`. They form two layers: the orchestration layer only affects how Compose starts the container; the container layer is forwarded into the container, key by key, through the service's `environment` block, and an empty value means the built-in default. Procedures and the layering are explained under [Docker deployment](../how-to/deployment.md#docker-deployment).
+Compose reads the root `.env` (template: `.env.docker.example`) and interpolates the keys below into `docker-compose.yml`. They form two layers: the orchestration layer only affects how Compose starts the container; the container layer is forwarded into the container, key by key, through the service's `environment` block, and an empty value means the built-in default. Procedures and the layering are explained under [Docker deployment](../getting-started/deployment.md#docker-deployment).
 
 ### Orchestration layer
 
@@ -104,7 +104,7 @@ Compose reads the root `.env` (template: `.env.docker.example`) and interpolates
 | `SCIENCE_AGENT_LOG_MAX_BYTES` | `10485760` | Maximum bytes per log category before rotation |
 | `SCIENCE_AGENT_LOG_BACKUP_COUNT` | `5` | Rotated files kept per category |
 | `SCIENCE_AGENT_CONTEXT_MODE` | `dynamic` | Context-assembly mode; `legacy` and `shadow` exist for debugging and regression comparison |
-| `SCIENCE_AGENT_CONTEXT_PROMPT_BUDGET_CHARS`, `…_SECTION_MAX_CHARS`, `…_DATA_BUDGET_CHARS`, `…_ATTACHMENT_MAX_CHARS`, `…_CONTRIBUTED_MESSAGE_BUDGET_CHARS`, `…_MAX_CONTRIBUTED_MESSAGES`, `…_WINDOW_MESSAGES`, `…_WINDOW_ROUNDS`, `…_WINDOW_TOKENS` | see `.env.docker.example` | Context-assembly budgets and windows; see [Context assembly](../../architecture/context-assembly.md) |
+| `SCIENCE_AGENT_CONTEXT_PROMPT_BUDGET_CHARS`, `…_SECTION_MAX_CHARS`, `…_DATA_BUDGET_CHARS`, `…_ATTACHMENT_MAX_CHARS`, `…_CONTRIBUTED_MESSAGE_BUDGET_CHARS`, `…_MAX_CONTRIBUTED_MESSAGES`, `…_WINDOW_MESSAGES`, `…_WINDOW_ROUNDS`, `…_WINDOW_TOKENS` | see `.env.docker.example` | Context-assembly budgets and windows; see [Context assembly](../developer-docs/context-assembly.md) |
 | `SCIENCE_AGENT_CONTEXT_TRACE` / `SCIENCE_AGENT_CONTEXT_TRACE_DIR` | `0` / `/app/data/context-traces` | Context-assembly tracing switch and output directory |
 | `SCIENCE_AGENT_RUNNER_TOKEN` | `sciencediscovery-runner-local` | API-to-runner token on container loopback |
 | `SCIENTIFIC_ENVS` | `1` | Managed Python/R environments and persistent kernels; the first start creates the starter Python automatically |
@@ -145,6 +145,6 @@ Unless overridden, persistent application data is kept in the repository:
 | `.sciencediscovery-data/logs/{api,run,gateway,runner,memory-graph}.log` | Rotating category logs; ScienceMemory exists only when enabled |
 | Browser local storage | Local service access token only; model credentials never leave the backend |
 
-The data directory is the only runtime root. `SCIENCE_DISCOVERY_DATA_DIR=/srv/science-discovery ./scripts/run-local.sh` moves state and service environments together. The former `SCIENCE_AGENT_DATA_DIR` is still read as a compatibility fallback and produces a log; when both are set, `SCIENCE_DISCOVERY_DATA_DIR` wins and the choice is logged. For the repository launcher, an existing default `data` directory is moved once into `.sciencediscovery-data`. For the single-file launcher, an existing default `./science-discovery-data` or the older `./science-agent-data` is imported once into `./.sciencediscovery-data`, newest first; an existing target is never overwritten and the skip is logged. Deleting the active data directory removes projects, sessions, credentials, and audit records. Under [Docker deployment](../how-to/deployment.md#docker-deployment), it is the host `./data` bind mount; only service `envs/` live in the image. `services/paper/.venv` and `services/gateway/.venv` are used only by standalone development or smoke commands.
+The data directory is the only runtime root. `SCIENCE_DISCOVERY_DATA_DIR=/srv/science-discovery ./scripts/run-local.sh` moves state and service environments together. The former `SCIENCE_AGENT_DATA_DIR` is still read as a compatibility fallback and produces a log; when both are set, `SCIENCE_DISCOVERY_DATA_DIR` wins and the choice is logged. For the repository launcher, an existing default `data` directory is moved once into `.sciencediscovery-data`. For the single-file launcher, an existing default `./science-discovery-data` or the older `./science-agent-data` is imported once into `./.sciencediscovery-data`, newest first; an existing target is never overwritten and the skip is logged. Deleting the active data directory removes projects, sessions, credentials, and audit records. Under [Docker deployment](../getting-started/deployment.md#docker-deployment), it is the host `./data` bind mount; only service `envs/` live in the image. `services/paper/.venv` and `services/gateway/.venv` are used only by standalone development or smoke commands.
 
 The single-file payload overrides follow the same naming and precedence rule: use `SCIENCE_DISCOVERY_PAYLOAD_CACHE_DIR` for the extraction cache or `SCIENCE_DISCOVERY_PAYLOAD_DIR` for a pre-extracted payload. The corresponding `SCIENCE_AGENT_*` names remain logged compatibility fallbacks.

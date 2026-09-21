@@ -4,7 +4,7 @@ ScienceDiscovery 可以让智能体循环跑在 [JiuwenSwarm](https://gitcode.co
 
 不变的部分：网页界面、会话、消息、运行事件、权限请求、Runner 及其沙箱、产物与溯源。工具仍在 ScienceDiscovery 的 API 进程里执行，所以每一项权限检查和 Runner 规则照旧。变化的部分：模型循环，以及对话上下文（由 JiuwenSwarm 保存并压缩）。
 
-```
+```text
 浏览器 ─▶ 适配器（公共端口）─▶ API（端口 + 100）
               │                     │
               └─▶ JiuwenSwarm ◀─────┘   工具在 API 里执行，经每次运行一个的桥回调
@@ -37,7 +37,7 @@ curl -s -H "Authorization: Bearer $SCIENCE_AGENT_AUTH_TOKEN" http://127.0.0.1:43
 
 ## 前置条件
 
-- 源码模式（见[部署](deployment.md#local-mode-host-processes)）；二进制包和 Docker 镜像不含适配器和 JiuwenSwarm。
+- 源码模式（见[部署](../getting-started/deployment.md#本地模式宿主进程)）；二进制包和 Docker 镜像不含适配器和 JiuwenSwarm。
 - 主机上有 `git` 和 `uv`。JiuwenSwarm 装在它自己的目录和虚拟环境里，不会装进 ScienceDiscovery 的环境。
 - 能访问 `gitcode.com`（克隆固定版本）和 PyPI 源。网络慢或在中国大陆时，把 `SCIENCE_AGENT_PYPI_INDEX` 设为镜像；下载超时再设 `UV_HTTP_TIMEOUT`（脚本默认 300 秒）。
 - JiuwenSwarm 的安装大约占 1.5 GB 磁盘。
