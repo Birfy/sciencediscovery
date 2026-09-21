@@ -104,3 +104,25 @@ async def test_prune_keeps_a_default_when_the_default_was_a_leftover():
     gw = FakeGateway([entry("sd-aaaa", default=True), entry("real")])
     await ModelSync(gw.rpc, URL).prune("sd-")
     assert [(m["model_name"], m["is_default"]) for m in gw.models] == [("real", True)]
+
+
+async def test_ensure_default_makes_one_default_and_clears_the_others():
+    gw = FakeGateway([entry("your-model-name", default=True), entry("sd-run1")])
+    await ModelSync(gw.rpc, URL).ensure_default(ModelProfile("sd-default", "http://a/llm/default/v1", "key"))
+    assert [(m["model_name"], m["is_default"]) for m in gw.models] == [("your-model-name", False), ("sd-run1", False), ("sd-default", True)]
+
+
+async def test_ensure_default_writes_nothing_when_it_already_is_the_only_default():
+    gw = FakeGateway([entry("other")])
+    sync = ModelSync(gw.rpc, URL)
+    profile = ModelProfile("sd-default", "http://a/llm/default/v1", "key")
+    await sync.ensure_default(profile)
+    writes = len(gw.replacements)
+    await sync.ensure_default(profile)
+    assert len(gw.replacements) == writes
+
+
+async def test_ensure_default_repairs_an_entry_whose_endpoint_changed():
+    gw = FakeGateway([entry("sd-default", base="http://old/v1", default=True)])
+    await ModelSync(gw.rpc, URL).ensure_default(ModelProfile("sd-default", "http://new/v1", "key"))
+    assert gw.models[0]["api_base"] == "http://new/v1" and gw.models[0]["is_default"] is True

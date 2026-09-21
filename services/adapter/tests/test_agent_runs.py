@@ -109,12 +109,13 @@ async def test_tools_are_registered_as_an_mcp_server_for_this_run_only(harness):
     tools = [{"name": "run_shell", "description": "d", "inputSchema": {"type": "object"}}]
     _, lines = await post(app, {"sessionId": "s1", "prompt": "go", "tools": tools,
                                 "bridge": {"url": "http://legacy.test/bridge", "token": "t"}})
-    methods = [m for _, m, _ in rpcs]
+    methods = [m for _, m, _ in rpcs if not m.startswith("models.")]  # the default-model entry is not the run's
     assert methods == ["mcp.register_custom", "mcp.connect", "mcp.disconnect", "mcp.delete_custom"]
-    name = rpcs[0][2]["name"]
-    assert rpcs[0][2]["url"].startswith("http://adapter.test/mcp/") and rpcs[0][2]["transport"] == "streamable-http"
+    mcp = [call for call in rpcs if call[1].startswith("mcp.")]
+    name = mcp[0][2]["name"]
+    assert mcp[0][2]["url"].startswith("http://adapter.test/mcp/") and mcp[0][2]["transport"] == "streamable-http"
     assert FakeRun.instances[0].params["mcp"] == [name]
-    assert all(p["name"] == name for _, _, p in rpcs)
+    assert all(p["name"] == name for _, _, p in mcp)
 
 
 async def test_tools_without_a_bridge_fail_the_run_cleanly(harness):
@@ -122,7 +123,7 @@ async def test_tools_without_a_bridge_fail_the_run_cleanly(harness):
     _, lines = await post(app, {"sessionId": "s1", "prompt": "go", "tools": [{"name": "x"}]})
     failed = [line["event"] for line in lines if line.get("event", {}).get("type") == "run.failed"]
     assert failed and "bridge" in failed[0]["error"]
-    assert rpcs == [] and "done" in lines[-1]
+    assert [m for _, m, _ in rpcs if not m.startswith("models.")] == [] and "done" in lines[-1]
 
 
 async def test_a_gateway_that_cannot_register_the_toolset_fails_the_run(harness):
@@ -223,7 +224,8 @@ async def test_the_run_talks_to_a_private_alias_that_routes_to_the_real_model(ha
     assert (route.base_url, route.api_key, route.model, route.system_prompt) == ("http://llm/v1", "sk", "gpt-x", "Be a scientist.")
     assert route.tool_names == frozenset({"run_shell"}) and route.tool_prefix.startswith("mcp_sci")
     # after the run: the alias is gone from the list and the route is closed
-    assert listed["models"] == [] and runner.routes.get(entry["api_key"]) is None
+    assert [m["model_name"] for m in listed["models"]] == ["sd-default"], "only the default-model entry is left"
+    assert runner.routes.get(entry["api_key"]) is None
 
 
 async def test_a_protocol_other_than_openai_chat_is_refused_clearly(harness):
@@ -253,7 +255,7 @@ async def test_start_up_removes_stale_aliases_left_by_an_earlier_process():
     app.state.agent_runner.models._rpc = rpc
     async with app.router.lifespan_context(app):
         pass
-    assert calls == ["models.list", "models.replace_all"]
+    assert calls == ["models.list", "models.replace_all", "models.list", "models.replace_all"], "prune, then the default model"
 
 
 async def test_the_per_run_mcp_server_gets_a_tool_timeout_far_beyond_jiuwenswarms_30_seconds(harness):

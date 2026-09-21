@@ -163,3 +163,48 @@ def test_jiuwenswarms_own_tools_named_for_the_run_stay_visible_with_their_own_sp
 
 def test_without_native_tools_none_of_them_is_visible():
     assert [t["function"]["name"] for t in rewrite_request({"tools": [tool("todo_create"), tool("mcp_sci_run_shell")], "messages": []}, ROUTE)["tools"]] == ["run_shell"]
+
+
+def _client(routes, handler):
+    upstream = httpx.MockTransport(handler)
+    app = FastAPI()
+    app.include_router(llm_router(routes, lambda: httpx.AsyncClient(transport=upstream)))
+    return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://adapter")
+
+
+async def test_jiuwenswarms_own_model_calls_go_to_the_model_of_the_run_in_progress_untouched():
+    routes = LlmRoutes()
+    routes.add(LlmRoute(**{**ROUTE.__dict__, "base_url": "http://old.test/v1", "api_key": "old", "model": "old-model"}))
+    routes.add(ROUTE)  # the run that started last
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(url=str(request.url), auth=request.headers["authorization"], body=json.loads(request.content))
+        return httpx.Response(200, json={"choices": [{"message": {"role": "assistant", "content": "summary", "tool_calls": [
+            {"id": "c", "type": "function", "function": {"name": "run_shell", "arguments": "{}"}}]}}]})
+
+    body = {"model": "sd-default", "messages": [{"role": "system", "content": "Summarise this."}, {"role": "user", "content": "long text"}], "tools": [tool("bash")]}
+    async with _client(routes, handler) as client:
+        response = await client.post("/llm/default/v1/chat/completions", json=body, headers={"authorization": f"Bearer {routes.default_key}"})
+    assert response.status_code == 200
+    assert seen["url"] == "http://llm.test/v1/chat/completions" and seen["auth"] == "Bearer sk-real"
+    assert seen["body"]["model"] == "gpt-real", "the real model id"
+    assert seen["body"]["messages"][0]["content"] == "Summarise this.", "JiuwenSwarm's own system prompt, not the agent's"
+    assert [t["function"]["name"] for t in seen["body"]["tools"]] == ["bash"], "no tool list cut or renamed"
+    assert response.json()["choices"][0]["message"]["tool_calls"][0]["function"]["name"] == "run_shell", "names are not prefixed"
+
+
+async def test_the_default_route_needs_its_own_key_and_a_run_in_progress():
+    routes = LlmRoutes()
+    async with _client(routes, lambda request: httpx.Response(200, json={})) as client:
+        assert (await client.post("/llm/default/v1/chat/completions", json={})).status_code == 401
+        assert (await client.post("/llm/default/v1/chat/completions", json={}, headers={"authorization": "Bearer wrong"})).status_code == 401
+        no_run = await client.post("/llm/default/v1/chat/completions", json={}, headers={"authorization": f"Bearer {routes.default_key}"})
+        assert no_run.status_code == 503 and "no run in progress" in no_run.json()["error"]["message"]
+
+
+async def test_the_default_route_is_not_mistaken_for_a_runs_token():
+    routes = LlmRoutes()
+    async with _client(routes, lambda request: httpx.Response(200, json={})) as client:
+        response = await client.post("/llm/default/v1/chat/completions", json={}, headers={"authorization": "Bearer x"})
+    assert response.status_code == 401  # not "unknown route" (404) from the per-run handler

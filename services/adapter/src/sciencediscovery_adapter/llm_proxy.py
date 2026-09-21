@@ -61,6 +61,8 @@ class LlmRoute:
 @dataclass
 class LlmRoutes:
     _routes: dict[str, LlmRoute] = field(default_factory=dict)
+    # Bearer key of JiuwenSwarm's default-model entry (see `default_completions`).
+    default_key: str = field(default_factory=lambda: secrets.token_hex(16))
 
     def add(self, route: LlmRoute) -> str:
         token = secrets.token_hex(16)
@@ -72,6 +74,10 @@ class LlmRoutes:
 
     def remove(self, token: str) -> None:
         self._routes.pop(token, None)
+
+    def latest(self) -> LlmRoute | None:
+        """The model of the run that started last and is still going."""
+        return next(reversed(self._routes.values()), None)
 
 
 def _unprefixed(name: str, route: LlmRoute) -> str:
@@ -163,15 +169,17 @@ async def _rewrite_stream(upstream: httpx.Response, route: LlmRoute) -> AsyncIte
         yield buffer.encode()
 
 
+# The name of JiuwenSwarm's default-model entry. JiuwenSwarm's own housekeeping calls (compressing a long
+# conversation, titling a session, probing a new model) use its default model, not the model of the run;
+# a fresh install's default is a placeholder that answers with an HTML page, so nothing it does with a model
+# works until the default points somewhere real.
+DEFAULT_ALIAS = "sd-default"
+
+
 def llm_router(routes: LlmRoutes, client_getter) -> APIRouter:
     router = APIRouter()
 
-    @router.post("/llm/{token}/v1/chat/completions")
-    async def completions(token: str, request: Request) -> Response:
-        route = routes.get(token)
-        if route is None:
-            return JSONResponse({"error": {"message": "unknown route"}}, status_code=404)
-        body = rewrite_request(await request.json(), route)
+    async def forward(route: LlmRoute, body: dict[str, Any], *, restore_names: bool) -> Response:
         client: httpx.AsyncClient = client_getter()
         upstream_request = client.build_request(
             "POST", f"{route.base_url}/chat/completions", json=body,
@@ -183,18 +191,41 @@ def llm_router(routes: LlmRoutes, client_getter) -> APIRouter:
             return JSONResponse({"error": {"message": f"model endpoint unreachable: {type(error).__name__}"}}, status_code=502)
         headers = {k: v for k, v in upstream.headers.items() if k.lower() not in _HOP_BY_HOP}
         if "text/event-stream" in upstream.headers.get("content-type", ""):
+            stream = _rewrite_stream(upstream, route) if restore_names else upstream.aiter_raw()
             return StreamingResponse(
-                _rewrite_stream(upstream, route), status_code=upstream.status_code, headers=headers,
+                stream, status_code=upstream.status_code, headers=headers,
                 media_type="text/event-stream", background=BackgroundTask(upstream.aclose),
             )
         content = await upstream.aread()
         await upstream.aclose()
-        if upstream.status_code == 200:
+        if upstream.status_code == 200 and restore_names:
             try:
                 content = json.dumps(rewrite_response(json.loads(content), route), ensure_ascii=False).encode()
             except ValueError:
                 pass
         return Response(content, status_code=upstream.status_code, headers=headers,
                         media_type=upstream.headers.get("content-type", "application/json"))
+
+    # Registered before the `{token}` route so that "default" is not taken for a run's token.
+    @router.post("/llm/default/v1/chat/completions")
+    async def default_completions(request: Request) -> Response:
+        """JiuwenSwarm's own model calls, sent on to the model of the run in progress, untouched.
+
+        No system prompt, tool list or tool name is rewritten: these are JiuwenSwarm's requests, not the
+        agent's. With no run in progress there is no model to use.
+        """
+        if request.headers.get("authorization") != f"Bearer {routes.default_key}":
+            return JSONResponse({"error": {"message": "unauthorized"}}, status_code=401)
+        route = routes.latest()
+        if route is None:
+            return JSONResponse({"error": {"message": "no run in progress: no model to use"}}, status_code=503)
+        return await forward(route, {**await request.json(), "model": route.model}, restore_names=False)
+
+    @router.post("/llm/{token}/v1/chat/completions")
+    async def completions(token: str, request: Request) -> Response:
+        route = routes.get(token)
+        if route is None:
+            return JSONResponse({"error": {"message": "unknown route"}}, status_code=404)
+        return await forward(route, rewrite_request(await request.json(), route), restore_names=True)
 
     return router

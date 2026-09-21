@@ -98,3 +98,18 @@ class ModelSync:
                 kept[0]["is_default"] = True
             await self._rpc(self._url, "models.replace_all", {"models": kept})
             return len(current) - len(kept)
+
+    async def ensure_default(self, profile: ModelProfile) -> None:
+        """Make `profile` the one default model of JiuwenSwarm, and change nothing if it already is."""
+        async with self._lock:
+            current = (await self._rpc(self._url, "models.list")).get("models", [])
+            wanted = profile.entry()
+            existing = next((m for m in current if m.get("model_name") == profile.model), None)
+            others_default = any(m.get("is_default") for m in current if m.get("model_name") != profile.model)
+            if existing and existing.get("is_default") and not others_default \
+                    and all(existing.get(key) == value for key, value in wanted.items()):
+                return
+            kept = [{**{k: v for k, v in m.items() if k not in _DERIVED}, "is_default": False}
+                    for m in current if m.get("model_name") != profile.model]
+            entry = {**{k: v for k, v in (existing or {}).items() if k not in _DERIVED}, **wanted, "is_default": True}
+            await self._rpc(self._url, "models.replace_all", {"models": [*kept, entry]})

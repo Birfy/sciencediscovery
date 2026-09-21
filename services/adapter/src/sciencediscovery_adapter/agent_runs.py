@@ -43,7 +43,7 @@ from pydantic import BaseModel, Field
 from . import gateway
 from .config import Settings
 from .events import RunEventMapper
-from .llm_proxy import LlmRoute, LlmRoutes
+from .llm_proxy import DEFAULT_ALIAS, LlmRoute, LlmRoutes
 from .mcp_server import Toolset, ToolsetRegistry
 from .models import ModelProfile, ModelSync
 from .schema import relax_schema
@@ -119,6 +119,11 @@ class AgentRunner:
         self.rpc = gateway.rpc
         self.models = ModelSync(lambda *a, **k: self.rpc(*a, **k), settings.mgmt_url)
 
+    async def ensure_default_model(self) -> None:
+        """Point JiuwenSwarm's default model at the adapter (see `llm_proxy.DEFAULT_ALIAS`)."""
+        await self.models.ensure_default(ModelProfile(
+            DEFAULT_ALIAS, f"{self.settings.public_url}/llm/default/v1", self.routes.default_key, "OpenAI"))
+
     async def stream(self, request: AgentRunRequest) -> AsyncIterator[str]:
         name = "sci" + _SAFE_NAME.sub("", uuid.uuid4().hex)[:10]
         token = None
@@ -145,6 +150,7 @@ class AgentRunner:
                     system_prompt=request.systemPrompt, native_tools=frozenset(request.nativeTools),
                 ))
                 model_alias = f"sd-{llm_token[:12]}"
+                await self.ensure_default_model()
                 params["model_name"] = await self.models.ensure(ModelProfile(
                     model_alias, f"{self.settings.public_url}/llm/{llm_token}/v1", llm_token, "OpenAI",))
             if request.tools:

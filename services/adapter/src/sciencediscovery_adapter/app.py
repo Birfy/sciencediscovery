@@ -35,6 +35,7 @@ async def forget_stale_aliases(runner) -> None:
     """Remove the per-run model aliases an earlier, abnormally ended process left in JiuwenSwarm."""
     try:
         removed = await runner.models.prune("sd-")
+        await runner.ensure_default_model()
     except Exception as error:  # JiuwenSwarm may not be up yet; nothing to clean then
         print(f"[adapter] could not clean stale model aliases: {error}", file=sys.stderr, flush=True)
         return
