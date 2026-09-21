@@ -1,0 +1,123 @@
+{
+ "domain": "Permissions",
+ "cases": [
+  {
+   "id": "permission-requests-and-grants",
+   "description": "A permission asked for directly through the API, allowed once for the session, then revoked. No model or run is involved.",
+   "steps": [
+    {
+     "name": "create a project",
+     "request": {
+      "method": "POST",
+      "path": "/api/projects",
+      "body": {
+       "name": "L1 permissions"
+      }
+     },
+     "capture": {
+      "projectId": "$.id",
+      "sessionId": "$.firstSession.id"
+     },
+     "expectStatus": 201
+    },
+    {
+     "name": "ask for a permission",
+     "request": {
+      "method": "POST",
+      "path": "/api/sessions/{{sessionId}}/permission-requests",
+      "body": {
+       "action": "connector",
+       "resource": "web",
+       "summary": "Use the web connector"
+      }
+     },
+     "covers": [
+      "POST /api/sessions/:id/permission-requests"
+     ],
+     "capture": {
+      "requestId": "$.request.id"
+     },
+     "expectStatus": 201
+    },
+    {
+     "name": "the request is pending",
+     "request": {
+      "method": "GET",
+      "path": "/api/permission-requests"
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "allow it for matching requests",
+     "request": {
+      "method": "POST",
+      "path": "/api/permission-requests/{{requestId}}/decision",
+      "body": {
+       "decision": "allow_matching"
+      }
+     },
+     "capture": {
+      "grantId": "$.authorization.permissionGrantId"
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "the grant is listed",
+     "request": {
+      "method": "GET",
+      "path": "/api/permission-grants"
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "the authorization is on record",
+     "request": {
+      "method": "GET",
+      "path": "/api/sessions/{{sessionId}}/permission-authorizations"
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "revoke the grant",
+     "request": {
+      "method": "DELETE",
+      "path": "/api/permission-grants/{{grantId}}"
+     },
+     "covers": [
+      "DELETE /api/permission-grants/:id"
+     ],
+     "expectStatus": 200
+    },
+    {
+     "name": "the grant is gone",
+     "request": {
+      "method": "GET",
+      "path": "/api/permission-grants"
+     },
+     "expectStatus": 200
+    },
+    {
+     "name": "a decision must be one of the known ones",
+     "request": {
+      "method": "POST",
+      "path": "/api/permission-requests/{{requestId}}/decision",
+      "body": {
+       "decision": "maybe"
+      }
+     }
+    },
+    {
+     "name": "delete the project",
+     "request": {
+      "method": "DELETE",
+      "path": "/api/projects/{{projectId}}",
+      "body": {
+       "confirmationId": "{{projectId}}"
+      }
+     },
+     "always": true
+    }
+   ]
+  }
+ ]
+}
