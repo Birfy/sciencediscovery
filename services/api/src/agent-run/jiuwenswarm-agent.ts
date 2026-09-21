@@ -17,14 +17,13 @@ import { createServer, type IncomingMessage, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 
 import type { AgentEvent } from "@sciencediscovery/orchestration";
-import type { AgentTool, AgentToolResult } from "@sciencediscovery/tools";
+import type { AgentTool } from "@sciencediscovery/tools";
 
 import { DurableContextStore } from "@sciencediscovery/context";
 
 import {
-  buildTools,
   composeSystemPrompt,
-  pluginTools,
+  createToolRegistry,
   startPluginScope,
   type NativeAgentHandle,
   type NativeAgentOptions,
@@ -115,11 +114,14 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
       ...(this.options.runContract ? { runContract: this.options.runContract } : {}),
     });
     const plugins = await startPluginScope(this.options, durable, this.controller.signal);
-    const tools = new Map([...buildTools(this.options), ...pluginTools(plugins)].map((tool) => [tool.name, tool]));
+    // The same registry the native loop dispatches through: output guard, detail sanitisation,
+    // neutralised untrusted content, loop protection, the standard error shape.
+    const registry = createToolRegistry(this.options, plugins, durable);
+    const tools = new Map(registry.values().map((tool) => [tool.name, tool]));
     const bridgeToken = randomUUID();
     const announcements = new ToolAnnouncements();
     const transcript = new Transcript();
-    const bridge = await startBridge(tools, bridgeToken, this.controller.signal, (event) => this.emit(event), announcements, transcript,
+    const bridge = await startBridge(registry, tools, bridgeToken, this.controller.signal, (event) => this.emit(event), announcements, transcript,
       this.config.toolAnnouncementTimeoutMs);
     const timeout = this.options.runTimeoutMs ? setTimeout(() => this.controller.abort(), this.options.runTimeoutMs) : undefined;
     try {
@@ -199,13 +201,21 @@ class ToolAnnouncements {
     for (const wake of [...this.waiters]) wake();
   }
 
-  /** Take the first announced call with this name and these arguments; undefined after `timeoutMs`. */
-  async claim(name: string, args: unknown, timeoutMs = 5_000): Promise<{ id: string; input: string } | undefined> {
-    const wanted = JSON.stringify(args ?? {});
+  /**
+   * Take the first announced call with this name whose arguments are the ones JiuwenSwarm passed on.
+   * JiuwenSwarm fills schema defaults into the arguments and drops empty arrays and objects, so
+   * "the same call" means: every argument the model sent is there unchanged, or was empty and is
+   * absent. The caller then runs the tool with the announced (model's own) arguments.
+   */
+  async claim(name: string, given: Record<string, unknown>, timeoutMs = 5_000):
+    Promise<{ args: Record<string, unknown>; id: string; input: string } | undefined> {
     const deadline = Date.now() + timeoutMs;
     for (;;) {
-      const index = this.pending.findIndex((call) => call.name === name && JSON.stringify(call.args ?? {}) === wanted);
-      if (index >= 0) return this.pending.splice(index, 1)[0];
+      const index = this.pending.findIndex((call) => call.name === name && sameCall(call.args as Record<string, unknown>, given));
+      if (index >= 0) {
+        const [call] = this.pending.splice(index, 1);
+        return { args: call!.args as Record<string, unknown>, id: call!.id, input: call!.input };
+      }
       const remaining = deadline - Date.now();
       if (remaining <= 0) return undefined;
       await new Promise<void>((resolve) => {
@@ -215,6 +225,15 @@ class ToolAnnouncements {
       });
     }
   }
+}
+
+const isEmptyContainer = (value: unknown) =>
+  (Array.isArray(value) && value.length === 0)
+  || (value !== null && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0);
+
+function sameCall(announced: Record<string, unknown>, given: Record<string, unknown>): boolean {
+  return Object.entries(announced ?? {}).every(([key, value]) =>
+    key in given ? JSON.stringify(given[key]) === JSON.stringify(value) : isEmptyContainer(value));
 }
 
 /** The model-facing transcript of a run, in the shape the native agent leaves behind. */
@@ -365,10 +384,6 @@ async function* ndjson(body: ReadableStream<Uint8Array>): AsyncGenerator<RunLine
   if (rest) yield JSON.parse(rest) as RunLine;
 }
 
-function resultText(result: AgentToolResult): string {
-  return result.content.map((part) => part.text).join("\n");
-}
-
 async function readJson(request: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = [];
   for await (const chunk of request) chunks.push(chunk as Buffer);
@@ -377,6 +392,7 @@ async function readJson(request: IncomingMessage): Promise<unknown> {
 
 /** Loopback endpoint the adapter calls to run one of this run's tools. */
 async function startBridge(
+  registry: ReturnType<typeof createToolRegistry>,
   tools: Map<string, AgentTool>,
   token: string,
   signal: AbortSignal,
@@ -406,28 +422,27 @@ async function startBridge(
       reply(404, { error: `unknown tool: ${body.name}` });
       return;
     }
-    const args = body.arguments ?? {};
-    // Run under the model's own id, and only after the adapter has reported the call (see ToolAnnouncements).
-    const claimed = await announcements.claim(tool.name, args, announcementTimeoutMs);
+    // Run under the model's own id and arguments, and only after the adapter has reported the call
+    // (see ToolAnnouncements).
+    const claimed = await announcements.claim(tool.name, body.arguments ?? {}, announcementTimeoutMs);
     if (!claimed) console.warn(`[jiuwenswarm-bridge] no model call was reported for ${tool.name}; running it under a generated id`);
     const toolCallId = claimed?.id ?? randomUUID();
+    const args = claimed?.args ?? body.arguments ?? {};
     emit({ type: "tool_execution_start", toolCallId, toolName: tool.name, args });
-    let result: AgentToolResult;
-    try {
-      result = await tool.execute(toolCallId, args as never, signal);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      result = { content: [{ type: "text", text: message }], isError: true };
-    }
-    const isError = result.isError === true;
+    // registry.execute never throws for a failing tool: it answers with the standard error shape.
+    const dispatched = await registry.execute({ id: toolCallId, name: tool.name, args } as never, signal);
+    const isError = dispatched.isError === true;
     // Tool failures reach the model as text; without this line they are invisible to the operator.
-    if (isError) console.warn(`[jiuwenswarm-bridge] tool ${tool.name} failed: ${resultText(result).slice(0, 300)}`);
+    if (isError) console.warn(`[jiuwenswarm-bridge] tool ${tool.name} failed: ${dispatched.content.slice(0, 300)}`);
     if (process.env.SCIENCE_AGENT_JIUWENSWARM_DEBUG === "1") {
-      console.warn(`[jiuwenswarm-bridge] ${tool.name}(${JSON.stringify(args).slice(0, 160)}) -> ${isError ? "ERROR " : ""}${resultText(result).slice(0, 300)}`);
+      console.warn(`[jiuwenswarm-bridge] ${tool.name}(${JSON.stringify(args).slice(0, 160)}) -> ${isError ? "ERROR " : ""}${dispatched.content.slice(0, 300)}`);
     }
-    emit({ type: "tool_execution_end", toolCallId, toolName: tool.name, isError, result });
-    transcript.toolResult(toolCallId, tool.name, resultText(result));
-    reply(200, { text: resultText(result), isError });
+    emit({
+      type: "tool_execution_end", toolCallId, toolName: tool.name, isError,
+      result: { content: [{ type: "text", text: dispatched.content }], ...(dispatched.details !== undefined ? { details: dispatched.details } : {}) },
+    });
+    transcript.toolResult(toolCallId, tool.name, dispatched.content);
+    reply(200, { text: dispatched.content, isError });
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address() as AddressInfo;

@@ -36,6 +36,7 @@ const chunk = (id, delta, finish = null) => ({
 export async function startStubModel(steps = {}) {
   const queues = { main: [...(steps.main ?? [])], subagent: [...(steps.subagent ?? [])] };
   const requests = [];
+  const consumed = { main: 0, subagent: 0 };
   const server = createServer((request, response) => {
     const chunks = [];
     request.on("data", (part) => chunks.push(part));
@@ -56,6 +57,7 @@ export async function startStubModel(steps = {}) {
       const system = String(body.messages?.find((message) => message.role === "system")?.content ?? "");
       const route = system.includes(SUBAGENT_MARKER) ? "subagent" : "main";
       const step = queues[route].shift();
+      if (step) consumed[route] += 1;
       requests.push({ route, step });
       if (!step) {
         response.writeHead(500, { "content-type": "application/json" });
@@ -70,7 +72,7 @@ export async function startStubModel(steps = {}) {
       }
       response.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
       if (step.tool) {
-        send(chunk(id, { role: "assistant", tool_calls: [{ index: 0, id: `call-${requests.length}`, type: "function", function: { name: step.tool, arguments: JSON.stringify(step.arguments ?? {}) } }] }));
+        send(chunk(id, { role: "assistant", tool_calls: [{ index: 0, id: `call-${route}-${consumed[route]}`, type: "function", function: { name: step.tool, arguments: JSON.stringify(step.arguments ?? {}) } }] }));
         send({ ...chunk(id, {}, "tool_calls"), usage: { completion_tokens: 8, prompt_tokens: 20, total_tokens: 28 } });
       } else {
         for (const word of String(step.text ?? "").split(/(?<= )/)) send(chunk(id, { role: "assistant", content: word }));

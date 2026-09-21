@@ -256,7 +256,11 @@ test("a throwing tool is a tool error, not a failed run", async () => {
     const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ extraTools: [failing as never] }));
     const events = collect(agent);
     const result = await agent.execute("go");
-    assert.deepEqual(reply, { text: "disk on fire", isError: true });
+    // The standard error shape the native registry produces, so the model sees the same JSON either way.
+    assert.equal(reply.isError, true);
+    assert.deepEqual(JSON.parse(reply.text), {
+      ok: false, error: { attempts: 1, code: "TOOL_EXECUTION_FAILED", message: "disk on fire", retryable: false },
+    });
     assert.equal((events.find((event) => event.type === "tool_execution_end") as any).isError, true);
     assert.equal(result.finalMessages.at(-1)!.content, "carried on");
   } finally {
@@ -470,6 +474,60 @@ test("a tool nobody reported still runs (under a generated id) instead of hangin
     assert.equal(events.some((event) => event.type === "tool_execution_end"), true);
   } finally {
     console.warn = warn;
+    await adapter.close();
+  }
+});
+
+test("the tool runs with the model's own arguments even though JiuwenSwarm added defaults and dropped empties", async () => {
+  const seen: unknown[] = [];
+  const probe = {
+    label: "Probe", name: "probe", description: "Records what it was called with.",
+    parameters: Type.Object({ word: Type.String(), extra: Type.Optional(Type.Number()), list: Type.Optional(Type.Array(Type.String())) }),
+    execute: async (_id: string, params: unknown) => { seen.push(params); return { content: [{ type: "text" as const, text: "ok" }] }; },
+  };
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    response.writeHead(200);
+    // the model sent {word, list: []}; JiuwenSwarm calls the tool with {word, extra: 7200} (default added, empty list dropped)
+    response.write(line({ event: { type: "tool.started", trace: { id: "call-p", name: "probe", args: { word: "w", list: [] }, status: "running" } } }));
+    await fetch(body.bridge.url, {
+      method: "POST", headers: { authorization: `Bearer ${body.bridge.token}` },
+      body: JSON.stringify({ name: "probe", arguments: { word: "w", extra: 7200 } }),
+    });
+    response.end(line({ done: { finalText: "" } }));
+  });
+  try {
+    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ extraTools: [probe as never] }));
+    const events = collect(agent);
+    await agent.execute("go");
+    assert.deepEqual(seen, [{ word: "w", list: [] }]);
+    const start = events.find((event) => event.type === "tool_execution_start") as { args: unknown; toolCallId: string };
+    assert.deepEqual(start.args, { word: "w", list: [] });
+    assert.equal(start.toolCallId, "call-p");
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("tool details in the run's events are sanitised and bounded like the native agent's", async () => {
+  const leaky = {
+    label: "Leaky", name: "leaky", description: "Returns details with a secret and a payload.", parameters: Type.Object({}),
+    execute: async () => ({ content: [{ type: "text" as const, text: "done" }], details: { apiKey: "sk-secret-value", stdout: "fine", note: "kept" } }),
+  };
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    response.writeHead(200);
+    response.write(line({ event: { type: "tool.started", trace: { id: "call-l", name: "leaky", args: {}, status: "running" } } }));
+    await fetch(body.bridge.url, { method: "POST", headers: { authorization: `Bearer ${body.bridge.token}` }, body: JSON.stringify({ name: "leaky", arguments: {} }) });
+    response.end(line({ done: { finalText: "" } }));
+  });
+  try {
+    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ extraTools: [leaky as never] }));
+    const events = collect(agent);
+    await agent.execute("go");
+    const end = events.find((event) => event.type === "tool_execution_end") as { result: { details: Record<string, unknown> } };
+    assert.equal(end.result.details.apiKey, "[redacted]", "secrets are redacted before they reach a run event");
+    assert.equal(end.result.details.stdout, "[omitted]", "payload fields are left out of run events");
+    assert.equal((end.result.details.__detailsBoundary as { omittedPayloadFields: boolean }).omittedPayloadFields, true);
+  } finally {
     await adapter.close();
   }
 });
