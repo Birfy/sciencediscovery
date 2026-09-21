@@ -1770,15 +1770,11 @@
      }
     },
     {
-     "name": "the run it created",
+     "name": "wait for the run list to show it settled",
      "request": {
       "method": "GET",
       "path": "/api/sessions/{{sessionId}}/runs"
      },
-     "capture": {
-      "runId": "$[0].id"
-     },
-     "expectStatus": 200,
      "poll": {
       "path": "$[0].status",
       "in": [
@@ -1789,6 +1785,17 @@
       ],
       "timeoutMs": 30000
      }
+    },
+    {
+     "name": "the run it created",
+     "request": {
+      "method": "GET",
+      "path": "/api/sessions/{{sessionId}}/runs"
+     },
+     "capture": {
+      "runId": "$[0].id"
+     },
+     "expectStatus": 200
     },
     {
      "name": "wait for the run to settle",
