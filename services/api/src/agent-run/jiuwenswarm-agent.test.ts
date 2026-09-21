@@ -532,3 +532,52 @@ test("tool details in the run's events are sanitised and bounded like the native
     await adapter.close();
   }
 });
+
+test("deferred tools (custom MCP) are callable at once, and tool_search is offered and answers", async () => {
+  const bulky = {
+    label: "Bulky", name: "mcp__custom-1__bulky", description: "A deferred MCP tool.", deferred: true,
+    parameters: Type.Object({ text: Type.String() }),
+    execute: async (_id: string, params: { text: string }) => ({ content: [{ type: "text" as const, text: `bulky:${params.text}` }] }),
+  };
+  let offered: string[] = [];
+  let direct: any;
+  let searched: any;
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    offered = body.tools.map((tool: { name: string }) => tool.name);
+    response.writeHead(200);
+    const call = (name: string, args: unknown) => fetch(body.bridge.url, {
+      method: "POST", headers: { authorization: `Bearer ${body.bridge.token}` }, body: JSON.stringify({ name, arguments: args }),
+    }).then((reply) => reply.json());
+    response.write(line({ event: { type: "tool.started", trace: { id: "c-search", name: "tool_search", args: { query: "select:mcp__custom-1__bulky" }, status: "running" } } }));
+    searched = await call("tool_search", { query: "select:mcp__custom-1__bulky" });
+    response.write(line({ event: { type: "tool.started", trace: { id: "c-bulky", name: "mcp__custom-1__bulky", args: { text: "hi" }, status: "running" } } }));
+    direct = await call("mcp__custom-1__bulky", { text: "hi" });
+    response.end(line({ done: { finalText: "ok" } }));
+  });
+  try {
+    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ extraTools: [bulky as never] }));
+    await agent.execute("use it");
+    assert.ok(offered.includes("mcp__custom-1__bulky"), `offered: ${offered.join(", ")}`);
+    assert.ok(offered.includes("tool_search"));
+    assert.equal(searched.isError, false, searched.text);
+    assert.match(searched.text, /mcp__custom-1__bulky/);
+    assert.deepEqual(direct, { text: "bulky:hi", isError: false });
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("a run with no deferred tools is not offered tool_search", async () => {
+  let offered: string[] = [];
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    offered = body.tools.map((tool: { name: string }) => tool.name);
+    response.writeHead(200);
+    response.end(line({ done: { finalText: "ok" } }));
+  });
+  try {
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options()).execute("go");
+    assert.ok(!offered.includes("tool_search"), offered.join(", "));
+  } finally {
+    await adapter.close();
+  }
+});

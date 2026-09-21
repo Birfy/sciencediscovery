@@ -17,7 +17,7 @@ import { createServer, type IncomingMessage, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 
 import type { AgentEvent } from "@sciencediscovery/orchestration";
-import type { AgentTool } from "@sciencediscovery/tools";
+import { TOOL_SEARCH_NAME, TOOL_SEARCH_SPEC, type AgentTool } from "@sciencediscovery/tools";
 
 import { DurableContextStore } from "@sciencediscovery/context";
 
@@ -118,6 +118,7 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
     // neutralised untrusted content, loop protection, the standard error shape.
     const registry = createToolRegistry(this.options, plugins, durable);
     const tools = new Map(registry.values().map((tool) => [tool.name, tool]));
+    await offerDeferredTools(registry, tools, this.controller.signal);
     const bridgeToken = randomUUID();
     const announcements = new ToolAnnouncements();
     const transcript = new Transcript();
@@ -390,6 +391,23 @@ async function readJson(request: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = [];
   for await (const chunk of request) chunks.push(chunk as Buffer);
   return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+}
+
+/**
+ * The native loop hides deferred tools (large MCP tool schemas) until the model finds them with
+ * `tool_search`. JiuwenSwarm fixes the tool list when the run starts, so nothing can be revealed
+ * later: promote every deferred tool now, offer them all, and keep `tool_search` in the list so a
+ * model that asks for it (the system prompt tells it to) gets the schemas and the tools stay callable.
+ */
+async function offerDeferredTools(
+  registry: ReturnType<typeof createToolRegistry>,
+  tools: Map<string, AgentTool>,
+  signal: AbortSignal,
+): Promise<void> {
+  const deferred = [...registry.deferredNames()];
+  if (!deferred.length) return;
+  await registry.execute({ id: randomUUID(), name: TOOL_SEARCH_NAME, args: { query: `select:${deferred.join(",")}` } } as never, signal);
+  tools.set(TOOL_SEARCH_NAME, { ...TOOL_SEARCH_SPEC, label: "Tool search" } as unknown as AgentTool);
 }
 
 /** Loopback endpoint the adapter calls to run one of this run's tools. */
