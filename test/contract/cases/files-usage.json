@@ -152,11 +152,18 @@
      "name": "project plugin events",
      "request": {
       "method": "GET",
-      "path": "/api/projects/{{projectId}}/plugins/events"
+      "path": "/api/projects/{{projectId}}/plugins/events",
+      "headers": {
+       "accept": "text/event-stream"
+      }
      },
      "covers": [
       "GET /api/projects/:id/plugins/events"
-     ]
+     ],
+     "stream": {
+      "until": [],
+      "timeoutMs": 2000
+     }
     },
     {
      "name": "project plugin candidates",
