@@ -52,7 +52,7 @@ and hands the model the original tool schemas.
 | `gateway.py` | `ChatRun` (one chat on one connection, approval answers, cancel) and `rpc()` |
 | `events.py` | `RunEventMapper`: gateway frames → run events, error classification, usage |
 | `mcp_server.py` | Stateless per-run MCP server; forwards tool calls to the bridge |
-| `llm_proxy.py` | Per-run OpenAI chat-completions proxy |
+| `llm_proxy.py` | Per-run OpenAI chat-completions proxy; forwards to the API's loopback model gateway |
 | `models.py` | Puts the run's model alias into JiuwenSwarm's global model list |
 | `schema.py` | Relaxes tool schemas for JiuwenSwarm; restores dropped empty arguments |
 
@@ -156,8 +156,15 @@ Not done yet:
   promoted up front and `tool_search` is offered as well (`offerDeferredTools`).
 - **Tool output store** (`ToolOutputStore`, oversized results by reference) is not part of
   the toolset; tool arguments are not schema-validated (as in the native agent).
-- **Protocols**: only OpenAI chat completions. Anthropic and Responses fail the run with a
-  clear message.
+- **Protocols**: JiuwenSwarm only speaks OpenAI chat completions to a model. The API starts a loopback
+  model gateway per run (`services/api/src/agent-run/jiuwenswarm-model-gateway.ts`) that serves those
+  requests through the native model client, so every protocol and variant the UI can configure
+  (OpenAI chat completions with the DeepSeek/Gemini/Kimi/Qwen/MiniMax/Ollama variants, OpenAI Responses,
+  Anthropic Messages) works, with the same thinking controls, network proxy, retries (including 429
+  back-off) and usage accounting as the built-in loop. The provider's own assistant messages (Anthropic
+  thinking blocks and signatures, Responses reasoning items) are restored on later requests and kept in
+  the saved history. Images are not sent (the gateway refuses a request that carries one, which is how
+  JiuwenSwarm's image probe learns the model has no image input here).
 - **Model alias**: an entry is keyed by model id, so two endpoints serving the same id
   share one entry while a run is active.
 - Everything outside `/agent/*` and `/llm/*` and `/mcp/*` is still proxied to the legacy API.

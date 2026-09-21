@@ -15,7 +15,7 @@ browser ─▶ adapter (public port) ─▶ legacy API (port + 100)
 - Source mode (see [Deployment](deployment.md#local-mode-host-processes)); the binary and Docker images do not include this executor yet.
 - `git` and `uv` on the host. JiuwenSwarm installs into its own directory and virtualenv, never into ScienceDiscovery's environments.
 - Access to `gitcode.com` (to clone the pinned tag) and to a PyPI index. On a slow link or in mainland China, set `SCIENCE_AGENT_PYPI_INDEX` to a mirror and, if downloads time out, `UV_HTTP_TIMEOUT` (the script defaults to 300 seconds).
-- A model endpoint that speaks the **OpenAI chat-completions** protocol. Anthropic Messages and OpenAI Responses models fail the run with a clear message; use the built-in loop for those.
+- Any model the UI can configure: OpenAI chat completions, OpenAI Responses or Anthropic Messages, with their provider variants. JiuwenSwarm itself only speaks chat completions, so a small loopback gateway in the API translates each run's model requests to the model's own protocol.
 - About 1.5 GB of disk for the JiuwenSwarm install.
 
 ## 1. Install and start JiuwenSwarm
@@ -61,7 +61,8 @@ With the adapter on, the adapter takes the public port (default 4310) and the le
 | Symptom | Cause and fix |
 |---|---|
 | `start-stack.sh` says JiuwenSwarm is not reachable | Run `scripts/jiuwenswarm.sh start`, then `scripts/jiuwenswarm.sh status`. Logs: `.sciencediscovery-data/jiuwenswarm/jiuwenswarm.log` and `~/.jiuwenswarm-instances/<name>/agent/.logs/`. |
-| Run fails with `... protocol is not supported by this executor yet` | The selected model uses Anthropic Messages or OpenAI Responses. Choose an OpenAI chat-completions model or start without `SCIENCE_AGENT_EXECUTOR`. |
+| A subagent or a long command ends with an empty error after 30 s | JiuwenSwarm's own limit for one MCP tool call. The adapter raises it per run (`SCIENCE_AGENT_ADAPTER_TOOL_TIMEOUT_S`, default 3600, or the run's timeout); if you see it, the adapter is older than this fix. |
+| A model returns `429` | The provider is rate limiting. The run retries with back-off as the built-in loop does, and fails with the provider's message when the retries run out. |
 | The model never calls a tool | Check `progressive_tool_enabled: false` in the instance config; `scripts/jiuwenswarm.sh setup` restores it. |
 | A provider answers `403` only through the executor | Some gateways filter by `User-Agent`. Test the endpoint with `curl` and the same key; report the response body. |
 | To see what a run did | `SCIENCE_AGENT_ADAPTER_DEBUG=1` (tool events, adapter) and `SCIENCE_AGENT_JIUWENSWARM_DEBUG=1` (tool calls, API) print them to the stack log. |

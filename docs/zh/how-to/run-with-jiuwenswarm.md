@@ -15,7 +15,7 @@ ScienceDiscovery 可以把 agent 循环交给 [JiuwenSwarm](https://gitcode.com/
 - 源码模式（见[部署](deployment.md#本地模式宿主进程)）；二进制和 Docker 镜像暂不包含这个执行器。
 - 宿主机有 `git` 和 `uv`。JiuwenSwarm 装在自己的目录和虚拟环境里，不会装进 ScienceDiscovery 的环境。
 - 能访问 `gitcode.com`（克隆固定版本）和一个 PyPI 源。网络慢或在中国大陆时，把 `SCIENCE_AGENT_PYPI_INDEX` 设为镜像；下载超时可调 `UV_HTTP_TIMEOUT`（脚本默认 300 秒）。
-- 模型端点需使用 **OpenAI chat-completions** 协议。Anthropic Messages 和 OpenAI Responses 的模型会让运行失败并给出明确提示，这类模型请用内置循环。
+- UI 里能配置的模型都可以：OpenAI chat completions、OpenAI Responses、Anthropic Messages，以及它们的供应商变体。JiuwenSwarm 自己只说 chat completions，所以 API 里有一个回环的小网关，把每次运行的模型请求转换成该模型自己的协议。
 - 约 1.5 GB 磁盘用于 JiuwenSwarm 安装。
 
 ## 1. 安装并启动 JiuwenSwarm
@@ -61,7 +61,8 @@ SCIENCE_AGENT_ADAPTER=1 SCIENCE_AGENT_EXECUTOR=jiuwenswarm ./scripts/start-stack
 | 现象 | 原因与处理 |
 |---|---|
 | `start-stack.sh` 提示 JiuwenSwarm 不可达 | 执行 `scripts/jiuwenswarm.sh start`，再用 `scripts/jiuwenswarm.sh status` 确认。日志：`.sciencediscovery-data/jiuwenswarm/jiuwenswarm.log` 与 `~/.jiuwenswarm-instances/<名称>/agent/.logs/`。 |
-| 运行失败，提示 `... protocol is not supported by this executor yet` | 所选模型用的是 Anthropic Messages 或 OpenAI Responses。请换 OpenAI chat-completions 模型，或不设置 `SCIENCE_AGENT_EXECUTOR` 启动。 |
+| 子代理或长命令在 30 秒后以空错误结束 | 这是 JiuwenSwarm 自己对单次 MCP 工具调用的限制。适配器按运行提高了它（`SCIENCE_AGENT_ADAPTER_TOOL_TIMEOUT_S`，默认 3600，或用运行的超时）；如果还看到，说明适配器版本早于此修复。 |
+| 模型返回 `429` | 供应商在限流。运行会像内置循环一样退避重试，重试用完才以供应商的原话失败。 |
 | 模型从不调用工具 | 检查实例配置里的 `progressive_tool_enabled: false`；`scripts/jiuwenswarm.sh setup` 会恢复它。 |
 | 仅经该执行器访问时提供方返回 `403` | 部分网关会按 `User-Agent` 过滤。请用同一个 key 直接 `curl` 测试端点，并反馈响应内容。 |
 | 想看一次运行做了什么 | `SCIENCE_AGENT_ADAPTER_DEBUG=1`（adapter 的工具事件）和 `SCIENCE_AGENT_JIUWENSWARM_DEBUG=1`（API 的工具调用）会把它们打到栈日志里。 |
