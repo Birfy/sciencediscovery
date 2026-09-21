@@ -109,19 +109,15 @@ so a run is reproducible.
 
 ## Configuration
 
-| Variable | Default | Meaning |
-|---|---|---|
-| `SCIENCE_AGENT_ADAPTER` | unset | `1` makes `start-stack.sh` start the adapter on the public port |
-| `SCIENCE_AGENT_PORT` | `4310` | Public port (the adapter's) |
-| `SCIENCE_AGENT_LEGACY_PORT` / `SCIENCE_AGENT_LEGACY_URL` | port + 100 | Where the legacy API listens |
-| `SCIENCE_AGENT_EXECUTOR` | unset | `jiuwenswarm` runs agent turns on JiuwenSwarm (needs the adapter) |
-| `JIUWENSWARM_GATEWAY_URL` | `ws://127.0.0.1:19001/tui` | Chat route of the gateway |
-| `JIUWENSWARM_MGMT_URL` | `ws://127.0.0.1:19000/ws` | Web channel used for `mcp.*` and `models.*` |
-| `SCIENCE_AGENT_ADAPTER_PUBLIC_URL` | `http://127.0.0.1:<port>` | How JiuwenSwarm reaches the adapter |
-| `SCIENCE_AGENT_ADAPTER_TOKEN` | unset | Bearer token required on `/agent/*` when set |
-| `SCIENCE_AGENT_ADAPTER_TOOL_TIMEOUT_S` | `3600` | Longest one tool call may take. JiuwenSwarm's own limit for an MCP call is 30 s, which cuts off subagents and long commands; the API passes the run's timeout when it has one |
-| `SCIENCE_AGENT_ADAPTER_DEBUG` | unset | `1` prints every tool event of every run to stderr |
-| `SCIENCE_AGENT_JIUWENSWARM_DEBUG` | unset | `1` (legacy API) logs every bridge tool call |
+Choosing the backend and every variable, with defaults, is in one place:
+[Run agent turns on JiuwenSwarm](../../docs/en/how-to/run-with-jiuwenswarm.md#choose-the-backend). In short:
+`./scripts/start-stack.sh --mode local --jiuwenswarm` (the same as `SCIENCE_AGENT_ADAPTER=1
+SCIENCE_AGENT_EXECUTOR=jiuwenswarm`); `GET /agent/info` on the public port says which backend runs and
+whether JiuwenSwarm answers (it takes the API's `SCIENCE_AGENT_AUTH_TOKEN`, or `SCIENCE_AGENT_ADAPTER_TOKEN`).
+The adapter itself reads `SCIENCE_AGENT_HOST`, `SCIENCE_AGENT_PORT`, `SCIENCE_AGENT_LEGACY_PORT`/`_URL`,
+`JIUWENSWARM_GATEWAY_URL`, `JIUWENSWARM_MGMT_URL`, `SCIENCE_AGENT_ADAPTER_PUBLIC_URL`,
+`SCIENCE_AGENT_ADAPTER_TOKEN`, `SCIENCE_AGENT_ADAPTER_TOOL_TIMEOUT_S`, `SCIENCE_AGENT_EXECUTOR` and
+`SCIENCE_AGENT_ADAPTER_DEBUG` (`config.py`).
 
 ## Tests
 

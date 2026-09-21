@@ -348,7 +348,14 @@ async def test_info_reports_an_executor_of_jiuwenswarm_and_a_gateway_that_does_n
     assert "unreachable" in body["jiuwenswarm"]["error"]
 
 
-async def test_info_needs_the_token_when_there_is_one():
+async def test_info_needs_a_token_when_there_is_one():
     guarded = create_app(Settings(**{**SETTINGS.__dict__, "agent_token": "secret"}))
     assert (await get(guarded, "/agent/info")).status_code == 401
     assert (await get(guarded, "/agent/info", {"authorization": "Bearer wrong"})).status_code == 401
+    assert (await get(guarded, "/agent/info", {"authorization": "Bearer secret"})).status_code == 200
+
+
+async def test_info_also_opens_with_the_apis_own_access_token():
+    app = create_app(Settings(**{**SETTINGS.__dict__, "api_token": "api-token"}))
+    assert (await get(app, "/agent/info")).status_code == 401
+    assert (await get(app, "/agent/info", {"authorization": "Bearer api-token"})).status_code == 200

@@ -39,6 +39,8 @@ class Settings:
     tool_timeout_s: int = 3600
     # Which executor the API runs agent turns on (SCIENCE_AGENT_EXECUTOR): "jiuwenswarm" or "native".
     executor: str = "native"
+    # The API's own access token (SCIENCE_AGENT_AUTH_TOKEN), which people already hold: it also opens /agent/info.
+    api_token: str = ""
 
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> "Settings":
@@ -54,5 +56,6 @@ class Settings:
             public_url=env.get("SCIENCE_AGENT_ADAPTER_PUBLIC_URL", f"http://127.0.0.1:{port}").rstrip("/"),
             agent_token=env.get("SCIENCE_AGENT_ADAPTER_TOKEN", ""),
             tool_timeout_s=int(env.get("SCIENCE_AGENT_ADAPTER_TOOL_TIMEOUT_S", "3600")),
+            api_token=env.get("SCIENCE_AGENT_AUTH_TOKEN", "").strip(),
             executor="jiuwenswarm" if env.get("SCIENCE_AGENT_EXECUTOR", "").strip() == "jiuwenswarm" else "native",
         )
