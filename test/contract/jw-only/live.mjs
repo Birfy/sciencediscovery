@@ -171,6 +171,9 @@ const checks = {
     const web = await api("GET", "/api/web/settings");
     if (web.backend !== "jiuwenswarm") throw new Error(`the web settings do not say jiuwenswarm: ${web.backend}`);
     await api("PUT", "/api/web/settings", { freeSearchEngines: { ...web.freeSearchEngines, duckduckgo: true, bing: true } });
+    // The memory graph is off in a fresh data directory; the check needs it on.
+    const memory = await api("GET", "/api/memory/settings");
+    if (!memory.enabled) await api("PUT", "/api/memory/settings", { enabled: true });
     const stub = await startStubModel({ main: [{ tool: "free_search", arguments: { query: "perovskite solar cell stability", max_results: 3 } }, { text: "Searched." }] });
     const { sessionId, cleanup } = await setup(stub);
     try {
