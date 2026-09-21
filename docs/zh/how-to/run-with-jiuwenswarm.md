@@ -71,6 +71,7 @@ scripts/jiuwenswarm.sh setup     # 一次性：克隆固定版本（workswarm0.2
 | `JIUWENSWARM_GIT_URL` | `https://gitcode.com/openJiuwen/jiuwenswarm.git` | 克隆来源 |
 | `JIUWENSWARM_GATEWAY_URL` | 从实例读取 | 网关的对话路由，例如 `ws://127.0.0.1:20001/tui` |
 | `JIUWENSWARM_MGMT_URL` | 从实例读取 | 用于 `mcp.*`、`models.*` 的 web 通道，例如 `ws://127.0.0.1:20000/ws` |
+| `JIUWENSWARM_CONTEXT_WINDOW_TOKENS` | 未设置（JiuwenSwarm 的 200000） | JiuwenSwarm 压缩对话所依据的窗口；实例启动时写进它的配置 |
 | `SCIENCE_AGENT_PYPI_INDEX`、`UV_HTTP_TIMEOUT` | 未设置、`300` | 安装时的 PyPI 镜像和下载超时 |
 | **端口与地址** | | |
 | `SCIENCE_AGENT_PORT` | `4310` | 公共端口（适配器的） |
@@ -88,12 +89,12 @@ scripts/jiuwenswarm.sh setup     # 一次性：克隆固定版本（workswarm0.2
 | `SCIENCE_AGENT_ADAPTER_DEBUG` | 未设置 | `1` 打印每次运行的每个工具事件和每个模型请求的最后几条消息（适配器） |
 | `SCIENCE_AGENT_JIUWENSWARM_DEBUG` | 未设置 | `1` 记录桥上的每次工具调用（API） |
 
-模型仍照常在界面里逐个设置：供应商、协议与变体、API key、思考模式、网络代理。模型的上下文窗口（来自模型目录，或你在模型设置里的覆盖值）会传给 JiuwenSwarm，它据此按模型真实的上限压缩对话。
+模型仍照常在界面里逐个设置：供应商、协议与变体、API key、思考模式、网络代理。唯一**不是**逐个模型设置的，是 JiuwenSwarm 压缩对话所依据的窗口大小：JiuwenSwarm 0.2.6 只认一个全局值（默认 200000 token），会忽略模型自己的窗口。请把 `JIUWENSWARM_CONTEXT_WINDOW_TOKENS` 设成你所用模型的窗口（它在达到该值的 80% 时压缩）；模型窗口比默认值小、又没设置时，对话可能在被压缩之前就溢出。
 
 ## 使用时会看到什么
 
 - 与内置循环相同的对话、工具卡片、权限提示、计划、子代理和产物；里程碑 0 的旅程在这个后端上通过。
-- JiuwenSwarm 把每个智能体（主智能体和每个子代理）的对话保存在自己的会话里，并在模型窗口快满时压缩。运行契约和 ScienceDiscovery 每一步的上下文（计划快照、持久状态）**不会**注入。
+- JiuwenSwarm 把每个智能体（主智能体和每个子代理）的对话保存在自己的会话里，达到 `JIUWENSWARM_CONTEXT_WINDOW_TOKENS` 的 80% 时压缩。JiuwenSwarm 自己的模型调用（压缩时写的摘要、会话标题）用的是它的*默认模型*：适配器把这个条目指向自己（`sd-default`），再把这些调用转给当前正在运行的那次运行的模型。所以这个 JiuwenSwarm 实例是 ScienceDiscovery 专用的，不要和别的工作共用。运行契约和 ScienceDiscovery 每一步的上下文（计划快照、持久状态）**不会**注入。
 - 对话、计划和事件的数据仍保存在 ScienceDiscovery 自己的存储里。
 - JiuwenSwarm 的运行没有轨迹和 evidence 记录，图片也不会发给模型。
 - 新增一个模型时，JiuwenSwarm 会向它发一条很小的探测请求（检测是否支持图片输入）；网关会拒绝那张图片，所以日志里出现一条 `400` 是预期的。

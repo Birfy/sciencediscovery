@@ -71,6 +71,7 @@ Everything is environment variables on the stack (in `.env`, or exported before 
 | `JIUWENSWARM_GIT_URL` | `https://gitcode.com/openJiuwen/jiuwenswarm.git` | Clone source |
 | `JIUWENSWARM_GATEWAY_URL` | read from the instance | Chat route of the gateway, e.g. `ws://127.0.0.1:20001/tui` |
 | `JIUWENSWARM_MGMT_URL` | read from the instance | Web channel used for `mcp.*` and `models.*`, e.g. `ws://127.0.0.1:20000/ws` |
+| `JIUWENSWARM_CONTEXT_WINDOW_TOKENS` | unset (JiuwenSwarm's 200000) | Window JiuwenSwarm compresses conversations against; written into its config when the instance starts |
 | `SCIENCE_AGENT_PYPI_INDEX`, `UV_HTTP_TIMEOUT` | unset, `300` | PyPI mirror and download timeout for the install |
 | **Ports and addresses** | | |
 | `SCIENCE_AGENT_PORT` | `4310` | Public port (the adapter's) |
@@ -88,7 +89,7 @@ Everything is environment variables on the stack (in `.env`, or exported before 
 | `SCIENCE_AGENT_ADAPTER_DEBUG` | unset | `1` prints every tool event and the last messages of every model request (adapter) |
 | `SCIENCE_AGENT_JIUWENSWARM_DEBUG` | unset | `1` logs every bridge tool call (API) |
 
-Set per model in the UI, as usual: provider, protocol and variant, API key, thinking mode, network proxy. The model's context window (from the model catalog, or your override in the model settings) is passed to JiuwenSwarm so that it compresses the conversation against the model's real limit.
+Set per model in the UI, as usual: provider, protocol and variant, API key, thinking mode, network proxy. The one thing that is **not** per model is the size JiuwenSwarm compresses conversations against: JiuwenSwarm 0.2.6 takes a single global value (its default is 200000 tokens) and ignores a model's own window. Set `JIUWENSWARM_CONTEXT_WINDOW_TOKENS` to the window of the models you use (it compresses at 80% of it); with a smaller model and the default, a conversation can overflow before it is compressed.
 
 ## What to expect
 

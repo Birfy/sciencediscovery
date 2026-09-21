@@ -149,8 +149,8 @@ Not done yet:
 - **History and context**: JiuwenSwarm is the only holder of the model's context. It keeps each agent's
   conversation in a stable session (`sessionKey`: the caller's session id for the main agent,
   `<session>--<agent>` for a subagent), persisted in its checkpoint database, and compresses it itself (its
-  context engine compresses at 80% of the model's window; the adapter passes the real window as
-  `context_window_tokens` on the model entry, and `chat.usage_summary` reports it back). The adapter sends
+  context engine compresses at 80% of one global window, `JIUWENSWARM_CONTEXT_WINDOW_TOKENS`; a model entry's
+  own window is dropped by `models.replace_all` in 0.2.6, so there is no per-model setting). The adapter sends
   and rebuilds no history: a conversation that began on the built-in loop is not known to JiuwenSwarm
   (there is no call that writes into a session's context; `history.append_record` only writes the display
   record). The context survives a restart of JiuwenSwarm (`test/contract/jw-only/live.mjs history-restart`). Not
@@ -171,3 +171,15 @@ Not done yet:
 - **Model alias**: an entry is keyed by model id, so two endpoints serving the same id
   share one entry while a run is active.
 - Everything outside `/agent/*` and `/llm/*` and `/mcp/*` is still proxied to the legacy API.
+
+## JiuwenSwarm's default model (`sd-default`)
+
+JiuwenSwarm makes some model calls of its own: the summaries written when it compresses a conversation, session
+titles, the image-input probe of a new model. They use its *default model*, not the model of the run, and a fresh
+install's default is a placeholder (`https://example.com/...`) that answers with an HTML page, so a compression
+attempt failed with `APIStatusError: <!doctype html>` and nothing was compressed. The adapter therefore keeps one
+entry, `sd-default`, first in JiuwenSwarm's list and flagged as the default, whose endpoint is
+`/llm/default/v1` on the adapter (`llm_proxy.default_completions`). That route sends the call, untouched (no system
+prompt, tool list or tool name rewritten), to the model of the run that started last and is still going, and answers
+503 when no run is in progress. It is set at start-up and before each run. Consequence: the JiuwenSwarm instance is
+ScienceDiscovery's own.
