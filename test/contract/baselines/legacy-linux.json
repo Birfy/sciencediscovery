@@ -7116,6 +7116,30 @@
    ]
   },
   {
+   "name": "a wrong token cannot list permission requests",
+   "status": 401,
+   "contentType": "application/json",
+   "body": {
+    "error": "Unauthorized"
+   }
+  },
+  {
+   "name": "a wrong token cannot decide a request",
+   "status": 401,
+   "contentType": "application/json",
+   "body": {
+    "error": "Unauthorized"
+   }
+  },
+  {
+   "name": "a wrong token cannot revoke a grant",
+   "status": 401,
+   "contentType": "application/json",
+   "body": {
+    "error": "Unauthorized"
+   }
+  },
+  {
    "name": "revoke the grant",
    "status": 200,
    "contentType": "application/json",
