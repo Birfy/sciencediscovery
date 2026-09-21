@@ -79,8 +79,13 @@ executor against them (`baselines/legacy-linux.json`, recorded on Linux with bub
   empty arrays.
 - The run keeps the tool round in its final messages, so a session can move back to the native executor.
 
-**Accepted** (`accepted-differences.json`, listed by `--compare`): the wording of a provider error.
-The `errorCode` is the same; each executor words the provider's message its own way.
+**Accepted** (`accepted-differences.json`, listed by `--compare`):
+
+- the wording of a provider error (the `errorCode` is the same);
+- **a gap, listed here so it is not forgotten**: the native agent attaches *evidence* (`agentRunId`,
+  `contextRef`, `stateRef`) to each event and records `context.captured`, `state.committed` and
+  `model.completed`. The JiuwenSwarm executor produces none of it, so the trajectory view of such a
+  run has nothing to show. Reproducing it needs the executor to record its own context and state.
 
 **Not covered yet**: the native agent's `agent.record` evidence (left out of the profile on purpose),
 parallel tool calls, reasoning/thinking streams, `tool_search` and deferred tools (the JiuwenSwarm

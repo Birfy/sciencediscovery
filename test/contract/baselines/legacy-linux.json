@@ -699,7 +699,7 @@
      "type": "tool.started"
     },
     {
-     "chunk": "{\"sessionId\":\"<uuid:3>\",\"agentId\":\"main\",\"runnerId\":\"local\",\"turnId\":\"<uuid:6>\",\"workspaceId\":\"<workspace>\",\"id\":\"<uuid:8>\",\"state\":\"completed\",\"queuedAt\":\"<time>\",\"accepted\":true,\"provenance\":\"committed\",\"startedAt\":\"<time>\",\"runnerVersionId\":\"<sha256>\",\"finishedAt\":\"<time>\",\"result\":{\"exitCode\":0,\"stderr\":\"\",\"stdout\":\"L2-MARK\\n\",\"cgroupMode\":\"none\",\"createdFiles\":[],\"environmentRevisionId\":\"<system-environment>\",\"environmentVariables\":{\"HOME\":\"/tmp\",\"PATH\":\"/usr/bin:/bin\",\"SSL_CERT_FILE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"CURL_CA_BUNDLE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"REQUESTS_CA_BUNDLE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"SSL_CERT_DIR\":\"/etc/ssl/certs\"},\"executionId\":\"<uuid:8>\",\"finishedAt\":\"<time>\",\"kernelId\":\"ephemeral:<uuid:8>\",\"kernelMode\":\"ephemeral\",\"language\":\"shell\",\"modifiedFiles\":[],\"networkAccessRevision\":\"none\",\"networkPolicy\":\"none\",\"runnerVersion\":\"f2dbe052-dirty\",\"sandbox\":\"bubblewrap\",\"startedAt\":\"<time>\",\"workingDirectory\":\"/workspace\",\"workspaceSnapshot\":{\"pool\":\"agent-state\",\"digest\":\"<sha256>\",\"size\":83,\"mediaType\":\"application/vnd.sciencediscovery.record.v1+json\"},\"workspaceVersion\":{\"pool\":\"agent-state\",\"digest\":\"<sha256>\",\"size\":1582,\"mediaType\":\"application/vnd.sciencediscovery.record.v1+json\"}}}",
+     "chunk": "{\"sessionId\":\"<uuid:3>\",\"agentId\":\"main\",\"runnerId\":\"local\",\"turnId\":\"<uuid:6>\",\"workspaceId\":\"<workspace>\",\"id\":\"<uuid:8>\",\"state\":\"completed\",\"queuedAt\":\"<time>\",\"accepted\":true,\"provenance\":\"committed\",\"startedAt\":\"<time>\",\"runnerVersionId\":\"<sha256>\",\"finishedAt\":\"<time>\",\"result\":{\"exitCode\":0,\"stderr\":\"\",\"stdout\":\"L2-MARK\\n\",\"cgroupMode\":\"none\",\"createdFiles\":[],\"environmentRevisionId\":\"<system-environment>\",\"environmentVariables\":{\"HOME\":\"/tmp\",\"PATH\":\"/usr/bin:/bin\",\"SSL_CERT_FILE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"CURL_CA_BUNDLE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"REQUESTS_CA_BUNDLE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"SSL_CERT_DIR\":\"/etc/ssl/certs\"},\"executionId\":\"<uuid:8>\",\"finishedAt\":\"<time>\",\"kernelId\":\"ephemeral:<uuid:8>\",\"kernelMode\":\"ephemeral\",\"language\":\"shell\",\"modifiedFiles\":[],\"networkAccessRevision\":\"none\",\"networkPolicy\":\"none\",\"runnerVersion\":\"<volatile>\",\"sandbox\":\"bubblewrap\",\"startedAt\":\"<time>\",\"workingDirectory\":\"/workspace\",\"workspaceSnapshot\":{\"pool\":\"agent-state\",\"digest\":\"<sha256>\",\"size\":83,\"mediaType\":\"application/vnd.sciencediscovery.record.v1+json\"},\"workspaceVersion\":{\"pool\":\"agent-state\",\"digest\":\"<sha256>\",\"size\":1582,\"mediaType\":\"application/vnd.sciencediscovery.record.v1+json\"}}}",
      "toolCallId": "call-main-1",
      "type": "tool.output"
     },
@@ -820,7 +820,7 @@
         ]
        },
        {
-        "content": "{\"sessionId\":\"<uuid:3>\",\"agentId\":\"main\",\"runnerId\":\"local\",\"turnId\":\"<uuid:6>\",\"workspaceId\":\"<workspace>\",\"id\":\"<uuid:8>\",\"state\":\"completed\",\"queuedAt\":\"<time>\",\"accepted\":true,\"provenance\":\"committed\",\"startedAt\":\"<time>\",\"runnerVersionId\":\"<sha256>\",\"finishedAt\":\"<time>\",\"result\":{\"exitCode\":0,\"stderr\":\"\",\"stdout\":\"L2-MARK\\n\",\"cgroupMode\":\"none\",\"createdFiles\":[],\"environmentRevisionId\":\"<system-environment>\",\"environmentVariables\":{\"HOME\":\"/tmp\",\"PATH\":\"/usr/bin:/bin\",\"SSL_CERT_FILE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"CURL_CA_BUNDLE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"REQUESTS_CA_BUNDLE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"SSL_CERT_DIR\":\"/etc/ssl/certs\"},\"executionId\":\"<uuid:8>\",\"finishedAt\":\"<time>\",\"kernelId\":\"ephemeral:<uuid:8>\",\"kernelMode\":\"ephemeral\",\"language\":\"shell\",\"modifiedFiles\":[],\"networkAccessRevision\":\"none\",\"networkPolicy\":\"none\",\"runnerVersion\":\"f2dbe052-dirty\",\"sandbox\":\"bubblewrap\",\"startedAt\":\"<time>\",\"workingDirectory\":\"/workspace\",\"workspaceSnapshot\":{\"pool\":\"agent-state\",\"digest\":\"<sha256>\",\"size\":83,\"mediaType\":\"application/vnd.sciencediscovery.record.v1+json\"},\"workspaceVersion\":{\"pool\":\"agent-state\",\"digest\":\"<sha256>\",\"size\":1582,\"mediaType\":\"application/vnd.sciencediscovery.record.v1+json\"}}}",
+        "content": "{\"sessionId\":\"<uuid:3>\",\"agentId\":\"main\",\"runnerId\":\"local\",\"turnId\":\"<uuid:6>\",\"workspaceId\":\"<workspace>\",\"id\":\"<uuid:8>\",\"state\":\"completed\",\"queuedAt\":\"<time>\",\"accepted\":true,\"provenance\":\"committed\",\"startedAt\":\"<time>\",\"runnerVersionId\":\"<sha256>\",\"finishedAt\":\"<time>\",\"result\":{\"exitCode\":0,\"stderr\":\"\",\"stdout\":\"L2-MARK\\n\",\"cgroupMode\":\"none\",\"createdFiles\":[],\"environmentRevisionId\":\"<system-environment>\",\"environmentVariables\":{\"HOME\":\"/tmp\",\"PATH\":\"/usr/bin:/bin\",\"SSL_CERT_FILE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"CURL_CA_BUNDLE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"REQUESTS_CA_BUNDLE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"SSL_CERT_DIR\":\"/etc/ssl/certs\"},\"executionId\":\"<uuid:8>\",\"finishedAt\":\"<time>\",\"kernelId\":\"ephemeral:<uuid:8>\",\"kernelMode\":\"ephemeral\",\"language\":\"shell\",\"modifiedFiles\":[],\"networkAccessRevision\":\"none\",\"networkPolicy\":\"none\",\"runnerVersion\":\"<volatile>\",\"sandbox\":\"bubblewrap\",\"startedAt\":\"<time>\",\"workingDirectory\":\"/workspace\",\"workspaceSnapshot\":{\"pool\":\"agent-state\",\"digest\":\"<sha256>\",\"size\":83,\"mediaType\":\"application/vnd.sciencediscovery.record.v1+json\"},\"workspaceVersion\":{\"pool\":\"agent-state\",\"digest\":\"<sha256>\",\"size\":1582,\"mediaType\":\"application/vnd.sciencediscovery.record.v1+json\"}}}",
         "name": "run_shell",
         "role": "tool",
         "tool_call_id": "call-main-1"
@@ -842,6 +842,306 @@
    "name": "wait for the run to settle",
    "status": 200,
    "polled": "completed"
+  },
+  {
+   "name": "the session's runs",
+   "status": 200,
+   "contentType": "application/json",
+   "body": [
+    {
+     "annotationIds": [],
+     "assistantMessageId": "<uuid:10>",
+     "createdAt": "<time>",
+     "finishedAt": "<time>",
+     "id": "<uuid:6>",
+     "prompt": "Run the marker command.",
+     "queueOrder": 1,
+     "references": [],
+     "sessionId": "<uuid:3>",
+     "settingsSnapshot": {
+      "enabledConnectorIds": [
+       "web"
+      ],
+      "enabledSkillIds": [],
+      "enabledSkillLibraries": [],
+      "ideaTreeEnabled": false,
+      "modelId": "<uuid:1>",
+      "semanticReviewEnabled": true,
+      "skillSelectionMode": "selected",
+      "thinkingMode": "auto"
+     },
+     "startedAt": "<time>",
+     "status": "completed",
+     "userMessageId": "<uuid:11>"
+    }
+   ]
+  },
+  {
+   "name": "prompt manifests",
+   "status": 200,
+   "contentType": "application/json",
+   "body": [
+    {
+     "costUsd": null,
+     "createdAt": "<time>",
+     "endpointHost": "127.0.0.1:<port>",
+     "finishedAt": "<time>",
+     "id": "<uuid:12>",
+     "inputs": [
+      {
+       "hash": "<hex>",
+       "messageId": "<uuid:11>",
+       "role": "user",
+       "size": 23
+      }
+     ],
+     "inputTokens": 20,
+     "model": "contract-stub",
+     "modelProfileId": "<uuid:1>",
+     "modelProfileName": "L2 stub model",
+     "outputTokens": 8,
+     "provider": "openai-compatible",
+     "redactionStatus": "not-applied",
+     "response": {
+      "hash": "<hex>",
+      "size": 28
+     },
+     "runtimeSettings": {
+      "enabledConnectorIds": [
+       "web"
+      ],
+      "enabledSkillIds": [],
+      "enabledSkillLibraries": [],
+      "ideaTreeEnabled": false,
+      "modelId": "<uuid:1>",
+      "semanticReviewEnabled": true,
+      "skillSelectionMode": "selected",
+      "thinkingMode": "auto"
+     },
+     "sessionId": "<uuid:3>",
+     "skillRefs": [],
+     "status": "succeeded",
+     "systemPrompt": {
+      "hash": "<hex>",
+      "size": 7445,
+      "version": "m8.3.0"
+     },
+     "totalTokens": 28,
+     "turnId": "<uuid:6>",
+     "usageStatus": "reported"
+    }
+   ]
+  },
+  {
+   "name": "execution runs",
+   "status": 200,
+   "contentType": "application/json",
+   "body": [
+    {
+     "cgroupMode": "none",
+     "code": {
+      "hash": "<hex>",
+      "size": 12
+     },
+     "createdFiles": [],
+     "environmentRevisionId": "<system-environment>",
+     "envSnapshot": {
+      "hash": "<hex>",
+      "size": 229
+     },
+     "exitCode": 0,
+     "finishedAt": "<time>",
+     "id": "<uuid:8>",
+     "kernelId": "ephemeral:<uuid:8>",
+     "kernelMode": "ephemeral",
+     "language": "shell",
+     "modifiedFiles": [],
+     "networkAccessRevision": "none",
+     "networkPolicy": "none",
+     "permissionEpochId": "<uuid:5>",
+     "runnerId": "local",
+     "runnerVersion": "<volatile>",
+     "sandbox": "bubblewrap",
+     "sessionId": "<uuid:3>",
+     "startedAt": "<time>",
+     "status": "succeeded",
+     "stderr": {
+      "hash": "<hex>",
+      "size": 0
+     },
+     "stdout": {
+      "hash": "<hex>",
+      "size": 8
+     },
+     "tool": "run_shell",
+     "toolCallId": "call-main-1",
+     "toolVersion": "1.1.0",
+     "turnId": "<uuid:6>",
+     "workingDirectory": "/workspace"
+    }
+   ]
+  },
+  {
+   "name": "a tool's output stream",
+   "status": 200,
+   "contentType": "application/json",
+   "body": [
+    {
+     "createdAt": "<time>",
+     "event": {
+      "chunk": "{\"sessionId\":\"<uuid:3>\",\"agentId\":\"main\",\"runnerId\":\"local\",\"turnId\":\"<uuid:6>\",\"workspaceId\":\"<workspace>\",\"id\":\"<uuid:8>\",\"state\":\"completed\",\"queuedAt\":\"<time>\",\"accepted\":true,\"provenance\":\"committed\",\"startedAt\":\"<time>\",\"runnerVersionId\":\"<sha256>\",\"finishedAt\":\"<time>\",\"result\":{\"exitCode\":0,\"stderr\":\"\",\"stdout\":\"L2-MARK\\n\",\"cgroupMode\":\"none\",\"createdFiles\":[],\"environmentRevisionId\":\"<system-environment>\",\"environmentVariables\":{\"HOME\":\"/tmp\",\"PATH\":\"/usr/bin:/bin\",\"SSL_CERT_FILE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"CURL_CA_BUNDLE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"REQUESTS_CA_BUNDLE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"SSL_CERT_DIR\":\"/etc/ssl/certs\"},\"executionId\":\"<uuid:8>\",\"finishedAt\":\"<time>\",\"kernelId\":\"ephemeral:<uuid:8>\",\"kernelMode\":\"ephemeral\",\"language\":\"shell\",\"modifiedFiles\":[],\"networkAccessRevision\":\"none\",\"networkPolicy\":\"none\",\"runnerVersion\":\"<volatile>\",\"sandbox\":\"bubblewrap\",\"startedAt\":\"<time>\",\"workingDirectory\":\"/workspace\",\"workspaceSnapshot\":{\"pool\":\"agent-state\",\"digest\":\"<sha256>\",\"size\":83,\"mediaType\":\"application/vnd.sciencediscovery.record.v1+json\"},\"workspaceVersion\":{\"pool\":\"agent-state\",\"digest\":\"<sha256>\",\"size\":1582,\"mediaType\":\"application/vnd.sciencediscovery.record.v1+json\"}}}",
+      "evidence": {
+       "agentId": "main:<uuid:3>",
+       "agentRunId": "<uuid:13>",
+       "contextRef": {
+        "digest": "<sha256>",
+        "mediaType": "application/vnd.sciencediscovery.record.v1+json",
+        "pool": "agent-state",
+        "size": 268882
+       },
+       "recordedAt": "<time>",
+       "requestExecutionId": "<uuid:6>",
+       "responseId": "<uuid:7>",
+       "stateRef": {
+        "digest": "<sha256>",
+        "mediaType": "application/vnd.sciencediscovery.record.v1+json",
+        "pool": "agent-state",
+        "size": 203309
+       },
+       "turn": 0
+      },
+      "toolCallId": "call-main-1",
+      "type": "tool.output"
+     },
+     "runId": "<uuid:6>",
+     "sequence": 1,
+     "sessionId": "<uuid:3>"
+    }
+   ]
+  },
+  {
+   "name": "agent activity after a shell call",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "agents": [
+     {
+      "agentId": "main",
+      "sessionId": "<uuid:3>",
+      "stopped": false
+     }
+    ],
+    "executions": [
+     {
+      "accepted": true,
+      "agentId": "main",
+      "finishedAt": "<time>",
+      "id": "<uuid:8>",
+      "provenance": "committed",
+      "queuedAt": "<time>",
+      "runnerId": "local",
+      "runnerVersionId": "<volatile>",
+      "sessionId": "<uuid:3>",
+      "startedAt": "<time>",
+      "state": "completed",
+      "turnId": "<uuid:6>",
+      "workspaceId": "<workspace>"
+     }
+    ],
+    "timers": [],
+    "transfers": []
+   }
+  },
+  {
+   "name": "the execution's logs",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "chunks": [
+     {
+      "cursor": 1,
+      "stream": "stdout",
+      "text": "L2-MARK\n"
+     }
+    ],
+    "nextCursor": 1,
+    "retentionTruncated": false,
+    "truncated": false
+   }
+  },
+  {
+   "name": "cancelling a finished execution",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "accepted": true,
+    "agentId": "main",
+    "finishedAt": "<time>",
+    "id": "<uuid:8>",
+    "provenance": "committed",
+    "queuedAt": "<time>",
+    "result": {
+     "cgroupMode": "none",
+     "createdFiles": [],
+     "environmentRevisionId": "<system-environment>",
+     "environmentVariables": {
+      "CURL_CA_BUNDLE": "/etc/pki/tls/certs/ca-bundle.crt",
+      "HOME": "/tmp",
+      "PATH": "/usr/bin:/bin",
+      "REQUESTS_CA_BUNDLE": "/etc/pki/tls/certs/ca-bundle.crt",
+      "SSL_CERT_DIR": "/etc/ssl/certs",
+      "SSL_CERT_FILE": "/etc/pki/tls/certs/ca-bundle.crt"
+     },
+     "executionId": "<uuid:8>",
+     "exitCode": 0,
+     "finishedAt": "<time>",
+     "kernelId": "ephemeral:<uuid:8>",
+     "kernelMode": "ephemeral",
+     "language": "shell",
+     "modifiedFiles": [],
+     "networkAccessRevision": "none",
+     "networkPolicy": "none",
+     "runnerVersion": "<volatile>",
+     "sandbox": "bubblewrap",
+     "startedAt": "<time>",
+     "stderr": "",
+     "stdout": "L2-MARK\n",
+     "workingDirectory": "/workspace",
+     "workspaceSnapshot": {
+      "digest": "<sha256>",
+      "mediaType": "application/vnd.sciencediscovery.record.v1+json",
+      "pool": "agent-state",
+      "size": 83
+     },
+     "workspaceVersion": {
+      "digest": "<sha256>",
+      "mediaType": "application/vnd.sciencediscovery.record.v1+json",
+      "pool": "agent-state",
+      "size": 1582
+     }
+    },
+    "runnerId": "local",
+    "runnerVersionId": "<volatile>",
+    "sessionId": "<uuid:3>",
+    "startedAt": "<time>",
+    "state": "completed",
+    "turnId": "<uuid:6>",
+    "workspaceId": "<workspace>"
+   }
+  },
+  {
+   "name": "remote workspace sync records",
+   "status": 200,
+   "contentType": "application/json",
+   "body": []
+  },
+  {
+   "name": "deleting a remote workspace that does not exist",
+   "status": 409,
+   "contentType": "application/json",
+   "body": {
+    "error": "Remote runner host  is not allowed by this Session"
+   }
   },
   {
    "name": "delete the project",
@@ -1310,7 +1610,7 @@
      "type": "run.status"
     },
     {
-     "chunk": "{\"sessionId\":\"<uuid:3>\",\"agentId\":\"main\",\"runnerId\":\"local\",\"turnId\":\"<uuid:5>\",\"workspaceId\":\"<workspace>\",\"id\":\"<uuid:11>\",\"state\":\"completed\",\"queuedAt\":\"<time>\",\"accepted\":true,\"provenance\":\"committed\",\"startedAt\":\"<time>\",\"runnerVersionId\":\"<sha256>\",\"finishedAt\":\"<time>\",\"result\":{\"exitCode\":0,\"stderr\":\"\",\"stdout\":\"L2-MARK\\n\",\"cgroupMode\":\"none\",\"createdFiles\":[],\"environmentRevisionId\":\"<system-environment>\",\"environmentVariables\":{\"HOME\":\"/tmp\",\"PATH\":\"/usr/bin:/bin\",\"SSL_CERT_FILE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"CURL_CA_BUNDLE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"REQUESTS_CA_BUNDLE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"SSL_CERT_DIR\":\"/etc/ssl/certs\"},\"executionId\":\"<uuid:11>\",\"finishedAt\":\"<time>\",\"kernelId\":\"ephemeral:<uuid:11>\",\"kernelMode\":\"ephemeral\",\"language\":\"shell\",\"modifiedFiles\":[],\"networkAccessRevision\":\"none\",\"networkPolicy\":\"none\",\"runnerVersion\":\"f2dbe052-dirty\",\"sandbox\":\"bubblewrap\",\"startedAt\":\"<time>\",\"workingDirectory\":\"/workspace\",\"workspaceSnapshot\":{\"pool\":\"agent-state\",\"digest\":\"<sha256>\",\"size\":83,\"mediaType\":\"application/vnd.sciencediscovery.record.v1+json\"},\"workspaceVersion\":{\"pool\":\"agent-state\",\"digest\":\"<sha256>\",\"size\":1582,\"mediaType\":\"application/vnd.sciencediscovery.record.v1+json\"}}}",
+     "chunk": "{\"sessionId\":\"<uuid:3>\",\"agentId\":\"main\",\"runnerId\":\"local\",\"turnId\":\"<uuid:5>\",\"workspaceId\":\"<workspace>\",\"id\":\"<uuid:11>\",\"state\":\"completed\",\"queuedAt\":\"<time>\",\"accepted\":true,\"provenance\":\"committed\",\"startedAt\":\"<time>\",\"runnerVersionId\":\"<sha256>\",\"finishedAt\":\"<time>\",\"result\":{\"exitCode\":0,\"stderr\":\"\",\"stdout\":\"L2-MARK\\n\",\"cgroupMode\":\"none\",\"createdFiles\":[],\"environmentRevisionId\":\"<system-environment>\",\"environmentVariables\":{\"HOME\":\"/tmp\",\"PATH\":\"/usr/bin:/bin\",\"SSL_CERT_FILE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"CURL_CA_BUNDLE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"REQUESTS_CA_BUNDLE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"SSL_CERT_DIR\":\"/etc/ssl/certs\"},\"executionId\":\"<uuid:11>\",\"finishedAt\":\"<time>\",\"kernelId\":\"ephemeral:<uuid:11>\",\"kernelMode\":\"ephemeral\",\"language\":\"shell\",\"modifiedFiles\":[],\"networkAccessRevision\":\"none\",\"networkPolicy\":\"none\",\"runnerVersion\":\"<volatile>\",\"sandbox\":\"bubblewrap\",\"startedAt\":\"<time>\",\"workingDirectory\":\"/workspace\",\"workspaceSnapshot\":{\"pool\":\"agent-state\",\"digest\":\"<sha256>\",\"size\":83,\"mediaType\":\"application/vnd.sciencediscovery.record.v1+json\"},\"workspaceVersion\":{\"pool\":\"agent-state\",\"digest\":\"<sha256>\",\"size\":1582,\"mediaType\":\"application/vnd.sciencediscovery.record.v1+json\"}}}",
      "toolCallId": "call-main-1",
      "type": "tool.output"
     },
@@ -1431,7 +1731,7 @@
         ]
        },
        {
-        "content": "{\"sessionId\":\"<uuid:3>\",\"agentId\":\"main\",\"runnerId\":\"local\",\"turnId\":\"<uuid:5>\",\"workspaceId\":\"<workspace>\",\"id\":\"<uuid:11>\",\"state\":\"completed\",\"queuedAt\":\"<time>\",\"accepted\":true,\"provenance\":\"committed\",\"startedAt\":\"<time>\",\"runnerVersionId\":\"<sha256>\",\"finishedAt\":\"<time>\",\"result\":{\"exitCode\":0,\"stderr\":\"\",\"stdout\":\"L2-MARK\\n\",\"cgroupMode\":\"none\",\"createdFiles\":[],\"environmentRevisionId\":\"<system-environment>\",\"environmentVariables\":{\"HOME\":\"/tmp\",\"PATH\":\"/usr/bin:/bin\",\"SSL_CERT_FILE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"CURL_CA_BUNDLE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"REQUESTS_CA_BUNDLE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"SSL_CERT_DIR\":\"/etc/ssl/certs\"},\"executionId\":\"<uuid:11>\",\"finishedAt\":\"<time>\",\"kernelId\":\"ephemeral:<uuid:11>\",\"kernelMode\":\"ephemeral\",\"language\":\"shell\",\"modifiedFiles\":[],\"networkAccessRevision\":\"none\",\"networkPolicy\":\"none\",\"runnerVersion\":\"f2dbe052-dirty\",\"sandbox\":\"bubblewrap\",\"startedAt\":\"<time>\",\"workingDirectory\":\"/workspace\",\"workspaceSnapshot\":{\"pool\":\"agent-state\",\"digest\":\"<sha256>\",\"size\":83,\"mediaType\":\"application/vnd.sciencediscovery.record.v1+json\"},\"workspaceVersion\":{\"pool\":\"agent-state\",\"digest\":\"<sha256>\",\"size\":1582,\"mediaType\":\"application/vnd.sciencediscovery.record.v1+json\"}}}",
+        "content": "{\"sessionId\":\"<uuid:3>\",\"agentId\":\"main\",\"runnerId\":\"local\",\"turnId\":\"<uuid:5>\",\"workspaceId\":\"<workspace>\",\"id\":\"<uuid:11>\",\"state\":\"completed\",\"queuedAt\":\"<time>\",\"accepted\":true,\"provenance\":\"committed\",\"startedAt\":\"<time>\",\"runnerVersionId\":\"<sha256>\",\"finishedAt\":\"<time>\",\"result\":{\"exitCode\":0,\"stderr\":\"\",\"stdout\":\"L2-MARK\\n\",\"cgroupMode\":\"none\",\"createdFiles\":[],\"environmentRevisionId\":\"<system-environment>\",\"environmentVariables\":{\"HOME\":\"/tmp\",\"PATH\":\"/usr/bin:/bin\",\"SSL_CERT_FILE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"CURL_CA_BUNDLE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"REQUESTS_CA_BUNDLE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"SSL_CERT_DIR\":\"/etc/ssl/certs\"},\"executionId\":\"<uuid:11>\",\"finishedAt\":\"<time>\",\"kernelId\":\"ephemeral:<uuid:11>\",\"kernelMode\":\"ephemeral\",\"language\":\"shell\",\"modifiedFiles\":[],\"networkAccessRevision\":\"none\",\"networkPolicy\":\"none\",\"runnerVersion\":\"<volatile>\",\"sandbox\":\"bubblewrap\",\"startedAt\":\"<time>\",\"workingDirectory\":\"/workspace\",\"workspaceSnapshot\":{\"pool\":\"agent-state\",\"digest\":\"<sha256>\",\"size\":83,\"mediaType\":\"application/vnd.sciencediscovery.record.v1+json\"},\"workspaceVersion\":{\"pool\":\"agent-state\",\"digest\":\"<sha256>\",\"size\":1582,\"mediaType\":\"application/vnd.sciencediscovery.record.v1+json\"}}}",
         "name": "run_shell",
         "role": "tool",
         "tool_call_id": "call-main-1"
@@ -3487,6 +3787,101 @@
    "polled": "completed"
   },
   {
+   "name": "subagents after the run",
+   "status": 200,
+   "contentType": "application/json",
+   "body": [
+    {
+     "contextRef": {
+      "digest": "<sha256>",
+      "mediaType": "application/vnd.sciencediscovery.record.v1+json",
+      "pool": "agent-state",
+      "size": 607
+     },
+     "createdAt": "<time>",
+     "finishedAt": "<time>",
+     "handoff": {
+      "inputPaths": [],
+      "manifestPath": "subagents/<uuid:8>/handoff.json",
+      "privateWorkspacePath": "subagents/<uuid:8>",
+      "workspaceId": "<workspace>"
+     },
+     "id": "<uuid:8>",
+     "input": {
+      "description": "Write a note",
+      "prompt": "Say done.",
+      "subagentType": "general-purpose"
+     },
+     "maxTurns": 300,
+     "model": {
+      "id": "<uuid:1>",
+      "model": "contract-stub",
+      "name": "L2 stub model"
+     },
+     "parentTurnId": "<uuid:6>",
+     "sessionId": "<uuid:3>",
+     "status": "completed",
+     "steps": [
+      {
+       "content": "Subagent type: general-purpose\nTask: Write a note",
+       "createdAt": "<time>",
+       "id": "<uuid:9>",
+       "kind": "system",
+       "status": "completed"
+      },
+      {
+       "content": "Workspace: <workspace>\nHandoff manifest: handoff.json",
+       "createdAt": "<time>",
+       "id": "<uuid:10>",
+       "kind": "system",
+       "status": "completed"
+      },
+      {
+       "content": "Turn 1 started",
+       "createdAt": "<time>",
+       "id": "<uuid:11>",
+       "kind": "system",
+       "status": "completed"
+      },
+      {
+       "content": "done.",
+       "createdAt": "<time>",
+       "id": "<uuid:12>",
+       "kind": "assistant",
+       "status": "completed"
+      }
+     ],
+     "timeoutSeconds": 7200,
+     "turnCount": 1,
+     "usage": {
+      "cacheReadTokens": null,
+      "cacheWriteTokens": null,
+      "inputTokens": 20,
+      "outputTokens": 8,
+      "totalTokens": 28
+     }
+    }
+   ]
+  },
+  {
+   "name": "resume a finished subagent",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "resumed": true
+   }
+  },
+  {
+   "name": "stop a finished subagent",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "sessionId": "<uuid:3>",
+    "stopped": true,
+    "subagentId": "<uuid:8>"
+   }
+  },
+  {
    "name": "delete the project",
    "status": 200,
    "contentType": "application/json",
@@ -3820,6 +4215,405 @@
    "status": 400,
    "contentType": "application/json",
    "events": []
+  },
+  {
+   "name": "wait for the run to settle",
+   "status": 200,
+   "polled": "completed"
+  },
+  {
+   "name": "delete the project",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "deleted": "<uuid:2>"
+   }
+  },
+  {
+   "name": "restore the global settings",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "effective": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [
+      "antibody-protenix-pipeline",
+      "assessment-screening",
+      "citation-reviewer",
+      "code-engineer",
+      "computation-reviewer",
+      "creative-material-design",
+      "evidence-extractor",
+      "evolve-design",
+      "idea-tree-team",
+      "insight-aggregator",
+      "life-science-evidence-brief",
+      "literature-searcher",
+      "report-writer",
+      "result-evaluator",
+      "science-research-team",
+      "skill-creator",
+      "structure-pocket-inspection"
+     ],
+     "enabledSkillLibraries": [],
+     "semanticReviewEnabled": true,
+     "skillSelectionMode": "all"
+    },
+    "overrides": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "semanticReviewEnabled": true
+    },
+    "sources": {
+     "enabledConnectorIds": "global",
+     "enabledSkillIds": "unset",
+     "enabledSkillLibraries": "unset",
+     "modelId": "unset",
+     "plugins": "unset",
+     "reviewModelId": "unset",
+     "semanticReviewEnabled": "global",
+     "skillSelectionMode": "unset",
+     "thinkingEffort": "unset",
+     "thinkingMode": "unset"
+    }
+   }
+  },
+  {
+   "name": "delete the model",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "deleted": "<uuid:1>"
+   }
+  }
+ ],
+ "l2-post-messages": [
+  {
+   "name": "remember the global settings",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "effective": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [
+      "antibody-protenix-pipeline",
+      "assessment-screening",
+      "citation-reviewer",
+      "code-engineer",
+      "computation-reviewer",
+      "creative-material-design",
+      "evidence-extractor",
+      "evolve-design",
+      "idea-tree-team",
+      "insight-aggregator",
+      "life-science-evidence-brief",
+      "literature-searcher",
+      "report-writer",
+      "result-evaluator",
+      "science-research-team",
+      "skill-creator",
+      "structure-pocket-inspection"
+     ],
+     "enabledSkillLibraries": [],
+     "semanticReviewEnabled": true,
+     "skillSelectionMode": "all"
+    },
+    "overrides": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "semanticReviewEnabled": true
+    },
+    "sources": {
+     "enabledConnectorIds": "global",
+     "enabledSkillIds": "unset",
+     "enabledSkillLibraries": "unset",
+     "modelId": "unset",
+     "plugins": "unset",
+     "reviewModelId": "unset",
+     "semanticReviewEnabled": "global",
+     "skillSelectionMode": "unset",
+     "thinkingEffort": "unset",
+     "thinkingMode": "unset"
+    }
+   }
+  },
+  {
+   "name": "register the stub model",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "apiProtocol": "openai-chat-completions",
+    "apiVariant": "openai",
+    "baseUrl": "http://127.0.0.1:<port>/v1",
+    "createdAt": "<time>",
+    "hasApiToken": true,
+    "id": "<uuid:1>",
+    "model": "contract-stub",
+    "name": "L2 stub model",
+    "proxyPolicy": "inherit",
+    "thinkingEffort": "high",
+    "thinkingMode": "auto",
+    "updatedAt": "<time>",
+    "vision": false
+   }
+  },
+  {
+   "name": "create a project",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "createdAt": "<time>",
+    "firstSession": {
+     "approvalMode": "ask_for_dangerous",
+     "createdAt": "<time>",
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [],
+     "id": "<uuid:3>",
+     "modelId": "<uuid:1>",
+     "permissionEpochId": "<uuid:4>",
+     "projectId": "<uuid:2>",
+     "reviewCriteria": [],
+     "reviewerAutomaticReviewEnabled": true,
+     "reviewerSpecialistLevel": "quick",
+     "reviewMode": "auto",
+     "semanticReviewEnabled": true,
+     "settingsOverrides": {},
+     "title": "Untitled session",
+     "updatedAt": "<time>"
+    },
+    "id": "<uuid:2>",
+    "name": "L2 project",
+    "project": {
+     "createdAt": "<time>",
+     "id": "<uuid:2>",
+     "name": "L2 project",
+     "remoteRunnerHostIds": [],
+     "settingsOverrides": {
+      "enabledSkillIds": [],
+      "enabledSkillLibraries": [],
+      "skillSelectionMode": "selected"
+     }
+    },
+    "remoteRunnerHostIds": [],
+    "settingsOverrides": {
+     "enabledSkillIds": [],
+     "enabledSkillLibraries": [],
+     "skillSelectionMode": "selected"
+    }
+   }
+  },
+  {
+   "name": "choose the model",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "approvalMode": "ask_for_dangerous",
+    "createdAt": "<time>",
+    "enabledConnectorIds": [
+     "web"
+    ],
+    "enabledSkillIds": [],
+    "id": "<uuid:3>",
+    "modelId": "<uuid:1>",
+    "permissionEpochId": "<uuid:4>",
+    "projectId": "<uuid:2>",
+    "reviewCriteria": [],
+    "reviewerAutomaticReviewEnabled": true,
+    "reviewerSpecialistLevel": "quick",
+    "reviewMode": "auto",
+    "semanticReviewEnabled": true,
+    "settingsOverrides": {
+     "modelId": "<uuid:1>"
+    },
+    "title": "L2 session",
+    "updatedAt": "<time>"
+   }
+  },
+  {
+   "name": "choose the approval mode",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "approvalMode": "always_allow",
+    "createdAt": "<time>",
+    "enabledConnectorIds": [
+     "web"
+    ],
+    "enabledSkillIds": [],
+    "id": "<uuid:3>",
+    "modelId": "<uuid:1>",
+    "permissionEpochId": "<uuid:5>",
+    "projectId": "<uuid:2>",
+    "reviewCriteria": [],
+    "reviewerAutomaticReviewEnabled": true,
+    "reviewerSpecialistLevel": "quick",
+    "reviewMode": "auto",
+    "semanticReviewEnabled": true,
+    "settingsOverrides": {
+     "modelId": "<uuid:1>"
+    },
+    "title": "L2 session",
+    "updatedAt": "<time>"
+   }
+  },
+  {
+   "name": "send a message and read the stream that comes back",
+   "status": 200,
+   "contentType": "text/event-stream",
+   "events": [
+    {
+     "run": {
+      "annotationIds": [],
+      "createdAt": "<time>",
+      "id": "<uuid:6>",
+      "prompt": "Say hello.",
+      "queueOrder": 1,
+      "references": [],
+      "sessionId": "<uuid:3>",
+      "settingsSnapshot": {
+       "enabledConnectorIds": [
+        "web"
+       ],
+       "enabledSkillIds": [],
+       "enabledSkillLibraries": [],
+       "ideaTreeEnabled": false,
+       "modelId": "<uuid:1>",
+       "semanticReviewEnabled": true,
+       "skillSelectionMode": "selected",
+       "thinkingMode": "auto"
+      },
+      "status": "queued"
+     },
+     "type": "run.queued"
+    },
+    {
+     "run": {
+      "annotationIds": [],
+      "createdAt": "<time>",
+      "id": "<uuid:6>",
+      "prompt": "Say hello.",
+      "queueOrder": 1,
+      "references": [],
+      "sessionId": "<uuid:3>",
+      "settingsSnapshot": {
+       "enabledConnectorIds": [
+        "web"
+       ],
+       "enabledSkillIds": [],
+       "enabledSkillLibraries": [],
+       "ideaTreeEnabled": false,
+       "modelId": "<uuid:1>",
+       "semanticReviewEnabled": true,
+       "skillSelectionMode": "selected",
+       "thinkingMode": "auto"
+      },
+      "startedAt": "<time>",
+      "status": "running"
+     },
+     "status": "running",
+     "type": "run.status"
+    },
+    {
+     "model": {
+      "id": "<uuid:1>",
+      "model": "contract-stub",
+      "name": "L2 stub model"
+     },
+     "runId": "<uuid:6>",
+     "settings": {
+      "enabledConnectorIds": [
+       "web"
+      ],
+      "enabledSkillIds": [],
+      "enabledSkillLibraries": [],
+      "ideaTreeEnabled": false,
+      "modelId": "<uuid:1>",
+      "semanticReviewEnabled": true,
+      "skillSelectionMode": "selected",
+      "thinkingMode": "auto"
+     },
+     "type": "run.started"
+    },
+    {
+     "phase": "thinking",
+     "turn": 1,
+     "type": "agent.phase"
+    },
+    {
+     "responseId": "<uuid:7>",
+     "turn": 1,
+     "type": "assistant.response.started"
+    },
+    {
+     "delta": "Hello over the message stream.",
+     "responseId": "<uuid:7>",
+     "type": "assistant.delta"
+    },
+    {
+     "responseId": "<uuid:7>",
+     "turn": 1,
+     "type": "assistant.response.settled"
+    },
+    {
+     "files": [],
+     "message": {
+      "content": "Hello over the message stream.",
+      "createdAt": "<time>",
+      "id": "<uuid:8>",
+      "kind": "message",
+      "modelContext": [
+       {
+        "content": "Hello over the message stream.",
+        "role": "assistant"
+       }
+      ],
+      "modelId": "<uuid:1>",
+      "modelName": "L2 stub model",
+      "role": "assistant"
+     },
+     "type": "run.completed"
+    }
+   ]
+  },
+  {
+   "name": "the run it created",
+   "status": 200,
+   "contentType": "application/json",
+   "body": [
+    {
+     "annotationIds": [],
+     "assistantMessageId": "<uuid:8>",
+     "createdAt": "<time>",
+     "id": "<uuid:6>",
+     "prompt": "Say hello.",
+     "queueOrder": 1,
+     "references": [],
+     "sessionId": "<uuid:3>",
+     "settingsSnapshot": {
+      "enabledConnectorIds": [
+       "web"
+      ],
+      "enabledSkillIds": [],
+      "enabledSkillLibraries": [],
+      "ideaTreeEnabled": false,
+      "modelId": "<uuid:1>",
+      "semanticReviewEnabled": true,
+      "skillSelectionMode": "selected",
+      "thinkingMode": "auto"
+     },
+     "startedAt": "<time>",
+     "status": "running",
+     "userMessageId": "<uuid:9>"
+    }
+   ]
   },
   {
    "name": "wait for the run to settle",
@@ -4452,7 +5246,7 @@
       "docsUrl": "https://docs.bigmodel.cn/cn/guide/develop/openai/introduction.md",
       "id": "zhipu",
       "modelDiscovery": "openai-models",
-      "name": "智谱 GLM"
+      "name": "\u667a\u8c31 GLM"
      },
      {
       "apiProtocol": "openai-chat-completions",
@@ -4942,6 +5736,1420 @@
      "sourceUrl": "https://models.dev/api.json"
     },
     "sourceUrl": "https://models.dev/api.json"
+   }
+  }
+ ],
+ "global-settings-round-trips": [
+  {
+   "name": "timeout settings",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "gatewayIdleTimeoutMs": 240000,
+    "gatewayTurnTimeoutMs": 0,
+    "kernelIdleTimeoutMs": 0,
+    "permissionWaitTimeoutMs": 0,
+    "runnerExecTimeoutMs": 0
+   }
+  },
+  {
+   "name": "change a timeout",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "gatewayIdleTimeoutMs": 250000,
+    "gatewayTurnTimeoutMs": 0,
+    "kernelIdleTimeoutMs": 0,
+    "permissionWaitTimeoutMs": 0,
+    "runnerExecTimeoutMs": 0
+   }
+  },
+  {
+   "name": "timeout settings after the change",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "gatewayIdleTimeoutMs": 250000,
+    "gatewayTurnTimeoutMs": 0,
+    "kernelIdleTimeoutMs": 0,
+    "permissionWaitTimeoutMs": 0,
+    "runnerExecTimeoutMs": 0
+   }
+  },
+  {
+   "name": "restore the timeouts",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "gatewayIdleTimeoutMs": 240000,
+    "gatewayTurnTimeoutMs": 0,
+    "kernelIdleTimeoutMs": 0,
+    "permissionWaitTimeoutMs": 0,
+    "runnerExecTimeoutMs": 0
+   }
+  },
+  {
+   "name": "quota settings",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "runnerMaxOutputBytes": 1073741824,
+    "runnerMaxWorkspaceBytes": 10737418240,
+    "uploadMaxFileBytes": 1073741824,
+    "uploadMaxRequestBytes": 10737418240
+   }
+  },
+  {
+   "name": "write the quotas back unchanged",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "runnerMaxOutputBytes": 1073741824,
+    "runnerMaxWorkspaceBytes": 10737418240,
+    "uploadMaxFileBytes": 1073741824,
+    "uploadMaxRequestBytes": 10737418240
+   }
+  },
+  {
+   "name": "sandbox network settings",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "allowedDomains": [],
+    "allowPrivateNetwork": false,
+    "egressProxyPolicy": "inherit",
+    "mode": "none"
+   }
+  },
+  {
+   "name": "write the sandbox network settings back",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "allowedDomains": [],
+    "allowPrivateNetwork": false,
+    "egressProxyPolicy": "inherit",
+    "mode": "none"
+   }
+  },
+  {
+   "name": "environment source settings",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "condaSource": "upstream",
+    "pipSource": "upstream"
+   }
+  },
+  {
+   "name": "write the environment sources back",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "condaSource": "upstream",
+    "pipSource": "upstream"
+   }
+  },
+  {
+   "name": "web settings",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "fetchCacheTtlSeconds": 86400,
+    "fetchProvider": "jina",
+    "freeSearchEngines": {
+     "bing": true,
+     "brave-html": true,
+     "duckduckgo": true
+    },
+    "paidSearchProviders": [
+     "tavily",
+     "exa",
+     "brave"
+    ],
+    "providers": [
+     {
+      "hasApiKey": false,
+      "provider": "jina"
+     },
+     {
+      "hasApiKey": false,
+      "provider": "tavily"
+     },
+     {
+      "hasApiKey": false,
+      "provider": "exa"
+     },
+     {
+      "hasApiKey": false,
+      "provider": "brave"
+     }
+    ],
+    "proxyPolicy": "inherit",
+    "searchCacheTtlSeconds": 3600
+   }
+  },
+  {
+   "name": "change the web fetch cache",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "fetchCacheTtlSeconds": 3600,
+    "fetchProvider": "jina",
+    "freeSearchEngines": {
+     "bing": true,
+     "brave-html": true,
+     "duckduckgo": true
+    },
+    "paidSearchProviders": [
+     "tavily",
+     "exa",
+     "brave"
+    ],
+    "providers": [
+     {
+      "hasApiKey": false,
+      "provider": "jina"
+     },
+     {
+      "hasApiKey": false,
+      "provider": "tavily"
+     },
+     {
+      "hasApiKey": false,
+      "provider": "exa"
+     },
+     {
+      "hasApiKey": false,
+      "provider": "brave"
+     }
+    ],
+    "proxyPolicy": "inherit",
+    "searchCacheTtlSeconds": 3600
+   }
+  },
+  {
+   "name": "restore the web fetch cache",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "fetchCacheTtlSeconds": 86400,
+    "fetchProvider": "jina",
+    "freeSearchEngines": {
+     "bing": true,
+     "brave-html": true,
+     "duckduckgo": true
+    },
+    "paidSearchProviders": [
+     "tavily",
+     "exa",
+     "brave"
+    ],
+    "providers": [
+     {
+      "hasApiKey": false,
+      "provider": "jina"
+     },
+     {
+      "hasApiKey": false,
+      "provider": "tavily"
+     },
+     {
+      "hasApiKey": false,
+      "provider": "exa"
+     },
+     {
+      "hasApiKey": false,
+      "provider": "brave"
+     }
+    ],
+    "proxyPolicy": "inherit",
+    "searchCacheTtlSeconds": 3600
+   }
+  },
+  {
+   "name": "web usage",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "cacheHits": 0,
+    "failures": 0,
+    "fallbacks": 0,
+    "fetches": 0,
+    "searches": 0
+   }
+  },
+  {
+   "name": "reviewer specialist settings",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "enabled": false,
+    "feedbackPolicy": "record"
+   }
+  },
+  {
+   "name": "write the reviewer settings back",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "enabled": false,
+    "feedbackPolicy": "record"
+   }
+  },
+  {
+   "name": "proxy settings",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "defaultPolicy": "proxy:environment",
+    "servers": [
+     {
+      "createdAt": "<time>",
+      "environment": {
+       "status": "unconfigured",
+       "variables": [
+        {
+         "names": [
+          "http_proxy",
+          "HTTP_PROXY"
+         ],
+         "status": "unconfigured"
+        },
+        {
+         "names": [
+          "https_proxy",
+          "HTTPS_PROXY"
+         ],
+         "status": "unconfigured"
+        },
+        {
+         "names": [
+          "all_proxy",
+          "ALL_PROXY"
+         ],
+         "status": "unconfigured"
+        },
+        {
+         "names": [
+          "no_proxy",
+          "NO_PROXY"
+         ],
+         "status": "unconfigured"
+        }
+       ]
+      },
+      "hasUrl": false,
+      "id": "environment",
+      "kind": "environment",
+      "name": "Environment variables",
+      "updatedAt": "<time>"
+     }
+    ]
+   }
+  },
+  {
+   "name": "write the proxy policy back",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "defaultPolicy": "proxy:environment",
+    "servers": [
+     {
+      "createdAt": "<time>",
+      "environment": {
+       "status": "unconfigured",
+       "variables": [
+        {
+         "names": [
+          "http_proxy",
+          "HTTP_PROXY"
+         ],
+         "status": "unconfigured"
+        },
+        {
+         "names": [
+          "https_proxy",
+          "HTTPS_PROXY"
+         ],
+         "status": "unconfigured"
+        },
+        {
+         "names": [
+          "all_proxy",
+          "ALL_PROXY"
+         ],
+         "status": "unconfigured"
+        },
+        {
+         "names": [
+          "no_proxy",
+          "NO_PROXY"
+         ],
+         "status": "unconfigured"
+        }
+       ]
+      },
+      "hasUrl": false,
+      "id": "environment",
+      "kind": "environment",
+      "name": "Environment variables",
+      "updatedAt": "<time>"
+     }
+    ]
+   }
+  },
+  {
+   "name": "global settings",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "effective": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [
+      "antibody-protenix-pipeline",
+      "assessment-screening",
+      "citation-reviewer",
+      "code-engineer",
+      "computation-reviewer",
+      "creative-material-design",
+      "evidence-extractor",
+      "evolve-design",
+      "idea-tree-team",
+      "insight-aggregator",
+      "life-science-evidence-brief",
+      "literature-searcher",
+      "report-writer",
+      "result-evaluator",
+      "science-research-team",
+      "skill-creator",
+      "structure-pocket-inspection"
+     ],
+     "enabledSkillLibraries": [],
+     "semanticReviewEnabled": true,
+     "skillSelectionMode": "all"
+    },
+    "overrides": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "semanticReviewEnabled": true
+    },
+    "sources": {
+     "enabledConnectorIds": "global",
+     "enabledSkillIds": "unset",
+     "enabledSkillLibraries": "unset",
+     "modelId": "unset",
+     "plugins": "unset",
+     "reviewModelId": "unset",
+     "semanticReviewEnabled": "global",
+     "skillSelectionMode": "unset",
+     "thinkingEffort": "unset",
+     "thinkingMode": "unset"
+    }
+   }
+  },
+  {
+   "name": "write the global settings back",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "effective": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [
+      "antibody-protenix-pipeline",
+      "assessment-screening",
+      "citation-reviewer",
+      "code-engineer",
+      "computation-reviewer",
+      "creative-material-design",
+      "evidence-extractor",
+      "evolve-design",
+      "idea-tree-team",
+      "insight-aggregator",
+      "life-science-evidence-brief",
+      "literature-searcher",
+      "report-writer",
+      "result-evaluator",
+      "science-research-team",
+      "skill-creator",
+      "structure-pocket-inspection"
+     ],
+     "enabledSkillLibraries": [],
+     "semanticReviewEnabled": true,
+     "skillSelectionMode": "all"
+    },
+    "overrides": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "semanticReviewEnabled": true
+    },
+    "sources": {
+     "enabledConnectorIds": "global",
+     "enabledSkillIds": "unset",
+     "enabledSkillLibraries": "unset",
+     "modelId": "unset",
+     "plugins": "unset",
+     "reviewModelId": "unset",
+     "semanticReviewEnabled": "global",
+     "skillSelectionMode": "unset",
+     "thinkingEffort": "unset",
+     "thinkingMode": "unset"
+    }
+   }
+  },
+  {
+   "name": "workbench search",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "hasMore": false,
+    "limit": 250,
+    "offset": 0,
+    "results": [],
+    "total": 0
+   }
+  },
+  {
+   "name": "web settings reject the whole GET body",
+   "status": 500,
+   "contentType": "application/json",
+   "body": {
+    "error": "Internal server error"
+   }
+  }
+ ],
+ "health-and-runtime-status": [
+  {
+   "name": "health",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "memoryGraph": "disabled",
+    "milestone": "M4",
+    "runner": {
+     "cgroupDelegated": false,
+     "cgroupMode": "none",
+     "cgroupRoot": "",
+     "executionAuth": "bearer+hmac-sha256",
+     "executionTimeoutMs": 0,
+     "executionUser": "root",
+     "maxFileBytes": 0,
+     "maxOutputBytes": 1073741824,
+     "maxWorkspaceBytes": 10737418240,
+     "networkPolicy": "none",
+     "noNewPrivileges": true,
+     "npuBroker": {
+      "enabled": false,
+      "queueConcurrency": 1,
+      "workloads": []
+     },
+     "platform": "linux",
+     "runnerVersion": "<volatile>",
+     "sandbox": "bubblewrap",
+     "sandboxNetwork": {
+      "available": true,
+      "modes": [
+       "none",
+       "domain-allowlist",
+       "open"
+      ]
+     },
+     "scientificEnvs": {
+      "available": false,
+      "enabled": false,
+      "languages": [],
+      "provisioner": null,
+      "startersReady": false,
+      "unavailableReason": "Scientific environments are disabled by configuration"
+     },
+     "seccompBaseline": "multiarch-v1-profile-aware",
+     "status": "ok",
+     "workerConcurrency": null
+    },
+    "sandboxNetwork": {
+     "allowedDomains": [],
+     "allowPrivateNetwork": false,
+     "egressProxyPolicy": "inherit",
+     "mode": "none",
+     "revision": "none",
+     "runner": {
+      "available": true,
+      "modes": [
+       "none",
+       "domain-allowlist",
+       "open"
+      ]
+     }
+    },
+    "service": "sciencediscovery-api",
+    "status": "ok",
+    "workspace": {
+     "maxFileBytes": 1073741824,
+     "maxRequestBytes": 10737418240,
+     "maxWorkspaceBytes": 10737418240
+    }
+   }
+  },
+  {
+   "name": "health under /api",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "memoryGraph": "disabled",
+    "milestone": "M4",
+    "runner": {
+     "cgroupDelegated": false,
+     "cgroupMode": "none",
+     "cgroupRoot": "",
+     "executionAuth": "bearer+hmac-sha256",
+     "executionTimeoutMs": 0,
+     "executionUser": "root",
+     "maxFileBytes": 0,
+     "maxOutputBytes": 1073741824,
+     "maxWorkspaceBytes": 10737418240,
+     "networkPolicy": "none",
+     "noNewPrivileges": true,
+     "npuBroker": {
+      "enabled": false,
+      "queueConcurrency": 1,
+      "workloads": []
+     },
+     "platform": "linux",
+     "runnerVersion": "<volatile>",
+     "sandbox": "bubblewrap",
+     "sandboxNetwork": {
+      "available": true,
+      "modes": [
+       "none",
+       "domain-allowlist",
+       "open"
+      ]
+     },
+     "scientificEnvs": {
+      "available": false,
+      "enabled": false,
+      "languages": [],
+      "provisioner": null,
+      "startersReady": false,
+      "unavailableReason": "Scientific environments are disabled by configuration"
+     },
+     "seccompBaseline": "multiarch-v1-profile-aware",
+     "status": "ok",
+     "workerConcurrency": null
+    },
+    "sandboxNetwork": {
+     "allowedDomains": [],
+     "allowPrivateNetwork": false,
+     "egressProxyPolicy": "inherit",
+     "mode": "none",
+     "revision": "none",
+     "runner": {
+      "available": true,
+      "modes": [
+       "none",
+       "domain-allowlist",
+       "open"
+      ]
+     }
+    },
+    "service": "sciencediscovery-api",
+    "status": "ok",
+    "workspace": {
+     "maxFileBytes": 1073741824,
+     "maxRequestBytes": 10737418240,
+     "maxWorkspaceBytes": 10737418240
+    }
+   }
+  },
+  {
+   "name": "runtime status",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "capturedAt": "<time>",
+    "runner": {
+     "activeExecutions": [],
+     "capturedAt": "<time>",
+     "kernels": [],
+     "npuJobs": [],
+     "runnerVersion": "<volatile>",
+     "status": "ok"
+    },
+    "sessions": []
+   }
+  },
+  {
+   "name": "tearing down an unknown kernel",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "count": 0,
+    "kernelId": "no-such-kernel",
+    "reason": "User cleared the persistent Kernel from Runtime status"
+   }
+  }
+ ],
+ "proxy-servers-and-specialists-crud": [
+  {
+   "name": "add a proxy server",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "createdAt": "<time>",
+    "hasUrl": true,
+    "id": "<uuid:1>",
+    "kind": "custom_url",
+    "name": "L1 proxy",
+    "updatedAt": "<time>",
+    "url": "http://127.0.0.1:<port>/"
+   }
+  },
+  {
+   "name": "rename it",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "createdAt": "<time>",
+    "hasUrl": true,
+    "id": "<uuid:1>",
+    "kind": "custom_url",
+    "name": "L1 proxy renamed",
+    "updatedAt": "<time>",
+    "url": "http://127.0.0.1:<port>/"
+   }
+  },
+  {
+   "name": "reject an unknown kind",
+   "status": 400,
+   "contentType": "application/json",
+   "body": {
+    "error": "Proxy server kind must be custom_url, environment, or system"
+   }
+  },
+  {
+   "name": "delete it",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "deleted": "<uuid:1>"
+   }
+  },
+  {
+   "name": "specialists",
+   "status": 200,
+   "contentType": "application/json",
+   "body": [
+    {
+     "builtIn": true,
+     "connectorIds": [],
+     "createdAt": "<time>",
+     "description": "Assessment screening agent: independently evaluates material design candidates against configurable multi-dimensional scoring rubrics. Each dispatch loads a specific expert perspective (A, B, or C) and produces independent scores without sharing results with other assessors.",
+     "enabledSkillIds": [
+      "assessment-screening"
+     ],
+     "id": "builtin-assessment-screener",
+     "instructions": "You are assessment-screener, the independent multi-dimensional evaluation specialist for the Idea Tree workflow.\nUse the assessment-screening skill to load the rubric specified by the assessment_perspective in the dispatch context (agent-a, agent-b, agent-c, or overall).\nScore each of the five dimensions (Catalytic Performance, Economic Viability, Environmental Friendliness, Technical Feasibility, Structural Validity) on a 1-10 scale strictly per the rubric.\nProduce structured JSON with exact snapshot_hash, candidate_version_id, per-dimension scores, pros, cons, and verification notes.\nEach dispatch is fully independent \u2014 do not reference or align with other assessors' results.\nDo not generate material designs, synthesize insights, or perform literature search.",
+     "name": "assessment-screener",
+     "updatedAt": "<time>"
+    },
+    {
+     "builtIn": true,
+     "connectorIds": [],
+     "createdAt": "<time>",
+     "description": "Code engineering agent: writes and executes reproducible Python/R analysis code with methodology documentation.",
+     "enabledSkillIds": [
+      "code-engineer"
+     ],
+     "id": "builtin-code-engineer",
+     "instructions": "You are code-engineer, the executable analysis specialist for the research workflow.\nUse the code-engineer skill to inspect data, write and run Python/R code, debug failures, and deliver reproducible computational results with complete methodology documentation.\nProduce scripts, logs, outputs, statistics, dependency notes, random seeds, and environment information as required.\nWhen the next step is to create, edit, run, inspect, or verify code, call the appropriate tool immediately. Do not stop after saying \"I will write\", \"Let me create\", or similar future-intent text.\nBefore final delivery, verify required files and outputs exist with ls/read_file/bash as appropriate.\nDo not perform literature search, evidence extraction, result evaluation, or report synthesis.",
+     "name": "code-engineer",
+     "updatedAt": "<time>"
+    },
+    {
+     "builtIn": true,
+     "connectorIds": [],
+     "createdAt": "<time>",
+     "description": "Creative material design agent: generates innovative water treatment material designs with structural descriptions, property predictions, and feasibility analysis.",
+     "enabledSkillIds": [
+      "creative-material-design"
+     ],
+     "id": "builtin-creative-material-design",
+     "instructions": "You are creative-material-design, the material design specialist for the Idea Tree workflow.\nUse the creative-material-design skill to generate innovative, feasible material solutions based on the hypothesis and research objective.\nProduce structured JSON designs with complete structural descriptions, property predictions, and feasibility analysis.\nDo not evaluate, score, or synthesize insights \u2014 produce the creative design only.\nDo not perform literature search, evidence extraction, or report writing.",
+     "name": "creative-material-design",
+     "updatedAt": "<time>"
+    },
+    {
+     "builtIn": true,
+     "connectorIds": [],
+     "createdAt": "<time>",
+     "description": "Evidence extraction agent: mines structured, source-grounded evidence from literature-searcher source packages.",
+     "enabledSkillIds": [
+      "evidence-extractor"
+     ],
+     "id": "builtin-evidence-extractor",
+     "instructions": "You are evidence-extractor, the evidence mining specialist for the research workflow.\nUse the evidence-extractor skill to extract structured claims, findings, statistics, methods, limitations, confidence, strength, and source citations from provided source packages.\nExtract from known sources only. Do not search for new literature, coordinate agents, synthesize final conclusions, or write reports.\nPreserve source anchors and identify extraction gaps clearly.\nWhen the next step is to create, edit, inspect, verify, or write an evidence package, call the appropriate tool immediately. Do not stop after saying \"I will write\", \"Let me create\", or similar future-intent text.\nFor multi-source extraction, write evidence_items.json and any summary files via bash/write_file instead of composing large JSON inline in the chat response.\nBefore final delivery, verify required files exist with ls/read_file/bash as appropriate.",
+     "name": "evidence-extractor",
+     "updatedAt": "<time>"
+    },
+    {
+     "builtIn": true,
+     "connectorIds": [],
+     "createdAt": "<time>",
+     "description": "Insight aggregator agent: synthesizes insights from multiple independent assessment results into a concise, actionable summary for tree propagation. Cross-validates expert scores, identifies patterns and discrepancies, and produces semantic insight without calculating or overriding scores.",
+     "enabledSkillIds": [
+      "insight-aggregator"
+     ],
+     "id": "builtin-insight-aggregator",
+     "instructions": "You are insight-aggregator, the insight synthesis specialist for the Idea Tree workflow.\nUse the insight-aggregator skill to cross-validate multiple independent assessment artifacts and synthesize a concise insight (1-3 sentences) for tree propagation.\nCompute per-dimension averages and standard deviations across experts. Flag dimensions with significant disagreement (SD > 2.0).\nProduce structured JSON with exact version IDs, cross-validation summary, synthesized pros/cons, and the insight field.\nDo NOT calculate or override the weighted score \u2014 the server computes that. Do NOT score candidates directly or generate material designs.\nPreserve contradictions between experts verbatim. Surface disagreements, do not resolve them silently.",
+     "name": "insight-aggregator",
+     "updatedAt": "<time>"
+    },
+    {
+     "builtIn": true,
+     "connectorIds": [
+      "pubmed",
+      "arxiv",
+      "europe-pmc",
+      "biorxiv",
+      "medrxiv"
+     ],
+     "createdAt": "<time>",
+     "description": "Literature retrieval agent: searches academic sources across arXiv, PubMed, and CrossRef and returns deduplicated source packages.",
+     "enabledSkillIds": [
+      "literature-searcher"
+     ],
+     "id": "builtin-literature-searcher",
+     "instructions": "You are literature-searcher, the academic retrieval specialist for the research workflow.\nUse the literature-searcher skill to retrieve verified academic source lists and produce deduplicated literature packages with coverage notes.\nSearch sources only. Do not read full papers deeply, extract evidence, evaluate results, coordinate other agents, or write final reports.\nUse only the governed literature MCP tools mounted for this Specialist. Do not run retrieval scripts or call literature APIs directly.\nDocument search queries and coverage limitations, and deliver outputs that evidence-extractor can consume.",
+     "name": "literature-searcher",
+     "updatedAt": "<time>"
+    },
+    {
+     "builtIn": true,
+     "connectorIds": [],
+     "createdAt": "<time>",
+     "description": "Report writing agent: synthesizes domain summaries into the requested final report format without adding new findings.",
+     "enabledSkillIds": [
+      "report-writer"
+     ],
+     "id": "builtin-report-writer",
+     "instructions": "You are report-writer, the final synthesis specialist for the research workflow.\nUse the report-writer skill to receive integrated Domain Summaries, identify SUPPORTS/CONTRADICTS/INFORMS/INDEPENDENT relationships, surface contradictions verbatim, and produce the user's requested output format.\nIf the user did not specify a format, use the default report structure from the skill.\nDo not perform new research, run analysis, evaluate results, resolve contradictions, or invent missing findings.",
+     "name": "report-writer",
+     "updatedAt": "<time>"
+    },
+    {
+     "builtIn": true,
+     "connectorIds": [],
+     "createdAt": "<time>",
+     "description": "Result evaluation agent: audits analysis outputs for reliability, methodology quality, and acceptance or revision decisions.",
+     "enabledSkillIds": [
+      "result-evaluator"
+     ],
+     "id": "builtin-result-evaluator",
+     "instructions": "You are result-evaluator, the quality review specialist for the research workflow.\nUse the result-evaluator skill to evaluate analysis results for accuracy, completeness, robustness, relevance, methodology quality, reproducibility, and source reliability.\nDecide ACCEPT_AND_PROCEED or REVISE_AND_RETRY with concrete revision guidance.\nDo not perform new analysis, modify results, search literature, or write final reports.",
+     "name": "result-evaluator",
+     "updatedAt": "<time>"
+    }
+   ]
+  },
+  {
+   "name": "add a specialist",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "connectorIds": [],
+    "createdAt": "<time>",
+    "description": "d",
+    "enabledSkillIds": [],
+    "id": "<uuid:2>",
+    "instructions": "be brief",
+    "name": "L1 specialist",
+    "updatedAt": "<time>"
+   }
+  },
+  {
+   "name": "edit it",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "connectorIds": [],
+    "createdAt": "<time>",
+    "description": "d2",
+    "enabledSkillIds": [],
+    "id": "<uuid:2>",
+    "instructions": "be briefer",
+    "name": "L1 specialist 2",
+    "updatedAt": "<time>"
+   }
+  },
+  {
+   "name": "delete it",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "deleted": "<uuid:2>"
+   }
+  }
+ ],
+ "providers-and-models-crud": [
+  {
+   "name": "remember the global settings",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "effective": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [
+      "antibody-protenix-pipeline",
+      "assessment-screening",
+      "citation-reviewer",
+      "code-engineer",
+      "computation-reviewer",
+      "creative-material-design",
+      "evidence-extractor",
+      "evolve-design",
+      "idea-tree-team",
+      "insight-aggregator",
+      "life-science-evidence-brief",
+      "literature-searcher",
+      "report-writer",
+      "result-evaluator",
+      "science-research-team",
+      "skill-creator",
+      "structure-pocket-inspection"
+     ],
+     "enabledSkillLibraries": [],
+     "semanticReviewEnabled": true,
+     "skillSelectionMode": "all"
+    },
+    "overrides": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "semanticReviewEnabled": true
+    },
+    "sources": {
+     "enabledConnectorIds": "global",
+     "enabledSkillIds": "unset",
+     "enabledSkillLibraries": "unset",
+     "modelId": "unset",
+     "plugins": "unset",
+     "reviewModelId": "unset",
+     "semanticReviewEnabled": "global",
+     "skillSelectionMode": "unset",
+     "thinkingEffort": "unset",
+     "thinkingMode": "unset"
+    }
+   }
+  },
+  {
+   "name": "add a provider",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "apiProtocol": "openai-chat-completions",
+    "apiVariant": "openai",
+    "baseUrl": "http://127.0.0.1:<port>/v1",
+    "createdAt": "<time>",
+    "hasApiToken": false,
+    "id": "<uuid:1>",
+    "modelDiscovery": "openai-models",
+    "name": "L1 provider",
+    "proxyPolicy": "inherit",
+    "tokenOptional": false,
+    "updatedAt": "<time>"
+   }
+  },
+  {
+   "name": "edit it",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "apiProtocol": "openai-chat-completions",
+    "apiVariant": "openai",
+    "baseUrl": "http://127.0.0.1:<port>/v1",
+    "createdAt": "<time>",
+    "hasApiToken": false,
+    "id": "<uuid:1>",
+    "modelDiscovery": "openai-models",
+    "name": "L1 provider renamed",
+    "proxyPolicy": "inherit",
+    "tokenOptional": false,
+    "updatedAt": "<time>"
+   }
+  },
+  {
+   "name": "discover its models",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "fetchedAt": "<time>",
+    "models": [
+     {
+      "id": "contract-stub"
+     },
+     {
+      "id": "contract-stub-2"
+     }
+    ],
+    "providerId": "<uuid:1>",
+    "source": "remote"
+   }
+  },
+  {
+   "name": "adding a model needs an id",
+   "status": 400,
+   "contentType": "application/json",
+   "body": {
+    "error": "Model ID is required"
+   }
+  },
+  {
+   "name": "register one of the discovered models",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "apiProtocol": "openai-chat-completions",
+    "apiVariant": "openai",
+    "baseUrl": "http://127.0.0.1:<port>/v1",
+    "createdAt": "<time>",
+    "hasApiToken": false,
+    "id": "<uuid:2>",
+    "model": "contract-stub",
+    "name": "L1 provider renamed \u00b7 L1 provider model",
+    "providerId": "<uuid:1>",
+    "proxyPolicy": "inherit",
+    "thinkingEffort": "high",
+    "thinkingMode": "auto",
+    "updatedAt": "<time>",
+    "vision": false
+   }
+  },
+  {
+   "name": "register a model by hand",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "apiProtocol": "openai-chat-completions",
+    "apiVariant": "openai",
+    "baseUrl": "http://127.0.0.1:<port>/v1",
+    "createdAt": "<time>",
+    "hasApiToken": true,
+    "id": "<uuid:3>",
+    "model": "contract-stub",
+    "name": "L1 model",
+    "proxyPolicy": "inherit",
+    "thinkingEffort": "high",
+    "thinkingMode": "auto",
+    "updatedAt": "<time>",
+    "vision": false
+   }
+  },
+  {
+   "name": "edit the model",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "apiProtocol": "openai-chat-completions",
+    "apiVariant": "openai",
+    "baseUrl": "http://127.0.0.1:<port>/v1",
+    "createdAt": "<time>",
+    "hasApiToken": true,
+    "id": "<uuid:3>",
+    "model": "contract-stub",
+    "name": "L1 model renamed",
+    "proxyPolicy": "inherit",
+    "thinkingEffort": "high",
+    "thinkingMode": "auto",
+    "updatedAt": "<time>",
+    "vision": true
+   }
+  },
+  {
+   "name": "models",
+   "status": 200,
+   "contentType": "application/json",
+   "body": [
+    {
+     "apiProtocol": "openai-chat-completions",
+     "apiVariant": "openai",
+     "baseUrl": "http://127.0.0.1:<port>/v1",
+     "createdAt": "<time>",
+     "hasApiToken": true,
+     "id": "<uuid:3>",
+     "model": "contract-stub",
+     "name": "L1 model renamed",
+     "proxyPolicy": "inherit",
+     "thinkingEffort": "high",
+     "thinkingMode": "auto",
+     "updatedAt": "<time>",
+     "vision": true
+    },
+    {
+     "apiProtocol": "openai-chat-completions",
+     "apiVariant": "openai",
+     "baseUrl": "http://127.0.0.1:<port>/v1",
+     "createdAt": "<time>",
+     "hasApiToken": false,
+     "id": "<uuid:2>",
+     "model": "contract-stub",
+     "name": "L1 provider renamed \u00b7 L1 provider model",
+     "providerId": "<uuid:1>",
+     "proxyPolicy": "inherit",
+     "thinkingEffort": "high",
+     "thinkingMode": "auto",
+     "updatedAt": "<time>",
+     "vision": false
+    }
+   ]
+  },
+  {
+   "name": "a model in use as the default cannot be deleted",
+   "status": 400,
+   "contentType": "application/json",
+   "body": {
+    "error": "Model is referenced by runtime settings and cannot be deleted"
+   }
+  },
+  {
+   "name": "restore the global settings",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "effective": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [
+      "antibody-protenix-pipeline",
+      "assessment-screening",
+      "citation-reviewer",
+      "code-engineer",
+      "computation-reviewer",
+      "creative-material-design",
+      "evidence-extractor",
+      "evolve-design",
+      "idea-tree-team",
+      "insight-aggregator",
+      "life-science-evidence-brief",
+      "literature-searcher",
+      "report-writer",
+      "result-evaluator",
+      "science-research-team",
+      "skill-creator",
+      "structure-pocket-inspection"
+     ],
+     "enabledSkillLibraries": [],
+     "semanticReviewEnabled": true,
+     "skillSelectionMode": "all"
+    },
+    "overrides": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "semanticReviewEnabled": true
+    },
+    "sources": {
+     "enabledConnectorIds": "global",
+     "enabledSkillIds": "unset",
+     "enabledSkillLibraries": "unset",
+     "modelId": "unset",
+     "plugins": "unset",
+     "reviewModelId": "unset",
+     "semanticReviewEnabled": "global",
+     "skillSelectionMode": "unset",
+     "thinkingEffort": "unset",
+     "thinkingMode": "unset"
+    }
+   }
+  },
+  {
+   "name": "delete the model",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "deleted": "<uuid:3>"
+   }
+  },
+  {
+   "name": "delete the provider's model",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "deleted": "<uuid:2>"
+   }
+  },
+  {
+   "name": "delete the provider",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "deleted": "<uuid:1>"
+   }
+  }
+ ],
+ "permission-requests-and-grants": [
+  {
+   "name": "create a project",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "createdAt": "<time>",
+    "firstSession": {
+     "approvalMode": "ask_for_dangerous",
+     "createdAt": "<time>",
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [],
+     "id": "<uuid:2>",
+     "permissionEpochId": "<uuid:3>",
+     "projectId": "<uuid:1>",
+     "reviewCriteria": [],
+     "reviewerAutomaticReviewEnabled": true,
+     "reviewerSpecialistLevel": "quick",
+     "reviewMode": "auto",
+     "semanticReviewEnabled": true,
+     "settingsOverrides": {},
+     "title": "Untitled session",
+     "updatedAt": "<time>"
+    },
+    "id": "<uuid:1>",
+    "name": "L1 permissions",
+    "project": {
+     "createdAt": "<time>",
+     "id": "<uuid:1>",
+     "name": "L1 permissions",
+     "remoteRunnerHostIds": [],
+     "settingsOverrides": {
+      "enabledSkillIds": [],
+      "enabledSkillLibraries": [],
+      "skillSelectionMode": "selected"
+     }
+    },
+    "remoteRunnerHostIds": [],
+    "settingsOverrides": {
+     "enabledSkillIds": [],
+     "enabledSkillLibraries": [],
+     "skillSelectionMode": "selected"
+    }
+   }
+  },
+  {
+   "name": "ask for a permission",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "allowed": false,
+    "request": {
+     "action": "connector",
+     "createdAt": "<time>",
+     "id": "<uuid:4>",
+     "projectId": "<uuid:1>",
+     "resource": "web",
+     "sessionId": "<uuid:2>",
+     "state": "pending",
+     "summary": "Use the web connector"
+    }
+   }
+  },
+  {
+   "name": "the request is pending",
+   "status": 200,
+   "contentType": "application/json",
+   "body": [
+    {
+     "action": "connector",
+     "createdAt": "<time>",
+     "id": "<uuid:4>",
+     "projectId": "<uuid:1>",
+     "resource": "web",
+     "sessionId": "<uuid:2>",
+     "state": "pending",
+     "summary": "Use the web connector"
+    }
+   ]
+  },
+  {
+   "name": "allow it for matching requests",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "authorization": {
+     "action": "connector",
+     "approvalMode": "ask_for_dangerous",
+     "createdAt": "<time>",
+     "id": "<uuid:5>",
+     "outcome": "allowed",
+     "permissionEpochId": "<uuid:6>",
+     "permissionGrantId": "<uuid:7>",
+     "permissionRequestId": "<uuid:4>",
+     "projectId": "<uuid:1>",
+     "resource": "web",
+     "sessionId": "<uuid:2>",
+     "source": "user_grant"
+    },
+    "authorizations": [
+     {
+      "action": "connector",
+      "approvalMode": "ask_for_dangerous",
+      "createdAt": "<time>",
+      "id": "<uuid:5>",
+      "outcome": "allowed",
+      "permissionEpochId": "<uuid:6>",
+      "permissionGrantId": "<uuid:7>",
+      "permissionRequestId": "<uuid:4>",
+      "projectId": "<uuid:1>",
+      "resource": "web",
+      "sessionId": "<uuid:2>",
+      "source": "user_grant"
+     }
+    ],
+    "grant": {
+     "action": "connector",
+     "createdAt": "<time>",
+     "id": "<uuid:7>",
+     "resource": "web",
+     "scope": "session",
+     "sessionId": "<uuid:2>",
+     "state": "active"
+    },
+    "permissionEpoch": {
+     "createdAt": "<time>",
+     "environmentRevisionId": "<system-environment>",
+     "executeGrantScope": "session",
+     "id": "<uuid:6>",
+     "mounts": [
+      {
+       "mode": "read-write",
+       "source": "workspace"
+      }
+     ],
+     "networkAccess": {
+      "allowedDomains": [],
+      "allowPrivateNetwork": false,
+      "egressProxyPolicy": "inherit",
+      "mode": "none",
+      "revision": "none"
+     },
+     "networkPolicy": "none",
+     "reason": "connector permission allowed",
+     "secretRefs": [],
+     "sessionId": "<uuid:2>"
+    },
+    "request": {
+     "action": "connector",
+     "createdAt": "<time>",
+     "decidedAt": "<time>",
+     "decision": "allowed",
+     "decisionEpochId": "<uuid:6>",
+     "grantId": "<uuid:7>",
+     "id": "<uuid:4>",
+     "permissionAuthorizationId": "<uuid:5>",
+     "projectId": "<uuid:1>",
+     "resource": "web",
+     "sessionId": "<uuid:2>",
+     "state": "allowed",
+     "summary": "Use the web connector"
+    },
+    "resolvedRequests": [
+     {
+      "action": "connector",
+      "createdAt": "<time>",
+      "decidedAt": "<time>",
+      "decision": "allowed",
+      "decisionEpochId": "<uuid:6>",
+      "grantId": "<uuid:7>",
+      "id": "<uuid:4>",
+      "permissionAuthorizationId": "<uuid:5>",
+      "projectId": "<uuid:1>",
+      "resource": "web",
+      "sessionId": "<uuid:2>",
+      "state": "allowed",
+      "summary": "Use the web connector"
+     }
+    ]
+   }
+  },
+  {
+   "name": "the grant is listed",
+   "status": 200,
+   "contentType": "application/json",
+   "body": [
+    {
+     "action": "connector",
+     "createdAt": "<time>",
+     "id": "<uuid:7>",
+     "resource": "web",
+     "scope": "session",
+     "sessionId": "<uuid:2>",
+     "state": "active"
+    }
+   ]
+  },
+  {
+   "name": "the authorization is on record",
+   "status": 200,
+   "contentType": "application/json",
+   "body": [
+    {
+     "action": "connector",
+     "approvalMode": "ask_for_dangerous",
+     "createdAt": "<time>",
+     "id": "<uuid:5>",
+     "outcome": "allowed",
+     "permissionEpochId": "<uuid:6>",
+     "permissionGrantId": "<uuid:7>",
+     "permissionRequestId": "<uuid:4>",
+     "projectId": "<uuid:1>",
+     "resource": "web",
+     "sessionId": "<uuid:2>",
+     "source": "user_grant"
+    }
+   ]
+  },
+  {
+   "name": "revoke the grant",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "action": "connector",
+    "createdAt": "<time>",
+    "id": "<uuid:7>",
+    "resource": "web",
+    "revokedAt": "<time>",
+    "scope": "session",
+    "sessionId": "<uuid:2>",
+    "state": "revoked"
+   }
+  },
+  {
+   "name": "the grant is gone",
+   "status": 200,
+   "contentType": "application/json",
+   "body": []
+  },
+  {
+   "name": "a decision must be one of the known ones",
+   "status": 400,
+   "contentType": "application/json",
+   "body": {
+    "error": "Invalid permission decision"
+   }
+  },
+  {
+   "name": "delete the project",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "deleted": "<uuid:1>"
    }
   }
  ]

@@ -6,6 +6,12 @@
       "step": "run events",
       "path": "$.events[*].error",
       "reason": "the errorCode is the same (unauthorized); the text is each executor's own wording of the provider's 401"
+    },
+    {
+      "case": "l2-tool-call",
+      "step": "a tool's output stream",
+      "path": "$.body[*].event.evidence",
+      "reason": "GAP, not a preference: the native agent attaches evidence (agentRunId, contextRef, stateRef) to every event and records context.captured/state.committed/model.completed; the JiuwenSwarm executor produces none of it, so the trajectory view of such a run has nothing to show"
     }
   ]
 }
