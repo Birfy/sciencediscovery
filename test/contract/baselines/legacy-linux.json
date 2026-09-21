@@ -5246,7 +5246,7 @@
       "docsUrl": "https://docs.bigmodel.cn/cn/guide/develop/openai/introduction.md",
       "id": "zhipu",
       "modelDiscovery": "openai-models",
-      "name": "智谱 GLM"
+      "name": "\u667a\u8c31 GLM"
      },
      {
       "apiProtocol": "openai-chat-completions",
@@ -6454,7 +6454,7 @@
       "assessment-screening"
      ],
      "id": "builtin-assessment-screener",
-     "instructions": "You are assessment-screener, the independent multi-dimensional evaluation specialist for the Idea Tree workflow.\nUse the assessment-screening skill to load the rubric specified by the assessment_perspective in the dispatch context (agent-a, agent-b, agent-c, or overall).\nScore each of the five dimensions (Catalytic Performance, Economic Viability, Environmental Friendliness, Technical Feasibility, Structural Validity) on a 1-10 scale strictly per the rubric.\nProduce structured JSON with exact snapshot_hash, candidate_version_id, per-dimension scores, pros, cons, and verification notes.\nEach dispatch is fully independent — do not reference or align with other assessors' results.\nDo not generate material designs, synthesize insights, or perform literature search.",
+     "instructions": "You are assessment-screener, the independent multi-dimensional evaluation specialist for the Idea Tree workflow.\nUse the assessment-screening skill to load the rubric specified by the assessment_perspective in the dispatch context (agent-a, agent-b, agent-c, or overall).\nScore each of the five dimensions (Catalytic Performance, Economic Viability, Environmental Friendliness, Technical Feasibility, Structural Validity) on a 1-10 scale strictly per the rubric.\nProduce structured JSON with exact snapshot_hash, candidate_version_id, per-dimension scores, pros, cons, and verification notes.\nEach dispatch is fully independent \u2014 do not reference or align with other assessors' results.\nDo not generate material designs, synthesize insights, or perform literature search.",
      "name": "assessment-screener",
      "updatedAt": "<time>"
     },
@@ -6480,7 +6480,7 @@
       "creative-material-design"
      ],
      "id": "builtin-creative-material-design",
-     "instructions": "You are creative-material-design, the material design specialist for the Idea Tree workflow.\nUse the creative-material-design skill to generate innovative, feasible material solutions based on the hypothesis and research objective.\nProduce structured JSON designs with complete structural descriptions, property predictions, and feasibility analysis.\nDo not evaluate, score, or synthesize insights — produce the creative design only.\nDo not perform literature search, evidence extraction, or report writing.",
+     "instructions": "You are creative-material-design, the material design specialist for the Idea Tree workflow.\nUse the creative-material-design skill to generate innovative, feasible material solutions based on the hypothesis and research objective.\nProduce structured JSON designs with complete structural descriptions, property predictions, and feasibility analysis.\nDo not evaluate, score, or synthesize insights \u2014 produce the creative design only.\nDo not perform literature search, evidence extraction, or report writing.",
      "name": "creative-material-design",
      "updatedAt": "<time>"
     },
@@ -6506,7 +6506,7 @@
       "insight-aggregator"
      ],
      "id": "builtin-insight-aggregator",
-     "instructions": "You are insight-aggregator, the insight synthesis specialist for the Idea Tree workflow.\nUse the insight-aggregator skill to cross-validate multiple independent assessment artifacts and synthesize a concise insight (1-3 sentences) for tree propagation.\nCompute per-dimension averages and standard deviations across experts. Flag dimensions with significant disagreement (SD > 2.0).\nProduce structured JSON with exact version IDs, cross-validation summary, synthesized pros/cons, and the insight field.\nDo NOT calculate or override the weighted score — the server computes that. Do NOT score candidates directly or generate material designs.\nPreserve contradictions between experts verbatim. Surface disagreements, do not resolve them silently.",
+     "instructions": "You are insight-aggregator, the insight synthesis specialist for the Idea Tree workflow.\nUse the insight-aggregator skill to cross-validate multiple independent assessment artifacts and synthesize a concise insight (1-3 sentences) for tree propagation.\nCompute per-dimension averages and standard deviations across experts. Flag dimensions with significant disagreement (SD > 2.0).\nProduce structured JSON with exact version IDs, cross-validation summary, synthesized pros/cons, and the insight field.\nDo NOT calculate or override the weighted score \u2014 the server computes that. Do NOT score candidates directly or generate material designs.\nPreserve contradictions between experts verbatim. Surface disagreements, do not resolve them silently.",
      "name": "insight-aggregator",
      "updatedAt": "<time>"
     },
@@ -6723,7 +6723,7 @@
     "hasApiToken": false,
     "id": "<uuid:2>",
     "model": "contract-stub",
-    "name": "L1 provider renamed · L1 provider model",
+    "name": "L1 provider renamed \u00b7 L1 provider model",
     "providerId": "<uuid:1>",
     "proxyPolicy": "inherit",
     "thinkingEffort": "high",
@@ -6800,7 +6800,7 @@
      "hasApiToken": false,
      "id": "<uuid:2>",
      "model": "contract-stub",
-     "name": "L1 provider renamed · L1 provider model",
+     "name": "L1 provider renamed \u00b7 L1 provider model",
      "providerId": "<uuid:1>",
      "proxyPolicy": "inherit",
      "thinkingEffort": "high",
@@ -8812,6 +8812,265 @@
    "contentType": "application/json",
    "body": {
     "error": "Remote host not found"
+   }
+  }
+ ],
+ "permission-grant-survives-epoch-rotation": [
+  {
+   "name": "create a project",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "createdAt": "<time>",
+    "firstSession": {
+     "approvalMode": "ask_for_dangerous",
+     "createdAt": "<time>",
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [],
+     "id": "<uuid:2>",
+     "permissionEpochId": "<uuid:3>",
+     "projectId": "<uuid:1>",
+     "reviewCriteria": [],
+     "reviewerAutomaticReviewEnabled": true,
+     "reviewerSpecialistLevel": "quick",
+     "reviewMode": "auto",
+     "semanticReviewEnabled": true,
+     "settingsOverrides": {},
+     "title": "Untitled session",
+     "updatedAt": "<time>"
+    },
+    "id": "<uuid:1>",
+    "name": "L1 epoch",
+    "project": {
+     "createdAt": "<time>",
+     "id": "<uuid:1>",
+     "name": "L1 epoch",
+     "remoteRunnerHostIds": [],
+     "settingsOverrides": {
+      "enabledSkillIds": [],
+      "enabledSkillLibraries": [],
+      "skillSelectionMode": "selected"
+     }
+    },
+    "remoteRunnerHostIds": [],
+    "settingsOverrides": {
+     "enabledSkillIds": [],
+     "enabledSkillLibraries": [],
+     "skillSelectionMode": "selected"
+    }
+   }
+  },
+  {
+   "name": "ask for a permission",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "allowed": false,
+    "request": {
+     "action": "connector",
+     "createdAt": "<time>",
+     "id": "<uuid:4>",
+     "projectId": "<uuid:1>",
+     "resource": "web",
+     "sessionId": "<uuid:2>",
+     "state": "pending",
+     "summary": "Use the web connector"
+    }
+   }
+  },
+  {
+   "name": "allow it for matching requests",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "authorization": {
+     "action": "connector",
+     "approvalMode": "ask_for_dangerous",
+     "createdAt": "<time>",
+     "id": "<uuid:5>",
+     "outcome": "allowed",
+     "permissionEpochId": "<uuid:6>",
+     "permissionGrantId": "<uuid:7>",
+     "permissionRequestId": "<uuid:4>",
+     "projectId": "<uuid:1>",
+     "resource": "web",
+     "sessionId": "<uuid:2>",
+     "source": "user_grant"
+    },
+    "authorizations": [
+     {
+      "action": "connector",
+      "approvalMode": "ask_for_dangerous",
+      "createdAt": "<time>",
+      "id": "<uuid:5>",
+      "outcome": "allowed",
+      "permissionEpochId": "<uuid:6>",
+      "permissionGrantId": "<uuid:7>",
+      "permissionRequestId": "<uuid:4>",
+      "projectId": "<uuid:1>",
+      "resource": "web",
+      "sessionId": "<uuid:2>",
+      "source": "user_grant"
+     }
+    ],
+    "grant": {
+     "action": "connector",
+     "createdAt": "<time>",
+     "id": "<uuid:7>",
+     "resource": "web",
+     "scope": "session",
+     "sessionId": "<uuid:2>",
+     "state": "active"
+    },
+    "permissionEpoch": {
+     "createdAt": "<time>",
+     "environmentRevisionId": "<system-environment>",
+     "executeGrantScope": "session",
+     "id": "<uuid:6>",
+     "mounts": [
+      {
+       "mode": "read-write",
+       "source": "workspace"
+      }
+     ],
+     "networkAccess": {
+      "allowedDomains": [],
+      "allowPrivateNetwork": false,
+      "egressProxyPolicy": "inherit",
+      "mode": "none",
+      "revision": "none"
+     },
+     "networkPolicy": "none",
+     "reason": "connector permission allowed",
+     "secretRefs": [],
+     "sessionId": "<uuid:2>"
+    },
+    "request": {
+     "action": "connector",
+     "createdAt": "<time>",
+     "decidedAt": "<time>",
+     "decision": "allowed",
+     "decisionEpochId": "<uuid:6>",
+     "grantId": "<uuid:7>",
+     "id": "<uuid:4>",
+     "permissionAuthorizationId": "<uuid:5>",
+     "projectId": "<uuid:1>",
+     "resource": "web",
+     "sessionId": "<uuid:2>",
+     "state": "allowed",
+     "summary": "Use the web connector"
+    },
+    "resolvedRequests": [
+     {
+      "action": "connector",
+      "createdAt": "<time>",
+      "decidedAt": "<time>",
+      "decision": "allowed",
+      "decisionEpochId": "<uuid:6>",
+      "grantId": "<uuid:7>",
+      "id": "<uuid:4>",
+      "permissionAuthorizationId": "<uuid:5>",
+      "projectId": "<uuid:1>",
+      "resource": "web",
+      "sessionId": "<uuid:2>",
+      "state": "allowed",
+      "summary": "Use the web connector"
+     }
+    ]
+   }
+  },
+  {
+   "name": "the same request is now allowed without asking",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "allowed": true,
+    "authorization": {
+     "action": "connector",
+     "approvalMode": "ask_for_dangerous",
+     "createdAt": "<time>",
+     "id": "<uuid:8>",
+     "outcome": "allowed",
+     "permissionEpochId": "<uuid:6>",
+     "permissionGrantId": "<uuid:7>",
+     "projectId": "<uuid:1>",
+     "resource": "web",
+     "sessionId": "<uuid:2>",
+     "source": "existing_grant"
+    }
+   }
+  },
+  {
+   "name": "rotate the permission epoch",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "createdAt": "<time>",
+    "environmentRevisionId": "<system-environment>",
+    "id": "<uuid:9>",
+    "mounts": [
+     {
+      "mode": "read-write",
+      "source": "workspace"
+     }
+    ],
+    "networkAccess": {
+     "allowedDomains": [],
+     "allowPrivateNetwork": false,
+     "egressProxyPolicy": "inherit",
+     "mode": "none",
+     "revision": "none"
+    },
+    "networkPolicy": "none",
+    "reason": "Permission policy changed",
+    "secretRefs": [],
+    "sessionId": "<uuid:2>"
+   }
+  },
+  {
+   "name": "the same request after the rotation is still allowed",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "allowed": true,
+    "authorization": {
+     "action": "connector",
+     "approvalMode": "ask_for_dangerous",
+     "createdAt": "<time>",
+     "id": "<uuid:10>",
+     "outcome": "allowed",
+     "permissionEpochId": "<uuid:9>",
+     "permissionGrantId": "<uuid:7>",
+     "projectId": "<uuid:1>",
+     "resource": "web",
+     "sessionId": "<uuid:2>",
+     "source": "existing_grant"
+    }
+   }
+  },
+  {
+   "name": "revoke the grant",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "action": "connector",
+    "createdAt": "<time>",
+    "id": "<uuid:7>",
+    "resource": "web",
+    "revokedAt": "<time>",
+    "scope": "session",
+    "sessionId": "<uuid:2>",
+    "state": "revoked"
+   }
+  },
+  {
+   "name": "delete the project",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "deleted": "<uuid:1>"
    }
   }
  ]

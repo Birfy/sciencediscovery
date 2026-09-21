@@ -120,8 +120,8 @@
    ]
   },
   {
-   "id": "permission-epoch-invalidates-grants",
-   "description": "A grant that lets a request through without asking stops doing so once the session's permission epoch is rotated.",
+   "id": "permission-grant-survives-epoch-rotation",
+   "description": "A session-scoped grant lets a request through without asking, and keeps doing so after the session's permission epoch is rotated. (Issue 90 expected the grant to stop applying; the legacy API does not do that. The epoch is about the sandbox, the grant is about the session.)",
    "steps": [
     {
      "name": "create a project",
@@ -190,7 +190,7 @@
      "expectStatus": 201
     },
     {
-     "name": "the same request after the rotation",
+     "name": "the same request after the rotation is still allowed",
      "request": {
       "method": "POST",
       "path": "/api/sessions/{{sessionId}}/permission-requests",
