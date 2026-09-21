@@ -67,6 +67,7 @@ JiuwenSwarm has a context engine of its own (it compresses at 80% of the model's
 | Run contract, protected | Every step | Every step: it is part of the system prompt, which the adapter puts on every model request |
 | JiuwenSwarm's own prompt | n/a | Kept whole; its per-turn wrapper and dynamic context (runtime state) are also added as user messages |
 | Plan snapshot, durable state, plugin context | Every step | **Not injected**; JiuwenSwarm adds its own dynamic context |
+| Tools | ScienceDiscovery's, all through its permissions and Runner | By default JiuwenSwarm's own (bash, files, web, sub-agents, todo, memory, skills) plus ScienceDiscovery's where JiuwenSwarm has none; JiuwenSwarm's run on the host without ScienceDiscovery's permissions, sandbox or provenance (verified: its `bash` runs and shows as a tool card). `SCIENCE_AGENT_JIUWENSWARM_TOOLS=ours` for the old set |
 | Tool routing hints | Yes | **Not injected** |
 | Tool-output guard and reader | Yes | Yes (same `ToolRegistry`) |
 | Recovery from an input-too-large error | Compact and retry | JiuwenSwarm's own handling; **not verified** |

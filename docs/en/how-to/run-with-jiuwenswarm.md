@@ -2,7 +2,9 @@
 
 ScienceDiscovery can run its agent loop on [JiuwenSwarm](https://gitcode.com/openJiuwen/jiuwenswarm) instead of the built-in loop. This is an **optional, experimental** backend introduced by the JiuwenSwarm migration (issue 84). The built-in loop stays the default; nothing changes unless you choose JiuwenSwarm as described below.
 
-What stays the same: the web UI, sessions, messages, run events, permission requests, the Runner and its sandbox, artifacts and provenance. Tools still run inside the ScienceDiscovery API process, so every permission check and Runner rule applies as before. What moves: the model loop, and the conversation context (JiuwenSwarm keeps and compresses it).
+What stays the same: the web UI, sessions, messages, run events, artifacts and provenance. What moves: the model loop, the conversation context (JiuwenSwarm keeps and compresses it), the system prompt (JiuwenSwarm's own, with ScienceDiscovery's added) and, by default, **the tools**: the model gets JiuwenSwarm's own (bash, file read/write/edit, grep, web fetch, sub-agents, todo, memory, skills, schedules) plus the ScienceDiscovery tools JiuwenSwarm has no equivalent for (`run_shell` on the Runner, artifacts, evidence and claims, papers, idea tree, evolve, `task`).
+
+**Know this before you use it:** JiuwenSwarm's own tools run inside the JiuwenSwarm process, on the host, as its user. They do not go through ScienceDiscovery's permission prompts, the Runner sandbox, execution records or provenance, and JiuwenSwarm's own permission engine is off. `SCIENCE_AGENT_JIUWENSWARM_TOOLS=ours` restores the earlier behaviour, where every tool call went through ScienceDiscovery.
 
 ```
 browser ─▶ adapter (public port) ─▶ API (port + 100)
@@ -83,6 +85,7 @@ Everything is environment variables on the stack (in `.env`, or exported before 
 | **How a run behaves** | | |
 | `SCIENCE_AGENT_ADAPTER_TOOL_TIMEOUT_S` | `3600` | Longest one tool call may take (JiuwenSwarm's own limit is 30 s; the API passes the run's timeout when it has one) |
 | `SCIENCE_AGENT_JIUWENSWARM_PLANNING` | `todo` | Who keeps the plan. `todo`: the model uses JiuwenSwarm's own todo tools and its list becomes the plan. `update_plan`: ScienceDiscovery's own tool instead (what the mocked browser journeys script) |
+| `SCIENCE_AGENT_JIUWENSWARM_TOOLS` | `jiuwenswarm` | `jiuwenswarm`: JiuwenSwarm's own tools plus ScienceDiscovery's where it has none (on a name clash JiuwenSwarm's wins). `ours`: ScienceDiscovery's only, every call through its permissions and Runner (what the mocked browser journeys use) |
 | `SCIENCE_AGENT_JIUWENSWARM_PROMPT` | `append` | `append`: JiuwenSwarm's own system prompt stays whole and ScienceDiscovery's follows it. `replace`: only ScienceDiscovery's reaches the model |
 | `SCIENCE_AGENT_LLM_MAX_TOKENS` | `16384` | Output budget per model call (shared with the built-in loop); raise it for reasoning models |
 | `SCIENCE_AGENT_LLM_MAX_RETRIES`, `SCIENCE_AGENT_LLM_TIMEOUT_SECONDS` | `2`, `600` | Retries (429 and other transient errors) and per-call timeout (shared) |

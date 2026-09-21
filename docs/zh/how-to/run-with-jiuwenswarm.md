@@ -2,7 +2,9 @@
 
 ScienceDiscovery 可以让智能体循环跑在 [JiuwenSwarm](https://gitcode.com/openJiuwen/jiuwenswarm) 上，而不是内置循环。这是 JiuwenSwarm 迁移（issue 84）引入的**可选、实验性**后端。默认仍是内置循环；不按下面的方法选择，就没有任何变化。
 
-不变的部分：网页界面、会话、消息、运行事件、权限请求、Runner 及其沙箱、产物与溯源。工具仍在 ScienceDiscovery 的 API 进程里执行，所以每一项权限检查和 Runner 规则照旧。变化的部分：模型循环，以及对话上下文（由 JiuwenSwarm 保存并压缩）。
+不变的部分：网页界面、会话、消息、运行事件、产物与溯源。变化的部分：模型循环、对话上下文（由 JiuwenSwarm 保存并压缩）、系统提示词（JiuwenSwarm 自己的，加上 ScienceDiscovery 的），以及默认情况下的**工具**：模型拿到的是 JiuwenSwarm 自己的工具（bash、文件读写编辑、grep、网页抓取、子代理、todo、记忆、技能、定时任务），再加上 JiuwenSwarm 没有对应物的 ScienceDiscovery 工具（在 Runner 上执行的 `run_shell`、产物、证据与论断、论文、idea tree、evolve、`task`）。
+
+**使用前请了解：** JiuwenSwarm 自己的工具在 JiuwenSwarm 进程里、以它的用户身份直接在主机上运行，不经过 ScienceDiscovery 的权限审批、Runner 沙箱、执行记录和溯源，JiuwenSwarm 自己的权限引擎也是关着的。设 `SCIENCE_AGENT_JIUWENSWARM_TOOLS=ours` 可恢复之前的做法：所有工具调用都经过 ScienceDiscovery。
 
 ```
 浏览器 ─▶ 适配器（公共端口）─▶ API（端口 + 100）
@@ -83,6 +85,7 @@ scripts/jiuwenswarm.sh setup     # 一次性：克隆固定版本（workswarm0.2
 | **一次运行的行为** | | |
 | `SCIENCE_AGENT_ADAPTER_TOOL_TIMEOUT_S` | `3600` | 单次工具调用最长多久（JiuwenSwarm 自己的限制是 30 秒；API 有运行超时时会传运行的超时） |
 | `SCIENCE_AGENT_JIUWENSWARM_PLANNING` | `todo` | 谁来维护计划。`todo`：模型用 JiuwenSwarm 自己的 todo 工具，它的清单就是计划。`update_plan`：改用 ScienceDiscovery 自己的工具（模拟浏览器旅程里脚本化的就是它） |
+| `SCIENCE_AGENT_JIUWENSWARM_TOOLS` | `jiuwenswarm` | `jiuwenswarm`：JiuwenSwarm 自己的工具，加上它没有的 ScienceDiscovery 工具（重名时用 JiuwenSwarm 的）。`ours`：只用 ScienceDiscovery 的，每次调用都经过它的权限和 Runner（模拟浏览器旅程用的就是这个） |
 | `SCIENCE_AGENT_JIUWENSWARM_PROMPT` | `append` | `append`：JiuwenSwarm 自己的系统提示词保持完整，ScienceDiscovery 的接在后面。`replace`：只有 ScienceDiscovery 的到达模型 |
 | `SCIENCE_AGENT_LLM_MAX_TOKENS` | `16384` | 每次模型调用的输出预算（与内置循环共用）；推理模型请调大 |
 | `SCIENCE_AGENT_LLM_MAX_RETRIES`、`SCIENCE_AGENT_LLM_TIMEOUT_SECONDS` | `2`、`600` | 重试次数（429 等瞬时错误）和单次调用超时（共用） |

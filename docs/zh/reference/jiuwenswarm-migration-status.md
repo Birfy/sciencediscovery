@@ -59,6 +59,7 @@ JiuwenSwarm 自己有一套上下文引擎（占用到模型窗口的 80% 时压
 | 运行契约（受保护） | 每一步都在 | 每一步都在：它是系统提示词的一部分，适配器在每次模型请求里都放上它 |
 | JiuwenSwarm 自己的提示词 | 不适用 | 完整保留；它的每轮包装和动态上下文（运行时状态）也作为用户消息加进去 |
 | 计划快照、持久状态、插件上下文 | 每一步注入 | **没有注入**；JiuwenSwarm 加自己的动态上下文 |
+| 工具 | ScienceDiscovery 的，全部经过它的权限和 Runner | 默认是 JiuwenSwarm 自己的（bash、文件、网页、子代理、todo、记忆、技能），加上它没有的 ScienceDiscovery 工具；JiuwenSwarm 的工具直接在主机上运行，不经过 ScienceDiscovery 的权限、沙箱和溯源（已验证：它的 `bash` 能运行并显示为工具卡片）。`SCIENCE_AGENT_JIUWENSWARM_TOOLS=ours` 恢复原来的工具集 |
 | 工具路由提示 | 有 | **没有注入** |
 | 工具输出守卫和读取 | 有 | 有（同一个 `ToolRegistry`） |
 | 输入过长的恢复 | 压缩后重试 | JiuwenSwarm 自己的处理；**没有验证** |
