@@ -5246,7 +5246,7 @@
       "docsUrl": "https://docs.bigmodel.cn/cn/guide/develop/openai/introduction.md",
       "id": "zhipu",
       "modelDiscovery": "openai-models",
-      "name": "\u667a\u8c31 GLM"
+      "name": "智谱 GLM"
      },
      {
       "apiProtocol": "openai-chat-completions",
@@ -6454,7 +6454,7 @@
       "assessment-screening"
      ],
      "id": "builtin-assessment-screener",
-     "instructions": "You are assessment-screener, the independent multi-dimensional evaluation specialist for the Idea Tree workflow.\nUse the assessment-screening skill to load the rubric specified by the assessment_perspective in the dispatch context (agent-a, agent-b, agent-c, or overall).\nScore each of the five dimensions (Catalytic Performance, Economic Viability, Environmental Friendliness, Technical Feasibility, Structural Validity) on a 1-10 scale strictly per the rubric.\nProduce structured JSON with exact snapshot_hash, candidate_version_id, per-dimension scores, pros, cons, and verification notes.\nEach dispatch is fully independent \u2014 do not reference or align with other assessors' results.\nDo not generate material designs, synthesize insights, or perform literature search.",
+     "instructions": "You are assessment-screener, the independent multi-dimensional evaluation specialist for the Idea Tree workflow.\nUse the assessment-screening skill to load the rubric specified by the assessment_perspective in the dispatch context (agent-a, agent-b, agent-c, or overall).\nScore each of the five dimensions (Catalytic Performance, Economic Viability, Environmental Friendliness, Technical Feasibility, Structural Validity) on a 1-10 scale strictly per the rubric.\nProduce structured JSON with exact snapshot_hash, candidate_version_id, per-dimension scores, pros, cons, and verification notes.\nEach dispatch is fully independent — do not reference or align with other assessors' results.\nDo not generate material designs, synthesize insights, or perform literature search.",
      "name": "assessment-screener",
      "updatedAt": "<time>"
     },
@@ -6480,7 +6480,7 @@
       "creative-material-design"
      ],
      "id": "builtin-creative-material-design",
-     "instructions": "You are creative-material-design, the material design specialist for the Idea Tree workflow.\nUse the creative-material-design skill to generate innovative, feasible material solutions based on the hypothesis and research objective.\nProduce structured JSON designs with complete structural descriptions, property predictions, and feasibility analysis.\nDo not evaluate, score, or synthesize insights \u2014 produce the creative design only.\nDo not perform literature search, evidence extraction, or report writing.",
+     "instructions": "You are creative-material-design, the material design specialist for the Idea Tree workflow.\nUse the creative-material-design skill to generate innovative, feasible material solutions based on the hypothesis and research objective.\nProduce structured JSON designs with complete structural descriptions, property predictions, and feasibility analysis.\nDo not evaluate, score, or synthesize insights — produce the creative design only.\nDo not perform literature search, evidence extraction, or report writing.",
      "name": "creative-material-design",
      "updatedAt": "<time>"
     },
@@ -6506,7 +6506,7 @@
       "insight-aggregator"
      ],
      "id": "builtin-insight-aggregator",
-     "instructions": "You are insight-aggregator, the insight synthesis specialist for the Idea Tree workflow.\nUse the insight-aggregator skill to cross-validate multiple independent assessment artifacts and synthesize a concise insight (1-3 sentences) for tree propagation.\nCompute per-dimension averages and standard deviations across experts. Flag dimensions with significant disagreement (SD > 2.0).\nProduce structured JSON with exact version IDs, cross-validation summary, synthesized pros/cons, and the insight field.\nDo NOT calculate or override the weighted score \u2014 the server computes that. Do NOT score candidates directly or generate material designs.\nPreserve contradictions between experts verbatim. Surface disagreements, do not resolve them silently.",
+     "instructions": "You are insight-aggregator, the insight synthesis specialist for the Idea Tree workflow.\nUse the insight-aggregator skill to cross-validate multiple independent assessment artifacts and synthesize a concise insight (1-3 sentences) for tree propagation.\nCompute per-dimension averages and standard deviations across experts. Flag dimensions with significant disagreement (SD > 2.0).\nProduce structured JSON with exact version IDs, cross-validation summary, synthesized pros/cons, and the insight field.\nDo NOT calculate or override the weighted score — the server computes that. Do NOT score candidates directly or generate material designs.\nPreserve contradictions between experts verbatim. Surface disagreements, do not resolve them silently.",
      "name": "insight-aggregator",
      "updatedAt": "<time>"
     },
@@ -6723,7 +6723,7 @@
     "hasApiToken": false,
     "id": "<uuid:2>",
     "model": "contract-stub",
-    "name": "L1 provider renamed \u00b7 L1 provider model",
+    "name": "L1 provider renamed · L1 provider model",
     "providerId": "<uuid:1>",
     "proxyPolicy": "inherit",
     "thinkingEffort": "high",
@@ -6800,7 +6800,7 @@
      "hasApiToken": false,
      "id": "<uuid:2>",
      "model": "contract-stub",
-     "name": "L1 provider renamed \u00b7 L1 provider model",
+     "name": "L1 provider renamed · L1 provider model",
      "providerId": "<uuid:1>",
      "proxyPolicy": "inherit",
      "thinkingEffort": "high",
@@ -7142,6 +7142,1184 @@
    "contentType": "application/json",
    "body": {
     "error": "Invalid permission decision"
+   }
+  },
+  {
+   "name": "delete the project",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "deleted": "<uuid:1>"
+   }
+  }
+ ],
+ "files-trajectory-usage-reads": [
+  {
+   "name": "create a project",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "createdAt": "<time>",
+    "firstSession": {
+     "approvalMode": "ask_for_dangerous",
+     "createdAt": "<time>",
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [],
+     "id": "<uuid:2>",
+     "permissionEpochId": "<uuid:3>",
+     "projectId": "<uuid:1>",
+     "reviewCriteria": [],
+     "reviewerAutomaticReviewEnabled": true,
+     "reviewerSpecialistLevel": "quick",
+     "reviewMode": "auto",
+     "semanticReviewEnabled": true,
+     "settingsOverrides": {},
+     "title": "Untitled session",
+     "updatedAt": "<time>"
+    },
+    "id": "<uuid:1>",
+    "name": "L1 files and usage",
+    "project": {
+     "createdAt": "<time>",
+     "id": "<uuid:1>",
+     "name": "L1 files and usage",
+     "remoteRunnerHostIds": [],
+     "settingsOverrides": {
+      "enabledSkillIds": [],
+      "enabledSkillLibraries": [],
+      "skillSelectionMode": "selected"
+     }
+    },
+    "remoteRunnerHostIds": [],
+    "settingsOverrides": {
+     "enabledSkillIds": [],
+     "enabledSkillLibraries": [],
+     "skillSelectionMode": "selected"
+    }
+   }
+  },
+  {
+   "name": "list workspace files of a fresh session",
+   "status": 200,
+   "contentType": "application/json",
+   "body": []
+  },
+  {
+   "name": "list files of an unknown session",
+   "status": 404,
+   "contentType": "application/json",
+   "body": {
+    "error": "Session not found"
+   }
+  },
+  {
+   "name": "read a file that does not exist",
+   "status": 404,
+   "contentType": "application/json",
+   "body": {
+    "error": "File not found"
+   }
+  },
+  {
+   "name": "read a file outside the workspace",
+   "status": 500,
+   "contentType": "application/json",
+   "body": {
+    "error": "Internal server error"
+   }
+  },
+  {
+   "name": "provenance of an empty workspace",
+   "status": 400,
+   "contentType": "application/json",
+   "body": {
+    "error": "Workspace paths must be non-empty and relative"
+   }
+  },
+  {
+   "name": "trajectory of a session with no runs",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "agents": [
+     {
+      "id": "main:<uuid:2>",
+      "label": "Main Agent"
+     }
+    ],
+    "capturedAt": "<time>",
+    "entries": [],
+    "historicalEntries": [],
+    "schemaVersion": 1,
+    "sessionId": "<uuid:2>",
+    "untimedEntries": [],
+    "warnings": []
+   }
+  },
+  {
+   "name": "trajectory detail for an unknown entry",
+   "status": 404,
+   "contentType": "application/json",
+   "body": {
+    "error": "Trajectory entry not found"
+   }
+  },
+  {
+   "name": "trajectory export of an empty session",
+   "status": 200,
+   "contentType": "application/x-ndjson",
+   "text": "{\"type\":\"trajectory\",\"schemaVersion\":1,\"sessionId\":\"<uuid:2>\",\"capturedAt\":\"<time>\",\"agents\":[{\"id\":\"main:<uuid:2>\",\"label\":\"Main Agent\"}],\"entries\":[],\"untimedEntries\":[],\"historicalEntries\":[],\"warnings\":[]}\n{\"type\":\"complete\",\"entries\":0,\"capturedAt\":\"<time>\"}\n"
+  },
+  {
+   "name": "session usage before any run",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "byInvocationKind": [],
+    "byModel": [],
+    "byRun": [],
+    "invocations": [],
+    "sessionId": "<uuid:2>",
+    "totals": {
+     "cacheReadTokens": null,
+     "cacheWriteTokens": null,
+     "costUsd": null,
+     "inputTokens": null,
+     "invocationCount": 0,
+     "key": "<uuid:2>",
+     "label": "Session",
+     "outputTokens": null,
+     "reportedInvocationCount": 0,
+     "totalTokens": null,
+     "unreportedInvocationCount": 0
+    }
+   }
+  },
+  {
+   "name": "usage of an unknown session",
+   "status": 404,
+   "contentType": "application/json",
+   "body": {
+    "error": "Session not found"
+   }
+  },
+  {
+   "name": "a CAS blob by an invalid hash",
+   "status": 404,
+   "contentType": "application/json",
+   "body": {
+    "error": "Not found"
+   }
+  },
+  {
+   "name": "a web page body that is not there",
+   "status": 404,
+   "contentType": "application/json",
+   "body": {
+    "error": "WebPage not found or has no content_hash"
+   }
+  },
+  {
+   "name": "project plugins",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "applies": "nextRun",
+    "plugins": [
+     {
+      "apiVersion": 1,
+      "capabilities": [
+       "tools",
+       "context",
+       "settings"
+      ],
+      "configuration": {
+       "applies": "nextRun",
+       "defaults": {},
+       "fields": {},
+       "schemaVersion": 1,
+       "scopes": [
+        "global",
+        "project",
+        "session"
+       ]
+      },
+      "contributes": [
+       "tools",
+       "context",
+       "settings"
+      ],
+      "entries": {
+       "runtime": "./plugin",
+       "web": "./web"
+      },
+      "id": "skill",
+      "permissions": [
+       "runtime.contribute"
+      ],
+      "services": {
+       "requires": [
+        {
+         "id": "skill.catalog",
+         "version": 1
+        }
+       ]
+      },
+      "settingsFields": [
+       "enabledSkillIds",
+       "enabledSkillLibraries",
+       "skillSelectionMode"
+      ],
+      "version": "0.1.0"
+     },
+     {
+      "apiVersion": 1,
+      "capabilities": [
+       "tools",
+       "settings"
+      ],
+      "configuration": {
+       "applies": "nextRun",
+       "defaults": {},
+       "fields": {},
+       "schemaVersion": 1,
+       "scopes": [
+        "global",
+        "project",
+        "session"
+       ]
+      },
+      "contributes": [
+       "tools",
+       "settings"
+      ],
+      "entries": {
+       "runtime": "./plugin",
+       "web": "./web"
+      },
+      "id": "mcp",
+      "permissions": [
+       "runtime.contribute"
+      ],
+      "services": {
+       "requires": [
+        {
+         "id": "mcp.tools",
+         "version": 1
+        }
+       ]
+      },
+      "settingsFields": [
+       "enabledConnectorIds"
+      ],
+      "version": "0.1.0"
+     },
+     {
+      "apiVersion": 1,
+      "capabilities": [
+       "tools",
+       "settings"
+      ],
+      "configuration": {
+       "applies": "nextRun",
+       "defaults": {
+        "policy": "default"
+       },
+       "fields": {
+        "policy": {
+         "enum": [
+          "default"
+         ],
+         "type": "string"
+        }
+       },
+       "schemaVersion": 1,
+       "scopes": [
+        "global",
+        "project",
+        "session"
+       ]
+      },
+      "contributes": [
+       "tools",
+       "settings"
+      ],
+      "entries": {
+       "runtime": "./plugin",
+       "web": "./manifest"
+      },
+      "id": "scheduler",
+      "permissions": [
+       "runtime.contribute"
+      ],
+      "services": {
+       "requires": [
+        {
+         "id": "subagent.dispatch",
+         "version": 1
+        }
+       ]
+      },
+      "version": "0.1.0"
+     },
+     {
+      "apiVersion": 1,
+      "capabilities": [
+       "tools",
+       "context",
+       "state",
+       "project.panel"
+      ],
+      "configuration": {
+       "applies": "nextRun",
+       "defaults": {},
+       "fields": {},
+       "schemaVersion": 1,
+       "scopes": [
+        "global",
+        "project",
+        "session"
+       ]
+      },
+      "contributes": [
+       "tools",
+       "context",
+       "state",
+       "project.panel"
+      ],
+      "entries": {
+       "runtime": "./plugin",
+       "web": "./web"
+      },
+      "id": "plan",
+      "permissions": [
+       "runtime.contribute"
+      ],
+      "services": {
+       "requires": [
+        {
+         "id": "plan.store",
+         "version": 1
+        }
+       ]
+      },
+      "version": "0.1.0"
+     },
+     {
+      "apiVersion": 1,
+      "capabilities": [
+       "connector",
+       "settings"
+      ],
+      "configuration": {
+       "applies": "nextRun",
+       "defaults": {},
+       "fields": {},
+       "schemaVersion": 1,
+       "scopes": [
+        "global",
+        "project",
+        "session"
+       ]
+      },
+      "contributes": [
+       "connector",
+       "settings"
+      ],
+      "entries": {
+       "platform": "./plugin"
+      },
+      "id": "connector.uniprot",
+      "permissions": [
+       "connector.register"
+      ],
+      "services": {
+       "requires": [
+        {
+         "id": "mcp.sources",
+         "version": 1
+        }
+       ]
+      },
+      "version": "0.1.0"
+     },
+     {
+      "apiVersion": 1,
+      "capabilities": [
+       "connector",
+       "settings"
+      ],
+      "configuration": {
+       "applies": "nextRun",
+       "defaults": {},
+       "fields": {},
+       "schemaVersion": 1,
+       "scopes": [
+        "global",
+        "project",
+        "session"
+       ]
+      },
+      "contributes": [
+       "connector",
+       "settings"
+      ],
+      "entries": {
+       "platform": "./plugin"
+      },
+      "id": "connector.llm-wiki",
+      "permissions": [
+       "connector.register"
+      ],
+      "services": {
+       "requires": [
+        {
+         "id": "mcp.sources",
+         "version": 1
+        }
+       ]
+      },
+      "version": "0.1.0"
+     },
+     {
+      "apiVersion": 1,
+      "capabilities": [
+       "connector",
+       "settings"
+      ],
+      "configuration": {
+       "applies": "nextRun",
+       "defaults": {},
+       "fields": {},
+       "schemaVersion": 1,
+       "scopes": [
+        "global",
+        "project",
+        "session"
+       ]
+      },
+      "contributes": [
+       "connector",
+       "settings"
+      ],
+      "entries": {
+       "platform": "./plugin"
+      },
+      "id": "connector.arxiv",
+      "permissions": [
+       "connector.register"
+      ],
+      "services": {
+       "requires": [
+        {
+         "id": "mcp.sources",
+         "version": 1
+        }
+       ]
+      },
+      "version": "0.1.0"
+     },
+     {
+      "apiVersion": 1,
+      "capabilities": [
+       "connector",
+       "settings"
+      ],
+      "configuration": {
+       "applies": "nextRun",
+       "defaults": {},
+       "fields": {},
+       "schemaVersion": 1,
+       "scopes": [
+        "global",
+        "project",
+        "session"
+       ]
+      },
+      "contributes": [
+       "connector",
+       "settings"
+      ],
+      "entries": {
+       "platform": "./plugin"
+      },
+      "id": "connector.pubmed",
+      "permissions": [
+       "connector.register"
+      ],
+      "services": {
+       "requires": [
+        {
+         "id": "mcp.sources",
+         "version": 1
+        }
+       ]
+      },
+      "version": "0.1.0"
+     },
+     {
+      "apiVersion": 1,
+      "capabilities": [
+       "connector",
+       "settings"
+      ],
+      "configuration": {
+       "applies": "nextRun",
+       "defaults": {},
+       "fields": {},
+       "schemaVersion": 1,
+       "scopes": [
+        "global",
+        "project",
+        "session"
+       ]
+      },
+      "contributes": [
+       "connector",
+       "settings"
+      ],
+      "entries": {
+       "platform": "./plugin"
+      },
+      "id": "connector.europe-pmc",
+      "permissions": [
+       "connector.register"
+      ],
+      "services": {
+       "requires": [
+        {
+         "id": "mcp.sources",
+         "version": 1
+        }
+       ]
+      },
+      "version": "0.1.0"
+     },
+     {
+      "apiVersion": 1,
+      "capabilities": [
+       "connector",
+       "settings"
+      ],
+      "configuration": {
+       "applies": "nextRun",
+       "defaults": {},
+       "fields": {},
+       "schemaVersion": 1,
+       "scopes": [
+        "global",
+        "project",
+        "session"
+       ]
+      },
+      "contributes": [
+       "connector",
+       "settings"
+      ],
+      "entries": {
+       "platform": "./plugin"
+      },
+      "id": "connector.biorxiv",
+      "permissions": [
+       "connector.register"
+      ],
+      "services": {
+       "requires": [
+        {
+         "id": "mcp.sources",
+         "version": 1
+        }
+       ]
+      },
+      "version": "0.1.0"
+     },
+     {
+      "apiVersion": 1,
+      "capabilities": [
+       "connector",
+       "settings"
+      ],
+      "configuration": {
+       "applies": "nextRun",
+       "defaults": {},
+       "fields": {},
+       "schemaVersion": 1,
+       "scopes": [
+        "global",
+        "project",
+        "session"
+       ]
+      },
+      "contributes": [
+       "connector",
+       "settings"
+      ],
+      "entries": {
+       "platform": "./plugin"
+      },
+      "id": "connector.medrxiv",
+      "permissions": [
+       "connector.register"
+      ],
+      "services": {
+       "requires": [
+        {
+         "id": "mcp.sources",
+         "version": 1
+        }
+       ]
+      },
+      "version": "0.1.0"
+     },
+     {
+      "apiVersion": 1,
+      "capabilities": [
+       "connector",
+       "settings"
+      ],
+      "configuration": {
+       "applies": "nextRun",
+       "defaults": {},
+       "fields": {},
+       "schemaVersion": 1,
+       "scopes": [
+        "global",
+        "project",
+        "session"
+       ]
+      },
+      "contributes": [
+       "connector",
+       "settings"
+      ],
+      "entries": {
+       "platform": "./plugin"
+      },
+      "id": "connector.pdb",
+      "permissions": [
+       "connector.register"
+      ],
+      "services": {
+       "requires": [
+        {
+         "id": "mcp.sources",
+         "version": 1
+        }
+       ]
+      },
+      "version": "0.1.0"
+     },
+     {
+      "apiVersion": 1,
+      "capabilities": [
+       "connector",
+       "settings"
+      ],
+      "configuration": {
+       "applies": "nextRun",
+       "defaults": {},
+       "fields": {},
+       "schemaVersion": 1,
+       "scopes": [
+        "global",
+        "project",
+        "session"
+       ]
+      },
+      "contributes": [
+       "connector",
+       "settings"
+      ],
+      "entries": {
+       "platform": "./plugin"
+      },
+      "id": "connector.ensembl",
+      "permissions": [
+       "connector.register"
+      ],
+      "services": {
+       "requires": [
+        {
+         "id": "mcp.sources",
+         "version": 1
+        }
+       ]
+      },
+      "version": "0.1.0"
+     },
+     {
+      "apiVersion": 1,
+      "capabilities": [
+       "connector",
+       "settings"
+      ],
+      "configuration": {
+       "applies": "nextRun",
+       "defaults": {},
+       "fields": {},
+       "schemaVersion": 1,
+       "scopes": [
+        "global",
+        "project",
+        "session"
+       ]
+      },
+      "contributes": [
+       "connector",
+       "settings"
+      ],
+      "entries": {
+       "platform": "./plugin"
+      },
+      "id": "connector.reactome",
+      "permissions": [
+       "connector.register"
+      ],
+      "services": {
+       "requires": [
+        {
+         "id": "mcp.sources",
+         "version": 1
+        }
+       ]
+      },
+      "version": "0.1.0"
+     },
+     {
+      "apiVersion": 1,
+      "capabilities": [
+       "connector",
+       "settings"
+      ],
+      "configuration": {
+       "applies": "nextRun",
+       "defaults": {},
+       "fields": {},
+       "schemaVersion": 1,
+       "scopes": [
+        "global",
+        "project",
+        "session"
+       ]
+      },
+      "contributes": [
+       "connector",
+       "settings"
+      ],
+      "entries": {
+       "platform": "./plugin"
+      },
+      "id": "connector.clinvar",
+      "permissions": [
+       "connector.register"
+      ],
+      "services": {
+       "requires": [
+        {
+         "id": "mcp.sources",
+         "version": 1
+        }
+       ]
+      },
+      "version": "0.1.0"
+     },
+     {
+      "apiVersion": 1,
+      "capabilities": [
+       "connector",
+       "settings"
+      ],
+      "configuration": {
+       "applies": "nextRun",
+       "defaults": {},
+       "fields": {},
+       "schemaVersion": 1,
+       "scopes": [
+        "global",
+        "project",
+        "session"
+       ]
+      },
+      "contributes": [
+       "connector",
+       "settings"
+      ],
+      "entries": {
+       "platform": "./plugin"
+      },
+      "id": "connector.chembl",
+      "permissions": [
+       "connector.register"
+      ],
+      "services": {
+       "requires": [
+        {
+         "id": "mcp.sources",
+         "version": 1
+        }
+       ]
+      },
+      "version": "0.1.0"
+     },
+     {
+      "apiVersion": 1,
+      "capabilities": [
+       "connector",
+       "settings"
+      ],
+      "configuration": {
+       "applies": "nextRun",
+       "defaults": {},
+       "fields": {},
+       "schemaVersion": 1,
+       "scopes": [
+        "global",
+        "project",
+        "session"
+       ]
+      },
+      "contributes": [
+       "connector",
+       "settings"
+      ],
+      "entries": {
+       "platform": "./plugin"
+      },
+      "id": "connector.geo",
+      "permissions": [
+       "connector.register"
+      ],
+      "services": {
+       "requires": [
+        {
+         "id": "mcp.sources",
+         "version": 1
+        }
+       ]
+      },
+      "version": "0.1.0"
+     },
+     {
+      "apiVersion": 1,
+      "capabilities": [
+       "artifact.viewer"
+      ],
+      "configuration": {
+       "applies": "nextRun",
+       "defaults": {},
+       "fields": {},
+       "schemaVersion": 1,
+       "scopes": [
+        "global",
+        "project",
+        "session"
+       ]
+      },
+      "contributes": [
+       "artifact.viewer"
+      ],
+      "entries": {
+       "web": "./web"
+      },
+      "id": "artifact-json",
+      "permissions": [
+       "artifact.read"
+      ],
+      "services": {
+       "requires": [
+        {
+         "id": "artifact.read",
+         "version": 1
+        }
+       ]
+      },
+      "version": "0.1.0"
+     }
+    ],
+    "projectId": "<uuid:1>",
+    "revision": "<hex>",
+    "settings": {
+     "effective": {
+      "enabledConnectorIds": [
+       "web"
+      ],
+      "enabledSkillIds": [],
+      "enabledSkillLibraries": [],
+      "semanticReviewEnabled": true,
+      "skillSelectionMode": "selected"
+     },
+     "overrides": {
+      "enabledSkillIds": [],
+      "enabledSkillLibraries": [],
+      "skillSelectionMode": "selected"
+     },
+     "sources": {
+      "enabledConnectorIds": "global",
+      "enabledSkillIds": "project",
+      "enabledSkillLibraries": "project",
+      "modelId": "unset",
+      "plugins": "unset",
+      "reviewModelId": "unset",
+      "semanticReviewEnabled": "global",
+      "skillSelectionMode": "project",
+      "thinkingEffort": "unset",
+      "thinkingMode": "unset"
+     }
+    },
+    "status": [
+     {
+      "active": false,
+      "authorized": true,
+      "available": true,
+      "diagnostics": [],
+      "enabled": true,
+      "id": "skill",
+      "installed": true
+     },
+     {
+      "active": false,
+      "authorized": true,
+      "available": true,
+      "diagnostics": [],
+      "enabled": true,
+      "id": "mcp",
+      "installed": true
+     },
+     {
+      "active": false,
+      "authorized": true,
+      "available": true,
+      "diagnostics": [],
+      "enabled": true,
+      "id": "scheduler",
+      "installed": true
+     },
+     {
+      "active": false,
+      "authorized": true,
+      "available": true,
+      "diagnostics": [],
+      "enabled": true,
+      "id": "plan",
+      "installed": true
+     },
+     {
+      "active": false,
+      "authorized": true,
+      "available": true,
+      "diagnostics": [],
+      "enabled": true,
+      "id": "connector.uniprot",
+      "installed": true
+     },
+     {
+      "active": false,
+      "authorized": true,
+      "available": true,
+      "diagnostics": [],
+      "enabled": true,
+      "id": "connector.llm-wiki",
+      "installed": true
+     },
+     {
+      "active": false,
+      "authorized": true,
+      "available": true,
+      "diagnostics": [],
+      "enabled": true,
+      "id": "connector.arxiv",
+      "installed": true
+     },
+     {
+      "active": false,
+      "authorized": true,
+      "available": true,
+      "diagnostics": [],
+      "enabled": true,
+      "id": "connector.pubmed",
+      "installed": true
+     },
+     {
+      "active": false,
+      "authorized": true,
+      "available": true,
+      "diagnostics": [],
+      "enabled": true,
+      "id": "connector.europe-pmc",
+      "installed": true
+     },
+     {
+      "active": false,
+      "authorized": true,
+      "available": true,
+      "diagnostics": [],
+      "enabled": true,
+      "id": "connector.biorxiv",
+      "installed": true
+     },
+     {
+      "active": false,
+      "authorized": true,
+      "available": true,
+      "diagnostics": [],
+      "enabled": true,
+      "id": "connector.medrxiv",
+      "installed": true
+     },
+     {
+      "active": false,
+      "authorized": true,
+      "available": true,
+      "diagnostics": [],
+      "enabled": true,
+      "id": "connector.pdb",
+      "installed": true
+     },
+     {
+      "active": false,
+      "authorized": true,
+      "available": true,
+      "diagnostics": [],
+      "enabled": true,
+      "id": "connector.ensembl",
+      "installed": true
+     },
+     {
+      "active": false,
+      "authorized": true,
+      "available": true,
+      "diagnostics": [],
+      "enabled": true,
+      "id": "connector.reactome",
+      "installed": true
+     },
+     {
+      "active": false,
+      "authorized": true,
+      "available": true,
+      "diagnostics": [],
+      "enabled": true,
+      "id": "connector.clinvar",
+      "installed": true
+     },
+     {
+      "active": false,
+      "authorized": true,
+      "available": true,
+      "diagnostics": [],
+      "enabled": true,
+      "id": "connector.chembl",
+      "installed": true
+     },
+     {
+      "active": false,
+      "authorized": true,
+      "available": true,
+      "diagnostics": [],
+      "enabled": true,
+      "id": "connector.geo",
+      "installed": true
+     },
+     {
+      "active": false,
+      "authorized": true,
+      "available": true,
+      "diagnostics": [],
+      "enabled": true,
+      "id": "artifact-json",
+      "installed": true
+     }
+    ]
+   }
+  },
+  {
+   "name": "project plugin events",
+   "status": 200,
+   "contentType": "text/event-stream",
+   "events": [
+    {
+     "revision": "<hex>",
+     "scope": {
+      "projectId": "<uuid:1>"
+     }
+    }
+   ]
+  },
+  {
+   "name": "project plugin candidates",
+   "status": 200,
+   "contentType": "application/json",
+   "body": []
+  },
+  {
+   "name": "usage analytics",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "dailyByModel": [],
+    "exchangeRates": [
+     {
+      "baseCurrency": "USD",
+      "effectiveDate": "<volatile>",
+      "provider": "Frankfurter",
+      "quoteCurrency": "CNY",
+      "rate": "<volatile>",
+      "retrievedAt": "<time>",
+      "sourceUrl": "https://api.frankfurter.dev/v2/rate/USD/CNY",
+      "stale": false
+     },
+     {
+      "baseCurrency": "CNY",
+      "effectiveDate": "<volatile>",
+      "provider": "Frankfurter",
+      "quoteCurrency": "USD",
+      "rate": "<volatile>",
+      "retrievedAt": "<time>",
+      "sourceUrl": "https://api.frankfurter.dev/v2/rate/USD/CNY",
+      "stale": false
+     }
+    ],
+    "filters": {
+     "timeZone": "Asia/Shanghai"
+    },
+    "generatedAt": "<time>",
+    "overview": {
+     "cacheReadTokens": 0,
+     "cacheWriteTokens": 0,
+     "estimatedCosts": [],
+     "inputTokens": 0,
+     "outputTokens": 0,
+     "totalTokens": 0
+    }
+   }
+  },
+  {
+   "name": "usage analytics as csv",
+   "status": 200,
+   "contentType": "text/csv",
+   "text": "\"date\",\"modelProfileName\",\"modelProfileId\",\"model\",\"inputTokens\",\"outputTokens\",\"cacheReadTokens\",\"cacheWriteTokens\",\"totalTokens\",\"estimatedCostOriginal\",\"originalCurrency\",\"displayCost\",\"displayCurrency\",\"displayExchangeRate\",\"displayExchangeRateSource\",\"displayExchangeRateRetrievedAt\"\n"
+  },
+  {
+   "name": "usage per model",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "byModel": [],
+    "totals": {
+     "cacheReadTokens": null,
+     "cacheWriteTokens": null,
+     "costUsd": null,
+     "inputTokens": null,
+     "invocationCount": 0,
+     "key": "global",
+     "label": "All models",
+     "outputTokens": null,
+     "reportedInvocationCount": 0,
+     "totalTokens": null,
+     "unreportedInvocationCount": 0
+    }
    }
   },
   {
