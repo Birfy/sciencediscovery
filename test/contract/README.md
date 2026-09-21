@@ -97,9 +97,12 @@ executor against them (`baselines/legacy-linux.json`, recorded on Linux with bub
 parallel tool calls, reasoning/thinking streams, `tool_search` and deferred tools (the JiuwenSwarm
 executor offers every tool up front), long-running tools, and errors other than a 401.
 
+- `POST /api/model-catalog/refresh` has no case on purpose: it downloads the live model catalog
+  (`origin: "downloaded"`), so its answer changes with the outside world.
+
 ## Coverage left for the sub-issues that own the routes
 
-129 of 254 rows have a recorded case (18 baseline cases have no wider coverage yet). The rest belong to the
+150 of 254 rows have a recorded case (22 baseline cases). The rest belong to the
 issue that migrates them, and each adds its cases there: skills and skill libraries (35 rows), artifacts,
 review and provenance (38), MCP and data sources (21), and the remaining chat and model rows.
 
