@@ -20,7 +20,9 @@ import test from "node:test";
 import type { AgentEvent } from "@sciencediscovery/orchestration";
 import { Type } from "typebox";
 
-import type { NativeAgentOptions } from "../native-agent/index.js";
+import { DurableContextStore } from "@sciencediscovery/context";
+
+import { createToolRegistry, startPluginScope, type NativeAgentOptions } from "../native-agent/index.js";
 import {
   createJiuwenSwarmAgentFactory,
   openAiHistory,
@@ -620,6 +622,39 @@ test("a first turn sends an empty history, not none", async () => {
   try {
     await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options()).execute("hi");
     assert.deepEqual(sent, []);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("the tools offered are exactly the native registry's, every one with its own schema (plus tool_search when some are deferred)", async () => {
+  const planStore = { latest: async () => undefined, update: async () => ({ id: "p", steps: [] }) as never };
+  const deferredTool = {
+    label: "D", name: "mcp__custom-2__d", description: "deferred", deferred: true,
+    parameters: Type.Object({ q: Type.String() }), execute: async () => ({ content: [{ type: "text" as const, text: "" }] }),
+  };
+  const opts = options({ planStore: planStore as never, extraTools: [deferredTool as never] });
+  const durable = new DurableContextStore({ history: [] });
+  const plugins = await startPluginScope(opts, durable, new AbortController().signal);
+  const registry = createToolRegistry(opts, plugins, durable);
+  const expected = new Map(registry.values().map((tool) => [tool.name, tool]));
+  await plugins.dispose();
+  let offered: Array<{ name: string; inputSchema: unknown }> = [];
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    offered = body.tools;
+    response.writeHead(200);
+    response.end(line({ done: { finalText: "ok" } }));
+  });
+  try {
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(opts).execute("go");
+    const names = offered.map((tool) => tool.name).sort();
+    assert.deepEqual(names, [...expected.keys(), "tool_search"].sort());
+    for (const tool of offered) {
+      if (tool.name === "tool_search") continue;
+      assert.deepEqual(tool.inputSchema, JSON.parse(JSON.stringify(expected.get(tool.name)!.parameters)), `schema of ${tool.name}`);
+    }
+    assert.ok(names.includes("update_plan"), "a plugin's tool is among them");
+    assert.ok(names.includes("echo"), "and so is an extra tool");
   } finally {
     await adapter.close();
   }
