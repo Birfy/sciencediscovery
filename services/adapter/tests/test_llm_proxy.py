@@ -312,3 +312,19 @@ def test_hidden_host_tools_are_not_offered_and_ours_of_the_same_name_take_their_
     chunk = {"choices": [{"delta": {"tool_calls": [{"function": {"name": n}} for n in ("read_file", "bash", "write_file", "subagent_spawn")]}}]}
     calls = rewrite_response(chunk, route)["choices"][0]["delta"]["tool_calls"]
     assert [c["function"]["name"] for c in calls] == ["mcp_sci_read_file", "unavailable__bash", "unavailable__write_file", "subagent_spawn"]
+
+
+def test_our_calls_get_the_runs_tag_and_the_history_loses_it():
+    route = LlmRoute(**{**ROUTE.__dict__, "run_tag": "run-a", "shadowed": set()})
+    chunk = {"choices": [{"delta": {"tool_calls": [
+        {"function": {"name": "run_shell", "arguments": '{"command": "ls"}'}},
+        {"function": {"name": "run_shell", "arguments": ""}},
+        {"function": {"name": "todo_list", "arguments": "{}"}}]}}]}
+    calls = rewrite_response(chunk, route)["choices"][0]["delta"]["tool_calls"]
+    assert json.loads(calls[0]["function"]["arguments"]) == {"command": "ls", "_sd_run": "run-a"}
+    assert json.loads(calls[1]["function"]["arguments"]) == {"_sd_run": "run-a"}
+    assert calls[2]["function"]["arguments"] == "{}"  # JiuwenSwarm's own tool: untouched
+    history = {"messages": [{"role": "assistant", "tool_calls": [
+        {"id": "c1", "function": {"name": "mcp_sci_run_shell", "arguments": '{"command": "ls", "_sd_run": "run-old"}'}}]}]}
+    [message] = rewrite_request(history, route)["messages"][1:]
+    assert json.loads(message["tool_calls"][0]["function"]["arguments"]) == {"command": "ls"}

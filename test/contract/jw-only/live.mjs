@@ -200,23 +200,31 @@ const checks = {
     }
   },
 
-  /** One of JiuwenSwarm's own tools (bash) runs, and the run shows it as a tool call with its output. */
-  async "native-tools"() {
-    const stub = await startStubModel({ main: [{ tool: "bash", arguments: { command: "echo JW-BASH-OK" } }, { text: "Ran it." }] });
+  /**
+   * ScienceDiscovery's tools reach JiuwenSwarm through one shared MCP server with stable names: run_shell runs in
+   * the sandbox in two runs one after the other (the second finds the server already there), and its output is
+   * in the run's tool card.
+   */
+  async "run-shell"() {
+    const stub = await startStubModel({ main: [
+      { tool: "run_shell", arguments: { command: "echo SD-SHELL-ONE" } }, { text: "One." },
+      { tool: "run_shell", arguments: { command: "echo SD-SHELL-TWO" } }, { text: "Two." },
+    ] });
     const { sessionId, cleanup } = await setup(stub);
     try {
-      const run = await runAndWait(sessionId, "Run echo.");
-      if (run.status !== "completed") throw new Error(`run ${run.status}: ${run.error}`);
-      const offered = JSON.stringify(stub.requests.at(-1) ?? {});
-      const events = await runEvents(sessionId, run.id);
-      const started = events.find((event) => event.type === "tool.started");
-      const completed = events.find((event) => event.type === "tool.completed");
-      if (started?.trace?.name !== "bash") throw new Error(`no bash tool call in the run: ${events.map((e) => e.type).join(" ")}`);
-      // A tool's output is kept in its own stream; the completed event only points at it.
-      const stream = completed?.trace?.outputStream;
-      const output = stream ? await api("GET", `/api/sessions/${sessionId}/runs/${run.id}/streams/${stream}/events`) : [];
-      if (!JSON.stringify(output).includes("JW-BASH-OK")) throw new Error(`bash output missing from ${stream}: ${JSON.stringify(output).slice(0, 300)}`);
-      console.log("native-tools: ok (JiuwenSwarm's bash ran and its output is in the run's tool card)");
+      for (const word of ["ONE", "TWO"]) {
+        const run = await runAndWait(sessionId, `Run echo ${word}.`);
+        if (run.status !== "completed") throw new Error(`run ${word} ${run.status}: ${run.error}`);
+        const events = await runEvents(sessionId, run.id);
+        const completed = events.find((event) => event.type === "tool.completed" && event.trace?.name === "run_shell");
+        if (!completed || completed.trace.native) throw new Error(`run ${word}: no run_shell of ours: ${events.map((e) => e.type).join(" ")}`);
+        const stream = completed.trace.outputStream;
+        const output = stream ? await api("GET", `/api/sessions/${sessionId}/runs/${run.id}/streams/${stream}/events`) : completed.trace;
+        if (!JSON.stringify(output).includes(`SD-SHELL-${word}`)) throw new Error(`run ${word}: output missing: ${JSON.stringify(output).slice(0, 300)}`);
+      }
+      const names = new Set(stub.requests.flatMap((request) => request.toolNames ?? []));
+      if (!names.has("run_shell") || [...names].some((name) => /^mcp_sci/.test(name))) throw new Error(`the model saw ${[...names].filter((n) => /shell/.test(n))}`);
+      console.log("run-shell: ok (run_shell ran in the sandbox in two runs through the shared MCP server; the model saw plain names)");
     } finally {
       await cleanup();
     }

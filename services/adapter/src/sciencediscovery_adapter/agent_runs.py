@@ -27,6 +27,7 @@ answer `{"text": "...", "isError": false}` goes back to JiuwenSwarm.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
@@ -44,7 +45,7 @@ from . import gateway
 from .config import Settings
 from .events import RunEventMapper
 from .llm_proxy import DEFAULT_ALIAS, LlmRoute, LlmRoutes
-from .mcp_server import Toolset, ToolsetRegistry
+from .mcp_server import SERVER_NAME, Toolset, ToolsetRegistry
 from .models import ModelProfile, ModelSync
 from .schema import relax_schema
 from .skills import SkillSync
@@ -158,18 +159,43 @@ class AgentRunner:
         self.rpc = gateway.rpc
         self.models = ModelSync(lambda *a, **k: self.rpc(*a, **k), settings.mgmt_url)
         self.skills = SkillSync(lambda *a, **k: self.rpc(*a, **k), settings.mgmt_url)
+        self._shared_lock = asyncio.Lock()
+        self._shared_registered = False
+        self._shared_timeout_s = 0
 
     async def ensure_default_model(self) -> None:
         """Point JiuwenSwarm's default model at the adapter (see `llm_proxy.DEFAULT_ALIAS`)."""
         await self.models.ensure_default(ModelProfile(
             DEFAULT_ALIAS, f"{self.settings.public_url}/llm/default/v1", self.routes.default_key, "OpenAI"))
 
+    async def ensure_shared_tools(self, tools: list[dict[str, Any]], timeout_s: int) -> None:
+        """Give JiuwenSwarm the one MCP server for every run's tools (see mcp_server), and its list again when a run
+        brought a tool (or an argument) it did not have. A reconnect makes JiuwenSwarm read the list afresh."""
+        async with self._shared_lock:
+            changed = self.registry.merge(tools)
+            longer = timeout_s > self._shared_timeout_s
+            if self._shared_registered and not changed and not longer:
+                return
+            self._shared_timeout_s = max(timeout_s, self._shared_timeout_s)
+            if not self._shared_registered or longer:
+                # An earlier adapter left it registered with another URL (its token changed), or a longer timeout is needed.
+                for method in ("mcp.disconnect", "mcp.delete_custom"):
+                    try:
+                        await self.rpc(self.settings.mgmt_url, method, {"name": SERVER_NAME})
+                    except Exception:
+                        pass
+                await self.rpc(self.settings.mgmt_url, "mcp.register_custom", {
+                    "name": SERVER_NAME, "transport": "streamable-http",
+                    "url": f"{self.settings.public_url}/mcp/{self.registry.token}", "timeout_s": self._shared_timeout_s,
+                })
+            await self.rpc(self.settings.mgmt_url, "mcp.connect", {"name": SERVER_NAME})
+            self._shared_registered = True
+
     async def stream(self, request: AgentRunRequest) -> AsyncIterator[str]:
-        name = "sci" + _SAFE_NAME.sub("", uuid.uuid4().hex)[:10]
+        name = SERVER_NAME
         token = None
         llm_token = None
         model_alias = None
-        registered = False
         jw_session = request.sessionKey or request.sessionId
         mapper = RunEventMapper(session_id=request.sessionId, mcp_prefixes=(f"mcp_{name}_",))
         params: dict[str, Any] = {
@@ -178,6 +204,14 @@ class AgentRunner:
             "supports_user_interaction": True, "agent_ref": {"mode": request.mode, "id": "default"},
         }
         try:
+            if request.tools:
+                if request.bridge is None:
+                    raise ValueError("tools were given without a bridge to run them")
+                # JiuwenSwarm validates strictly; the model still sees the originals (see LlmRoute).
+                token = self.registry.add(Toolset(
+                    tools=[{**t.model_dump(), "inputSchema": relax_schema(t.inputSchema)} for t in request.tools],
+                    call=bridge_caller(request.bridge, self.client()),
+                ))
             if request.model:
                 if request.model.provider != "OpenAI":
                     raise ValueError(f"the {request.model.provider} protocol is not supported by this executor yet")
@@ -190,7 +224,7 @@ class AgentRunner:
                     system_prompt=request.systemPrompt, system_prompt_mode=request.systemPromptMode,
                     system_prompt_tail=request.systemPromptTail,
                     native_tools=frozenset(request.nativeTools), all_native_tools=request.jiuwenSwarmTools == "all",
-                    hidden_native_tools=frozenset(request.hiddenJiuwenSwarmTools),
+                    hidden_native_tools=frozenset(request.hiddenJiuwenSwarmTools), run_tag=token,
                 ))
                 # Named after the real model: JiuwenSwarm tells the model its own model's name (runtime state), and
                 # the alias is all it knows. The suffix keeps two runs of one model apart.
@@ -201,17 +235,8 @@ class AgentRunner:
             if request.tools:
                 if request.bridge is None:
                     raise ValueError("tools were given without a bridge to run them")
-                token = self.registry.add(Toolset(
-                    # JiuwenSwarm validates strictly; the model still sees the originals (see LlmRoute).
-                    tools=[{**t.model_dump(), "inputSchema": relax_schema(t.inputSchema)} for t in request.tools], call=bridge_caller(request.bridge, self.client()),
-                    server_name=name,
-                ))
-                await self.rpc(self.settings.mgmt_url, "mcp.register_custom", {
-                    "name": name, "transport": "streamable-http", "url": f"{self.settings.public_url}/mcp/{token}",
-                    "timeout_s": request.toolTimeoutSeconds or self.settings.tool_timeout_s,
-                })
-                registered = True
-                await self.rpc(self.settings.mgmt_url, "mcp.connect", {"name": name})
+                tools = [{**t.model_dump(), "inputSchema": relax_schema(t.inputSchema)} for t in request.tools]
+                await self.ensure_shared_tools(tools, request.toolTimeoutSeconds or self.settings.tool_timeout_s)
                 params["mcp"] = [name]
             async with self.chat_run(self.settings.gateway_url, params) as run:
                 try:
@@ -247,13 +272,7 @@ class AgentRunner:
                 except Exception:
                     pass
             if token:
-                self.registry.remove(token)
-            if registered:
-                for method in ("mcp.disconnect", "mcp.delete_custom"):
-                    try:
-                        await self.rpc(self.settings.mgmt_url, method, {"name": name})
-                    except Exception:
-                        pass  # best effort: the toolset is unreachable once removed anyway
+                self.registry.remove(token)  # the shared server stays; calls for this run find nothing now
 
 
 def agent_router(runner: AgentRunner, settings: Settings) -> APIRouter:

@@ -103,19 +103,22 @@ async def test_the_run_is_sent_to_the_gateway_with_the_session_and_prompt(harnes
     assert "mcp" not in params
 
 
-async def test_tools_are_registered_as_an_mcp_server_for_this_run_only(harness):
+async def test_tools_go_to_the_one_shared_mcp_server_which_is_only_given_again_when_they_change(harness):
     app, _, rpcs = harness
     FakeRun.fixture = "jw_chat_mcp_direct.raw"
     tools = [{"name": "run_shell", "description": "d", "inputSchema": {"type": "object"}}]
-    _, lines = await post(app, {"sessionId": "s1", "prompt": "go", "tools": tools,
-                                "bridge": {"url": "http://legacy.test/bridge", "token": "t"}})
-    methods = [m for _, m, _ in rpcs if not m.startswith("models.")]  # the default-model entry is not the run's
-    assert methods == ["mcp.register_custom", "mcp.connect", "mcp.disconnect", "mcp.delete_custom"]
-    mcp = [call for call in rpcs if call[1].startswith("mcp.")]
-    name = mcp[0][2]["name"]
-    assert mcp[0][2]["url"].startswith("http://adapter.test/mcp/") and mcp[0][2]["transport"] == "streamable-http"
-    assert FakeRun.instances[0].params["mcp"] == [name]
-    assert all(p["name"] == name for _, _, p in mcp)
+    bridge = {"url": "http://legacy.test/bridge", "token": "t"}
+    await post(app, {"sessionId": "s1", "prompt": "go", "tools": tools, "bridge": bridge})
+    await post(app, {"sessionId": "s2", "prompt": "go", "tools": tools, "bridge": bridge})
+    wider = [*tools, {"name": "declare_artifact", "description": "d", "inputSchema": {"type": "object"}}]
+    await post(app, {"sessionId": "s3", "prompt": "go", "tools": wider, "bridge": bridge})
+    mcp = [(m, p) for _, m, p in rpcs if m.startswith("mcp.")]
+    # First run: any earlier registration is replaced, then connected. Second: nothing (same tools). Third: reconnect.
+    assert [m for m, _ in mcp] == ["mcp.disconnect", "mcp.delete_custom", "mcp.register_custom", "mcp.connect", "mcp.connect"]
+    assert all(p["name"] == "sci" for _, p in mcp)
+    register = next(p for m, p in mcp if m == "mcp.register_custom")
+    assert register["url"].startswith("http://adapter.test/mcp/") and register["transport"] == "streamable-http"
+    assert all(run.params["mcp"] == ["sci"] for run in FakeRun.instances)
 
 
 async def test_tools_without_a_bridge_fail_the_run_cleanly(harness):
@@ -142,7 +145,7 @@ async def test_a_gateway_that_cannot_register_the_toolset_fails_the_run(harness)
                                 "bridge": {"url": "http://legacy.test/b"}})
     failed = next(line["event"] for line in lines if line.get("event", {}).get("type") == "run.failed")
     assert "mcp.connect refused" in failed["error"]
-    assert rpcs[-2:] == ["mcp.disconnect", "mcp.delete_custom"]  # cleaned up even though connect failed
+    assert "mcp.connect" in rpcs
 
 
 async def test_the_token_is_enforced_when_configured(harness):

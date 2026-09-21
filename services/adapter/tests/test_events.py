@@ -347,3 +347,13 @@ def test_a_jiuwenswarm_tool_is_marked_native_and_one_of_ours_is_not():
     started = [e for e in own + ours if e["type"] == "tool.started"]
     assert started[0]["trace"].get("native") is True and started[0]["trace"]["name"] == "bash"
     assert "native" not in started[1]["trace"] and started[1]["trace"]["name"] == "run_shell"
+
+
+def test_the_run_tag_is_not_part_of_a_reported_call():
+    from sciencediscovery_adapter.events import RunEventMapper
+
+    mapper = RunEventMapper(session_id="s1", mcp_prefixes=("mcp_sci_",))
+    events = mapper.feed({"type": "event", "event": "chat.tool_call", "payload": {"tool_call": {
+        "tool_call_id": "c1", "name": "mcp_sci_run_shell", "arguments": '{"command": "ls", "_sd_run": "abc"}'}}})
+    started = next(event for event in events if event["type"] == "tool.started")
+    assert started["trace"]["args"] == {"command": "ls"} and "_sd_run" not in started["trace"]["input"]

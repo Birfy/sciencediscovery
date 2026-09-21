@@ -41,6 +41,7 @@ from typing import Any
 import httpx
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
+from .mcp_server import RUN_ARG
 from starlette.background import BackgroundTask
 
 
@@ -72,6 +73,8 @@ class LlmRoute:
     # work goes to ScienceDiscovery's tools, in its sandbox and Runner. One of ours of the same name is offered instead,
     # and a call the model makes to one anyway (JiuwenSwarm's prompt still names them) is turned away.
     hidden_native_tools: frozenset[str] = frozenset()
+    # The run's tag: put in each call of one of its tools, it tells the shared MCP server which run the call is for.
+    run_tag: str | None = None
 
 
 @dataclass
@@ -96,7 +99,7 @@ class LlmRoutes:
         return next(reversed(self._routes.values()), None)
 
 
-# The prefix JiuwenSwarm gives the tools of any run's MCP server (`mcp_` + the server name `sci` + 10 characters,
+# The prefix JiuwenSwarm gave the tools of each run's own MCP server, before there was one server for all (`mcp_` + the server name `sci` + 10 characters,
 # see agent_runs). Each run has its own server, and a session's history, which JiuwenSwarm keeps across runs,
 # holds the calls of earlier runs under their prefixes. Those servers are gone once their run ended.
 _ANY_RUN_PREFIX = re.compile(r"^mcp_sci[0-9a-z]{10}_")
@@ -176,7 +179,8 @@ def rewrite_request(body: dict[str, Any], route: LlmRoute) -> dict[str, Any]:
                 message["content"] = "\n\n".join(p for p in (route.system_prompt, route.system_prompt_tail) if p)
             replaced = True
         for call in message.get("tool_calls") or []:
-            call["function"] = {**call["function"], "name": _unprefixed(call["function"]["name"], route)}
+            call["function"] = {**call["function"], "name": _unprefixed(call["function"]["name"], route),
+                                "arguments": _with_run_tag(call["function"].get("arguments"), None)}
         if isinstance(message.get("name"), str):
             message["name"] = _unprefixed(message["name"], route)
         messages.append(message)
@@ -218,14 +222,33 @@ def _prefixed(name: str, route: LlmRoute) -> str:
     return UNAVAILABLE_PREFIX + name if name in route.hidden_native_tools else name
 
 
+def _with_run_tag(arguments: Any, tag: str | None) -> Any:
+    """A call's JSON arguments with the run tag set (or, with `tag` None, removed). Anything else is left alone:
+    the model gateway sends each call whole, in one chunk, so its arguments are complete JSON."""
+    if not isinstance(arguments, str):
+        return arguments
+    try:
+        parsed = json.loads(arguments) if arguments.strip() else {}
+    except ValueError:
+        return arguments
+    if not isinstance(parsed, dict) or (tag is None and RUN_ARG not in parsed):
+        return arguments
+    parsed.pop(RUN_ARG, None)
+    if tag is not None:
+        parsed[RUN_ARG] = tag
+    return json.dumps(parsed, ensure_ascii=False)
+
+
 def rewrite_response(payload: dict[str, Any], route: LlmRoute) -> dict[str, Any]:
-    """Give tool calls the prefix again. Works on a full response and on a stream chunk."""
+    """Give tool calls the prefix again, and ours the run's tag. Works on a full response and on a stream chunk."""
     for choice in payload.get("choices") or []:
         for holder in (choice.get("message"), choice.get("delta")):
             for call in (holder or {}).get("tool_calls") or []:
                 function = call.get("function") or {}
                 if isinstance(function.get("name"), str):
                     function["name"] = _prefixed(function["name"], route)
+                    if route.run_tag and function["name"].startswith(route.tool_prefix):
+                        function["arguments"] = _with_run_tag(function.get("arguments"), route.run_tag)
     return payload
 
 
