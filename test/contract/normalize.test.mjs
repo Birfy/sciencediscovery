@@ -117,3 +117,9 @@ test("this checkout's path is hidden, so a recording does not depend on where it
   const { REPO_ROOT } = await import("./normalize.mjs");
   assert.equal(scrubValue(`cwd ${REPO_ROOT}/test/fixtures`), "cwd <repo>/test/fixtures");
 });
+
+test("a custom MCP server's generated id is numbered like a uuid", () => {
+  const normalize = createNormalizer();
+  assert.equal(normalize.text("custom-683c5afc5d06 and custom-0b782b84a4f9 and custom-683c5afc5d06"),
+    "<custom-mcp:1> and <custom-mcp:2> and <custom-mcp:1>");
+});

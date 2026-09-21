@@ -36,6 +36,8 @@ const RUNNER_VERSION = /(\\*"runnerVersion\\*":\\*")[^"\\]*/g;
 // Where this checkout lives differs between machines; a case that passes it to the server (`{{repoRoot}}`)
 // would otherwise record one machine's path.
 export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
+// A custom MCP server's id is generated per run.
+const CUSTOM_MCP_ID = /\bcustom-[0-9a-f]{12}\b/g;
 const HEX_TOKEN = /\b[0-9a-f]{32,}\b/gi;
 const TIMEY_KEY = /(At|Time|Ts|Timestamp)$/;
 // Keys whose value is a per-run measurement, not part of the contract.
@@ -77,6 +79,7 @@ export function createNormalizer() {
   };
   const text = (value) => scrubText(value)
     .replace(UUID, (match) => `<uuid:${idFor(match)}>`)
+    .replace(CUSTOM_MCP_ID, (match) => `<custom-mcp:${idFor(match)}>`)
     .replace(ISO_TIME, "<time>")
     .replace(HEX_TOKEN, "<hex>");
   const walk = (value, key = "") => {
