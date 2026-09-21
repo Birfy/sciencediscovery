@@ -1,0 +1,4948 @@
+{
+ "l2-text-only": [
+  {
+   "name": "remember the global settings",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "effective": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [
+      "antibody-protenix-pipeline",
+      "assessment-screening",
+      "citation-reviewer",
+      "code-engineer",
+      "computation-reviewer",
+      "creative-material-design",
+      "evidence-extractor",
+      "evolve-design",
+      "idea-tree-team",
+      "insight-aggregator",
+      "life-science-evidence-brief",
+      "literature-searcher",
+      "report-writer",
+      "result-evaluator",
+      "science-research-team",
+      "skill-creator",
+      "structure-pocket-inspection"
+     ],
+     "enabledSkillLibraries": [],
+     "semanticReviewEnabled": true,
+     "skillSelectionMode": "all"
+    },
+    "overrides": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "semanticReviewEnabled": true
+    },
+    "sources": {
+     "enabledConnectorIds": "global",
+     "enabledSkillIds": "unset",
+     "enabledSkillLibraries": "unset",
+     "modelId": "unset",
+     "plugins": "unset",
+     "reviewModelId": "unset",
+     "semanticReviewEnabled": "global",
+     "skillSelectionMode": "unset",
+     "thinkingEffort": "unset",
+     "thinkingMode": "unset"
+    }
+   }
+  },
+  {
+   "name": "register the stub model",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "apiProtocol": "openai-chat-completions",
+    "apiVariant": "openai",
+    "baseUrl": "http://127.0.0.1:<port>/v1",
+    "createdAt": "<time>",
+    "hasApiToken": true,
+    "id": "<uuid:1>",
+    "model": "contract-stub",
+    "name": "L2 stub model",
+    "proxyPolicy": "inherit",
+    "thinkingEffort": "high",
+    "thinkingMode": "auto",
+    "updatedAt": "<time>",
+    "vision": false
+   }
+  },
+  {
+   "name": "create a project",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "createdAt": "<time>",
+    "firstSession": {
+     "approvalMode": "ask_for_dangerous",
+     "createdAt": "<time>",
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [],
+     "id": "<uuid:3>",
+     "modelId": "<uuid:1>",
+     "permissionEpochId": "<uuid:4>",
+     "projectId": "<uuid:2>",
+     "reviewCriteria": [],
+     "reviewerAutomaticReviewEnabled": true,
+     "reviewerSpecialistLevel": "quick",
+     "reviewMode": "auto",
+     "semanticReviewEnabled": true,
+     "settingsOverrides": {},
+     "title": "Untitled session",
+     "updatedAt": "<time>"
+    },
+    "id": "<uuid:2>",
+    "name": "L2 project",
+    "project": {
+     "createdAt": "<time>",
+     "id": "<uuid:2>",
+     "name": "L2 project",
+     "remoteRunnerHostIds": [],
+     "settingsOverrides": {
+      "enabledSkillIds": [],
+      "enabledSkillLibraries": [],
+      "skillSelectionMode": "selected"
+     }
+    },
+    "remoteRunnerHostIds": [],
+    "settingsOverrides": {
+     "enabledSkillIds": [],
+     "enabledSkillLibraries": [],
+     "skillSelectionMode": "selected"
+    }
+   }
+  },
+  {
+   "name": "choose the model",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "approvalMode": "ask_for_dangerous",
+    "createdAt": "<time>",
+    "enabledConnectorIds": [
+     "web"
+    ],
+    "enabledSkillIds": [],
+    "id": "<uuid:3>",
+    "modelId": "<uuid:1>",
+    "permissionEpochId": "<uuid:4>",
+    "projectId": "<uuid:2>",
+    "reviewCriteria": [],
+    "reviewerAutomaticReviewEnabled": true,
+    "reviewerSpecialistLevel": "quick",
+    "reviewMode": "auto",
+    "semanticReviewEnabled": true,
+    "settingsOverrides": {
+     "modelId": "<uuid:1>"
+    },
+    "title": "L2 session",
+    "updatedAt": "<time>"
+   }
+  },
+  {
+   "name": "choose the approval mode",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "approvalMode": "always_allow",
+    "createdAt": "<time>",
+    "enabledConnectorIds": [
+     "web"
+    ],
+    "enabledSkillIds": [],
+    "id": "<uuid:3>",
+    "modelId": "<uuid:1>",
+    "permissionEpochId": "<uuid:5>",
+    "projectId": "<uuid:2>",
+    "reviewCriteria": [],
+    "reviewerAutomaticReviewEnabled": true,
+    "reviewerSpecialistLevel": "quick",
+    "reviewMode": "auto",
+    "semanticReviewEnabled": true,
+    "settingsOverrides": {
+     "modelId": "<uuid:1>"
+    },
+    "title": "L2 session",
+    "updatedAt": "<time>"
+   }
+  },
+  {
+   "name": "send a message",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "annotationIds": [],
+    "createdAt": "<time>",
+    "id": "<uuid:6>",
+    "prompt": "Say hello.",
+    "queueOrder": 1,
+    "references": [],
+    "sessionId": "<uuid:3>",
+    "settingsSnapshot": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [],
+     "enabledSkillLibraries": [],
+     "ideaTreeEnabled": false,
+     "modelId": "<uuid:1>",
+     "semanticReviewEnabled": true,
+     "skillSelectionMode": "selected",
+     "thinkingMode": "auto"
+    },
+    "status": "queued"
+   }
+  },
+  {
+   "name": "run events",
+   "status": 200,
+   "contentType": "text/event-stream",
+   "events": [
+    {
+     "run": {
+      "annotationIds": [],
+      "createdAt": "<time>",
+      "id": "<uuid:6>",
+      "prompt": "Say hello.",
+      "queueOrder": 1,
+      "references": [],
+      "sessionId": "<uuid:3>",
+      "settingsSnapshot": {
+       "enabledConnectorIds": [
+        "web"
+       ],
+       "enabledSkillIds": [],
+       "enabledSkillLibraries": [],
+       "ideaTreeEnabled": false,
+       "modelId": "<uuid:1>",
+       "semanticReviewEnabled": true,
+       "skillSelectionMode": "selected",
+       "thinkingMode": "auto"
+      },
+      "status": "queued"
+     },
+     "type": "run.queued"
+    },
+    {
+     "run": {
+      "annotationIds": [],
+      "createdAt": "<time>",
+      "id": "<uuid:6>",
+      "prompt": "Say hello.",
+      "queueOrder": 1,
+      "references": [],
+      "sessionId": "<uuid:3>",
+      "settingsSnapshot": {
+       "enabledConnectorIds": [
+        "web"
+       ],
+       "enabledSkillIds": [],
+       "enabledSkillLibraries": [],
+       "ideaTreeEnabled": false,
+       "modelId": "<uuid:1>",
+       "semanticReviewEnabled": true,
+       "skillSelectionMode": "selected",
+       "thinkingMode": "auto"
+      },
+      "startedAt": "<time>",
+      "status": "running"
+     },
+     "status": "running",
+     "type": "run.status"
+    },
+    {
+     "model": {
+      "id": "<uuid:1>",
+      "model": "contract-stub",
+      "name": "L2 stub model"
+     },
+     "runId": "<uuid:6>",
+     "settings": {
+      "enabledConnectorIds": [
+       "web"
+      ],
+      "enabledSkillIds": [],
+      "enabledSkillLibraries": [],
+      "ideaTreeEnabled": false,
+      "modelId": "<uuid:1>",
+      "semanticReviewEnabled": true,
+      "skillSelectionMode": "selected",
+      "thinkingMode": "auto"
+     },
+     "type": "run.started"
+    },
+    {
+     "phase": "thinking",
+     "turn": 1,
+     "type": "agent.phase"
+    },
+    {
+     "responseId": "<uuid:7>",
+     "turn": 1,
+     "type": "assistant.response.started"
+    },
+    {
+     "delta": "Hello from the contract stub.",
+     "responseId": "<uuid:7>",
+     "type": "assistant.delta"
+    },
+    {
+     "responseId": "<uuid:7>",
+     "turn": 1,
+     "type": "assistant.response.settled"
+    },
+    {
+     "files": [],
+     "message": {
+      "content": "Hello from the contract stub.",
+      "createdAt": "<time>",
+      "id": "<uuid:8>",
+      "kind": "message",
+      "modelContext": [
+       {
+        "content": "Hello from the contract stub.",
+        "role": "assistant"
+       }
+      ],
+      "modelId": "<uuid:1>",
+      "modelName": "L2 stub model",
+      "role": "assistant"
+     },
+     "type": "run.completed"
+    }
+   ]
+  },
+  {
+   "name": "wait for the run to settle",
+   "status": 200,
+   "polled": "completed"
+  },
+  {
+   "name": "delete the project",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "deleted": "<uuid:2>"
+   }
+  },
+  {
+   "name": "restore the global settings",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "effective": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [
+      "antibody-protenix-pipeline",
+      "assessment-screening",
+      "citation-reviewer",
+      "code-engineer",
+      "computation-reviewer",
+      "creative-material-design",
+      "evidence-extractor",
+      "evolve-design",
+      "idea-tree-team",
+      "insight-aggregator",
+      "life-science-evidence-brief",
+      "literature-searcher",
+      "report-writer",
+      "result-evaluator",
+      "science-research-team",
+      "skill-creator",
+      "structure-pocket-inspection"
+     ],
+     "enabledSkillLibraries": [],
+     "semanticReviewEnabled": true,
+     "skillSelectionMode": "all"
+    },
+    "overrides": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "semanticReviewEnabled": true
+    },
+    "sources": {
+     "enabledConnectorIds": "global",
+     "enabledSkillIds": "unset",
+     "enabledSkillLibraries": "unset",
+     "modelId": "unset",
+     "plugins": "unset",
+     "reviewModelId": "unset",
+     "semanticReviewEnabled": "global",
+     "skillSelectionMode": "unset",
+     "thinkingEffort": "unset",
+     "thinkingMode": "unset"
+    }
+   }
+  },
+  {
+   "name": "delete the model",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "deleted": "<uuid:1>"
+   }
+  }
+ ],
+ "l2-tool-call": [
+  {
+   "name": "remember the global settings",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "effective": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [
+      "antibody-protenix-pipeline",
+      "assessment-screening",
+      "citation-reviewer",
+      "code-engineer",
+      "computation-reviewer",
+      "creative-material-design",
+      "evidence-extractor",
+      "evolve-design",
+      "idea-tree-team",
+      "insight-aggregator",
+      "life-science-evidence-brief",
+      "literature-searcher",
+      "report-writer",
+      "result-evaluator",
+      "science-research-team",
+      "skill-creator",
+      "structure-pocket-inspection"
+     ],
+     "enabledSkillLibraries": [],
+     "semanticReviewEnabled": true,
+     "skillSelectionMode": "all"
+    },
+    "overrides": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "semanticReviewEnabled": true
+    },
+    "sources": {
+     "enabledConnectorIds": "global",
+     "enabledSkillIds": "unset",
+     "enabledSkillLibraries": "unset",
+     "modelId": "unset",
+     "plugins": "unset",
+     "reviewModelId": "unset",
+     "semanticReviewEnabled": "global",
+     "skillSelectionMode": "unset",
+     "thinkingEffort": "unset",
+     "thinkingMode": "unset"
+    }
+   }
+  },
+  {
+   "name": "register the stub model",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "apiProtocol": "openai-chat-completions",
+    "apiVariant": "openai",
+    "baseUrl": "http://127.0.0.1:<port>/v1",
+    "createdAt": "<time>",
+    "hasApiToken": true,
+    "id": "<uuid:1>",
+    "model": "contract-stub",
+    "name": "L2 stub model",
+    "proxyPolicy": "inherit",
+    "thinkingEffort": "high",
+    "thinkingMode": "auto",
+    "updatedAt": "<time>",
+    "vision": false
+   }
+  },
+  {
+   "name": "create a project",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "createdAt": "<time>",
+    "firstSession": {
+     "approvalMode": "ask_for_dangerous",
+     "createdAt": "<time>",
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [],
+     "id": "<uuid:3>",
+     "modelId": "<uuid:1>",
+     "permissionEpochId": "<uuid:4>",
+     "projectId": "<uuid:2>",
+     "reviewCriteria": [],
+     "reviewerAutomaticReviewEnabled": true,
+     "reviewerSpecialistLevel": "quick",
+     "reviewMode": "auto",
+     "semanticReviewEnabled": true,
+     "settingsOverrides": {},
+     "title": "Untitled session",
+     "updatedAt": "<time>"
+    },
+    "id": "<uuid:2>",
+    "name": "L2 project",
+    "project": {
+     "createdAt": "<time>",
+     "id": "<uuid:2>",
+     "name": "L2 project",
+     "remoteRunnerHostIds": [],
+     "settingsOverrides": {
+      "enabledSkillIds": [],
+      "enabledSkillLibraries": [],
+      "skillSelectionMode": "selected"
+     }
+    },
+    "remoteRunnerHostIds": [],
+    "settingsOverrides": {
+     "enabledSkillIds": [],
+     "enabledSkillLibraries": [],
+     "skillSelectionMode": "selected"
+    }
+   }
+  },
+  {
+   "name": "choose the model",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "approvalMode": "ask_for_dangerous",
+    "createdAt": "<time>",
+    "enabledConnectorIds": [
+     "web"
+    ],
+    "enabledSkillIds": [],
+    "id": "<uuid:3>",
+    "modelId": "<uuid:1>",
+    "permissionEpochId": "<uuid:4>",
+    "projectId": "<uuid:2>",
+    "reviewCriteria": [],
+    "reviewerAutomaticReviewEnabled": true,
+    "reviewerSpecialistLevel": "quick",
+    "reviewMode": "auto",
+    "semanticReviewEnabled": true,
+    "settingsOverrides": {
+     "modelId": "<uuid:1>"
+    },
+    "title": "L2 session",
+    "updatedAt": "<time>"
+   }
+  },
+  {
+   "name": "choose the approval mode",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "approvalMode": "always_allow",
+    "createdAt": "<time>",
+    "enabledConnectorIds": [
+     "web"
+    ],
+    "enabledSkillIds": [],
+    "id": "<uuid:3>",
+    "modelId": "<uuid:1>",
+    "permissionEpochId": "<uuid:5>",
+    "projectId": "<uuid:2>",
+    "reviewCriteria": [],
+    "reviewerAutomaticReviewEnabled": true,
+    "reviewerSpecialistLevel": "quick",
+    "reviewMode": "auto",
+    "semanticReviewEnabled": true,
+    "settingsOverrides": {
+     "modelId": "<uuid:1>"
+    },
+    "title": "L2 session",
+    "updatedAt": "<time>"
+   }
+  },
+  {
+   "name": "send a message",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "annotationIds": [],
+    "createdAt": "<time>",
+    "id": "<uuid:6>",
+    "prompt": "Run the marker command.",
+    "queueOrder": 1,
+    "references": [],
+    "sessionId": "<uuid:3>",
+    "settingsSnapshot": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [],
+     "enabledSkillLibraries": [],
+     "ideaTreeEnabled": false,
+     "modelId": "<uuid:1>",
+     "semanticReviewEnabled": true,
+     "skillSelectionMode": "selected",
+     "thinkingMode": "auto"
+    },
+    "status": "queued"
+   }
+  },
+  {
+   "name": "run events",
+   "status": 200,
+   "contentType": "text/event-stream",
+   "events": [
+    {
+     "run": {
+      "annotationIds": [],
+      "createdAt": "<time>",
+      "id": "<uuid:6>",
+      "prompt": "Run the marker command.",
+      "queueOrder": 1,
+      "references": [],
+      "sessionId": "<uuid:3>",
+      "settingsSnapshot": {
+       "enabledConnectorIds": [
+        "web"
+       ],
+       "enabledSkillIds": [],
+       "enabledSkillLibraries": [],
+       "ideaTreeEnabled": false,
+       "modelId": "<uuid:1>",
+       "semanticReviewEnabled": true,
+       "skillSelectionMode": "selected",
+       "thinkingMode": "auto"
+      },
+      "status": "queued"
+     },
+     "type": "run.queued"
+    },
+    {
+     "run": {
+      "annotationIds": [],
+      "createdAt": "<time>",
+      "id": "<uuid:6>",
+      "prompt": "Run the marker command.",
+      "queueOrder": 1,
+      "references": [],
+      "sessionId": "<uuid:3>",
+      "settingsSnapshot": {
+       "enabledConnectorIds": [
+        "web"
+       ],
+       "enabledSkillIds": [],
+       "enabledSkillLibraries": [],
+       "ideaTreeEnabled": false,
+       "modelId": "<uuid:1>",
+       "semanticReviewEnabled": true,
+       "skillSelectionMode": "selected",
+       "thinkingMode": "auto"
+      },
+      "startedAt": "<time>",
+      "status": "running"
+     },
+     "status": "running",
+     "type": "run.status"
+    },
+    {
+     "model": {
+      "id": "<uuid:1>",
+      "model": "contract-stub",
+      "name": "L2 stub model"
+     },
+     "runId": "<uuid:6>",
+     "settings": {
+      "enabledConnectorIds": [
+       "web"
+      ],
+      "enabledSkillIds": [],
+      "enabledSkillLibraries": [],
+      "ideaTreeEnabled": false,
+      "modelId": "<uuid:1>",
+      "semanticReviewEnabled": true,
+      "skillSelectionMode": "selected",
+      "thinkingMode": "auto"
+     },
+     "type": "run.started"
+    },
+    {
+     "phase": "thinking",
+     "turn": 1,
+     "type": "agent.phase"
+    },
+    {
+     "responseId": "<uuid:7>",
+     "turn": 1,
+     "type": "assistant.response.started"
+    },
+    {
+     "responseId": "<uuid:7>",
+     "turn": 1,
+     "type": "assistant.response.settled"
+    },
+    {
+     "trace": {
+      "args": {
+       "command": "echo L2-MARK"
+      },
+      "id": "call-main-1",
+      "name": "run_shell",
+      "status": "running"
+     },
+     "type": "tool.started"
+    },
+    {
+     "chunk": "{\"sessionId\":\"<uuid:3>\",\"agentId\":\"main\",\"runnerId\":\"local\",\"turnId\":\"<uuid:6>\",\"workspaceId\":\"<workspace>\",\"id\":\"<uuid:8>\",\"state\":\"completed\",\"queuedAt\":\"<time>\",\"accepted\":true,\"provenance\":\"committed\",\"startedAt\":\"<time>\",\"runnerVersionId\":\"<sha256>\",\"finishedAt\":\"<time>\",\"result\":{\"exitCode\":0,\"stderr\":\"\",\"stdout\":\"L2-MARK\\n\",\"cgroupMode\":\"none\",\"createdFiles\":[],\"environmentRevisionId\":\"<system-environment>\",\"environmentVariables\":{\"HOME\":\"/tmp\",\"PATH\":\"/usr/bin:/bin\",\"SSL_CERT_FILE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"CURL_CA_BUNDLE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"REQUESTS_CA_BUNDLE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"SSL_CERT_DIR\":\"/etc/ssl/certs\"},\"executionId\":\"<uuid:8>\",\"finishedAt\":\"<time>\",\"kernelId\":\"ephemeral:<uuid:8>\",\"kernelMode\":\"ephemeral\",\"language\":\"shell\",\"modifiedFiles\":[],\"networkAccessRevision\":\"none\",\"networkPolicy\":\"none\",\"runnerVersion\":\"f2dbe052-dirty\",\"sandbox\":\"bubblewrap\",\"startedAt\":\"<time>\",\"workingDirectory\":\"/workspace\",\"workspaceSnapshot\":{\"pool\":\"agent-state\",\"digest\":\"<sha256>\",\"size\":83,\"mediaType\":\"application/vnd.sciencediscovery.record.v1+json\"},\"workspaceVersion\":{\"pool\":\"agent-state\",\"digest\":\"<sha256>\",\"size\":1582,\"mediaType\":\"application/vnd.sciencediscovery.record.v1+json\"}}}",
+     "toolCallId": "call-main-1",
+     "type": "tool.output"
+    },
+    {
+     "trace": {
+      "details": {
+       "__detailsBoundary": {
+        "maxArrayItems": 100,
+        "maxDepth": 8,
+        "maxObjectKeys": 100,
+        "maxStringChars": 4096,
+        "maxTotalStringChars": 64000,
+        "omittedPayloadFields": true,
+        "truncated": false
+       },
+       "accepted": true,
+       "agentId": "main",
+       "finishedAt": "<time>",
+       "id": "<uuid:8>",
+       "provenance": "committed",
+       "queuedAt": "<time>",
+       "result": {
+        "cgroupMode": "none",
+        "createdFiles": [],
+        "environmentRevisionId": "<system-environment>",
+        "environmentVariables": {
+         "CURL_CA_BUNDLE": "/etc/pki/tls/certs/ca-bundle.crt",
+         "HOME": "/tmp",
+         "PATH": "/usr/bin:/bin",
+         "REQUESTS_CA_BUNDLE": "/etc/pki/tls/certs/ca-bundle.crt",
+         "SSL_CERT_DIR": "/etc/ssl/certs",
+         "SSL_CERT_FILE": "/etc/pki/tls/certs/ca-bundle.crt"
+        },
+        "executionId": "<uuid:8>",
+        "exitCode": 0,
+        "finishedAt": "<time>",
+        "kernelId": "ephemeral:<uuid:8>",
+        "kernelMode": "ephemeral",
+        "language": "shell",
+        "modifiedFiles": [],
+        "networkAccessRevision": "none",
+        "networkPolicy": "none",
+        "runnerVersion": "<volatile>",
+        "sandbox": "bubblewrap",
+        "startedAt": "<time>",
+        "stderr": "[omitted]",
+        "stdout": "[omitted]",
+        "workingDirectory": "/workspace",
+        "workspaceSnapshot": {
+         "digest": "<sha256>",
+         "mediaType": "application/vnd.sciencediscovery.record.v1+json",
+         "pool": "agent-state",
+         "size": 83
+        },
+        "workspaceVersion": {
+         "digest": "<sha256>",
+         "mediaType": "application/vnd.sciencediscovery.record.v1+json",
+         "pool": "agent-state",
+         "size": 1582
+        }
+       },
+       "runnerId": "local",
+       "runnerVersionId": "<volatile>",
+       "sessionId": "<uuid:3>",
+       "startedAt": "<time>",
+       "state": "completed",
+       "turnId": "<uuid:6>",
+       "workspaceId": "<workspace>"
+      },
+      "id": "call-main-1",
+      "name": "run_shell",
+      "outputChars": 1724,
+      "outputStream": "tool-call-main-1",
+      "status": "completed"
+     },
+     "type": "tool.completed"
+    },
+    {
+     "phase": "thinking",
+     "turn": 2,
+     "type": "agent.phase"
+    },
+    {
+     "responseId": "<uuid:9>",
+     "turn": 2,
+     "type": "assistant.response.started"
+    },
+    {
+     "delta": "The command printed L2-MARK.",
+     "responseId": "<uuid:9>",
+     "type": "assistant.delta"
+    },
+    {
+     "responseId": "<uuid:9>",
+     "turn": 2,
+     "type": "assistant.response.settled"
+    },
+    {
+     "files": [],
+     "message": {
+      "content": "The command printed L2-MARK.",
+      "createdAt": "<time>",
+      "id": "<uuid:10>",
+      "kind": "message",
+      "modelContext": [
+       {
+        "content": "",
+        "role": "assistant",
+        "tool_calls": [
+         {
+          "function": {
+           "arguments": "{\"command\":\"echo L2-MARK\"}",
+           "name": "run_shell"
+          },
+          "id": "call-main-1",
+          "type": "function"
+         }
+        ]
+       },
+       {
+        "content": "{\"sessionId\":\"<uuid:3>\",\"agentId\":\"main\",\"runnerId\":\"local\",\"turnId\":\"<uuid:6>\",\"workspaceId\":\"<workspace>\",\"id\":\"<uuid:8>\",\"state\":\"completed\",\"queuedAt\":\"<time>\",\"accepted\":true,\"provenance\":\"committed\",\"startedAt\":\"<time>\",\"runnerVersionId\":\"<sha256>\",\"finishedAt\":\"<time>\",\"result\":{\"exitCode\":0,\"stderr\":\"\",\"stdout\":\"L2-MARK\\n\",\"cgroupMode\":\"none\",\"createdFiles\":[],\"environmentRevisionId\":\"<system-environment>\",\"environmentVariables\":{\"HOME\":\"/tmp\",\"PATH\":\"/usr/bin:/bin\",\"SSL_CERT_FILE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"CURL_CA_BUNDLE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"REQUESTS_CA_BUNDLE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"SSL_CERT_DIR\":\"/etc/ssl/certs\"},\"executionId\":\"<uuid:8>\",\"finishedAt\":\"<time>\",\"kernelId\":\"ephemeral:<uuid:8>\",\"kernelMode\":\"ephemeral\",\"language\":\"shell\",\"modifiedFiles\":[],\"networkAccessRevision\":\"none\",\"networkPolicy\":\"none\",\"runnerVersion\":\"f2dbe052-dirty\",\"sandbox\":\"bubblewrap\",\"startedAt\":\"<time>\",\"workingDirectory\":\"/workspace\",\"workspaceSnapshot\":{\"pool\":\"agent-state\",\"digest\":\"<sha256>\",\"size\":83,\"mediaType\":\"application/vnd.sciencediscovery.record.v1+json\"},\"workspaceVersion\":{\"pool\":\"agent-state\",\"digest\":\"<sha256>\",\"size\":1582,\"mediaType\":\"application/vnd.sciencediscovery.record.v1+json\"}}}",
+        "name": "run_shell",
+        "role": "tool",
+        "tool_call_id": "call-main-1"
+       },
+       {
+        "content": "The command printed L2-MARK.",
+        "role": "assistant"
+       }
+      ],
+      "modelId": "<uuid:1>",
+      "modelName": "L2 stub model",
+      "role": "assistant"
+     },
+     "type": "run.completed"
+    }
+   ]
+  },
+  {
+   "name": "wait for the run to settle",
+   "status": 200,
+   "polled": "completed"
+  },
+  {
+   "name": "delete the project",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "deleted": "<uuid:2>"
+   }
+  },
+  {
+   "name": "restore the global settings",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "effective": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [
+      "antibody-protenix-pipeline",
+      "assessment-screening",
+      "citation-reviewer",
+      "code-engineer",
+      "computation-reviewer",
+      "creative-material-design",
+      "evidence-extractor",
+      "evolve-design",
+      "idea-tree-team",
+      "insight-aggregator",
+      "life-science-evidence-brief",
+      "literature-searcher",
+      "report-writer",
+      "result-evaluator",
+      "science-research-team",
+      "skill-creator",
+      "structure-pocket-inspection"
+     ],
+     "enabledSkillLibraries": [],
+     "semanticReviewEnabled": true,
+     "skillSelectionMode": "all"
+    },
+    "overrides": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "semanticReviewEnabled": true
+    },
+    "sources": {
+     "enabledConnectorIds": "global",
+     "enabledSkillIds": "unset",
+     "enabledSkillLibraries": "unset",
+     "modelId": "unset",
+     "plugins": "unset",
+     "reviewModelId": "unset",
+     "semanticReviewEnabled": "global",
+     "skillSelectionMode": "unset",
+     "thinkingEffort": "unset",
+     "thinkingMode": "unset"
+    }
+   }
+  },
+  {
+   "name": "delete the model",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "deleted": "<uuid:1>"
+   }
+  }
+ ],
+ "l2-approval-allowed": [
+  {
+   "name": "remember the global settings",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "effective": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [
+      "antibody-protenix-pipeline",
+      "assessment-screening",
+      "citation-reviewer",
+      "code-engineer",
+      "computation-reviewer",
+      "creative-material-design",
+      "evidence-extractor",
+      "evolve-design",
+      "idea-tree-team",
+      "insight-aggregator",
+      "life-science-evidence-brief",
+      "literature-searcher",
+      "report-writer",
+      "result-evaluator",
+      "science-research-team",
+      "skill-creator",
+      "structure-pocket-inspection"
+     ],
+     "enabledSkillLibraries": [],
+     "semanticReviewEnabled": true,
+     "skillSelectionMode": "all"
+    },
+    "overrides": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "semanticReviewEnabled": true
+    },
+    "sources": {
+     "enabledConnectorIds": "global",
+     "enabledSkillIds": "unset",
+     "enabledSkillLibraries": "unset",
+     "modelId": "unset",
+     "plugins": "unset",
+     "reviewModelId": "unset",
+     "semanticReviewEnabled": "global",
+     "skillSelectionMode": "unset",
+     "thinkingEffort": "unset",
+     "thinkingMode": "unset"
+    }
+   }
+  },
+  {
+   "name": "register the stub model",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "apiProtocol": "openai-chat-completions",
+    "apiVariant": "openai",
+    "baseUrl": "http://127.0.0.1:<port>/v1",
+    "createdAt": "<time>",
+    "hasApiToken": true,
+    "id": "<uuid:1>",
+    "model": "contract-stub",
+    "name": "L2 stub model",
+    "proxyPolicy": "inherit",
+    "thinkingEffort": "high",
+    "thinkingMode": "auto",
+    "updatedAt": "<time>",
+    "vision": false
+   }
+  },
+  {
+   "name": "create a project",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "createdAt": "<time>",
+    "firstSession": {
+     "approvalMode": "ask_for_dangerous",
+     "createdAt": "<time>",
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [],
+     "id": "<uuid:3>",
+     "modelId": "<uuid:1>",
+     "permissionEpochId": "<uuid:4>",
+     "projectId": "<uuid:2>",
+     "reviewCriteria": [],
+     "reviewerAutomaticReviewEnabled": true,
+     "reviewerSpecialistLevel": "quick",
+     "reviewMode": "auto",
+     "semanticReviewEnabled": true,
+     "settingsOverrides": {},
+     "title": "Untitled session",
+     "updatedAt": "<time>"
+    },
+    "id": "<uuid:2>",
+    "name": "L2 project",
+    "project": {
+     "createdAt": "<time>",
+     "id": "<uuid:2>",
+     "name": "L2 project",
+     "remoteRunnerHostIds": [],
+     "settingsOverrides": {
+      "enabledSkillIds": [],
+      "enabledSkillLibraries": [],
+      "skillSelectionMode": "selected"
+     }
+    },
+    "remoteRunnerHostIds": [],
+    "settingsOverrides": {
+     "enabledSkillIds": [],
+     "enabledSkillLibraries": [],
+     "skillSelectionMode": "selected"
+    }
+   }
+  },
+  {
+   "name": "choose the model",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "approvalMode": "ask_for_dangerous",
+    "createdAt": "<time>",
+    "enabledConnectorIds": [
+     "web"
+    ],
+    "enabledSkillIds": [],
+    "id": "<uuid:3>",
+    "modelId": "<uuid:1>",
+    "permissionEpochId": "<uuid:4>",
+    "projectId": "<uuid:2>",
+    "reviewCriteria": [],
+    "reviewerAutomaticReviewEnabled": true,
+    "reviewerSpecialistLevel": "quick",
+    "reviewMode": "auto",
+    "semanticReviewEnabled": true,
+    "settingsOverrides": {
+     "modelId": "<uuid:1>"
+    },
+    "title": "L2 session",
+    "updatedAt": "<time>"
+   }
+  },
+  {
+   "name": "choose the approval mode",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "approvalMode": "ask_for_dangerous",
+    "createdAt": "<time>",
+    "enabledConnectorIds": [
+     "web"
+    ],
+    "enabledSkillIds": [],
+    "id": "<uuid:3>",
+    "modelId": "<uuid:1>",
+    "permissionEpochId": "<uuid:4>",
+    "projectId": "<uuid:2>",
+    "reviewCriteria": [],
+    "reviewerAutomaticReviewEnabled": true,
+    "reviewerSpecialistLevel": "quick",
+    "reviewMode": "auto",
+    "semanticReviewEnabled": true,
+    "settingsOverrides": {
+     "modelId": "<uuid:1>"
+    },
+    "title": "L2 session",
+    "updatedAt": "<time>"
+   }
+  },
+  {
+   "name": "send a message",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "annotationIds": [],
+    "createdAt": "<time>",
+    "id": "<uuid:5>",
+    "prompt": "Run the marker command.",
+    "queueOrder": 1,
+    "references": [],
+    "sessionId": "<uuid:3>",
+    "settingsSnapshot": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [],
+     "enabledSkillLibraries": [],
+     "ideaTreeEnabled": false,
+     "modelId": "<uuid:1>",
+     "semanticReviewEnabled": true,
+     "skillSelectionMode": "selected",
+     "thinkingMode": "auto"
+    },
+    "status": "queued"
+   }
+  },
+  {
+   "name": "run events",
+   "status": 200,
+   "contentType": "text/event-stream",
+   "events": [
+    {
+     "run": {
+      "annotationIds": [],
+      "createdAt": "<time>",
+      "id": "<uuid:5>",
+      "prompt": "Run the marker command.",
+      "queueOrder": 1,
+      "references": [],
+      "sessionId": "<uuid:3>",
+      "settingsSnapshot": {
+       "enabledConnectorIds": [
+        "web"
+       ],
+       "enabledSkillIds": [],
+       "enabledSkillLibraries": [],
+       "ideaTreeEnabled": false,
+       "modelId": "<uuid:1>",
+       "semanticReviewEnabled": true,
+       "skillSelectionMode": "selected",
+       "thinkingMode": "auto"
+      },
+      "status": "queued"
+     },
+     "type": "run.queued"
+    },
+    {
+     "run": {
+      "annotationIds": [],
+      "createdAt": "<time>",
+      "id": "<uuid:5>",
+      "prompt": "Run the marker command.",
+      "queueOrder": 1,
+      "references": [],
+      "sessionId": "<uuid:3>",
+      "settingsSnapshot": {
+       "enabledConnectorIds": [
+        "web"
+       ],
+       "enabledSkillIds": [],
+       "enabledSkillLibraries": [],
+       "ideaTreeEnabled": false,
+       "modelId": "<uuid:1>",
+       "semanticReviewEnabled": true,
+       "skillSelectionMode": "selected",
+       "thinkingMode": "auto"
+      },
+      "startedAt": "<time>",
+      "status": "running"
+     },
+     "status": "running",
+     "type": "run.status"
+    },
+    {
+     "model": {
+      "id": "<uuid:1>",
+      "model": "contract-stub",
+      "name": "L2 stub model"
+     },
+     "runId": "<uuid:5>",
+     "settings": {
+      "enabledConnectorIds": [
+       "web"
+      ],
+      "enabledSkillIds": [],
+      "enabledSkillLibraries": [],
+      "ideaTreeEnabled": false,
+      "modelId": "<uuid:1>",
+      "semanticReviewEnabled": true,
+      "skillSelectionMode": "selected",
+      "thinkingMode": "auto"
+     },
+     "type": "run.started"
+    },
+    {
+     "phase": "thinking",
+     "turn": 1,
+     "type": "agent.phase"
+    },
+    {
+     "responseId": "<uuid:6>",
+     "turn": 1,
+     "type": "assistant.response.started"
+    },
+    {
+     "responseId": "<uuid:6>",
+     "turn": 1,
+     "type": "assistant.response.settled"
+    },
+    {
+     "trace": {
+      "args": {
+       "command": "echo L2-MARK"
+      },
+      "id": "call-main-1",
+      "name": "run_shell",
+      "status": "running"
+     },
+     "type": "tool.started"
+    },
+    {
+     "request": {
+      "action": "code",
+      "createdAt": "<time>",
+      "executionId": "<uuid:5>",
+      "id": "<uuid:7>",
+      "projectId": "<uuid:2>",
+      "resource": "workspace-code",
+      "sessionId": "<uuid:3>",
+      "state": "pending",
+      "summary": "Run a shell script in the Session workspace",
+      "toolCallId": "call-main-1"
+     },
+     "type": "permission.required"
+    },
+    {
+     "reason": "Waiting for permission decision",
+     "run": {
+      "annotationIds": [],
+      "createdAt": "<time>",
+      "id": "<uuid:5>",
+      "prompt": "Run the marker command.",
+      "queueOrder": 1,
+      "references": [],
+      "sessionId": "<uuid:3>",
+      "settingsSnapshot": {
+       "enabledConnectorIds": [
+        "web"
+       ],
+       "enabledSkillIds": [],
+       "enabledSkillLibraries": [],
+       "ideaTreeEnabled": false,
+       "modelId": "<uuid:1>",
+       "semanticReviewEnabled": true,
+       "skillSelectionMode": "selected",
+       "thinkingMode": "auto"
+      },
+      "startedAt": "<time>",
+      "status": "blocked",
+      "userMessageId": "<uuid:8>"
+     },
+     "status": "blocked",
+     "type": "run.status"
+    },
+    {
+     "request": {
+      "action": "code",
+      "createdAt": "<time>",
+      "decidedAt": "<time>",
+      "decision": "allowed",
+      "decisionEpochId": "<uuid:9>",
+      "executionId": "<uuid:5>",
+      "id": "<uuid:7>",
+      "permissionAuthorizationId": "<uuid:10>",
+      "projectId": "<uuid:2>",
+      "resource": "workspace-code",
+      "sessionId": "<uuid:3>",
+      "state": "allowed",
+      "summary": "Run a shell script in the Session workspace",
+      "toolCallId": "call-main-1"
+     },
+     "type": "permission.resolved"
+    },
+    {
+     "reason": "Permission decision received",
+     "run": {
+      "annotationIds": [],
+      "createdAt": "<time>",
+      "id": "<uuid:5>",
+      "prompt": "Run the marker command.",
+      "queueOrder": 1,
+      "references": [],
+      "sessionId": "<uuid:3>",
+      "settingsSnapshot": {
+       "enabledConnectorIds": [
+        "web"
+       ],
+       "enabledSkillIds": [],
+       "enabledSkillLibraries": [],
+       "ideaTreeEnabled": false,
+       "modelId": "<uuid:1>",
+       "semanticReviewEnabled": true,
+       "skillSelectionMode": "selected",
+       "thinkingMode": "auto"
+      },
+      "startedAt": "<time>",
+      "status": "running",
+      "userMessageId": "<uuid:8>"
+     },
+     "status": "running",
+     "type": "run.status"
+    },
+    {
+     "chunk": "{\"sessionId\":\"<uuid:3>\",\"agentId\":\"main\",\"runnerId\":\"local\",\"turnId\":\"<uuid:5>\",\"workspaceId\":\"<workspace>\",\"id\":\"<uuid:11>\",\"state\":\"completed\",\"queuedAt\":\"<time>\",\"accepted\":true,\"provenance\":\"committed\",\"startedAt\":\"<time>\",\"runnerVersionId\":\"<sha256>\",\"finishedAt\":\"<time>\",\"result\":{\"exitCode\":0,\"stderr\":\"\",\"stdout\":\"L2-MARK\\n\",\"cgroupMode\":\"none\",\"createdFiles\":[],\"environmentRevisionId\":\"<system-environment>\",\"environmentVariables\":{\"HOME\":\"/tmp\",\"PATH\":\"/usr/bin:/bin\",\"SSL_CERT_FILE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"CURL_CA_BUNDLE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"REQUESTS_CA_BUNDLE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"SSL_CERT_DIR\":\"/etc/ssl/certs\"},\"executionId\":\"<uuid:11>\",\"finishedAt\":\"<time>\",\"kernelId\":\"ephemeral:<uuid:11>\",\"kernelMode\":\"ephemeral\",\"language\":\"shell\",\"modifiedFiles\":[],\"networkAccessRevision\":\"none\",\"networkPolicy\":\"none\",\"runnerVersion\":\"f2dbe052-dirty\",\"sandbox\":\"bubblewrap\",\"startedAt\":\"<time>\",\"workingDirectory\":\"/workspace\",\"workspaceSnapshot\":{\"pool\":\"agent-state\",\"digest\":\"<sha256>\",\"size\":83,\"mediaType\":\"application/vnd.sciencediscovery.record.v1+json\"},\"workspaceVersion\":{\"pool\":\"agent-state\",\"digest\":\"<sha256>\",\"size\":1582,\"mediaType\":\"application/vnd.sciencediscovery.record.v1+json\"}}}",
+     "toolCallId": "call-main-1",
+     "type": "tool.output"
+    },
+    {
+     "trace": {
+      "details": {
+       "__detailsBoundary": {
+        "maxArrayItems": 100,
+        "maxDepth": 8,
+        "maxObjectKeys": 100,
+        "maxStringChars": 4096,
+        "maxTotalStringChars": 64000,
+        "omittedPayloadFields": true,
+        "truncated": false
+       },
+       "accepted": true,
+       "agentId": "main",
+       "finishedAt": "<time>",
+       "id": "<uuid:11>",
+       "provenance": "committed",
+       "queuedAt": "<time>",
+       "result": {
+        "cgroupMode": "none",
+        "createdFiles": [],
+        "environmentRevisionId": "<system-environment>",
+        "environmentVariables": {
+         "CURL_CA_BUNDLE": "/etc/pki/tls/certs/ca-bundle.crt",
+         "HOME": "/tmp",
+         "PATH": "/usr/bin:/bin",
+         "REQUESTS_CA_BUNDLE": "/etc/pki/tls/certs/ca-bundle.crt",
+         "SSL_CERT_DIR": "/etc/ssl/certs",
+         "SSL_CERT_FILE": "/etc/pki/tls/certs/ca-bundle.crt"
+        },
+        "executionId": "<uuid:11>",
+        "exitCode": 0,
+        "finishedAt": "<time>",
+        "kernelId": "ephemeral:<uuid:11>",
+        "kernelMode": "ephemeral",
+        "language": "shell",
+        "modifiedFiles": [],
+        "networkAccessRevision": "none",
+        "networkPolicy": "none",
+        "runnerVersion": "<volatile>",
+        "sandbox": "bubblewrap",
+        "startedAt": "<time>",
+        "stderr": "[omitted]",
+        "stdout": "[omitted]",
+        "workingDirectory": "/workspace",
+        "workspaceSnapshot": {
+         "digest": "<sha256>",
+         "mediaType": "application/vnd.sciencediscovery.record.v1+json",
+         "pool": "agent-state",
+         "size": 83
+        },
+        "workspaceVersion": {
+         "digest": "<sha256>",
+         "mediaType": "application/vnd.sciencediscovery.record.v1+json",
+         "pool": "agent-state",
+         "size": 1582
+        }
+       },
+       "runnerId": "local",
+       "runnerVersionId": "<volatile>",
+       "sessionId": "<uuid:3>",
+       "startedAt": "<time>",
+       "state": "completed",
+       "turnId": "<uuid:5>",
+       "workspaceId": "<workspace>"
+      },
+      "id": "call-main-1",
+      "name": "run_shell",
+      "outputChars": 1724,
+      "outputStream": "tool-call-main-1",
+      "status": "completed"
+     },
+     "type": "tool.completed"
+    },
+    {
+     "phase": "thinking",
+     "turn": 2,
+     "type": "agent.phase"
+    },
+    {
+     "responseId": "<uuid:12>",
+     "turn": 2,
+     "type": "assistant.response.started"
+    },
+    {
+     "delta": "Allowed and done.",
+     "responseId": "<uuid:12>",
+     "type": "assistant.delta"
+    },
+    {
+     "responseId": "<uuid:12>",
+     "turn": 2,
+     "type": "assistant.response.settled"
+    },
+    {
+     "files": [],
+     "message": {
+      "content": "Allowed and done.",
+      "createdAt": "<time>",
+      "id": "<uuid:13>",
+      "kind": "message",
+      "modelContext": [
+       {
+        "content": "",
+        "role": "assistant",
+        "tool_calls": [
+         {
+          "function": {
+           "arguments": "{\"command\":\"echo L2-MARK\"}",
+           "name": "run_shell"
+          },
+          "id": "call-main-1",
+          "type": "function"
+         }
+        ]
+       },
+       {
+        "content": "{\"sessionId\":\"<uuid:3>\",\"agentId\":\"main\",\"runnerId\":\"local\",\"turnId\":\"<uuid:5>\",\"workspaceId\":\"<workspace>\",\"id\":\"<uuid:11>\",\"state\":\"completed\",\"queuedAt\":\"<time>\",\"accepted\":true,\"provenance\":\"committed\",\"startedAt\":\"<time>\",\"runnerVersionId\":\"<sha256>\",\"finishedAt\":\"<time>\",\"result\":{\"exitCode\":0,\"stderr\":\"\",\"stdout\":\"L2-MARK\\n\",\"cgroupMode\":\"none\",\"createdFiles\":[],\"environmentRevisionId\":\"<system-environment>\",\"environmentVariables\":{\"HOME\":\"/tmp\",\"PATH\":\"/usr/bin:/bin\",\"SSL_CERT_FILE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"CURL_CA_BUNDLE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"REQUESTS_CA_BUNDLE\":\"/etc/pki/tls/certs/ca-bundle.crt\",\"SSL_CERT_DIR\":\"/etc/ssl/certs\"},\"executionId\":\"<uuid:11>\",\"finishedAt\":\"<time>\",\"kernelId\":\"ephemeral:<uuid:11>\",\"kernelMode\":\"ephemeral\",\"language\":\"shell\",\"modifiedFiles\":[],\"networkAccessRevision\":\"none\",\"networkPolicy\":\"none\",\"runnerVersion\":\"f2dbe052-dirty\",\"sandbox\":\"bubblewrap\",\"startedAt\":\"<time>\",\"workingDirectory\":\"/workspace\",\"workspaceSnapshot\":{\"pool\":\"agent-state\",\"digest\":\"<sha256>\",\"size\":83,\"mediaType\":\"application/vnd.sciencediscovery.record.v1+json\"},\"workspaceVersion\":{\"pool\":\"agent-state\",\"digest\":\"<sha256>\",\"size\":1582,\"mediaType\":\"application/vnd.sciencediscovery.record.v1+json\"}}}",
+        "name": "run_shell",
+        "role": "tool",
+        "tool_call_id": "call-main-1"
+       },
+       {
+        "content": "Allowed and done.",
+        "role": "assistant"
+       }
+      ],
+      "modelId": "<uuid:1>",
+      "modelName": "L2 stub model",
+      "role": "assistant"
+     },
+     "type": "run.completed"
+    }
+   ]
+  },
+  {
+   "name": "wait for the run to settle",
+   "status": 200,
+   "polled": "completed"
+  },
+  {
+   "name": "delete the project",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "deleted": "<uuid:2>"
+   }
+  },
+  {
+   "name": "restore the global settings",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "effective": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [
+      "antibody-protenix-pipeline",
+      "assessment-screening",
+      "citation-reviewer",
+      "code-engineer",
+      "computation-reviewer",
+      "creative-material-design",
+      "evidence-extractor",
+      "evolve-design",
+      "idea-tree-team",
+      "insight-aggregator",
+      "life-science-evidence-brief",
+      "literature-searcher",
+      "report-writer",
+      "result-evaluator",
+      "science-research-team",
+      "skill-creator",
+      "structure-pocket-inspection"
+     ],
+     "enabledSkillLibraries": [],
+     "semanticReviewEnabled": true,
+     "skillSelectionMode": "all"
+    },
+    "overrides": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "semanticReviewEnabled": true
+    },
+    "sources": {
+     "enabledConnectorIds": "global",
+     "enabledSkillIds": "unset",
+     "enabledSkillLibraries": "unset",
+     "modelId": "unset",
+     "plugins": "unset",
+     "reviewModelId": "unset",
+     "semanticReviewEnabled": "global",
+     "skillSelectionMode": "unset",
+     "thinkingEffort": "unset",
+     "thinkingMode": "unset"
+    }
+   }
+  },
+  {
+   "name": "delete the model",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "deleted": "<uuid:1>"
+   }
+  }
+ ],
+ "l2-approval-denied": [
+  {
+   "name": "remember the global settings",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "effective": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [
+      "antibody-protenix-pipeline",
+      "assessment-screening",
+      "citation-reviewer",
+      "code-engineer",
+      "computation-reviewer",
+      "creative-material-design",
+      "evidence-extractor",
+      "evolve-design",
+      "idea-tree-team",
+      "insight-aggregator",
+      "life-science-evidence-brief",
+      "literature-searcher",
+      "report-writer",
+      "result-evaluator",
+      "science-research-team",
+      "skill-creator",
+      "structure-pocket-inspection"
+     ],
+     "enabledSkillLibraries": [],
+     "semanticReviewEnabled": true,
+     "skillSelectionMode": "all"
+    },
+    "overrides": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "semanticReviewEnabled": true
+    },
+    "sources": {
+     "enabledConnectorIds": "global",
+     "enabledSkillIds": "unset",
+     "enabledSkillLibraries": "unset",
+     "modelId": "unset",
+     "plugins": "unset",
+     "reviewModelId": "unset",
+     "semanticReviewEnabled": "global",
+     "skillSelectionMode": "unset",
+     "thinkingEffort": "unset",
+     "thinkingMode": "unset"
+    }
+   }
+  },
+  {
+   "name": "register the stub model",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "apiProtocol": "openai-chat-completions",
+    "apiVariant": "openai",
+    "baseUrl": "http://127.0.0.1:<port>/v1",
+    "createdAt": "<time>",
+    "hasApiToken": true,
+    "id": "<uuid:1>",
+    "model": "contract-stub",
+    "name": "L2 stub model",
+    "proxyPolicy": "inherit",
+    "thinkingEffort": "high",
+    "thinkingMode": "auto",
+    "updatedAt": "<time>",
+    "vision": false
+   }
+  },
+  {
+   "name": "create a project",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "createdAt": "<time>",
+    "firstSession": {
+     "approvalMode": "ask_for_dangerous",
+     "createdAt": "<time>",
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [],
+     "id": "<uuid:3>",
+     "modelId": "<uuid:1>",
+     "permissionEpochId": "<uuid:4>",
+     "projectId": "<uuid:2>",
+     "reviewCriteria": [],
+     "reviewerAutomaticReviewEnabled": true,
+     "reviewerSpecialistLevel": "quick",
+     "reviewMode": "auto",
+     "semanticReviewEnabled": true,
+     "settingsOverrides": {},
+     "title": "Untitled session",
+     "updatedAt": "<time>"
+    },
+    "id": "<uuid:2>",
+    "name": "L2 project",
+    "project": {
+     "createdAt": "<time>",
+     "id": "<uuid:2>",
+     "name": "L2 project",
+     "remoteRunnerHostIds": [],
+     "settingsOverrides": {
+      "enabledSkillIds": [],
+      "enabledSkillLibraries": [],
+      "skillSelectionMode": "selected"
+     }
+    },
+    "remoteRunnerHostIds": [],
+    "settingsOverrides": {
+     "enabledSkillIds": [],
+     "enabledSkillLibraries": [],
+     "skillSelectionMode": "selected"
+    }
+   }
+  },
+  {
+   "name": "choose the model",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "approvalMode": "ask_for_dangerous",
+    "createdAt": "<time>",
+    "enabledConnectorIds": [
+     "web"
+    ],
+    "enabledSkillIds": [],
+    "id": "<uuid:3>",
+    "modelId": "<uuid:1>",
+    "permissionEpochId": "<uuid:4>",
+    "projectId": "<uuid:2>",
+    "reviewCriteria": [],
+    "reviewerAutomaticReviewEnabled": true,
+    "reviewerSpecialistLevel": "quick",
+    "reviewMode": "auto",
+    "semanticReviewEnabled": true,
+    "settingsOverrides": {
+     "modelId": "<uuid:1>"
+    },
+    "title": "L2 session",
+    "updatedAt": "<time>"
+   }
+  },
+  {
+   "name": "choose the approval mode",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "approvalMode": "ask_for_dangerous",
+    "createdAt": "<time>",
+    "enabledConnectorIds": [
+     "web"
+    ],
+    "enabledSkillIds": [],
+    "id": "<uuid:3>",
+    "modelId": "<uuid:1>",
+    "permissionEpochId": "<uuid:4>",
+    "projectId": "<uuid:2>",
+    "reviewCriteria": [],
+    "reviewerAutomaticReviewEnabled": true,
+    "reviewerSpecialistLevel": "quick",
+    "reviewMode": "auto",
+    "semanticReviewEnabled": true,
+    "settingsOverrides": {
+     "modelId": "<uuid:1>"
+    },
+    "title": "L2 session",
+    "updatedAt": "<time>"
+   }
+  },
+  {
+   "name": "send a message",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "annotationIds": [],
+    "createdAt": "<time>",
+    "id": "<uuid:5>",
+    "prompt": "Run the marker command.",
+    "queueOrder": 1,
+    "references": [],
+    "sessionId": "<uuid:3>",
+    "settingsSnapshot": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [],
+     "enabledSkillLibraries": [],
+     "ideaTreeEnabled": false,
+     "modelId": "<uuid:1>",
+     "semanticReviewEnabled": true,
+     "skillSelectionMode": "selected",
+     "thinkingMode": "auto"
+    },
+    "status": "queued"
+   }
+  },
+  {
+   "name": "run events",
+   "status": 200,
+   "contentType": "text/event-stream",
+   "events": [
+    {
+     "run": {
+      "annotationIds": [],
+      "createdAt": "<time>",
+      "id": "<uuid:5>",
+      "prompt": "Run the marker command.",
+      "queueOrder": 1,
+      "references": [],
+      "sessionId": "<uuid:3>",
+      "settingsSnapshot": {
+       "enabledConnectorIds": [
+        "web"
+       ],
+       "enabledSkillIds": [],
+       "enabledSkillLibraries": [],
+       "ideaTreeEnabled": false,
+       "modelId": "<uuid:1>",
+       "semanticReviewEnabled": true,
+       "skillSelectionMode": "selected",
+       "thinkingMode": "auto"
+      },
+      "status": "queued"
+     },
+     "type": "run.queued"
+    },
+    {
+     "run": {
+      "annotationIds": [],
+      "createdAt": "<time>",
+      "id": "<uuid:5>",
+      "prompt": "Run the marker command.",
+      "queueOrder": 1,
+      "references": [],
+      "sessionId": "<uuid:3>",
+      "settingsSnapshot": {
+       "enabledConnectorIds": [
+        "web"
+       ],
+       "enabledSkillIds": [],
+       "enabledSkillLibraries": [],
+       "ideaTreeEnabled": false,
+       "modelId": "<uuid:1>",
+       "semanticReviewEnabled": true,
+       "skillSelectionMode": "selected",
+       "thinkingMode": "auto"
+      },
+      "startedAt": "<time>",
+      "status": "running"
+     },
+     "status": "running",
+     "type": "run.status"
+    },
+    {
+     "model": {
+      "id": "<uuid:1>",
+      "model": "contract-stub",
+      "name": "L2 stub model"
+     },
+     "runId": "<uuid:5>",
+     "settings": {
+      "enabledConnectorIds": [
+       "web"
+      ],
+      "enabledSkillIds": [],
+      "enabledSkillLibraries": [],
+      "ideaTreeEnabled": false,
+      "modelId": "<uuid:1>",
+      "semanticReviewEnabled": true,
+      "skillSelectionMode": "selected",
+      "thinkingMode": "auto"
+     },
+     "type": "run.started"
+    },
+    {
+     "phase": "thinking",
+     "turn": 1,
+     "type": "agent.phase"
+    },
+    {
+     "responseId": "<uuid:6>",
+     "turn": 1,
+     "type": "assistant.response.started"
+    },
+    {
+     "responseId": "<uuid:6>",
+     "turn": 1,
+     "type": "assistant.response.settled"
+    },
+    {
+     "trace": {
+      "args": {
+       "command": "echo L2-MARK"
+      },
+      "id": "call-main-1",
+      "name": "run_shell",
+      "status": "running"
+     },
+     "type": "tool.started"
+    },
+    {
+     "request": {
+      "action": "code",
+      "createdAt": "<time>",
+      "executionId": "<uuid:5>",
+      "id": "<uuid:7>",
+      "projectId": "<uuid:2>",
+      "resource": "workspace-code",
+      "sessionId": "<uuid:3>",
+      "state": "pending",
+      "summary": "Run a shell script in the Session workspace",
+      "toolCallId": "call-main-1"
+     },
+     "type": "permission.required"
+    },
+    {
+     "reason": "Waiting for permission decision",
+     "run": {
+      "annotationIds": [],
+      "createdAt": "<time>",
+      "id": "<uuid:5>",
+      "prompt": "Run the marker command.",
+      "queueOrder": 1,
+      "references": [],
+      "sessionId": "<uuid:3>",
+      "settingsSnapshot": {
+       "enabledConnectorIds": [
+        "web"
+       ],
+       "enabledSkillIds": [],
+       "enabledSkillLibraries": [],
+       "ideaTreeEnabled": false,
+       "modelId": "<uuid:1>",
+       "semanticReviewEnabled": true,
+       "skillSelectionMode": "selected",
+       "thinkingMode": "auto"
+      },
+      "startedAt": "<time>",
+      "status": "blocked",
+      "userMessageId": "<uuid:8>"
+     },
+     "status": "blocked",
+     "type": "run.status"
+    },
+    {
+     "request": {
+      "action": "code",
+      "createdAt": "<time>",
+      "decidedAt": "<time>",
+      "decision": "denied",
+      "decisionEpochId": "<uuid:9>",
+      "executionId": "<uuid:5>",
+      "id": "<uuid:7>",
+      "permissionAuthorizationId": "<uuid:10>",
+      "projectId": "<uuid:2>",
+      "resource": "workspace-code",
+      "sessionId": "<uuid:3>",
+      "state": "denied",
+      "summary": "Run a shell script in the Session workspace",
+      "toolCallId": "call-main-1"
+     },
+     "type": "permission.resolved"
+    },
+    {
+     "reason": "Permission decision received",
+     "run": {
+      "annotationIds": [],
+      "createdAt": "<time>",
+      "id": "<uuid:5>",
+      "prompt": "Run the marker command.",
+      "queueOrder": 1,
+      "references": [],
+      "sessionId": "<uuid:3>",
+      "settingsSnapshot": {
+       "enabledConnectorIds": [
+        "web"
+       ],
+       "enabledSkillIds": [],
+       "enabledSkillLibraries": [],
+       "ideaTreeEnabled": false,
+       "modelId": "<uuid:1>",
+       "semanticReviewEnabled": true,
+       "skillSelectionMode": "selected",
+       "thinkingMode": "auto"
+      },
+      "startedAt": "<time>",
+      "status": "running",
+      "userMessageId": "<uuid:8>"
+     },
+     "status": "running",
+     "type": "run.status"
+    },
+    {
+     "chunk": "{\"ok\":false,\"error\":{\"attempts\":1,\"code\":\"TOOL_EXECUTION_FAILED\",\"message\":\"Permission denied: Run a shell script in the Session workspace\",\"retryable\":false}}",
+     "toolCallId": "call-main-1",
+     "type": "tool.output"
+    },
+    {
+     "trace": {
+      "details": {
+       "error": {
+        "attempts": 1,
+        "code": "TOOL_EXECUTION_FAILED",
+        "message": "Permission denied: Run a shell script in the Session workspace",
+        "retryable": false
+       },
+       "ok": false
+      },
+      "id": "call-main-1",
+      "name": "run_shell",
+      "outputChars": 159,
+      "outputStream": "tool-call-main-1",
+      "status": "failed"
+     },
+     "type": "tool.completed"
+    },
+    {
+     "phase": "thinking",
+     "turn": 2,
+     "type": "agent.phase"
+    },
+    {
+     "responseId": "<uuid:11>",
+     "turn": 2,
+     "type": "assistant.response.started"
+    },
+    {
+     "delta": "The command was not allowed.",
+     "responseId": "<uuid:11>",
+     "type": "assistant.delta"
+    },
+    {
+     "responseId": "<uuid:11>",
+     "turn": 2,
+     "type": "assistant.response.settled"
+    },
+    {
+     "files": [],
+     "message": {
+      "content": "The command was not allowed.",
+      "createdAt": "<time>",
+      "id": "<uuid:12>",
+      "kind": "message",
+      "modelContext": [
+       {
+        "content": "",
+        "role": "assistant",
+        "tool_calls": [
+         {
+          "function": {
+           "arguments": "{\"command\":\"echo L2-MARK\"}",
+           "name": "run_shell"
+          },
+          "id": "call-main-1",
+          "type": "function"
+         }
+        ]
+       },
+       {
+        "content": "{\"ok\":false,\"error\":{\"attempts\":1,\"code\":\"TOOL_EXECUTION_FAILED\",\"message\":\"Permission denied: Run a shell script in the Session workspace\",\"retryable\":false}}",
+        "name": "run_shell",
+        "role": "tool",
+        "tool_call_id": "call-main-1"
+       },
+       {
+        "content": "The command was not allowed.",
+        "role": "assistant"
+       }
+      ],
+      "modelId": "<uuid:1>",
+      "modelName": "L2 stub model",
+      "role": "assistant"
+     },
+     "type": "run.completed"
+    }
+   ]
+  },
+  {
+   "name": "wait for the run to settle",
+   "status": 200,
+   "polled": "completed"
+  },
+  {
+   "name": "delete the project",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "deleted": "<uuid:2>"
+   }
+  },
+  {
+   "name": "restore the global settings",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "effective": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [
+      "antibody-protenix-pipeline",
+      "assessment-screening",
+      "citation-reviewer",
+      "code-engineer",
+      "computation-reviewer",
+      "creative-material-design",
+      "evidence-extractor",
+      "evolve-design",
+      "idea-tree-team",
+      "insight-aggregator",
+      "life-science-evidence-brief",
+      "literature-searcher",
+      "report-writer",
+      "result-evaluator",
+      "science-research-team",
+      "skill-creator",
+      "structure-pocket-inspection"
+     ],
+     "enabledSkillLibraries": [],
+     "semanticReviewEnabled": true,
+     "skillSelectionMode": "all"
+    },
+    "overrides": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "semanticReviewEnabled": true
+    },
+    "sources": {
+     "enabledConnectorIds": "global",
+     "enabledSkillIds": "unset",
+     "enabledSkillLibraries": "unset",
+     "modelId": "unset",
+     "plugins": "unset",
+     "reviewModelId": "unset",
+     "semanticReviewEnabled": "global",
+     "skillSelectionMode": "unset",
+     "thinkingEffort": "unset",
+     "thinkingMode": "unset"
+    }
+   }
+  },
+  {
+   "name": "delete the model",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "deleted": "<uuid:1>"
+   }
+  }
+ ],
+ "l2-cancel": [
+  {
+   "name": "remember the global settings",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "effective": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [
+      "antibody-protenix-pipeline",
+      "assessment-screening",
+      "citation-reviewer",
+      "code-engineer",
+      "computation-reviewer",
+      "creative-material-design",
+      "evidence-extractor",
+      "evolve-design",
+      "idea-tree-team",
+      "insight-aggregator",
+      "life-science-evidence-brief",
+      "literature-searcher",
+      "report-writer",
+      "result-evaluator",
+      "science-research-team",
+      "skill-creator",
+      "structure-pocket-inspection"
+     ],
+     "enabledSkillLibraries": [],
+     "semanticReviewEnabled": true,
+     "skillSelectionMode": "all"
+    },
+    "overrides": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "semanticReviewEnabled": true
+    },
+    "sources": {
+     "enabledConnectorIds": "global",
+     "enabledSkillIds": "unset",
+     "enabledSkillLibraries": "unset",
+     "modelId": "unset",
+     "plugins": "unset",
+     "reviewModelId": "unset",
+     "semanticReviewEnabled": "global",
+     "skillSelectionMode": "unset",
+     "thinkingEffort": "unset",
+     "thinkingMode": "unset"
+    }
+   }
+  },
+  {
+   "name": "register the stub model",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "apiProtocol": "openai-chat-completions",
+    "apiVariant": "openai",
+    "baseUrl": "http://127.0.0.1:<port>/v1",
+    "createdAt": "<time>",
+    "hasApiToken": true,
+    "id": "<uuid:1>",
+    "model": "contract-stub",
+    "name": "L2 stub model",
+    "proxyPolicy": "inherit",
+    "thinkingEffort": "high",
+    "thinkingMode": "auto",
+    "updatedAt": "<time>",
+    "vision": false
+   }
+  },
+  {
+   "name": "create a project",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "createdAt": "<time>",
+    "firstSession": {
+     "approvalMode": "ask_for_dangerous",
+     "createdAt": "<time>",
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [],
+     "id": "<uuid:3>",
+     "modelId": "<uuid:1>",
+     "permissionEpochId": "<uuid:4>",
+     "projectId": "<uuid:2>",
+     "reviewCriteria": [],
+     "reviewerAutomaticReviewEnabled": true,
+     "reviewerSpecialistLevel": "quick",
+     "reviewMode": "auto",
+     "semanticReviewEnabled": true,
+     "settingsOverrides": {},
+     "title": "Untitled session",
+     "updatedAt": "<time>"
+    },
+    "id": "<uuid:2>",
+    "name": "L2 project",
+    "project": {
+     "createdAt": "<time>",
+     "id": "<uuid:2>",
+     "name": "L2 project",
+     "remoteRunnerHostIds": [],
+     "settingsOverrides": {
+      "enabledSkillIds": [],
+      "enabledSkillLibraries": [],
+      "skillSelectionMode": "selected"
+     }
+    },
+    "remoteRunnerHostIds": [],
+    "settingsOverrides": {
+     "enabledSkillIds": [],
+     "enabledSkillLibraries": [],
+     "skillSelectionMode": "selected"
+    }
+   }
+  },
+  {
+   "name": "choose the model",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "approvalMode": "ask_for_dangerous",
+    "createdAt": "<time>",
+    "enabledConnectorIds": [
+     "web"
+    ],
+    "enabledSkillIds": [],
+    "id": "<uuid:3>",
+    "modelId": "<uuid:1>",
+    "permissionEpochId": "<uuid:4>",
+    "projectId": "<uuid:2>",
+    "reviewCriteria": [],
+    "reviewerAutomaticReviewEnabled": true,
+    "reviewerSpecialistLevel": "quick",
+    "reviewMode": "auto",
+    "semanticReviewEnabled": true,
+    "settingsOverrides": {
+     "modelId": "<uuid:1>"
+    },
+    "title": "L2 session",
+    "updatedAt": "<time>"
+   }
+  },
+  {
+   "name": "choose the approval mode",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "approvalMode": "always_allow",
+    "createdAt": "<time>",
+    "enabledConnectorIds": [
+     "web"
+    ],
+    "enabledSkillIds": [],
+    "id": "<uuid:3>",
+    "modelId": "<uuid:1>",
+    "permissionEpochId": "<uuid:5>",
+    "projectId": "<uuid:2>",
+    "reviewCriteria": [],
+    "reviewerAutomaticReviewEnabled": true,
+    "reviewerSpecialistLevel": "quick",
+    "reviewMode": "auto",
+    "semanticReviewEnabled": true,
+    "settingsOverrides": {
+     "modelId": "<uuid:1>"
+    },
+    "title": "L2 session",
+    "updatedAt": "<time>"
+   }
+  },
+  {
+   "name": "send a message",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "annotationIds": [],
+    "createdAt": "<time>",
+    "id": "<uuid:6>",
+    "prompt": "Take your time.",
+    "queueOrder": 1,
+    "references": [],
+    "sessionId": "<uuid:3>",
+    "settingsSnapshot": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [],
+     "enabledSkillLibraries": [],
+     "ideaTreeEnabled": false,
+     "modelId": "<uuid:1>",
+     "semanticReviewEnabled": true,
+     "skillSelectionMode": "selected",
+     "thinkingMode": "auto"
+    },
+    "status": "queued"
+   }
+  },
+  {
+   "name": "run events",
+   "status": 200,
+   "contentType": "text/event-stream",
+   "events": [
+    {
+     "run": {
+      "annotationIds": [],
+      "createdAt": "<time>",
+      "id": "<uuid:6>",
+      "prompt": "Take your time.",
+      "queueOrder": 1,
+      "references": [],
+      "sessionId": "<uuid:3>",
+      "settingsSnapshot": {
+       "enabledConnectorIds": [
+        "web"
+       ],
+       "enabledSkillIds": [],
+       "enabledSkillLibraries": [],
+       "ideaTreeEnabled": false,
+       "modelId": "<uuid:1>",
+       "semanticReviewEnabled": true,
+       "skillSelectionMode": "selected",
+       "thinkingMode": "auto"
+      },
+      "status": "queued"
+     },
+     "type": "run.queued"
+    },
+    {
+     "run": {
+      "annotationIds": [],
+      "createdAt": "<time>",
+      "id": "<uuid:6>",
+      "prompt": "Take your time.",
+      "queueOrder": 1,
+      "references": [],
+      "sessionId": "<uuid:3>",
+      "settingsSnapshot": {
+       "enabledConnectorIds": [
+        "web"
+       ],
+       "enabledSkillIds": [],
+       "enabledSkillLibraries": [],
+       "ideaTreeEnabled": false,
+       "modelId": "<uuid:1>",
+       "semanticReviewEnabled": true,
+       "skillSelectionMode": "selected",
+       "thinkingMode": "auto"
+      },
+      "startedAt": "<time>",
+      "status": "running"
+     },
+     "status": "running",
+     "type": "run.status"
+    },
+    {
+     "model": {
+      "id": "<uuid:1>",
+      "model": "contract-stub",
+      "name": "L2 stub model"
+     },
+     "runId": "<uuid:6>",
+     "settings": {
+      "enabledConnectorIds": [
+       "web"
+      ],
+      "enabledSkillIds": [],
+      "enabledSkillLibraries": [],
+      "ideaTreeEnabled": false,
+      "modelId": "<uuid:1>",
+      "semanticReviewEnabled": true,
+      "skillSelectionMode": "selected",
+      "thinkingMode": "auto"
+     },
+     "type": "run.started"
+    },
+    {
+     "reason": "Run cancelled",
+     "runId": "<uuid:6>",
+     "type": "run.cancelled"
+    }
+   ]
+  },
+  {
+   "name": "wait for the run to settle",
+   "status": 200,
+   "polled": "cancelled"
+  },
+  {
+   "name": "delete the project",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "deleted": "<uuid:2>"
+   }
+  },
+  {
+   "name": "restore the global settings",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "effective": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [
+      "antibody-protenix-pipeline",
+      "assessment-screening",
+      "citation-reviewer",
+      "code-engineer",
+      "computation-reviewer",
+      "creative-material-design",
+      "evidence-extractor",
+      "evolve-design",
+      "idea-tree-team",
+      "insight-aggregator",
+      "life-science-evidence-brief",
+      "literature-searcher",
+      "report-writer",
+      "result-evaluator",
+      "science-research-team",
+      "skill-creator",
+      "structure-pocket-inspection"
+     ],
+     "enabledSkillLibraries": [],
+     "semanticReviewEnabled": true,
+     "skillSelectionMode": "all"
+    },
+    "overrides": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "semanticReviewEnabled": true
+    },
+    "sources": {
+     "enabledConnectorIds": "global",
+     "enabledSkillIds": "unset",
+     "enabledSkillLibraries": "unset",
+     "modelId": "unset",
+     "plugins": "unset",
+     "reviewModelId": "unset",
+     "semanticReviewEnabled": "global",
+     "skillSelectionMode": "unset",
+     "thinkingEffort": "unset",
+     "thinkingMode": "unset"
+    }
+   }
+  },
+  {
+   "name": "delete the model",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "deleted": "<uuid:1>"
+   }
+  }
+ ],
+ "l2-provider-unauthorized": [
+  {
+   "name": "remember the global settings",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "effective": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [
+      "antibody-protenix-pipeline",
+      "assessment-screening",
+      "citation-reviewer",
+      "code-engineer",
+      "computation-reviewer",
+      "creative-material-design",
+      "evidence-extractor",
+      "evolve-design",
+      "idea-tree-team",
+      "insight-aggregator",
+      "life-science-evidence-brief",
+      "literature-searcher",
+      "report-writer",
+      "result-evaluator",
+      "science-research-team",
+      "skill-creator",
+      "structure-pocket-inspection"
+     ],
+     "enabledSkillLibraries": [],
+     "semanticReviewEnabled": true,
+     "skillSelectionMode": "all"
+    },
+    "overrides": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "semanticReviewEnabled": true
+    },
+    "sources": {
+     "enabledConnectorIds": "global",
+     "enabledSkillIds": "unset",
+     "enabledSkillLibraries": "unset",
+     "modelId": "unset",
+     "plugins": "unset",
+     "reviewModelId": "unset",
+     "semanticReviewEnabled": "global",
+     "skillSelectionMode": "unset",
+     "thinkingEffort": "unset",
+     "thinkingMode": "unset"
+    }
+   }
+  },
+  {
+   "name": "register the stub model",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "apiProtocol": "openai-chat-completions",
+    "apiVariant": "openai",
+    "baseUrl": "http://127.0.0.1:<port>/v1",
+    "createdAt": "<time>",
+    "hasApiToken": true,
+    "id": "<uuid:1>",
+    "model": "contract-stub",
+    "name": "L2 stub model",
+    "proxyPolicy": "inherit",
+    "thinkingEffort": "high",
+    "thinkingMode": "auto",
+    "updatedAt": "<time>",
+    "vision": false
+   }
+  },
+  {
+   "name": "create a project",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "createdAt": "<time>",
+    "firstSession": {
+     "approvalMode": "ask_for_dangerous",
+     "createdAt": "<time>",
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [],
+     "id": "<uuid:3>",
+     "modelId": "<uuid:1>",
+     "permissionEpochId": "<uuid:4>",
+     "projectId": "<uuid:2>",
+     "reviewCriteria": [],
+     "reviewerAutomaticReviewEnabled": true,
+     "reviewerSpecialistLevel": "quick",
+     "reviewMode": "auto",
+     "semanticReviewEnabled": true,
+     "settingsOverrides": {},
+     "title": "Untitled session",
+     "updatedAt": "<time>"
+    },
+    "id": "<uuid:2>",
+    "name": "L2 project",
+    "project": {
+     "createdAt": "<time>",
+     "id": "<uuid:2>",
+     "name": "L2 project",
+     "remoteRunnerHostIds": [],
+     "settingsOverrides": {
+      "enabledSkillIds": [],
+      "enabledSkillLibraries": [],
+      "skillSelectionMode": "selected"
+     }
+    },
+    "remoteRunnerHostIds": [],
+    "settingsOverrides": {
+     "enabledSkillIds": [],
+     "enabledSkillLibraries": [],
+     "skillSelectionMode": "selected"
+    }
+   }
+  },
+  {
+   "name": "choose the model",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "approvalMode": "ask_for_dangerous",
+    "createdAt": "<time>",
+    "enabledConnectorIds": [
+     "web"
+    ],
+    "enabledSkillIds": [],
+    "id": "<uuid:3>",
+    "modelId": "<uuid:1>",
+    "permissionEpochId": "<uuid:4>",
+    "projectId": "<uuid:2>",
+    "reviewCriteria": [],
+    "reviewerAutomaticReviewEnabled": true,
+    "reviewerSpecialistLevel": "quick",
+    "reviewMode": "auto",
+    "semanticReviewEnabled": true,
+    "settingsOverrides": {
+     "modelId": "<uuid:1>"
+    },
+    "title": "L2 session",
+    "updatedAt": "<time>"
+   }
+  },
+  {
+   "name": "choose the approval mode",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "approvalMode": "always_allow",
+    "createdAt": "<time>",
+    "enabledConnectorIds": [
+     "web"
+    ],
+    "enabledSkillIds": [],
+    "id": "<uuid:3>",
+    "modelId": "<uuid:1>",
+    "permissionEpochId": "<uuid:5>",
+    "projectId": "<uuid:2>",
+    "reviewCriteria": [],
+    "reviewerAutomaticReviewEnabled": true,
+    "reviewerSpecialistLevel": "quick",
+    "reviewMode": "auto",
+    "semanticReviewEnabled": true,
+    "settingsOverrides": {
+     "modelId": "<uuid:1>"
+    },
+    "title": "L2 session",
+    "updatedAt": "<time>"
+   }
+  },
+  {
+   "name": "send a message",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "annotationIds": [],
+    "createdAt": "<time>",
+    "id": "<uuid:6>",
+    "prompt": "Anything.",
+    "queueOrder": 1,
+    "references": [],
+    "sessionId": "<uuid:3>",
+    "settingsSnapshot": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [],
+     "enabledSkillLibraries": [],
+     "ideaTreeEnabled": false,
+     "modelId": "<uuid:1>",
+     "semanticReviewEnabled": true,
+     "skillSelectionMode": "selected",
+     "thinkingMode": "auto"
+    },
+    "status": "queued"
+   }
+  },
+  {
+   "name": "run events",
+   "status": 200,
+   "contentType": "text/event-stream",
+   "events": [
+    {
+     "run": {
+      "annotationIds": [],
+      "createdAt": "<time>",
+      "id": "<uuid:6>",
+      "prompt": "Anything.",
+      "queueOrder": 1,
+      "references": [],
+      "sessionId": "<uuid:3>",
+      "settingsSnapshot": {
+       "enabledConnectorIds": [
+        "web"
+       ],
+       "enabledSkillIds": [],
+       "enabledSkillLibraries": [],
+       "ideaTreeEnabled": false,
+       "modelId": "<uuid:1>",
+       "semanticReviewEnabled": true,
+       "skillSelectionMode": "selected",
+       "thinkingMode": "auto"
+      },
+      "status": "queued"
+     },
+     "type": "run.queued"
+    },
+    {
+     "run": {
+      "annotationIds": [],
+      "createdAt": "<time>",
+      "id": "<uuid:6>",
+      "prompt": "Anything.",
+      "queueOrder": 1,
+      "references": [],
+      "sessionId": "<uuid:3>",
+      "settingsSnapshot": {
+       "enabledConnectorIds": [
+        "web"
+       ],
+       "enabledSkillIds": [],
+       "enabledSkillLibraries": [],
+       "ideaTreeEnabled": false,
+       "modelId": "<uuid:1>",
+       "semanticReviewEnabled": true,
+       "skillSelectionMode": "selected",
+       "thinkingMode": "auto"
+      },
+      "startedAt": "<time>",
+      "status": "running"
+     },
+     "status": "running",
+     "type": "run.status"
+    },
+    {
+     "model": {
+      "id": "<uuid:1>",
+      "model": "contract-stub",
+      "name": "L2 stub model"
+     },
+     "runId": "<uuid:6>",
+     "settings": {
+      "enabledConnectorIds": [
+       "web"
+      ],
+      "enabledSkillIds": [],
+      "enabledSkillLibraries": [],
+      "ideaTreeEnabled": false,
+      "modelId": "<uuid:1>",
+      "semanticReviewEnabled": true,
+      "skillSelectionMode": "selected",
+      "thinkingMode": "auto"
+     },
+     "type": "run.started"
+    },
+    {
+     "phase": "thinking",
+     "turn": 1,
+     "type": "agent.phase"
+    },
+    {
+     "responseId": "<uuid:7>",
+     "turn": 1,
+     "type": "assistant.response.started"
+    },
+    {
+     "responseId": "<uuid:7>",
+     "turn": 1,
+     "type": "assistant.response.settled"
+    },
+    {
+     "error": "Model request failed with status 401: {\"error\":{\"message\":\"scripted failure 401\"}}",
+     "errorCode": "unauthorized",
+     "type": "run.failed"
+    }
+   ]
+  },
+  {
+   "name": "wait for the run to settle",
+   "status": 200,
+   "polled": "failed"
+  },
+  {
+   "name": "delete the project",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "deleted": "<uuid:2>"
+   }
+  },
+  {
+   "name": "restore the global settings",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "effective": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [
+      "antibody-protenix-pipeline",
+      "assessment-screening",
+      "citation-reviewer",
+      "code-engineer",
+      "computation-reviewer",
+      "creative-material-design",
+      "evidence-extractor",
+      "evolve-design",
+      "idea-tree-team",
+      "insight-aggregator",
+      "life-science-evidence-brief",
+      "literature-searcher",
+      "report-writer",
+      "result-evaluator",
+      "science-research-team",
+      "skill-creator",
+      "structure-pocket-inspection"
+     ],
+     "enabledSkillLibraries": [],
+     "semanticReviewEnabled": true,
+     "skillSelectionMode": "all"
+    },
+    "overrides": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "semanticReviewEnabled": true
+    },
+    "sources": {
+     "enabledConnectorIds": "global",
+     "enabledSkillIds": "unset",
+     "enabledSkillLibraries": "unset",
+     "modelId": "unset",
+     "plugins": "unset",
+     "reviewModelId": "unset",
+     "semanticReviewEnabled": "global",
+     "skillSelectionMode": "unset",
+     "thinkingEffort": "unset",
+     "thinkingMode": "unset"
+    }
+   }
+  },
+  {
+   "name": "delete the model",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "deleted": "<uuid:1>"
+   }
+  }
+ ],
+ "l2-subagent": [
+  {
+   "name": "remember the global settings",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "effective": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [
+      "antibody-protenix-pipeline",
+      "assessment-screening",
+      "citation-reviewer",
+      "code-engineer",
+      "computation-reviewer",
+      "creative-material-design",
+      "evidence-extractor",
+      "evolve-design",
+      "idea-tree-team",
+      "insight-aggregator",
+      "life-science-evidence-brief",
+      "literature-searcher",
+      "report-writer",
+      "result-evaluator",
+      "science-research-team",
+      "skill-creator",
+      "structure-pocket-inspection"
+     ],
+     "enabledSkillLibraries": [],
+     "semanticReviewEnabled": true,
+     "skillSelectionMode": "all"
+    },
+    "overrides": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "semanticReviewEnabled": true
+    },
+    "sources": {
+     "enabledConnectorIds": "global",
+     "enabledSkillIds": "unset",
+     "enabledSkillLibraries": "unset",
+     "modelId": "unset",
+     "plugins": "unset",
+     "reviewModelId": "unset",
+     "semanticReviewEnabled": "global",
+     "skillSelectionMode": "unset",
+     "thinkingEffort": "unset",
+     "thinkingMode": "unset"
+    }
+   }
+  },
+  {
+   "name": "register the stub model",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "apiProtocol": "openai-chat-completions",
+    "apiVariant": "openai",
+    "baseUrl": "http://127.0.0.1:<port>/v1",
+    "createdAt": "<time>",
+    "hasApiToken": true,
+    "id": "<uuid:1>",
+    "model": "contract-stub",
+    "name": "L2 stub model",
+    "proxyPolicy": "inherit",
+    "thinkingEffort": "high",
+    "thinkingMode": "auto",
+    "updatedAt": "<time>",
+    "vision": false
+   }
+  },
+  {
+   "name": "create a project",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "createdAt": "<time>",
+    "firstSession": {
+     "approvalMode": "ask_for_dangerous",
+     "createdAt": "<time>",
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [],
+     "id": "<uuid:3>",
+     "modelId": "<uuid:1>",
+     "permissionEpochId": "<uuid:4>",
+     "projectId": "<uuid:2>",
+     "reviewCriteria": [],
+     "reviewerAutomaticReviewEnabled": true,
+     "reviewerSpecialistLevel": "quick",
+     "reviewMode": "auto",
+     "semanticReviewEnabled": true,
+     "settingsOverrides": {},
+     "title": "Untitled session",
+     "updatedAt": "<time>"
+    },
+    "id": "<uuid:2>",
+    "name": "L2 project",
+    "project": {
+     "createdAt": "<time>",
+     "id": "<uuid:2>",
+     "name": "L2 project",
+     "remoteRunnerHostIds": [],
+     "settingsOverrides": {
+      "enabledSkillIds": [],
+      "enabledSkillLibraries": [],
+      "skillSelectionMode": "selected"
+     }
+    },
+    "remoteRunnerHostIds": [],
+    "settingsOverrides": {
+     "enabledSkillIds": [],
+     "enabledSkillLibraries": [],
+     "skillSelectionMode": "selected"
+    }
+   }
+  },
+  {
+   "name": "choose the model",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "approvalMode": "ask_for_dangerous",
+    "createdAt": "<time>",
+    "enabledConnectorIds": [
+     "web"
+    ],
+    "enabledSkillIds": [],
+    "id": "<uuid:3>",
+    "modelId": "<uuid:1>",
+    "permissionEpochId": "<uuid:4>",
+    "projectId": "<uuid:2>",
+    "reviewCriteria": [],
+    "reviewerAutomaticReviewEnabled": true,
+    "reviewerSpecialistLevel": "quick",
+    "reviewMode": "auto",
+    "semanticReviewEnabled": true,
+    "settingsOverrides": {
+     "modelId": "<uuid:1>"
+    },
+    "title": "L2 session",
+    "updatedAt": "<time>"
+   }
+  },
+  {
+   "name": "choose the approval mode",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "approvalMode": "always_allow",
+    "createdAt": "<time>",
+    "enabledConnectorIds": [
+     "web"
+    ],
+    "enabledSkillIds": [],
+    "id": "<uuid:3>",
+    "modelId": "<uuid:1>",
+    "permissionEpochId": "<uuid:5>",
+    "projectId": "<uuid:2>",
+    "reviewCriteria": [],
+    "reviewerAutomaticReviewEnabled": true,
+    "reviewerSpecialistLevel": "quick",
+    "reviewMode": "auto",
+    "semanticReviewEnabled": true,
+    "settingsOverrides": {
+     "modelId": "<uuid:1>"
+    },
+    "title": "L2 session",
+    "updatedAt": "<time>"
+   }
+  },
+  {
+   "name": "send a message",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "annotationIds": [],
+    "createdAt": "<time>",
+    "id": "<uuid:6>",
+    "prompt": "Delegate one task.",
+    "queueOrder": 1,
+    "references": [],
+    "sessionId": "<uuid:3>",
+    "settingsSnapshot": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [],
+     "enabledSkillLibraries": [],
+     "ideaTreeEnabled": false,
+     "modelId": "<uuid:1>",
+     "semanticReviewEnabled": true,
+     "skillSelectionMode": "selected",
+     "thinkingMode": "auto"
+    },
+    "status": "queued"
+   }
+  },
+  {
+   "name": "run events",
+   "status": 200,
+   "contentType": "text/event-stream",
+   "events": [
+    {
+     "run": {
+      "annotationIds": [],
+      "createdAt": "<time>",
+      "id": "<uuid:6>",
+      "prompt": "Delegate one task.",
+      "queueOrder": 1,
+      "references": [],
+      "sessionId": "<uuid:3>",
+      "settingsSnapshot": {
+       "enabledConnectorIds": [
+        "web"
+       ],
+       "enabledSkillIds": [],
+       "enabledSkillLibraries": [],
+       "ideaTreeEnabled": false,
+       "modelId": "<uuid:1>",
+       "semanticReviewEnabled": true,
+       "skillSelectionMode": "selected",
+       "thinkingMode": "auto"
+      },
+      "status": "queued"
+     },
+     "type": "run.queued"
+    },
+    {
+     "run": {
+      "annotationIds": [],
+      "createdAt": "<time>",
+      "id": "<uuid:6>",
+      "prompt": "Delegate one task.",
+      "queueOrder": 1,
+      "references": [],
+      "sessionId": "<uuid:3>",
+      "settingsSnapshot": {
+       "enabledConnectorIds": [
+        "web"
+       ],
+       "enabledSkillIds": [],
+       "enabledSkillLibraries": [],
+       "ideaTreeEnabled": false,
+       "modelId": "<uuid:1>",
+       "semanticReviewEnabled": true,
+       "skillSelectionMode": "selected",
+       "thinkingMode": "auto"
+      },
+      "startedAt": "<time>",
+      "status": "running"
+     },
+     "status": "running",
+     "type": "run.status"
+    },
+    {
+     "model": {
+      "id": "<uuid:1>",
+      "model": "contract-stub",
+      "name": "L2 stub model"
+     },
+     "runId": "<uuid:6>",
+     "settings": {
+      "enabledConnectorIds": [
+       "web"
+      ],
+      "enabledSkillIds": [],
+      "enabledSkillLibraries": [],
+      "ideaTreeEnabled": false,
+      "modelId": "<uuid:1>",
+      "semanticReviewEnabled": true,
+      "skillSelectionMode": "selected",
+      "thinkingMode": "auto"
+     },
+     "type": "run.started"
+    },
+    {
+     "phase": "thinking",
+     "turn": 1,
+     "type": "agent.phase"
+    },
+    {
+     "responseId": "<uuid:7>",
+     "turn": 1,
+     "type": "assistant.response.started"
+    },
+    {
+     "responseId": "<uuid:7>",
+     "turn": 1,
+     "type": "assistant.response.settled"
+    },
+    {
+     "trace": {
+      "args": {
+       "description": "Write a note",
+       "prompt": "Say done.",
+       "subagent_type": "general-purpose"
+      },
+      "id": "call-main-1",
+      "name": "task",
+      "status": "running"
+     },
+     "type": "tool.started"
+    },
+    {
+     "subagent": {
+      "createdAt": "<time>",
+      "id": "<uuid:8>",
+      "input": {
+       "description": "Write a note",
+       "prompt": "Say done.",
+       "subagentType": "general-purpose"
+      },
+      "maxTurns": 300,
+      "model": {
+       "id": "<uuid:1>",
+       "model": "contract-stub",
+       "name": "L2 stub model"
+      },
+      "parentTurnId": "<uuid:6>",
+      "sessionId": "<uuid:3>",
+      "status": "running",
+      "steps": [
+       {
+        "content": "Subagent type: general-purpose\nTask: Write a note",
+        "createdAt": "<time>",
+        "id": "<uuid:9>",
+        "kind": "system",
+        "status": "completed"
+       }
+      ],
+      "timeoutSeconds": 7200,
+      "turnCount": 0
+     },
+     "type": "subagent.updated"
+    },
+    {
+     "subagent": {
+      "createdAt": "<time>",
+      "handoff": {
+       "inputPaths": [],
+       "manifestPath": "subagents/<uuid:8>/handoff.json",
+       "privateWorkspacePath": "subagents/<uuid:8>",
+       "workspaceId": "<workspace>"
+      },
+      "id": "<uuid:8>",
+      "input": {
+       "description": "Write a note",
+       "prompt": "Say done.",
+       "subagentType": "general-purpose"
+      },
+      "maxTurns": 300,
+      "model": {
+       "id": "<uuid:1>",
+       "model": "contract-stub",
+       "name": "L2 stub model"
+      },
+      "parentTurnId": "<uuid:6>",
+      "sessionId": "<uuid:3>",
+      "status": "running",
+      "steps": [
+       {
+        "content": "Subagent type: general-purpose\nTask: Write a note",
+        "createdAt": "<time>",
+        "id": "<uuid:9>",
+        "kind": "system",
+        "status": "completed"
+       },
+       {
+        "content": "Workspace: <workspace>\nHandoff manifest: handoff.json",
+        "createdAt": "<time>",
+        "id": "<uuid:10>",
+        "kind": "system",
+        "status": "completed"
+       }
+      ],
+      "timeoutSeconds": 7200,
+      "turnCount": 0
+     },
+     "type": "subagent.updated"
+    },
+    {
+     "step": {
+      "content": "Turn 1 started",
+      "createdAt": "<time>",
+      "id": "<uuid:11>",
+      "kind": "system",
+      "status": "completed"
+     },
+     "subagentId": "<uuid:8>",
+     "type": "subagent.step"
+    },
+    {
+     "step": {
+      "content": "done.",
+      "createdAt": "<time>",
+      "id": "<uuid:12>",
+      "kind": "assistant",
+      "status": "completed"
+     },
+     "subagentId": "<uuid:8>",
+     "type": "subagent.step"
+    },
+    {
+     "subagentId": "<uuid:8>",
+     "type": "subagent.usage",
+     "usage": {
+      "cacheReadTokens": null,
+      "cacheWriteTokens": null,
+      "inputTokens": 20,
+      "outputTokens": 8,
+      "totalTokens": 28
+     }
+    },
+    {
+     "subagent": {
+      "contextRef": {
+       "digest": "<sha256>",
+       "mediaType": "application/vnd.sciencediscovery.record.v1+json",
+       "pool": "agent-state",
+       "size": 607
+      },
+      "createdAt": "<time>",
+      "finishedAt": "<time>",
+      "handoff": {
+       "inputPaths": [],
+       "manifestPath": "subagents/<uuid:8>/handoff.json",
+       "privateWorkspacePath": "subagents/<uuid:8>",
+       "workspaceId": "<workspace>"
+      },
+      "id": "<uuid:8>",
+      "input": {
+       "description": "Write a note",
+       "prompt": "Say done.",
+       "subagentType": "general-purpose"
+      },
+      "maxTurns": 300,
+      "model": {
+       "id": "<uuid:1>",
+       "model": "contract-stub",
+       "name": "L2 stub model"
+      },
+      "parentTurnId": "<uuid:6>",
+      "sessionId": "<uuid:3>",
+      "status": "completed",
+      "steps": [
+       {
+        "content": "Subagent type: general-purpose\nTask: Write a note",
+        "createdAt": "<time>",
+        "id": "<uuid:9>",
+        "kind": "system",
+        "status": "completed"
+       },
+       {
+        "content": "Workspace: <workspace>\nHandoff manifest: handoff.json",
+        "createdAt": "<time>",
+        "id": "<uuid:10>",
+        "kind": "system",
+        "status": "completed"
+       },
+       {
+        "content": "Turn 1 started",
+        "createdAt": "<time>",
+        "id": "<uuid:11>",
+        "kind": "system",
+        "status": "completed"
+       },
+       {
+        "content": "done.",
+        "createdAt": "<time>",
+        "id": "<uuid:12>",
+        "kind": "assistant",
+        "status": "completed"
+       }
+      ],
+      "timeoutSeconds": 7200,
+      "turnCount": 1,
+      "usage": {
+       "cacheReadTokens": null,
+       "cacheWriteTokens": null,
+       "inputTokens": 20,
+       "outputTokens": 8,
+       "totalTokens": 28
+      }
+     },
+     "type": "subagent.updated"
+    },
+    {
+     "chunk": "{\"brief\":\"done.\",\"finalText\":\"done.\",\"id\":\"<uuid:8>\",\"status\":\"completed\",\"stopReason\":\"completed\",\"subagent_model_name\":\"contract-stub\",\"subagent_result_brief\":\"done.\",\"subagent_result_sha256\":\"<hex>\",\"subagent_status\":\"completed\",\"subagent_token_usage\":{\"input_tokens\":20,\"output_tokens\":8,\"total_tokens\":28},\"turnCount\":1,\"usage\":{\"inputTokens\":20,\"outputTokens\":8,\"totalTokens\":28,\"cacheReadTokens\":null,\"cacheWriteTokens\":null}}",
+     "toolCallId": "call-main-1",
+     "type": "tool.output"
+    },
+    {
+     "trace": {
+      "details": {
+       "__detailsBoundary": {
+        "maxArrayItems": 100,
+        "maxDepth": 8,
+        "maxObjectKeys": 100,
+        "maxStringChars": 4096,
+        "maxTotalStringChars": 64000,
+        "omittedPayloadFields": true,
+        "truncated": false
+       },
+       "subagent": {
+        "contextRef": {
+         "digest": "<sha256>",
+         "mediaType": "application/vnd.sciencediscovery.record.v1+json",
+         "pool": "agent-state",
+         "size": 607
+        },
+        "createdAt": "<time>",
+        "finishedAt": "<time>",
+        "handoff": {
+         "inputPaths": [],
+         "manifestPath": "subagents/<uuid:8>/handoff.json",
+         "privateWorkspacePath": "subagents/<uuid:8>",
+         "workspaceId": "<workspace>"
+        },
+        "id": "<uuid:8>",
+        "input": "[omitted]",
+        "maxTurns": 300,
+        "model": {
+         "id": "<uuid:1>",
+         "model": "contract-stub",
+         "name": "L2 stub model"
+        },
+        "parentTurnId": "<uuid:6>",
+        "sessionId": "<uuid:3>",
+        "status": "completed",
+        "steps": [
+         {
+          "content": "[omitted]",
+          "createdAt": "<time>",
+          "id": "<uuid:9>",
+          "kind": "system",
+          "status": "completed"
+         },
+         {
+          "content": "[omitted]",
+          "createdAt": "<time>",
+          "id": "<uuid:10>",
+          "kind": "system",
+          "status": "completed"
+         },
+         {
+          "content": "[omitted]",
+          "createdAt": "<time>",
+          "id": "<uuid:11>",
+          "kind": "system",
+          "status": "completed"
+         },
+         {
+          "content": "[omitted]",
+          "createdAt": "<time>",
+          "id": "<uuid:12>",
+          "kind": "assistant",
+          "status": "completed"
+         }
+        ],
+        "timeoutSeconds": 7200,
+        "turnCount": 1,
+        "usage": {
+         "cacheReadTokens": null,
+         "cacheWriteTokens": null,
+         "inputTokens": 20,
+         "outputTokens": 8,
+         "totalTokens": 28
+        }
+       },
+       "summary": {
+        "brief": "done.",
+        "finalText": "done.",
+        "id": "<uuid:8>",
+        "status": "completed",
+        "stopReason": "completed",
+        "subagent_model_name": "contract-stub",
+        "subagent_result_brief": "done.",
+        "subagent_result_sha256": "<hex>",
+        "subagent_status": "completed",
+        "subagent_token_usage": {
+         "input_tokens": 20,
+         "output_tokens": 8,
+         "total_tokens": 28
+        },
+        "turnCount": 1,
+        "usage": {
+         "cacheReadTokens": null,
+         "cacheWriteTokens": null,
+         "inputTokens": 20,
+         "outputTokens": 8,
+         "totalTokens": 28
+        }
+       }
+      },
+      "id": "call-main-1",
+      "name": "task",
+      "outputChars": 520,
+      "outputStream": "tool-call-main-1",
+      "status": "completed"
+     },
+     "type": "tool.completed"
+    },
+    {
+     "phase": "thinking",
+     "turn": 2,
+     "type": "agent.phase"
+    },
+    {
+     "responseId": "<uuid:13>",
+     "turn": 2,
+     "type": "assistant.response.started"
+    },
+    {
+     "delta": "The subagent finished.",
+     "responseId": "<uuid:13>",
+     "type": "assistant.delta"
+    },
+    {
+     "responseId": "<uuid:13>",
+     "turn": 2,
+     "type": "assistant.response.settled"
+    },
+    {
+     "files": [],
+     "message": {
+      "content": "The subagent finished.",
+      "createdAt": "<time>",
+      "id": "<uuid:14>",
+      "kind": "message",
+      "modelContext": [
+       {
+        "content": "",
+        "role": "assistant",
+        "tool_calls": [
+         {
+          "function": {
+           "arguments": "{\"description\":\"Write a note\",\"prompt\":\"Say done.\",\"subagent_type\":\"general-purpose\"}",
+           "name": "task"
+          },
+          "id": "call-main-1",
+          "type": "function"
+         }
+        ]
+       },
+       {
+        "content": "{\"brief\":\"done.\",\"finalText\":\"done.\",\"id\":\"<uuid:8>\",\"status\":\"completed\",\"stopReason\":\"completed\",\"subagent_model_name\":\"contract-stub\",\"subagent_result_brief\":\"done.\",\"subagent_result_sha256\":\"<hex>\",\"subagent_status\":\"completed\",\"subagent_token_usage\":{\"input_tokens\":20,\"output_tokens\":8,\"total_tokens\":28},\"turnCount\":1,\"usage\":{\"inputTokens\":20,\"outputTokens\":8,\"totalTokens\":28,\"cacheReadTokens\":null,\"cacheWriteTokens\":null}}",
+        "name": "task",
+        "role": "tool",
+        "tool_call_id": "call-main-1"
+       },
+       {
+        "content": "The subagent finished.",
+        "role": "assistant"
+       }
+      ],
+      "modelId": "<uuid:1>",
+      "modelName": "L2 stub model",
+      "role": "assistant"
+     },
+     "type": "run.completed"
+    }
+   ]
+  },
+  {
+   "name": "wait for the run to settle",
+   "status": 200,
+   "polled": "completed"
+  },
+  {
+   "name": "delete the project",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "deleted": "<uuid:2>"
+   }
+  },
+  {
+   "name": "restore the global settings",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "effective": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [
+      "antibody-protenix-pipeline",
+      "assessment-screening",
+      "citation-reviewer",
+      "code-engineer",
+      "computation-reviewer",
+      "creative-material-design",
+      "evidence-extractor",
+      "evolve-design",
+      "idea-tree-team",
+      "insight-aggregator",
+      "life-science-evidence-brief",
+      "literature-searcher",
+      "report-writer",
+      "result-evaluator",
+      "science-research-team",
+      "skill-creator",
+      "structure-pocket-inspection"
+     ],
+     "enabledSkillLibraries": [],
+     "semanticReviewEnabled": true,
+     "skillSelectionMode": "all"
+    },
+    "overrides": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "semanticReviewEnabled": true
+    },
+    "sources": {
+     "enabledConnectorIds": "global",
+     "enabledSkillIds": "unset",
+     "enabledSkillLibraries": "unset",
+     "modelId": "unset",
+     "plugins": "unset",
+     "reviewModelId": "unset",
+     "semanticReviewEnabled": "global",
+     "skillSelectionMode": "unset",
+     "thinkingEffort": "unset",
+     "thinkingMode": "unset"
+    }
+   }
+  },
+  {
+   "name": "delete the model",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "deleted": "<uuid:1>"
+   }
+  }
+ ],
+ "l2-resume-after-disconnect": [
+  {
+   "name": "remember the global settings",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "effective": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [
+      "antibody-protenix-pipeline",
+      "assessment-screening",
+      "citation-reviewer",
+      "code-engineer",
+      "computation-reviewer",
+      "creative-material-design",
+      "evidence-extractor",
+      "evolve-design",
+      "idea-tree-team",
+      "insight-aggregator",
+      "life-science-evidence-brief",
+      "literature-searcher",
+      "report-writer",
+      "result-evaluator",
+      "science-research-team",
+      "skill-creator",
+      "structure-pocket-inspection"
+     ],
+     "enabledSkillLibraries": [],
+     "semanticReviewEnabled": true,
+     "skillSelectionMode": "all"
+    },
+    "overrides": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "semanticReviewEnabled": true
+    },
+    "sources": {
+     "enabledConnectorIds": "global",
+     "enabledSkillIds": "unset",
+     "enabledSkillLibraries": "unset",
+     "modelId": "unset",
+     "plugins": "unset",
+     "reviewModelId": "unset",
+     "semanticReviewEnabled": "global",
+     "skillSelectionMode": "unset",
+     "thinkingEffort": "unset",
+     "thinkingMode": "unset"
+    }
+   }
+  },
+  {
+   "name": "register the stub model",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "apiProtocol": "openai-chat-completions",
+    "apiVariant": "openai",
+    "baseUrl": "http://127.0.0.1:<port>/v1",
+    "createdAt": "<time>",
+    "hasApiToken": true,
+    "id": "<uuid:1>",
+    "model": "contract-stub",
+    "name": "L2 stub model",
+    "proxyPolicy": "inherit",
+    "thinkingEffort": "high",
+    "thinkingMode": "auto",
+    "updatedAt": "<time>",
+    "vision": false
+   }
+  },
+  {
+   "name": "create a project",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "createdAt": "<time>",
+    "firstSession": {
+     "approvalMode": "ask_for_dangerous",
+     "createdAt": "<time>",
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [],
+     "id": "<uuid:3>",
+     "modelId": "<uuid:1>",
+     "permissionEpochId": "<uuid:4>",
+     "projectId": "<uuid:2>",
+     "reviewCriteria": [],
+     "reviewerAutomaticReviewEnabled": true,
+     "reviewerSpecialistLevel": "quick",
+     "reviewMode": "auto",
+     "semanticReviewEnabled": true,
+     "settingsOverrides": {},
+     "title": "Untitled session",
+     "updatedAt": "<time>"
+    },
+    "id": "<uuid:2>",
+    "name": "L2 project",
+    "project": {
+     "createdAt": "<time>",
+     "id": "<uuid:2>",
+     "name": "L2 project",
+     "remoteRunnerHostIds": [],
+     "settingsOverrides": {
+      "enabledSkillIds": [],
+      "enabledSkillLibraries": [],
+      "skillSelectionMode": "selected"
+     }
+    },
+    "remoteRunnerHostIds": [],
+    "settingsOverrides": {
+     "enabledSkillIds": [],
+     "enabledSkillLibraries": [],
+     "skillSelectionMode": "selected"
+    }
+   }
+  },
+  {
+   "name": "choose the model",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "approvalMode": "ask_for_dangerous",
+    "createdAt": "<time>",
+    "enabledConnectorIds": [
+     "web"
+    ],
+    "enabledSkillIds": [],
+    "id": "<uuid:3>",
+    "modelId": "<uuid:1>",
+    "permissionEpochId": "<uuid:4>",
+    "projectId": "<uuid:2>",
+    "reviewCriteria": [],
+    "reviewerAutomaticReviewEnabled": true,
+    "reviewerSpecialistLevel": "quick",
+    "reviewMode": "auto",
+    "semanticReviewEnabled": true,
+    "settingsOverrides": {
+     "modelId": "<uuid:1>"
+    },
+    "title": "L2 session",
+    "updatedAt": "<time>"
+   }
+  },
+  {
+   "name": "choose the approval mode",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "approvalMode": "always_allow",
+    "createdAt": "<time>",
+    "enabledConnectorIds": [
+     "web"
+    ],
+    "enabledSkillIds": [],
+    "id": "<uuid:3>",
+    "modelId": "<uuid:1>",
+    "permissionEpochId": "<uuid:5>",
+    "projectId": "<uuid:2>",
+    "reviewCriteria": [],
+    "reviewerAutomaticReviewEnabled": true,
+    "reviewerSpecialistLevel": "quick",
+    "reviewMode": "auto",
+    "semanticReviewEnabled": true,
+    "settingsOverrides": {
+     "modelId": "<uuid:1>"
+    },
+    "title": "L2 session",
+    "updatedAt": "<time>"
+   }
+  },
+  {
+   "name": "send a message",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "annotationIds": [],
+    "createdAt": "<time>",
+    "id": "<uuid:6>",
+    "prompt": "Answer briefly.",
+    "queueOrder": 1,
+    "references": [],
+    "sessionId": "<uuid:3>",
+    "settingsSnapshot": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [],
+     "enabledSkillLibraries": [],
+     "ideaTreeEnabled": false,
+     "modelId": "<uuid:1>",
+     "semanticReviewEnabled": true,
+     "skillSelectionMode": "selected",
+     "thinkingMode": "auto"
+    },
+    "status": "queued"
+   }
+  },
+  {
+   "name": "first read, cut after 2 events",
+   "status": 200,
+   "contentType": "text/event-stream",
+   "events": [
+    {
+     "run": {
+      "annotationIds": [],
+      "createdAt": "<time>",
+      "id": "<uuid:6>",
+      "prompt": "Answer briefly.",
+      "queueOrder": 1,
+      "references": [],
+      "sessionId": "<uuid:3>",
+      "settingsSnapshot": {
+       "enabledConnectorIds": [
+        "web"
+       ],
+       "enabledSkillIds": [],
+       "enabledSkillLibraries": [],
+       "ideaTreeEnabled": false,
+       "modelId": "<uuid:1>",
+       "semanticReviewEnabled": true,
+       "skillSelectionMode": "selected",
+       "thinkingMode": "auto"
+      },
+      "status": "queued"
+     },
+     "type": "run.queued"
+    },
+    {
+     "run": {
+      "annotationIds": [],
+      "createdAt": "<time>",
+      "id": "<uuid:6>",
+      "prompt": "Answer briefly.",
+      "queueOrder": 1,
+      "references": [],
+      "sessionId": "<uuid:3>",
+      "settingsSnapshot": {
+       "enabledConnectorIds": [
+        "web"
+       ],
+       "enabledSkillIds": [],
+       "enabledSkillLibraries": [],
+       "ideaTreeEnabled": false,
+       "modelId": "<uuid:1>",
+       "semanticReviewEnabled": true,
+       "skillSelectionMode": "selected",
+       "thinkingMode": "auto"
+      },
+      "startedAt": "<time>",
+      "status": "running"
+     },
+     "status": "running",
+     "type": "run.status"
+    }
+   ]
+  },
+  {
+   "name": "second read from the cursor",
+   "status": 400,
+   "contentType": "application/json",
+   "events": []
+  },
+  {
+   "name": "wait for the run to settle",
+   "status": 200,
+   "polled": "completed"
+  },
+  {
+   "name": "delete the project",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "deleted": "<uuid:2>"
+   }
+  },
+  {
+   "name": "restore the global settings",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "effective": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [
+      "antibody-protenix-pipeline",
+      "assessment-screening",
+      "citation-reviewer",
+      "code-engineer",
+      "computation-reviewer",
+      "creative-material-design",
+      "evidence-extractor",
+      "evolve-design",
+      "idea-tree-team",
+      "insight-aggregator",
+      "life-science-evidence-brief",
+      "literature-searcher",
+      "report-writer",
+      "result-evaluator",
+      "science-research-team",
+      "skill-creator",
+      "structure-pocket-inspection"
+     ],
+     "enabledSkillLibraries": [],
+     "semanticReviewEnabled": true,
+     "skillSelectionMode": "all"
+    },
+    "overrides": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "semanticReviewEnabled": true
+    },
+    "sources": {
+     "enabledConnectorIds": "global",
+     "enabledSkillIds": "unset",
+     "enabledSkillLibraries": "unset",
+     "modelId": "unset",
+     "plugins": "unset",
+     "reviewModelId": "unset",
+     "semanticReviewEnabled": "global",
+     "skillSelectionMode": "unset",
+     "thinkingEffort": "unset",
+     "thinkingMode": "unset"
+    }
+   }
+  },
+  {
+   "name": "delete the model",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "deleted": "<uuid:1>"
+   }
+  }
+ ],
+ "projects-and-sessions-lifecycle": [
+  {
+   "name": "create project",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "createdAt": "<time>",
+    "firstSession": {
+     "approvalMode": "ask_for_dangerous",
+     "createdAt": "<time>",
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [],
+     "id": "<uuid:2>",
+     "permissionEpochId": "<uuid:3>",
+     "projectId": "<uuid:1>",
+     "reviewCriteria": [],
+     "reviewerAutomaticReviewEnabled": true,
+     "reviewerSpecialistLevel": "quick",
+     "reviewMode": "auto",
+     "semanticReviewEnabled": true,
+     "settingsOverrides": {},
+     "title": "Untitled session",
+     "updatedAt": "<time>"
+    },
+    "id": "<uuid:1>",
+    "name": "L1 contract project",
+    "project": {
+     "createdAt": "<time>",
+     "id": "<uuid:1>",
+     "name": "L1 contract project",
+     "remoteRunnerHostIds": [],
+     "settingsOverrides": {
+      "enabledSkillIds": [],
+      "enabledSkillLibraries": [],
+      "skillSelectionMode": "selected"
+     }
+    },
+    "remoteRunnerHostIds": [],
+    "settingsOverrides": {
+     "enabledSkillIds": [],
+     "enabledSkillLibraries": [],
+     "skillSelectionMode": "selected"
+    }
+   }
+  },
+  {
+   "name": "list projects",
+   "status": 200,
+   "contentType": "application/json",
+   "body": [
+    {
+     "createdAt": "<time>",
+     "id": "<uuid:1>",
+     "name": "L1 contract project",
+     "remoteRunnerHostIds": [],
+     "settingsOverrides": {
+      "enabledSkillIds": [],
+      "enabledSkillLibraries": [],
+      "skillSelectionMode": "selected"
+     }
+    }
+   ]
+  },
+  {
+   "name": "rename project",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "createdAt": "<time>",
+    "id": "<uuid:1>",
+    "name": "L1 contract project renamed",
+    "remoteRunnerHostIds": [],
+    "settingsOverrides": {
+     "enabledSkillIds": [],
+     "enabledSkillLibraries": [],
+     "skillSelectionMode": "selected"
+    }
+   }
+  },
+  {
+   "name": "project deletion impact",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "activeSessionCount": 1,
+    "archivedSessionCount": 0,
+    "dataCategories": [
+     "messages",
+     "execution records",
+     "provenance and reviews",
+     "connector and evidence records",
+     "paper records",
+     "workspace files"
+    ],
+    "sessionIds": [
+     "<uuid:2>"
+    ],
+    "targetId": "<uuid:1>",
+    "targetType": "project",
+    "totalSessionCount": 1
+   }
+  },
+  {
+   "name": "list the project's sessions",
+   "status": 200,
+   "contentType": "application/json",
+   "body": [
+    {
+     "approvalMode": "ask_for_dangerous",
+     "createdAt": "<time>",
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [],
+     "id": "<uuid:2>",
+     "permissionEpochId": "<uuid:3>",
+     "projectId": "<uuid:1>",
+     "reviewCriteria": [],
+     "reviewerAutomaticReviewEnabled": true,
+     "reviewerSpecialistLevel": "quick",
+     "reviewMode": "auto",
+     "semanticReviewEnabled": true,
+     "settingsOverrides": {},
+     "title": "Untitled session",
+     "updatedAt": "<time>"
+    }
+   ]
+  },
+  {
+   "name": "create a second session",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "approvalMode": "ask_for_dangerous",
+    "createdAt": "<time>",
+    "enabledConnectorIds": [
+     "web"
+    ],
+    "enabledSkillIds": [],
+    "id": "<uuid:4>",
+    "permissionEpochId": "<uuid:5>",
+    "projectId": "<uuid:1>",
+    "reviewCriteria": [],
+    "reviewerAutomaticReviewEnabled": true,
+    "reviewerSpecialistLevel": "quick",
+    "reviewMode": "auto",
+    "semanticReviewEnabled": true,
+    "settingsOverrides": {},
+    "title": "L1 second session",
+    "updatedAt": "<time>"
+   }
+  },
+  {
+   "name": "get session",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "approvalMode": "ask_for_dangerous",
+    "createdAt": "<time>",
+    "enabledConnectorIds": [
+     "web"
+    ],
+    "enabledSkillIds": [],
+    "id": "<uuid:2>",
+    "messages": [],
+    "permissionEpochId": "<uuid:3>",
+    "projectId": "<uuid:1>",
+    "reviewCriteria": [],
+    "reviewerAutomaticReviewEnabled": true,
+    "reviewerSpecialistLevel": "quick",
+    "reviewMode": "auto",
+    "semanticReviewEnabled": true,
+    "settingsOverrides": {},
+    "title": "Untitled session",
+    "updatedAt": "<time>"
+   }
+  },
+  {
+   "name": "rename session",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "approvalMode": "ask_for_dangerous",
+    "createdAt": "<time>",
+    "enabledConnectorIds": [
+     "web"
+    ],
+    "enabledSkillIds": [],
+    "id": "<uuid:2>",
+    "permissionEpochId": "<uuid:3>",
+    "projectId": "<uuid:1>",
+    "reviewCriteria": [],
+    "reviewerAutomaticReviewEnabled": true,
+    "reviewerSpecialistLevel": "quick",
+    "reviewMode": "auto",
+    "semanticReviewEnabled": true,
+    "settingsOverrides": {},
+    "title": "L1 renamed session",
+    "updatedAt": "<time>"
+   }
+  },
+  {
+   "name": "session settings",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "effective": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [],
+     "enabledSkillLibraries": [],
+     "semanticReviewEnabled": true,
+     "skillSelectionMode": "selected"
+    },
+    "overrides": {},
+    "sources": {
+     "enabledConnectorIds": "global",
+     "enabledSkillIds": "project",
+     "enabledSkillLibraries": "project",
+     "modelId": "unset",
+     "plugins": "unset",
+     "reviewModelId": "unset",
+     "semanticReviewEnabled": "global",
+     "skillSelectionMode": "project",
+     "thinkingEffort": "unset",
+     "thinkingMode": "unset"
+    }
+   }
+  },
+  {
+   "name": "override a session setting",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "effective": {
+     "enabledConnectorIds": [
+      "web"
+     ],
+     "enabledSkillIds": [],
+     "enabledSkillLibraries": [],
+     "semanticReviewEnabled": false,
+     "skillSelectionMode": "selected"
+    },
+    "overrides": {
+     "semanticReviewEnabled": false
+    },
+    "sources": {
+     "enabledConnectorIds": "global",
+     "enabledSkillIds": "project",
+     "enabledSkillLibraries": "project",
+     "modelId": "unset",
+     "plugins": "unset",
+     "reviewModelId": "unset",
+     "semanticReviewEnabled": "session",
+     "skillSelectionMode": "project",
+     "thinkingEffort": "unset",
+     "thinkingMode": "unset"
+    }
+   }
+  },
+  {
+   "name": "reviewer settings",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "automaticReviewEnabled": true,
+    "level": "quick"
+   }
+  },
+  {
+   "name": "change reviewer settings",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "automaticReviewEnabled": false,
+    "level": "quick"
+   }
+  },
+  {
+   "name": "reviewer settings reject a non-boolean",
+   "status": 400,
+   "contentType": "application/json",
+   "body": {
+    "error": "Reviewer Specialist automatic review must be a boolean"
+   }
+  },
+  {
+   "name": "session deletion impact",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "activeSessionCount": 1,
+    "archivedSessionCount": 0,
+    "dataCategories": [
+     "messages",
+     "execution records",
+     "provenance and reviews",
+     "connector and evidence records",
+     "paper records",
+     "workspace files"
+    ],
+    "sessionIds": [
+     "<uuid:2>"
+    ],
+    "targetId": "<uuid:2>",
+    "targetType": "session",
+    "totalSessionCount": 1
+   }
+  },
+  {
+   "name": "subagents",
+   "status": 200,
+   "contentType": "application/json",
+   "body": []
+  },
+  {
+   "name": "agent activity",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "agents": [
+     {
+      "agentId": "main",
+      "sessionId": "<uuid:2>",
+      "stopped": false
+     }
+    ],
+    "executions": [],
+    "timers": [],
+    "transfers": []
+   }
+  },
+  {
+   "name": "permission epoch",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "createdAt": "<time>",
+    "environmentRevisionId": "<system-environment>",
+    "id": "<uuid:3>",
+    "mounts": [
+     {
+      "mode": "read-write",
+      "source": "workspace"
+     }
+    ],
+    "networkAccess": {
+     "allowedDomains": [],
+     "allowPrivateNetwork": false,
+     "egressProxyPolicy": "inherit",
+     "mode": "none",
+     "revision": "none"
+    },
+    "networkPolicy": "none",
+    "reason": "Session created",
+    "secretRefs": [],
+    "sessionId": "<uuid:2>"
+   }
+  },
+  {
+   "name": "rotate the permission epoch",
+   "status": 201,
+   "contentType": "application/json",
+   "body": {
+    "createdAt": "<time>",
+    "environmentRevisionId": "<system-environment>",
+    "id": "<uuid:6>",
+    "mounts": [
+     {
+      "mode": "read-write",
+      "source": "workspace"
+     }
+    ],
+    "networkAccess": {
+     "allowedDomains": [],
+     "allowPrivateNetwork": false,
+     "egressProxyPolicy": "inherit",
+     "mode": "none",
+     "revision": "none"
+    },
+    "networkPolicy": "none",
+    "reason": "Permission policy changed",
+    "secretRefs": [],
+    "sessionId": "<uuid:2>"
+   }
+  },
+  {
+   "name": "permission authorizations",
+   "status": 200,
+   "contentType": "application/json",
+   "body": []
+  },
+  {
+   "name": "pending permission requests",
+   "status": 200,
+   "contentType": "application/json",
+   "body": []
+  },
+  {
+   "name": "permission grants",
+   "status": 200,
+   "contentType": "application/json",
+   "body": []
+  },
+  {
+   "name": "archive",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "approvalMode": "ask_for_dangerous",
+    "archivedAt": "<time>",
+    "createdAt": "<time>",
+    "enabledConnectorIds": [
+     "web"
+    ],
+    "enabledSkillIds": [],
+    "id": "<uuid:2>",
+    "permissionEpochId": "<uuid:6>",
+    "projectId": "<uuid:1>",
+    "reviewCriteria": [],
+    "reviewerAutomaticReviewEnabled": false,
+    "reviewerSpecialistLevel": "quick",
+    "reviewMode": "auto",
+    "semanticReviewEnabled": false,
+    "settingsOverrides": {
+     "semanticReviewEnabled": false
+    },
+    "title": "L1 renamed session",
+    "updatedAt": "<time>"
+   }
+  },
+  {
+   "name": "restore",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "approvalMode": "ask_for_dangerous",
+    "createdAt": "<time>",
+    "enabledConnectorIds": [
+     "web"
+    ],
+    "enabledSkillIds": [],
+    "id": "<uuid:2>",
+    "permissionEpochId": "<uuid:6>",
+    "projectId": "<uuid:1>",
+    "reviewCriteria": [],
+    "reviewerAutomaticReviewEnabled": false,
+    "reviewerSpecialistLevel": "quick",
+    "reviewMode": "auto",
+    "semanticReviewEnabled": false,
+    "settingsOverrides": {
+     "semanticReviewEnabled": false
+    },
+    "title": "L1 renamed session",
+    "updatedAt": "<time>"
+   }
+  },
+  {
+   "name": "deleting without the right confirmation is refused",
+   "status": 400,
+   "contentType": "application/json",
+   "body": {
+    "error": "Session deletion confirmation does not match the target"
+   }
+  },
+  {
+   "name": "delete the second session",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "deleted": "<uuid:4>"
+   }
+  },
+  {
+   "name": "delete the project",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "deleted": "<uuid:1>"
+   }
+  },
+  {
+   "name": "the project is gone",
+   "status": 404,
+   "contentType": "application/json",
+   "body": {
+    "error": "Project not found"
+   }
+  }
+ ],
+ "unknown-ids": [
+  {
+   "name": "unknown session",
+   "status": 404,
+   "contentType": "application/json",
+   "body": {
+    "error": "Session not found"
+   }
+  },
+  {
+   "name": "unknown project's sessions",
+   "status": 404,
+   "contentType": "application/json",
+   "body": {
+    "error": "Project not found"
+   }
+  },
+  {
+   "name": "unknown route",
+   "status": 404,
+   "contentType": "application/json",
+   "body": {
+    "error": "Not found"
+   }
+  }
+ ],
+ "models-and-providers-reads": [
+  {
+   "name": "models",
+   "status": 200,
+   "contentType": "application/json",
+   "body": []
+  },
+  {
+   "name": "providers and presets",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "presets": [
+     {
+      "apiProtocol": "openai-chat-completions",
+      "apiVariant": "deepseek",
+      "baseUrl": "https://api.deepseek.com",
+      "docsUrl": "https://api-docs.deepseek.com/",
+      "id": "deepseek",
+      "modelDiscovery": "openai-models",
+      "name": "DeepSeek"
+     },
+     {
+      "apiProtocol": "openai-chat-completions",
+      "apiVariant": "deepseek",
+      "baseUrl": "https://api.moonshot.cn/v1",
+      "docsUrl": "https://platform.kimi.com/docs/api/chat",
+      "id": "moonshot",
+      "modelDiscovery": "openai-models",
+      "name": "Moonshot Kimi"
+     },
+     {
+      "apiProtocol": "openai-chat-completions",
+      "apiVariant": "deepseek",
+      "baseUrl": "https://open.bigmodel.cn/api/paas/v4",
+      "docsUrl": "https://docs.bigmodel.cn/cn/guide/develop/openai/introduction.md",
+      "id": "zhipu",
+      "modelDiscovery": "openai-models",
+      "name": "智谱 GLM"
+     },
+     {
+      "apiProtocol": "openai-chat-completions",
+      "apiVariant": "deepseek",
+      "baseUrl": "https://api.z.ai/api/paas/v4",
+      "docsUrl": "https://docs.z.ai/api-reference/llm/chat-completion",
+      "id": "zai",
+      "modelDiscovery": "openai-models",
+      "name": "Z.AI"
+     },
+     {
+      "apiProtocol": "openai-chat-completions",
+      "apiVariant": "minimax",
+      "baseUrl": "https://api.minimaxi.com/v1",
+      "docsUrl": "https://platform.minimaxi.com/docs/api-reference/text-openai-api",
+      "id": "minimax",
+      "modelDiscovery": "openai-models",
+      "name": "MiniMax"
+     },
+     {
+      "apiProtocol": "openai-chat-completions",
+      "apiVariant": "qwen",
+      "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "docsUrl": "https://help.aliyun.com/en/model-studio/base-url",
+      "id": "dashscope",
+      "modelDiscovery": "openai-models",
+      "name": "Alibaba Cloud Model Studio"
+     },
+     {
+      "apiProtocol": "openai-responses",
+      "apiVariant": "responses",
+      "baseUrl": "https://api.openai.com/v1",
+      "docsUrl": "https://developers.openai.com/api/docs/api-reference/introduction",
+      "id": "openai",
+      "modelDiscovery": "openai-models",
+      "name": "OpenAI"
+     },
+     {
+      "apiProtocol": "anthropic-messages",
+      "apiVariant": "anthropic-adaptive",
+      "baseUrl": "https://api.anthropic.com",
+      "docsUrl": "https://platform.claude.com/docs/en/api/overview.md",
+      "id": "anthropic",
+      "modelDiscovery": "anthropic-models",
+      "name": "Anthropic"
+     },
+     {
+      "apiProtocol": "openai-chat-completions",
+      "apiVariant": "gemini",
+      "baseUrl": "https://generativelanguage.googleapis.com/v1beta/openai",
+      "docsUrl": "https://ai.google.dev/gemini-api/docs/openai",
+      "id": "gemini",
+      "modelDiscovery": "openai-models",
+      "name": "Google Gemini"
+     },
+     {
+      "apiProtocol": "openai-chat-completions",
+      "apiVariant": "openai",
+      "baseUrl": "https://api.siliconflow.cn/v1",
+      "docsUrl": "https://docs.siliconflow.cn/cn/api-reference/chat-completions/chat-completions",
+      "id": "siliconflow",
+      "modelDiscovery": "openai-models",
+      "name": "SiliconFlow"
+     },
+     {
+      "apiProtocol": "openai-chat-completions",
+      "apiVariant": "openai",
+      "baseUrl": "https://openrouter.ai/api/v1",
+      "docsUrl": "https://openrouter.ai/docs/quickstart",
+      "id": "openrouter",
+      "modelDiscovery": "openai-models",
+      "name": "OpenRouter"
+     },
+     {
+      "apiProtocol": "openai-chat-completions",
+      "apiVariant": "ollama",
+      "baseUrl": "http://localhost:11434/v1",
+      "docsUrl": "https://docs.ollama.com/openai",
+      "id": "ollama",
+      "modelDiscovery": "openai-models",
+      "name": "Ollama",
+      "tokenOptional": true
+     }
+    ],
+    "providers": []
+   }
+  },
+  {
+   "name": "model catalog",
+   "status": 200,
+   "contentType": "application/json",
+   "body": {
+    "snapshot": {
+     "fetchedAt": "<time>",
+     "origin": "bundled",
+     "records": [
+      {
+       "apiVariant": "anthropic-legacy",
+       "contextWindow": 200000,
+       "key": "claude-haiku-4-5",
+       "label": "Claude Haiku 4.5 (latest)",
+       "maxOutputTokens": 64000,
+       "pricing": {
+        "anthropic": {
+         "cachedInput": 0.1,
+         "cacheWriteInput": 1.25,
+         "currency": "USD",
+         "input": 1,
+         "output": 5,
+         "source": {
+          "retrievedAt": "<time>",
+          "url": "https://docs.anthropic.com/en/docs/about-claude/models"
+         },
+         "unit": "per-1m-tokens"
+        }
+       },
+       "source": {
+        "retrievedAt": "<time>",
+        "url": "https://docs.anthropic.com/en/docs/about-claude/models"
+       },
+       "thinking": {
+        "supported": true
+       },
+       "vision": true
+      },
+      {
+       "apiVariant": "anthropic-legacy",
+       "contextWindow": 200000,
+       "key": "claude-haiku-4-5-20251001",
+       "label": "Claude Haiku 4.5",
+       "maxOutputTokens": 64000,
+       "pricing": {
+        "anthropic": {
+         "cachedInput": 0.1,
+         "cacheWriteInput": 1.25,
+         "currency": "USD",
+         "input": 1,
+         "output": 5,
+         "source": {
+          "retrievedAt": "<time>",
+          "url": "https://docs.anthropic.com/en/docs/about-claude/models"
+         },
+         "unit": "per-1m-tokens"
+        }
+       },
+       "source": {
+        "retrievedAt": "<time>",
+        "url": "https://docs.anthropic.com/en/docs/about-claude/models"
+       },
+       "thinking": {
+        "supported": true
+       },
+       "vision": true
+      },
+      {
+       "contextWindow": 1000000,
+       "key": "claude-opus-5",
+       "label": "Claude Opus 5",
+       "maxOutputTokens": 128000,
+       "pricing": {
+        "anthropic": {
+         "cachedInput": 0.5,
+         "cacheWriteInput": 6.25,
+         "currency": "USD",
+         "input": 5,
+         "output": 25,
+         "source": {
+          "retrievedAt": "<time>",
+          "url": "https://docs.anthropic.com/en/docs/about-claude/models"
+         },
+         "unit": "per-1m-tokens"
+        }
+       },
+       "source": {
+        "retrievedAt": "<time>",
+        "url": "https://docs.anthropic.com/en/docs/about-claude/models"
+       },
+       "thinking": {
+        "efforts": [
+         "low",
+         "medium",
+         "high",
+         "xhigh",
+         "max"
+        ],
+        "supported": true
+       },
+       "vision": true
+      },
+      {
+       "key": "deepseek-chat",
+       "label": "DeepSeek Chat",
+       "source": {
+        "retrievedAt": "<time>",
+        "url": "https://api-docs.deepseek.com/quick_start/pricing"
+       }
+      },
+      {
+       "contextWindow": 1000000,
+       "key": "deepseek-v4-flash",
+       "label": "DeepSeek V4 Flash",
+       "maxOutputTokens": 384000,
+       "pricing": {
+        "deepseek": {
+         "cachedInput": 0.0028,
+         "currency": "USD",
+         "input": 0.14,
+         "output": 0.28,
+         "source": {
+          "retrievedAt": "<time>",
+          "url": "https://api-docs.deepseek.com/quick_start/pricing"
+         },
+         "unit": "per-1m-tokens"
+        }
+       },
+       "source": {
+        "retrievedAt": "<time>",
+        "url": "https://api-docs.deepseek.com/quick_start/pricing"
+       },
+       "thinking": {
+        "efforts": [
+         "low",
+         "high",
+         "max"
+        ],
+        "supported": true
+       },
+       "vision": false
+      },
+      {
+       "contextWindow": 1000000,
+       "key": "deepseek-v4-pro",
+       "label": "DeepSeek V4 Pro",
+       "maxOutputTokens": 384000,
+       "pricing": {
+        "deepseek": {
+         "cachedInput": 0.003625,
+         "currency": "USD",
+         "input": 0.435,
+         "output": 0.87,
+         "source": {
+          "retrievedAt": "<time>",
+          "url": "https://api-docs.deepseek.com/quick_start/pricing"
+         },
+         "unit": "per-1m-tokens"
+        }
+       },
+       "source": {
+        "retrievedAt": "<time>",
+        "url": "https://api-docs.deepseek.com/quick_start/pricing"
+       },
+       "thinking": {
+        "efforts": [
+         "high",
+         "max"
+        ],
+        "supported": true
+       },
+       "vision": false
+      },
+      {
+       "contextWindow": 1048576,
+       "key": "gemini-3.7-flash",
+       "label": "Gemini 3.7 Flash",
+       "maxOutputTokens": 65536,
+       "pricing": {
+        "gemini": {
+         "cachedInput": 0.075,
+         "currency": "USD",
+         "input": 0.75,
+         "output": 3.75,
+         "source": {
+          "retrievedAt": "<time>",
+          "url": "https://ai.google.dev/gemini-api/docs/models"
+         },
+         "unit": "per-1m-tokens"
+        }
+       },
+       "source": {
+        "retrievedAt": "<time>",
+        "url": "https://ai.google.dev/gemini-api/docs/models"
+       },
+       "thinking": {
+        "efforts": [
+         "low",
+         "medium",
+         "high"
+        ],
+        "supported": true
+       },
+       "vision": true
+      },
+      {
+       "contextWindow": 204800,
+       "key": "glm-5",
+       "label": "GLM-5",
+       "maxOutputTokens": 131072,
+       "pricing": {
+        "zhipu": {
+         "cachedInput": 0.2,
+         "cacheWriteInput": 0,
+         "currency": "USD",
+         "input": 1,
+         "output": 3.2,
+         "source": {
+          "retrievedAt": "<time>",
+          "url": "https://docs.z.ai/guides/overview/pricing"
+         },
+         "unit": "per-1m-tokens"
+        }
+       },
+       "source": {
+        "retrievedAt": "<time>",
+        "url": "https://docs.z.ai/guides/overview/pricing"
+       },
+       "thinking": {
+        "supported": true
+       },
+       "vision": false
+      },
+      {
+       "contextWindow": 1000000,
+       "key": "glm-5.2",
+       "label": "GLM-5.2",
+       "maxOutputTokens": 131072,
+       "pricing": {
+        "zhipu": {
+         "cachedInput": 0.26,
+         "cacheWriteInput": 0,
+         "currency": "USD",
+         "input": 1.4,
+         "output": 4.4,
+         "source": {
+          "retrievedAt": "<time>",
+          "url": "https://docs.z.ai/guides/overview/pricing"
+         },
+         "unit": "per-1m-tokens"
+        }
+       },
+       "source": {
+        "retrievedAt": "<time>",
+        "url": "https://docs.z.ai/guides/overview/pricing"
+       },
+       "thinking": {
+        "efforts": [
+         "high",
+         "max"
+        ],
+        "supported": true
+       },
+       "vision": false
+      },
+      {
+       "contextWindow": 1050000,
+       "key": "gpt-5.5",
+       "label": "GPT-5.5",
+       "maxOutputTokens": 128000,
+       "pricing": {
+        "openai": {
+         "cachedInput": 0.5,
+         "currency": "USD",
+         "input": 5,
+         "output": 30,
+         "source": {
+          "retrievedAt": "<time>",
+          "url": "https://platform.openai.com/docs/models"
+         },
+         "unit": "per-1m-tokens"
+        }
+       },
+       "source": {
+        "retrievedAt": "<time>",
+        "url": "https://platform.openai.com/docs/models"
+       },
+       "thinking": {
+        "efforts": [
+         "low",
+         "medium",
+         "high",
+         "xhigh"
+        ],
+        "supported": true
+       },
+       "vision": true
+      },
+      {
+       "contextWindow": 1050000,
+       "key": "gpt-5.6",
+       "label": "GPT-5.6",
+       "maxOutputTokens": 128000,
+       "pricing": {
+        "openai": {
+         "cachedInput": 0.4,
+         "cacheWriteInput": 5,
+         "currency": "USD",
+         "input": 4,
+         "output": 20,
+         "source": {
+          "retrievedAt": "<time>",
+          "url": "https://platform.openai.com/docs/models"
+         },
+         "unit": "per-1m-tokens"
+        }
+       },
+       "source": {
+        "retrievedAt": "<time>",
+        "url": "https://platform.openai.com/docs/models"
+       },
+       "thinking": {
+        "efforts": [
+         "low",
+         "medium",
+         "high",
+         "xhigh",
+         "max"
+        ],
+        "supported": true
+       },
+       "vision": true
+      },
+      {
+       "contextWindow": 262144,
+       "key": "kimi-k2.6",
+       "label": "Kimi K2.6",
+       "maxOutputTokens": 262144,
+       "pricing": {
+        "moonshot": {
+         "cachedInput": 0.16,
+         "currency": "USD",
+         "input": 0.95,
+         "output": 4,
+         "source": {
+          "retrievedAt": "<time>",
+          "url": "https://platform.moonshot.cn/docs/api/chat"
+         },
+         "unit": "per-1m-tokens"
+        }
+       },
+       "source": {
+        "retrievedAt": "<time>",
+        "url": "https://platform.moonshot.cn/docs/api/chat"
+       },
+       "thinking": {
+        "supported": true
+       },
+       "vision": true
+      },
+      {
+       "apiVariant": "kimi-k3",
+       "contextWindow": 1048576,
+       "key": "kimi-k3",
+       "label": "Kimi K3",
+       "maxOutputTokens": 131072,
+       "pricing": {
+        "moonshot": {
+         "cachedInput": 0.3,
+         "currency": "USD",
+         "input": 3,
+         "output": 15,
+         "source": {
+          "retrievedAt": "<time>",
+          "url": "https://platform.moonshot.cn/docs/api/chat"
+         },
+         "unit": "per-1m-tokens"
+        }
+       },
+       "source": {
+        "retrievedAt": "<time>",
+        "url": "https://platform.moonshot.cn/docs/api/chat"
+       },
+       "thinking": {
+        "defaultEffort": "max",
+        "defaultMode": "enabled",
+        "efforts": [
+         "low",
+         "high",
+         "max"
+        ],
+        "modes": [
+         "enabled"
+        ],
+        "supported": true
+       },
+       "vision": true
+      }
+     ],
+     "sourceUrl": "https://models.dev/api.json"
+    },
+    "sourceUrl": "https://models.dev/api.json"
+   }
+  }
+ ]
+}

@@ -61,3 +61,27 @@ check; if it does not, a case leaks or the normaliser misses something.
 
 Which differences matter is a judgement, so they are listed rather than hidden: see
 "Known differences between executors" below.
+
+## Known differences between executors
+
+Measured by recording the legacy API's run event streams and comparing the JiuwenSwarm
+executor against them (`baselines/legacy-linux.json`, recorded on Linux with bubblewrap).
+
+**Fixed because a comparison showed them** (each has a test in the code that fixed it):
+
+- The native agent announces a response (`assistant.response.started` + `settled`) for every model
+  call, even one that only ends in a tool call or a provider error.
+- It emits one summed `usage` event after the last model call; subagent usage is built from it.
+- A tool runs under the id the model gave it, and after the response of the model call that made it.
+- Tool results go through the native `ToolRegistry`: bounded output, neutralised untrusted content,
+  redacted and size-bounded `details` (`__detailsBoundary`), the standard error shape.
+- A tool receives the arguments the model sent; JiuwenSwarm had filled schema defaults in and dropped
+  empty arrays.
+- The run keeps the tool round in its final messages, so a session can move back to the native executor.
+
+**Accepted** (`accepted-differences.json`, listed by `--compare`): the wording of a provider error.
+The `errorCode` is the same; each executor words the provider's message its own way.
+
+**Not covered yet**: the native agent's `agent.record` evidence (left out of the profile on purpose),
+parallel tool calls, reasoning/thinking streams, `tool_search` and deferred tools (the JiuwenSwarm
+executor offers every tool up front), long-running tools, and errors other than a 401.
