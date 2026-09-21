@@ -52,7 +52,7 @@ With the adapter on, the adapter takes the public port (default 4310) and the le
 ## What to expect
 
 - The same conversations, tool cards, permission prompts, plans, subagents and artifacts as with the built-in loop; the milestone-0 journeys pass on this executor.
-- Conversation history is kept by JiuwenSwarm per session. Sessions that already have history from the built-in loop do **not** carry it over when you switch, and a subagent that is resumed does not receive its earlier history.
+- Conversation history stays in ScienceDiscovery: each run sends it along and JiuwenSwarm runs the turn in a session of its own. Sessions begun on the built-in loop, resumed subagents and history compaction therefore carry over. Deferred (MCP) tools are offered up front.
 - Adding a model makes JiuwenSwarm send one small probe request to it (to detect image input).
 - Token usage is reported per model call, including reasoning tokens.
 

@@ -34,9 +34,9 @@ Design and measured protocol facts: [`services/adapter/README.md`](../../../serv
 | 87 Adapter core | closed | Public port, streaming proxy (SSE, NDJSON), 502 on upstream failure, optional token on `/agent/*` | Own storage, run registry, event log and resume: they stay in the legacy API |
 | 88 Sessions and projects | closed | Served by the legacy API through the proxy; L1 covers all 13 rows | Nothing moves to JiuwenSwarm's session store |
 | 89 Chat and runs | closed | A run executes on JiuwenSwarm; events, cancel, approval, usage, disconnect handling; L2 golden traces for 8 scenarios | See "Known gaps" |
-| 90 Permissions | open | Approval requests, allow/deny, grants, audit and epoch behave as before (L1 8/8, L2 approve/deny) | Not mapped to JiuwenSwarm's permission engine (left off); one open finding, below |
-| 91 Models, providers, settings | open | Model list, defaults and settings served by legacy (L1 covered); the selected model is handed to JiuwenSwarm per run | Only OpenAI chat-completions models run; Anthropic and Responses fail with a clear message |
-| 92 MCP and data sources | open | Legacy MCP servers are part of the toolset the run sees | 0/21 L1 cases; the custom-MCP, OAuth and secret-edit journeys are not verified on this executor |
+| 90 Permissions | closed | Approval requests, allow/deny, grants, audit, epoch and wrong-token refusal behave as before (L1 8/8 plus negative cases, L2 approve/deny) | Not mapped to JiuwenSwarm's permission engine (left off; the API's permission runtime decides). Finding below |
+| 91 Models, providers, settings | closed | Model list, defaults and settings served by legacy (L1 covers every row); the selected model is handed to JiuwenSwarm per run | Only OpenAI chat-completions models run; Anthropic and Responses fail with a clear message |
+| 92 MCP and data sources | closed | All 21 rows have L1 cases; the five MCP journeys pass on this executor (custom MCP, agent calls a custom MCP tool, OAuth, secret edit x2); deferred MCP tools are promoted up front and `tool_search` is offered | MCP OAuth against a real provider was not exercised |
 | 93 Skills and libraries | open | Served by legacy | 0/35 L1 cases; skill use on this executor is not verified |
 | 94 Files, workspace, trajectory | open | Read routes have L1 cases | Trajectory view is empty for JiuwenSwarm runs (no `evidence` recorded) |
 | 95 Planning and sub-agents | open | `update_plan` and `task` run through the bridge; M0 plan and delegate journeys pass | Subagent resume gets no earlier history |
@@ -58,7 +58,7 @@ On the Aliyun Linux server (bubblewrap sandbox) with `SCIENCE_AGENT_ADAPTER=1 SC
 ## Known gaps
 
 1. **No evidence or trajectory.** Runs on JiuwenSwarm produce no `agent.record`/`evidence` events, so the trajectory view is empty.
-2. **No history carried in.** JiuwenSwarm keeps history per session; `gatewayHistory` from the API is unused, so a session started on the built-in loop does not continue on JiuwenSwarm, and legacy compaction is not applied.
+2. **History.** The API's record is sent with every run and inserted by the adapter's model proxy; JiuwenSwarm runs each turn in its own session. A session begun on the built-in loop, a resumed subagent and the API's compaction therefore carry over. JiuwenSwarm's own session store is no longer used for conversation state.
 3. **OpenAI chat-completions only.**
 4. **No tool-output store, deferred tools or parallel tool calls** in the JiuwenSwarm toolset.
 5. **Wake notices.** The mocked E2E `issue-77-wake-notice` fails on this executor (the scripted model recognises the wake turn by a prompt JiuwenSwarm does not present that way). `issue-85` passes. Run the group with `CI_E2E_BACKEND=jiuwenswarm .ci/run-e2e.sh mocked`; other specs have not been run through it.

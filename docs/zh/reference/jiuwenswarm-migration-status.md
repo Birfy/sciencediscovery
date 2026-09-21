@@ -27,9 +27,9 @@ issue 84（复用 JiuwenSwarm 后端）做到哪一步、现在能跑什么、�
 | 87 适配器核心 | 已关闭 | 公共端口、流式代理（SSE、NDJSON）、上游失败返回 502、`/agent/*` 可选 token | 自有存储、run 注册表、事件日志与续传：仍在 legacy API |
 | 88 会话与项目 | 已关闭 | 经代理由 legacy API 提供；L1 覆盖 13 行 | 没有迁到 JiuwenSwarm 的会话存储 |
 | 89 对话与运行 | 已关闭 | 运行在 JiuwenSwarm 上执行；事件、取消、审批、用量、断线处理；8 个场景的 L2 黄金轨迹 | 见“已知缺口” |
-| 90 权限 | 进行中 | 审批请求、允许/拒绝、授权、审计、epoch 行为与之前一致（L1 8/8，L2 允许/拒绝） | 未映射到 JiuwenSwarm 的权限引擎（保持关闭）；有一条待议发现，见下 |
-| 91 模型、供应商、设置 | 进行中 | 模型列表、默认值、设置由 legacy 提供（L1 已覆盖）；所选模型按次交给 JiuwenSwarm | 只有 OpenAI chat-completions 模型能跑；Anthropic、Responses 会给出明确报错 |
-| 92 MCP 与数据源 | 进行中 | legacy 的 MCP 服务是运行所见工具集的一部分 | L1 0/21；自定义 MCP、OAuth、密钥编辑旅程未在此执行器上验证 |
+| 90 权限 | 已完成 | 审批请求、允许/拒绝、授权、审计、epoch、错误 token 拒绝与之前一致（L1 8/8 加负例，L2 允许/拒绝） | 未映射到 JiuwenSwarm 的权限引擎（保持关闭，由 API 的权限运行时判定）；发现见下 |
+| 91 模型、供应商、设置 | 已完成 | 模型列表、默认值、设置由 legacy 提供（L1 覆盖全部行）；所选模型按次交给 JiuwenSwarm | 只有 OpenAI chat-completions 模型能跑；Anthropic、Responses 会给出明确报错 |
+| 92 MCP 与数据源 | 已完成 | 21 行都有 L1 用例；5 条 MCP 旅程在此执行器上通过（自定义 MCP、智能体调用自定义 MCP 工具、OAuth、密钥编辑 ×2）；延迟的 MCP 工具启动时一并晋升，并提供 `tool_search` | 没有对真实供应商跑过 MCP OAuth |
 | 93 技能与技能库 | 未开始 | 由 legacy 提供 | L1 0/35；技能在此执行器上的使用未验证 |
 | 94 文件、工作区、轨迹 | 未开始 | 读接口有 L1 用例 | JiuwenSwarm 运行的轨迹视图为空（没有记录 `evidence`） |
 | 95 规划与子代理 | 进行中 | `update_plan`、`task` 经 bridge 运行；M0 计划、委派旅程通过 | 恢复的子代理拿不到此前历史 |
@@ -50,7 +50,7 @@ issue 84（复用 JiuwenSwarm 后端）做到哪一步、现在能跑什么、�
 ## 已知缺口
 
 1. **没有 evidence / 轨迹。** JiuwenSwarm 运行不产生 `agent.record`/`evidence`，轨迹视图为空。
-2. **没有带入历史。** JiuwenSwarm 按会话自己保存历史，API 的 `gatewayHistory` 未使用；在内置循环上开始的会话切换后不会延续，也不会应用 legacy 的压缩。
+2. **历史。** 每次运行都会把 API 的记录一并发给适配器，由模型代理插入请求；JiuwenSwarm 每一轮在自己的独立会话里运行。所以在内置循环上开始的会话、恢复的子代理、API 的压缩都能延续。JiuwenSwarm 自己的会话存储不再保存对话状态。
 3. **仅 OpenAI chat-completions。**
 4. **工具集里没有** 工具输出存储、延迟工具、并行工具调用。
 5. **唤醒提示。** mocked E2E 的 `issue-77-wake-notice` 在此执行器上失败（脚本化模型靠 JiuwenSwarm 没有那样给出的提示词识别唤醒轮）；`issue-85` 通过。用 `CI_E2E_BACKEND=jiuwenswarm .ci/run-e2e.sh mocked` 运行该组，其他用例没有跑过。

@@ -146,10 +146,12 @@ passes against a live OpenAI-compatible endpoint.
 
 Not done yet:
 
-- **History**: only the current prompt is sent; JiuwenSwarm keeps history per `session_id`.
-  `gatewayHistory` from the legacy API is unused, so pre-existing conversations are not
-  carried over, a resumed subagent does not get its history, and legacy compaction is not
-  applied.
+- **History**: the API's record (`gatewayHistory`) is sent with the run as OpenAI messages
+  (`history`); `llm_proxy.rewrite_request` inserts it after the system prompt in every model
+  request, and the run gets a JiuwenSwarm session of its own (`<session>-<random>`), so nothing is
+  remembered twice and the API's compaction applies. JiuwenSwarm accumulates one small session per run.
+- **Deferred tools**: JiuwenSwarm fixes the tool list at the start of a run, so every deferred MCP tool is
+  promoted up front and `tool_search` is offered as well (`offerDeferredTools`).
 - **Tool output store** (`ToolOutputStore`, oversized results by reference) is not part of
   the toolset; tool arguments are not schema-validated (as in the native agent).
 - **Protocols**: only OpenAI chat completions. Anthropic and Responses fail the run with a
