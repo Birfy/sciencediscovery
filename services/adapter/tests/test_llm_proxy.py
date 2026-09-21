@@ -298,3 +298,17 @@ def test_an_earlier_runs_tool_names_in_the_history_become_the_plain_names():
 def test_a_model_that_calls_an_earlier_runs_name_is_sent_to_this_runs_server():
     chunk = {"choices": [{"delta": {"tool_calls": [{"function": {"name": "mcp_sci0096f4fcd7_run_shell"}}]}}]}
     assert rewrite_response(chunk, ROUTE)["choices"][0]["delta"]["tool_calls"][0]["function"]["name"] == "mcp_sci_run_shell"
+
+
+def test_hidden_host_tools_are_not_offered_and_ours_of_the_same_name_take_their_place():
+    route = LlmRoute(**{**ROUTE.__dict__, "tool_names": frozenset({"read_file", "run_shell"}), "all_native_tools": True,
+                        "hidden_native_tools": frozenset({"bash", "read_file", "write_file"}), "shadowed": set()})
+    body = {"tools": [tool("read_file"), tool("bash"), tool("write_file"), tool("subagent_spawn"), tool("mcp_sci_read_file"), tool("mcp_sci_run_shell")],
+            "messages": []}
+    names = [t["function"]["name"] for t in rewrite_request(body, route)["tools"]]
+    assert names == ["subagent_spawn", "read_file", "run_shell"]
+    assert route.shadowed == set()
+    # read_file now reaches ours; bash and write_file, which JiuwenSwarm would run on the host, reach nothing.
+    chunk = {"choices": [{"delta": {"tool_calls": [{"function": {"name": n}} for n in ("read_file", "bash", "write_file", "subagent_spawn")]}}]}
+    calls = rewrite_response(chunk, route)["choices"][0]["delta"]["tool_calls"]
+    assert [c["function"]["name"] for c in calls] == ["mcp_sci_read_file", "unavailable__bash", "unavailable__write_file", "subagent_spawn"]

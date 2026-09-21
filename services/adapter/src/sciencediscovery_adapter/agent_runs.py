@@ -95,6 +95,8 @@ class AgentRunRequest(BaseModel):
     nativeTools: list[str] = Field(default_factory=list)
     # "all": every one of JiuwenSwarm's own tools is offered too, and one of ours with the same name gives way.
     jiuwenSwarmTools: Literal["all", "listed"] = "listed"
+    # JiuwenSwarm's own tools the model must not get (they act on the host; see LlmRoute.hidden_native_tools).
+    hiddenJiuwenSwarmTools: list[str] = Field(default_factory=list, max_length=100)
     # Longest a single tool call may take, in seconds; the run's own timeout, when the caller has one.
     toolTimeoutSeconds: int | None = None
 
@@ -188,6 +190,7 @@ class AgentRunner:
                     system_prompt=request.systemPrompt, system_prompt_mode=request.systemPromptMode,
                     system_prompt_tail=request.systemPromptTail,
                     native_tools=frozenset(request.nativeTools), all_native_tools=request.jiuwenSwarmTools == "all",
+                    hidden_native_tools=frozenset(request.hiddenJiuwenSwarmTools),
                 ))
                 # Named after the real model: JiuwenSwarm tells the model its own model's name (runtime state), and
                 # the alias is all it knows. The suffix keeps two runs of one model apart.

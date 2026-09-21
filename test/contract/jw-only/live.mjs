@@ -320,6 +320,36 @@ const checks = {
   },
 
   /**
+   * JiuwenSwarm's tools that act on the host are not the model's: a bash call it makes anyway runs nothing (the marker
+   * file it would create stays absent), and read_file reaches ScienceDiscovery's, in the workspace.
+   */
+  async "host-tools"() {
+    const { existsSync } = await import("node:fs");
+    const marker = `/tmp/sd-host-tool-${Date.now()}`;
+    const stub = await startStubModel({ main: [
+      { tool: "bash", arguments: { command: `touch ${marker}` } },
+      { tool: "read_file", arguments: { path: "missing-on-purpose.txt" } },
+      { text: "Done." },
+    ] });
+    const { sessionId, cleanup } = await setup(stub);
+    try {
+      const run = await runAndWait(sessionId, "Try the tools.");
+      if (run.status !== "completed") throw new Error(`run ${run.status}: ${run.error}`);
+      if (existsSync(marker)) throw new Error(`bash ran on the host: ${marker} exists`);
+      const offered = new Set(stub.requests.flatMap((request) => request.toolNames ?? []));
+      for (const hidden of ["bash", "write_file", "edit_file", "glob", "grep"]) {
+        if (offered.has(hidden)) throw new Error(`JiuwenSwarm's ${hidden} was offered to the model`);
+      }
+      const events = await runEvents(sessionId, run.id);
+      const read = events.find((event) => event.type === "tool.started" && /read_file$/.test(event.trace?.name ?? ""));
+      if (!read || read.trace.native) throw new Error(`read_file did not reach ScienceDiscovery's tool: ${JSON.stringify(read?.trace ?? null)}`);
+      console.log(`host-tools: ok (bash turned away, nothing ran on the host; read_file was ScienceDiscovery's; offered: ${[...offered].filter((n) => !n.startsWith("mcp_")).length} JiuwenSwarm tools)`);
+    } finally {
+      await cleanup();
+    }
+  },
+
+  /**
    * Where the time before the first token goes, with a model that answers at once: from the run's start to the
    * model's first request, and from there to the first text event. Two runs, since the first of a session sets more up.
    */

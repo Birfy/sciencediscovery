@@ -69,9 +69,10 @@ export interface JiuwenSwarmAgentConfig {
    */
   prompt?: "prepend" | "replace";
   /**
-   * Which tools the model gets. `jiuwenswarm` (default): all of JiuwenSwarm's own (bash, files, web, sub-agents,
-   * todo, memory, skills ...) plus ScienceDiscovery's that JiuwenSwarm does not have; on a name clash
-   * JiuwenSwarm's is used. `ours`: ScienceDiscovery's only (and JiuwenSwarm's todo tools for planning).
+   * Which tools the model gets. `jiuwenswarm` (default): JiuwenSwarm's own (web, sub-agents, todo, memory,
+   * skills ...) except those that act on the host (`JIUWENSWARM_HOST_TOOLS`: their work goes to ScienceDiscovery's
+   * sandboxed tools), plus all of ScienceDiscovery's; on any other name clash JiuwenSwarm's is used. `ours`:
+   * ScienceDiscovery's only (and JiuwenSwarm's todo tools for planning).
    */
   tools?: "jiuwenswarm" | "ours";
   /**
@@ -95,6 +96,16 @@ export const TODO_PLANNING_SECTION = [
 
 /** ScienceDiscovery's web tools and the JiuwenSwarm tools that take their place. */
 export const JIUWENSWARM_WEB_TOOLS: Record<string, string> = { web_search: "free_search (or paid_search)", web_fetch: "fetch_webpage" };
+
+/**
+ * JiuwenSwarm's own tools that act on the host: the model never gets them. Commands and file writes go through
+ * ScienceDiscovery's `run_shell`, reads through its file tools, so they run in its sandbox and Runner, with its
+ * provenance. The adapter turns away a call the model makes to one anyway.
+ */
+export const JIUWENSWARM_HOST_TOOLS = ["bash", "read_file", "write_file", "edit_file", "glob", "list_files", "grep", "read_pdf"] as const;
+
+/** What the model is told instead: JiuwenSwarm's own prompt still names those tools. */
+export const HOST_TOOLS_SECTION = "Commands, scripts and file writes run in the sandbox through run_shell; read workspace files with read_file and list_files. JiuwenSwarm's bash, write_file, edit_file, glob, grep and read_pdf are not available here.";
 
 /** JiuwenSwarm's own todo tools, left visible to the model unless planning is `update_plan`. */
 export const JIUWENSWARM_TODO_TOOLS = ["todo_create", "todo_modify", "todo_list", "todo_get"] as const;
@@ -303,7 +314,8 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
       ? Object.entries(JIUWENSWARM_WEB_TOOLS).reduce((text, [mine, theirs]) => text.replaceAll(mine, theirs),
         composed.replace("Use only the registered workspace tools. ", ""))
       : composed;
-    const systemPrompt = jiuwenSwarmPlans && !keepJiuwenSwarmPrompt ? `${ours}\n\n${TODO_PLANNING_SECTION}` : ours;
+    const withHostRule = allJiuwenSwarmTools ? `${ours}\n\n${HOST_TOOLS_SECTION}` : ours;
+    const systemPrompt = jiuwenSwarmPlans && !keepJiuwenSwarmPrompt ? `${withHostRule}\n\n${TODO_PLANNING_SECTION}` : withHostRule;
     const response = await (this.config.fetch ?? fetch)(`${this.config.adapterUrl}/agent/runs`, {
       method: "POST",
       headers: {
@@ -322,6 +334,7 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
         model: { model: model.model, baseUrl: modelGateway.url, apiKey: modelGateway.token, provider: "OpenAI" },
         ...(jiuwenSwarmPlans ? { nativeTools: [...JIUWENSWARM_TODO_TOOLS] } : {}),
         jiuwenSwarmTools: allJiuwenSwarmTools ? "all" : "listed",
+        ...(allJiuwenSwarmTools ? { hiddenJiuwenSwarmTools: [...JIUWENSWARM_HOST_TOOLS] } : {}),
         // JiuwenSwarm gives a tool call 30 s unless told otherwise; the run's own timeout is the limit here.
         ...(this.options.runTimeoutMs ? { toolTimeoutSeconds: Math.ceil(this.options.runTimeoutMs / 1000) } : {}),
         tools: [...tools.values()].map((tool) => ({

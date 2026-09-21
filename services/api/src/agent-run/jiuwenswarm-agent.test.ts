@@ -937,13 +937,13 @@ test("the prompt mode is chosen by SCIENCE_AGENT_JIUWENSWARM_PROMPT", () => {
   assert.equal(jiuwenSwarmConfigFromEnv({ ...env, SCIENCE_AGENT_JIUWENSWARM_PROMPT: "replace" })?.prompt, "replace");
 });
 
-test("by default the model gets JiuwenSwarm's own tools, and a call to one is reported from the event stream", async () => {
+test("by default the model gets JiuwenSwarm's own tools but not those acting on the host, and a call to one is reported from the event stream", async () => {
   let sent: any;
   const adapter = await fakeAdapter(async ({ body }, response) => {
     sent = body;
     response.writeHead(200);
-    response.write(line({ event: { type: "tool.started", trace: { id: "b1", name: "bash", args: { command: "ls" }, status: "running", native: true } } }));
-    response.write(line({ event: { type: "tool.completed", trace: { id: "b1", name: "bash", args: {}, status: "completed", output: "a.txt", native: true } } }));
+    response.write(line({ event: { type: "tool.started", trace: { id: "b1", name: "memory_search", args: { query: "x" }, status: "running", native: true } } }));
+    response.write(line({ event: { type: "tool.completed", trace: { id: "b1", name: "memory_search", args: {}, status: "completed", output: "a note", native: true } } }));
     response.end(line({ done: { finalText: "ok" } }));
   });
   try {
@@ -952,10 +952,13 @@ test("by default the model gets JiuwenSwarm's own tools, and a call to one is re
     await agent.execute("go");
     assert.equal(sent.jiuwenSwarmTools, "all");
     assert.equal(sent.systemPrompt.includes("Use only the registered workspace tools"), false);
+    // Commands and file writes stay in ScienceDiscovery's sandbox: JiuwenSwarm's host tools are hidden, and the prompt says so.
+    assert.deepEqual(sent.hiddenJiuwenSwarmTools, ["bash", "read_file", "write_file", "edit_file", "glob", "list_files", "grep", "read_pdf"]);
+    assert.match(sent.systemPrompt, /run in the sandbox through run_shell/);
     const start = events.find((event) => event.type === "tool_execution_start") as any;
     const end = events.find((event) => event.type === "tool_execution_end") as any;
-    assert.equal(start.toolName, "bash");
-    assert.equal(end.result.content[0].text, "a.txt");
+    assert.equal(start.toolName, "memory_search");
+    assert.equal(end.result.content[0].text, "a note");
   } finally {
     await adapter.close();
   }

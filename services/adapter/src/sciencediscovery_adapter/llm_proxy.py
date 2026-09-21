@@ -68,6 +68,10 @@ class LlmRoute:
     # name, JiuwenSwarm's is kept and ours is not offered (`shadowed`, filled in as requests go by).
     all_native_tools: bool = False
     shadowed: set[str] = field(default_factory=set)
+    # JiuwenSwarm's own tools the model never gets: those that act on the host (bash, file reads and writes), whose
+    # work goes to ScienceDiscovery's tools, in its sandbox and Runner. One of ours of the same name is offered instead,
+    # and a call the model makes to one anyway (JiuwenSwarm's prompt still names them) is turned away.
+    hidden_native_tools: frozenset[str] = frozenset()
 
 
 @dataclass
@@ -130,7 +134,7 @@ def rewrite_request(body: dict[str, Any], route: LlmRoute) -> dict[str, Any]:
     out["model"] = route.model
     if body.get("tools"):
         names = [tool.get("function", {}).get("name", "") for tool in body["tools"]]
-        native = {name for name in names if not name.startswith(route.tool_prefix)}
+        native = {name for name in names if not name.startswith(route.tool_prefix)} - route.hidden_native_tools
         if route.all_native_tools:
             route.shadowed |= native & route.tool_names
 
@@ -201,10 +205,17 @@ def _is_ours(name: str, route: LlmRoute) -> bool:
     return name.startswith(route.tool_prefix) and name.removeprefix(route.tool_prefix) in route.tool_names
 
 
+# What a call to a hidden JiuwenSwarm tool is renamed to: no tool has that name, so JiuwenSwarm answers that it does
+# not exist and the model carries on with the tools it was given, instead of JiuwenSwarm running it on the host.
+UNAVAILABLE_PREFIX = "unavailable__"
+
+
 def _prefixed(name: str, route: LlmRoute) -> str:
     # A model that copies an earlier run's name from the history is sent to this run's server.
     name = _unprefixed(name, route)
-    return route.tool_prefix + name if name in route.tool_names and name not in route.shadowed else name
+    if name in route.tool_names and name not in route.shadowed:
+        return route.tool_prefix + name
+    return UNAVAILABLE_PREFIX + name if name in route.hidden_native_tools else name
 
 
 def rewrite_response(payload: dict[str, Any], route: LlmRoute) -> dict[str, Any]:
