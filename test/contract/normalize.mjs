@@ -38,6 +38,8 @@ const RUNNER_VERSION = /(\\*"runnerVersion\\*":\\*")[^"\\]*/g;
 export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 // A custom MCP server's id is generated per run.
 const CUSTOM_MCP_ID = /\bcustom-[0-9a-f]{12}\b/g;
+// A person's or a service account's home directory: the machine a recording was made on is not part of the contract.
+const HOME_DIR = /(?<![\w.:\-\/])(?:\/root|\/home\/[^/\s"']+|\/Users\/[^/\s"']+)(?=\/|\b)/g;
 const HEX_TOKEN = /\b[0-9a-f]{32,}\b/gi;
 const TIMEY_KEY = /(At|Time|Ts|Timestamp)$/;
 // Keys whose value is a per-run measurement, not part of the contract.
@@ -55,6 +57,7 @@ const VOLATILE_KEYS = new Set(["durationMs", "elapsedMs", "latencyMs", "runnerVe
 export function scrubText(value) {
   return value
     .split(REPO_ROOT).join("<repo>")
+    .replace(HOME_DIR, "<home>")
     .replace(DIGEST, "<sha256>")
     .replace(WORKSPACE_ID, "<workspace>")
     .replace(SYSTEM_ENVIRONMENT, "<system-environment>")

@@ -123,3 +123,12 @@ test("a custom MCP server's generated id is numbered like a uuid", () => {
   assert.equal(normalize.text("custom-683c5afc5d06 and custom-0b782b84a4f9 and custom-683c5afc5d06"),
     "<custom-mcp:1> and <custom-mcp:2> and <custom-mcp:1>");
 });
+
+test("a home directory is hidden, wherever the recording was made", () => {
+  assert.equal(scrubValue("/root/.ssh/authorized_keys"), "<home>/.ssh/authorized_keys");
+  assert.equal(scrubValue("/home/alice/data/x"), "<home>/data/x");
+  assert.equal(scrubValue("/Users/bob/Downloads"), "<home>/Downloads");
+  assert.equal(scrubValue("/rootless/keep"), "/rootless/keep");
+  assert.equal(scrubValue("https://www.ncbi.nlm.nih.gov/home/about/policies/"), "https://www.ncbi.nlm.nih.gov/home/about/policies/", "a URL path is not a home directory");
+  assert.equal(scrubValue("cwd /root/work"), "cwd <home>/work");
+});

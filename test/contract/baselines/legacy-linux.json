@@ -8860,7 +8860,7 @@
      },
      "status": "ready",
      "updatedAt": "<time>",
-     "workspaceRoot": "/root/l1-runtime/projects"
+     "workspaceRoot": "<home>/l1-runtime/projects"
     }
    ]
   },
@@ -8885,7 +8885,7 @@
     },
     "status": "ready",
     "updatedAt": "<time>",
-    "workspaceRoot": "/root/l1-runtime/projects"
+    "workspaceRoot": "<home>/l1-runtime/projects"
    }
   },
   {
@@ -9045,16 +9045,16 @@
    "status": 200,
    "contentType": "application/json",
    "body": {
-    "directory": "/root/.ssh",
+    "directory": "<home>/.ssh",
     "entries": [
      {
       "kind": "file",
       "name": "authorized_keys",
-      "path": "/root/.ssh/authorized_keys"
+      "path": "<home>/.ssh/authorized_keys"
      }
     ],
     "nextOffset": null,
-    "parentDirectory": "/root"
+    "parentDirectory": "<home>"
    }
   },
   {
