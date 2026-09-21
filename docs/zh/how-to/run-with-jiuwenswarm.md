@@ -4,7 +4,7 @@ ScienceDiscovery 可以让智能体循环跑在 [JiuwenSwarm](https://gitcode.co
 
 不变的部分：网页界面、会话、消息、运行事件、产物与溯源。变化的部分：模型循环、对话上下文（由 JiuwenSwarm 保存并压缩）、系统提示词（JiuwenSwarm 自己的，加上 ScienceDiscovery 的），以及默认情况下的**工具**：模型拿到的是 JiuwenSwarm 自己的工具（bash、文件读写编辑、grep、网页抓取、子代理、todo、记忆、技能、定时任务），再加上 JiuwenSwarm 没有对应物的 ScienceDiscovery 工具（在 Runner 上执行的 `run_shell`、产物、证据与论断、论文、idea tree、evolve、`task`）。
 
-**使用前请了解：** JiuwenSwarm 自己的工具在 JiuwenSwarm 进程里、以它的用户身份直接在主机上运行，不经过 ScienceDiscovery 的权限审批、Runner 沙箱、执行记录和溯源，JiuwenSwarm 自己的权限引擎也是关着的。设 `SCIENCE_AGENT_JIUWENSWARM_TOOLS=ours` 可恢复之前的做法：所有工具调用都经过 ScienceDiscovery。
+**工具、沙箱与审批：** JiuwenSwarm 直接在主机上操作的工具（`bash`、`read_file`、`write_file`、`edit_file`、`glob`、`list_files`、`grep`、`read_pdf`）对模型隐藏：命令、脚本和写文件走 ScienceDiscovery 的 `run_shell`，在它的沙箱或 Runner 里执行，保留溯源；读文件用它的文件工具。模型若仍调用被隐藏的工具，调用会被拒绝，什么也不执行。JiuwenSwarm 其余的工具（网页搜索与抓取、todo、记忆、技能、子代理、定时任务）保留。ScienceDiscovery 的工具通过一个 MCP 服务 `sci` 提供给 JiuwenSwarm，名字固定（如 `mcp_sci_run_shell`）。**审批用 JiuwenSwarm 的**：它的权限引擎已开启，每次工具调用前由它判断。我们的每个工具在第一次出现时设定级别：会执行命令、访问主机或 Runner、下载的工具，以及自定义 MCP 连接器工具为*询问*，其余为*允许*。询问显示为 ScienceDiscovery 的审批卡片（会话的审批模式和已有授权仍然生效），答复回传给 JiuwenSwarm（本次 / 本会话 / 总是 / 拒绝）。之后 ScienceDiscovery 自己的审批层放行这次调用，并以来源 `jiuwenswarm` 记录。设 `SCIENCE_AGENT_JIUWENSWARM_TOOLS=ours` 则模型只用 ScienceDiscovery 的工具。
 
 ```
 浏览器 ─▶ 适配器（公共端口）─▶ API（端口 + 100）
