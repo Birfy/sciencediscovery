@@ -412,6 +412,44 @@ const checks = {
     }
   },
 
+  /** Not a check: prints what a JiuwenSwarm subagent (task_tool) looks like from here, to design the mapping. */
+  async "subagent-probe"() {
+    const stub = await startStubModel({
+      subagentMarker: "SUBAGENT-PROBE",
+      main: [
+        { tool: "subagent_spawn", arguments: { subagent_type: process.env.PROBE_TYPE || "general_agent", display_name: "Probe", role: "helper",
+          task_description: "SUBAGENT-PROBE: run `echo CHILD-OK` with run_shell, then say done." } },
+        { tool: "subagent_wait", arguments: (body) => {
+          const text = JSON.stringify(body.messages ?? []);
+          const id = text.match(/(?:sub_session_id|subagent_id)['\\"]*\s*:\s*['\\"]*([A-Za-z0-9_.:-]+)/)?.[1];
+          console.log(`probe: spawn result gives id ${id}`);
+          return { subagent_ids: id ? [id] : [], timeout_seconds: 60 };
+        } },
+        { text: "Delegated." },
+      ],
+      subagent: [{ tool: "run_shell", arguments: { command: "echo CHILD-OK" } }, { text: "child done" }],
+    });
+    const { sessionId, cleanup } = await setup(stub);
+    try {
+      const run = await runAndWait(sessionId, "Delegate a probe.");
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      console.log(`run: ${run.status} ${run.error ?? ""}`);
+      for (const request of stub.requests) {
+        console.log(`model request: route=${request.route} messages=${request.messages} system=${request.systemLength} tools=${(request.toolNames ?? []).length} run_shell=${(request.toolNames ?? []).includes("run_shell")} task_tool=${(request.toolNames ?? []).includes("task_tool")} system-start=${JSON.stringify((request.system ?? "").slice(0, 90))}`);
+      }
+      const events = await runEvents(sessionId, run.id);
+      console.log(`event types: ${[...new Set(events.map((event) => event.type))].join(" ")}`);
+      for (const event of events.filter((event) => /^tool\.|subagent/.test(event.type))) {
+        console.log(`  ${event.type} ${JSON.stringify(event.trace ?? event.subagent ?? event).slice(0, 260)}`);
+      }
+      const streams = await Promise.all(events.filter((event) => event.type === "tool.completed" && event.trace?.outputStream)
+        .map((event) => api("GET", `/api/sessions/${sessionId}/runs/${run.id}/streams/${event.trace.outputStream}/events`)));
+      console.log(`CHILD-OK in outputs: ${JSON.stringify(streams).includes("CHILD-OK") || JSON.stringify(events).includes("CHILD-OK")}`);
+    } finally {
+      await cleanup();
+    }
+  },
+
   /**
    * Where the time before the first token goes, with a model that answers at once: from the run's start to the
    * model's first request, and from there to the first text event. Two runs, since the first of a session sets more up.
