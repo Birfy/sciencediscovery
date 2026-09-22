@@ -197,7 +197,7 @@ This section walks through prepare → build → start → connect in the browse
 ### Prerequisites
 
 - A Linux x86_64 or aarch64 host with Docker Engine 24+ (which ships BuildKit) and the Compose v2 plugin; `docker compose version` should print `v2` or newer. The build relies on BuildKit's `TARGETARCH`: the legacy `docker-compose` v1, or a build with BuildKit disabled, fails with `TARGETARCH is required`. Docker Desktop on macOS or Windows is unsupported because the sandbox depends on Linux kernel user namespaces.
-- Disk: the image is about 1.8 GB and the build cache takes several more GB; the starter Python scientific environment created automatically on first start writes about 2 GB into the data directory.
+- Disk: the image is about 3.9 GB (roughly 1.6 GB of it JiuwenSwarm's own dependency closure) and the build cache takes several more GB; the starter Python scientific environment created automatically on first start writes about 2 GB into the data directory.
 - Network: the **build** reaches Docker Hub (the `node:22-bookworm` base images), `ghcr.io` (the uv image), the Debian apt mirrors, the npm registry, PyPI, GitHub Releases (micromamba), and `models.dev` (the model catalog snapshot). At **run time** the services inside the image need no network, but the first start creates the starter Python environment in the background, which needs conda-forge or a mirror of it; model APIs and paper sources are reached directly from the container — see [Frequently asked questions](#frequently-asked-questions) when they must go through a proxy.
 - Unprivileged user namespaces available to the container, which the Bubblewrap sandbox depends on. **The gate is the probe the product actually runs, not the value of any sysctl**: both the container entry point and the runner build a minimal sandbox at startup and decide from the result. Confirm it positively with the probe under [Step 3](#step-3-start-and-confirm-health) once the stack is up; if it fails, see [Sandbox and host requirements](#sandbox-and-host-requirements).
 
@@ -217,7 +217,7 @@ mkdir -p data                 # host directory for all runtime state; create it 
 docker compose build
 ```
 
-The result is `sciencediscovery:local` (`SCIENCE_AGENT_IMAGE` changes the tag). The first build installs the workspace dependencies, compiles the Web UI, resolves both service Python environments, and downloads micromamba and the model catalog snapshot, so it needs network access throughout; with an empty cache it takes a few minutes on an ordinary x86_64 machine, longer on a slow connection. Later rebuilds that only change application source reuse the dependency layers.
+The result is `sciencediscovery:local` (`SCIENCE_AGENT_IMAGE` changes the tag). The first build installs the workspace dependencies, compiles the Web UI, resolves the paper, gateway and adapter Python environments, installs [JiuwenSwarm](../how-to/run-with-jiuwenswarm.md) from its PyPI release, and downloads micromamba and the model catalog snapshot, so it needs network access throughout; with an empty cache it takes a few minutes on an ordinary x86_64 machine, longer on a slow connection. Later rebuilds that only change application source reuse the dependency layers, JiuwenSwarm's included — it is not re-downloaded unless `JIUWENSWARM_TAG` changes.
 
 BuildKit selects the `linux/amd64` or `linux/arm64` micromamba for `TARGETARCH` and verifies it against the runner's shared release manifest. The binary is stored at `/opt/sciencediscovery/provisioner/micromamba`; when `/app/data` is an empty bind mount, the first start copies it to the managed default path and the runner verifies it again. This does not access GitHub at **run time**.
 
@@ -274,6 +274,23 @@ ssh -N -L 4310:127.0.0.1:4310 <user>@<remote-host>   # then open http://127.0.0.
 ### Step 5: configure a model and start the first task
 
 The image ships no model. The "Configure a model" entry on the home page leads to **System configuration → Model registry**: create a model connection, enter the provider's API key, save it, and select it as the task model under **Global defaults**. Then create a project and start the first session; see the [Quick Start tutorial](quick-start.md). The container reaches the model provider directly; see [Frequently asked questions](#frequently-asked-questions) when it must go through a proxy or when the model server runs on the host itself.
+
+### Run agent turns on JiuwenSwarm
+
+The image already has [JiuwenSwarm](../how-to/run-with-jiuwenswarm.md) and its adapter baked in; nothing more to install. Add `--jiuwenswarm` to the container's command to run agent turns on it instead of the native loop:
+
+```yaml
+# docker-compose.override.yml
+services:
+  sciencediscovery:
+    command: ["--jiuwenswarm"]
+```
+
+```bash
+docker compose up -d
+```
+
+The public port then serves the adapter, which proxies routes it has not migrated to the API behind it (`+ 100` by default); the browser URL and token flow are unchanged. `GET /agent/info` on the public port says which backend is running. The instance's own state (skills, permission grants, conversation context) lives under `./data`, alongside everything else, so it survives `docker compose down` and image rebuilds the same way.
 
 ### Day-to-day management
 

@@ -194,14 +194,14 @@ SSH 自动部署使用自带 Node runtime 的 Runner SEA 单文件，不要求�
 
 ## Docker 部署
 
-单个镜像承载完整技术栈：容器入口 `docker-entrypoint.sh` 转调 `scripts/start-stack.sh --mode docker`，在一个容器内按与本地模式相同的顺序启动 bubblewrap runner 和带 Web UI 的控制 API，随包的 Python MCP server 由 API 按需拉起；Docker 专属预检只在该模式执行。builder 阶段使用 pnpm 与 uv；运行镜像携带 Node、预构建的服务 Python 环境、bubblewrap，以及按 `TARGETARCH` 下载并校验的固定版本 micromamba。宿主机只需要 Docker。
+单个镜像承载完整技术栈：容器入口 `docker-entrypoint.sh` 转调 `scripts/start-stack.sh --mode docker`，在一个容器内按与本地模式相同的顺序启动 bubblewrap runner 和带 Web UI 的控制 API，随包的 Python MCP server 由 API 按需拉起；Docker 专属预检只在该模式执行。builder 阶段使用 pnpm 与 uv；运行镜像携带 Node、预构建的服务 Python 环境、bubblewrap，以及按 `TARGETARCH` 下载并校验的固定版本 micromamba。镜像同样内置了 [JiuwenSwarm](../how-to/run-with-jiuwenswarm.md) 与其适配器，做法与单文件二进制包相同；给 `start-stack.sh --mode docker` 加上 `--jiuwenswarm` 即可让智能体轮次跑在它上面而非原生循环（见[在 JiuwenSwarm 上运行智能体](../how-to/run-with-jiuwenswarm.md)）。宿主机只需要 Docker。
 
 本节按「准备 → 构建 → 启动 → 浏览器连接 → 配置模型」给出完整步骤，之后是日常管理、数据目录、多实例、环境变量、沙箱要求与常见问题。命令都在仓库根目录执行。
 
 ### 前置条件
 
 - Linux x86_64 或 aarch64 宿主机，Docker Engine 24+（自带 BuildKit）与 Compose v2 插件；`docker compose version` 应输出 `v2` 或更高。构建依赖 BuildKit 的 `TARGETARCH`，旧的 `docker-compose` v1 或关闭 BuildKit 的构建会以 `TARGETARCH is required` 失败。macOS / Windows 上的 Docker Desktop 不支持：沙箱依赖 Linux 内核的用户命名空间。
-- 磁盘：镜像约 1.8 GB，构建缓存另占数 GB；首次启动自动创建的 starter Python 科学环境会向数据目录写入约 2 GB。
+- 磁盘：镜像约 3.9 GB（其中约 1.6 GB 是 JiuwenSwarm 自身的依赖闭包），构建缓存另占数 GB；首次启动自动创建的 starter Python 科学环境会向数据目录写入约 2 GB。
 - 网络：**构建期**需要访问 Docker Hub（`node:22-bookworm` 基础镜像）、`ghcr.io`（uv 镜像）、Debian apt 源、npm registry、PyPI、GitHub Releases（micromamba）与 `models.dev`（模型目录快照）。**运行期**镜像内的服务本身不再联网，但首次启动会在后台创建 starter Python 环境，需要访问 conda-forge 或其镜像；模型 API、文献源等由容器直接出站，需要走代理时见[常见问题](#常见问题)。
 - 容器内可用的无特权用户命名空间——bubblewrap 沙箱依赖它。**判据是产品实际跑的 bwrap 探针，不是某个 sysctl 的取值**：容器入口和 runner 启动时都会真正构建一次最小沙箱，据此决定沙箱能否工作。起栈之后按[第 3 步](#第-3-步启动并确认健康)的探针命令正面复核；探针失败后的排查项见[沙箱与宿主要求](#沙箱与宿主要求)。
 
@@ -221,7 +221,7 @@ mkdir -p data                 # 承载全部运行时状态的宿主目录，必
 docker compose build
 ```
 
-产物是 `sciencediscovery:local`（可用 `SCIENCE_AGENT_IMAGE` 改 tag）。首次构建会安装 workspace 依赖、编译 Web UI、解析两个服务 Python 环境、下载 micromamba 与模型目录快照，全程需要外网；缓存全空时在一台普通 x86_64 机器上约需两三分钟，网络慢时更长。之后只改源码的重建会复用依赖层缓存。
+产物是 `sciencediscovery:local`（可用 `SCIENCE_AGENT_IMAGE` 改 tag）。首次构建会安装 workspace 依赖、编译 Web UI、解析 paper、gateway 和适配器三个 Python 环境、从 PyPI 安装 [JiuwenSwarm](../how-to/run-with-jiuwenswarm.md)、下载 micromamba 与模型目录快照，全程需要外网；缓存全空时在一台普通 x86_64 机器上约需两三分钟，网络慢时更长。之后只改源码的重建会复用依赖层缓存，JiuwenSwarm 也在内——除非 `JIUWENSWARM_TAG` 变了，否则不会重新下载。
 
 Docker 构建会根据 BuildKit 的 `TARGETARCH` 选择 `linux/amd64` 或 `linux/arm64` 对应的 micromamba，并用 Runner 共用的发布清单校验 SHA256。二进制保存在镜像的 `/opt/sciencediscovery/provisioner/micromamba`；容器首次面对空的 `/app/data` bind mount 时把它复制到默认托管路径，Runner 随后再次按同一清单校验。这个流程不需要在**运行时**访问 GitHub。
 
@@ -278,6 +278,23 @@ ssh -N -L 4310:127.0.0.1:4310 <用户>@<远程主机>   # 然后在本地浏览�
 ### 第 5 步：配置模型并开始第一次任务
 
 镜像不内置任何模型。首页的「配置模型」入口指向 **系统设置 → 模型注册表**：新建一个模型连接、填入服务商 API Key 并保存，再在 **全局默认值** 中把它设为任务模型。之后创建项目、发起第一次会话，见[快速开始教程](quick-start.md)。容器直接向模型服务商出站；需要经代理访问或模型服务跑在宿主机上时，见[常见问题](#常见问题)。
+
+### 在 JiuwenSwarm 上运行智能体
+
+镜像已经内置了 [JiuwenSwarm](../how-to/run-with-jiuwenswarm.md) 与适配器，无需额外安装。给容器的命令加上 `--jiuwenswarm` 即可让智能体轮次跑在它上面而非原生循环：
+
+```yaml
+# docker-compose.override.yml
+services:
+  sciencediscovery:
+    command: ["--jiuwenswarm"]
+```
+
+```bash
+docker compose up -d
+```
+
+之后公共端口由适配器提供服务，未迁移的路由会代理到其后的 API（默认端口 +100）；浏览器地址和令牌流程不变。公共端口上的 `GET /agent/info` 会说明当前跑的是哪个后端。实例自身的状态（技能、权限授权、对话上下文）与其他数据一样存在 `./data` 下，所以同样能挺过 `docker compose down` 和镜像重建。
 
 ### 日常管理
 

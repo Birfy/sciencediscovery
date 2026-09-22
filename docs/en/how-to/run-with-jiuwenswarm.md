@@ -32,8 +32,9 @@ The same thing by variables: `SCIENCE_AGENT_ADAPTER=1 SCIENCE_AGENT_EXECUTOR=jiu
 The single-file binary carries the same JiuwenSwarm and adapter, installed at build time
 (`scripts/binary-release/build-payload.sh`), so there is nothing to clone or install at run time, and `./ScienceDiscovery
 serve` runs on it **by default** — `--jiuwenswarm` is accepted but redundant. Pass `--no-jiuwenswarm` (or
-`SCIENCE_AGENT_EXECUTOR=native`) for the native loop instead. The Docker image does not include them yet, so it keeps
-the native loop as its own default regardless.
+`SCIENCE_AGENT_EXECUTOR=native`) for the native loop instead. The Docker image bakes them in the same way (see
+[Deployment → Run agent turns on JiuwenSwarm](../getting-started/deployment.md#run-agent-turns-on-jiuwenswarm)), but
+keeps the native loop as its own default: add `--jiuwenswarm` to the container's command to switch it.
 
 Data (sessions, projects, models, settings, messages on screen) lives in the usual data directory either way, but the
 **model's conversation context is JiuwenSwarm's own**: it keeps and compresses it itself, and a fresh instance starts
@@ -52,7 +53,7 @@ A stack on the built-in loop, or one that was never started with the adapter, ha
 
 ## Requirements
 
-Two paths carry JiuwenSwarm; the Docker image does not yet.
+Three paths carry JiuwenSwarm.
 
 **Single-file binary**: `./ScienceDiscovery serve` — JiuwenSwarm and the adapter are already inside the executable
 (see [Deployment → what the binary contains](../getting-started/deployment.md#what-the-binary-contains)) and this is
@@ -61,13 +62,20 @@ beyond the usual [bubblewrap](../getting-started/deployment.md#host-dependency-b
 payload, which this adds roughly 1.5 GB to. Nothing is cloned or installed at run time, so this path needs no access to
 `gitcode.com` or a PyPI index.
 
+**Docker**: `docker compose build` bakes them into the image the same way, from a plain PyPI install — no cloning, no
+extra host requirement beyond the usual Docker one. The native loop stays the image's own default; add
+`--jiuwenswarm` to the container's command to switch it (see [Deployment → Run agent turns on
+JiuwenSwarm](../getting-started/deployment.md#run-agent-turns-on-jiuwenswarm)). First start still creates the
+instance, under the bind-mounted data directory so it survives a container recreation, adding roughly 1.6 GB to the
+image build.
+
 **Source mode** (see [Deployment](../getting-started/deployment.md#local-mode-host-processes)):
 
 - `git` and `uv` on the host. JiuwenSwarm installs into its own directory and virtualenv, never into ScienceDiscovery's environments.
 - Access to `gitcode.com` (to clone the pinned tag) and to a PyPI index. On a slow link or in mainland China, set `SCIENCE_AGENT_PYPI_INDEX` to a mirror and, if downloads time out, `UV_HTTP_TIMEOUT` (the script defaults to 300 seconds).
 - About 1.5 GB of disk for the JiuwenSwarm install.
 
-Either path: any model the UI can configure: OpenAI chat completions, OpenAI Responses or Anthropic Messages, with their provider variants. You configure the model in ScienceDiscovery as usual; JiuwenSwarm needs no model setup of its own.
+Any path: any model the UI can configure: OpenAI chat completions, OpenAI Responses or Anthropic Messages, with their provider variants. You configure the model in ScienceDiscovery as usual; JiuwenSwarm needs no model setup of its own.
 
 ## Install and start
 
