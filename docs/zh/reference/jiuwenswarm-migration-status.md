@@ -75,6 +75,11 @@ JiuwenSwarm 自己有一套上下文引擎（占用到模型窗口的 80% 时压
 5. **唤醒提示：已修复。** `test/helpers/journeys.ts` 里脚本化模型现在会先从 JiuwenSwarm 自己的信封（`你收到一条消息：{"content": "..."}`）里取出用户轮次内容，再去匹配 `[Execution notifications]`；`issue-77-wake-notice` 和 `issue-85-foreground-exec-inbox` 三个用例中的两个都通过了。第三个（子代理把工作放到后台，随后被自己的结果唤醒）是 1a 里的待解决项。用 `.ci/run-e2e.sh mocked` 运行该组（`CI_E2E_BACKEND=jiuwenswarm` 现在是默认值）。这些旅程在小机器上对负载敏感：在 2 核服务器上连续运行时有两条失败过一次，单独运行（重复 3 次）都通过，所以有疑问时请逐条运行。
 6. **录制中发现的 legacy 缺陷（未修）：** `PUT /api/sessions/:id/settings` 请求体错误返回 500；`PUT /api/web/settings` 用它自己 GET 的响应体返回 500；对未知 run 做技能进化返回 500；读工作区外的文件（`/file?path=../../etc/passwd`）返回 500 而非 4xx。
 7. **#90 的发现：** `POST /api/sessions/:id/permission-epoch` 之后，会话范围的授权仍然生效（epoch 管沙箱，授权管会话）。issue 文字期望旧授权失效；基线记录的是 legacy 的实际行为。
+8. **UT 已在真实 JiuwenSwarm 下审计。** `services/api/src/server.test.ts`（host 档 UT 里最大的测试文件）现在通过 `scripts/with-jiuwenswarm.sh` 让智能体轮次跑在真实的 JiuwenSwarm 和适配器上（`pnpm ci:ut:host` 已接好）。审计发现：
+   - **真 bug，已修复：** JiuwenSwarm 审批问题的 resource 用的是这次调用自己的描述文字（如 `"run_shell: rm -rf out"`），运行之外预先建立的授权（预检、"本会话总是允许"）永远匹配不上——运行只能等一个不会有人做出的决定，等到运行放弃等待，补发的答复又收到 404。`describe_approval` 现在单独发送工具原名（`toolName`）；适配器把 `run_shell`/`execute`/`environment_setup`/`execution_cancel` 归类到内置循环自己权限检查用的那个固定 resource（`workspace-code`），这样已有的授权也能应用到 JiuwenSwarm 拦下的调用上。
+   - **真实的、JiuwenSwarm 特有的行为，测试已相应调整，不是 bug：** 会话的技能不是一份选择（所有已安装技能到处可用；子代理的对应情况见上文"子代理仍用 ScienceDiscovery 的 `task`"——子代理也会把所有延迟工具，包括连接器 MCP 工具，提前全部展开）；skill-creator 用 JiuwenSwarm 的 `skill_tool` 加载，不是我们的 `read_skill`；工具结果被重新塞进模型下一轮时，包在 JiuwenSwarm 自己的 Python repr 信封里（`{'result': '...'}`，不是 JSON），不是原样传回。
+   - **同一轮里另一个无关的 bug，已修复：** 这个测试文件自己那个内联的模型桩，检测后台执行唤醒通知时，没有先解开 JiuwenSwarm 包在用户轮次外面的信封就去匹配 `[Execution notifications]`——和 E2E 旅程里（`test/helpers/journeys.ts`）已经修过的那类 bug一样。
+   - **已知，尚未解决：** 三个在运行过程中切换会话审批模式（切到 `always_allow`，切到 `ask`）的测试失败；尚未定位根因，和上面已修复的审批 resource bug是两回事。在这个问题解决前，把"运行中途切换审批模式"当作这个执行器上未验证的行为。
 
 ## 开始做某个子 issue
 
