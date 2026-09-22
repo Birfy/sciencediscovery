@@ -96,7 +96,8 @@ ScienceDiscovery help                  Show help
 | `--bwrap <path>` | `bwrap` on `PATH` | Bubblewrap executable |
 | `--skip-sandbox-check` | off | Start without Bubblewrap; sandbox execution is unavailable |
 | `--no-scientific-envs` | off | Do not initialize managed scientific environments |
-| `--jiuwenswarm` | off | Run agent turns on the embedded [JiuwenSwarm](../how-to/run-with-jiuwenswarm.md) instead of the native loop |
+| `--jiuwenswarm` | **on** | Run agent turns on the embedded [JiuwenSwarm](../how-to/run-with-jiuwenswarm.md) instead of the native loop; accepted for compatibility, this is already the default |
+| `--no-jiuwenswarm` | off | Run agent turns on the native loop instead; also `SCIENCE_AGENT_EXECUTOR=native` |
 
 The variables in [Configuration reference](../reference/configuration.md#environment-variables-local-mode) also apply and can be exported or placed in `--env-file`. The API and the runner bind to loopback by default. To expose the API, first replace `SCIENCE_AGENT_AUTH_TOKEN`, then explicitly use `--host 0.0.0.0` only on a trusted, protected network.
 

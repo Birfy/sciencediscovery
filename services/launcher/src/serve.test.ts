@@ -54,7 +54,10 @@ function contextFor(overrides: Partial<ServicePlanContext> = {}): ServicePlanCon
     credentials,
     manifest,
     payloadRoot: "/cache/payload/abc",
-    settings: defaultSettings({}, "/opt/sciencediscovery"),
+    // The release binary now defaults to JiuwenSwarm; most tests below are
+    // about the native-mode topology, so this fixture opts back out and the
+    // "jiuwenswarm mode" tests turn it on explicitly where they mean to.
+    settings: { ...defaultSettings({}, "/opt/sciencediscovery"), jiuwenswarm: false },
     ...overrides,
   };
 }

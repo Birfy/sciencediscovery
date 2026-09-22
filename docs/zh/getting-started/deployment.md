@@ -102,6 +102,8 @@ ScienceDiscovery help                显示帮助
 | `--bwrap <路径>` | `PATH` 中的 `bwrap` | bubblewrap 可执行文件 |
 | `--skip-sandbox-check` | 关 | 缺少 bubblewrap 时仍启动；沙箱执行不可用 |
 | `--no-scientific-envs` | 关 | 不初始化托管科学环境 |
+| `--jiuwenswarm` | **开** | 智能体轮次跑在内置的 [JiuwenSwarm](../how-to/run-with-jiuwenswarm.md) 上而非原生循环；为兼容保留此参数，这已经是默认行为 |
+| `--no-jiuwenswarm` | 关 | 改为跑原生循环；等价于 `SCIENCE_AGENT_EXECUTOR=native` |
 
 [配置参考](../reference/configuration.md#环境变量本地模式)中的变量同样生效，可直接导出或写进 `--env-file`。API 与 runner 默认都只监听回环。确需对外提供 API 时，应先更换 `SCIENCE_AGENT_AUTH_TOKEN`，在可信且受保护的网络中显式使用 `--host 0.0.0.0`。
 
@@ -129,6 +131,7 @@ ScienceDiscovery help                显示帮助
 | CPython 3.12 | 可重定位发行版，无需宿主 Python；同时作为首启 gateway venv 的基础解释器 |
 | Web 静态资源 | 预构建的 `apps/web/dist` |
 | gateway wheel 与首启清单 | 自有代码的 `sciencediscovery-gateway` wheel、带哈希的锁定依赖清单、uv wheel 的版本 pin |
+| JiuwenSwarm 与适配器 | 固定版本的 [JiuwenSwarm](../how-to/run-with-jiuwenswarm.md) 与自有代码的 `sciencediscovery-adapter` wheel，连同各自完整的第三方依赖树一起在构建时装好——跟 gateway 不同，不推迟到首次启动，因为 JiuwenSwarm 自身体量（约 1.5 GB）是发布包体积最大的单一来源 |
 | micromamba | 固定版本，首次 `serve` 播种到 `<数据目录>/scientific-envs/bin/micromamba`，之后 Runner 按同一发布清单校验 |
 
 不含 uv 与 gateway 的第三方 Python 依赖（见[首次启动安装的依赖](#首次启动安装的依赖)），不含 Neo4j，也不含 starter Python/R 科学环境与 conda 包缓存：首次创建 starter 环境仍需访问允许的软件包渠道。

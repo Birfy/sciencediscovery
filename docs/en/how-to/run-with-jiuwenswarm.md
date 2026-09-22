@@ -30,8 +30,10 @@ The same thing by variables: `SCIENCE_AGENT_ADAPTER=1 SCIENCE_AGENT_EXECUTOR=jiu
 4310, with the API behind it on 4410.
 
 The single-file binary carries the same JiuwenSwarm and adapter, installed at build time
-(`scripts/binary-release/build-payload.sh`), so there is nothing to clone or install at run time: `./ScienceDiscovery
-serve --jiuwenswarm`. The Docker image does not include them yet.
+(`scripts/binary-release/build-payload.sh`), so there is nothing to clone or install at run time, and `./ScienceDiscovery
+serve` runs on it **by default** — `--jiuwenswarm` is accepted but redundant. Pass `--no-jiuwenswarm` (or
+`SCIENCE_AGENT_EXECUTOR=native`) for the native loop instead. The Docker image does not include them yet, so it keeps
+the native loop as its own default regardless.
 
 Data (sessions, projects, models, settings, messages on screen) lives in the usual data directory either way, but the
 **model's conversation context is JiuwenSwarm's own**: it keeps and compresses it itself, and a fresh instance starts
@@ -52,11 +54,12 @@ A stack on the built-in loop, or one that was never started with the adapter, ha
 
 Two paths carry JiuwenSwarm; the Docker image does not yet.
 
-**Single-file binary**: `./ScienceDiscovery serve --jiuwenswarm`. JiuwenSwarm and the adapter are already inside the
-executable (see [Deployment → what the binary contains](../getting-started/deployment.md#what-the-binary-contains)); the only host
-requirement beyond the usual [bubblewrap](../getting-started/deployment.md#host-dependency-bubblewrap) is disk for the
-extracted payload, which this adds roughly 1.5 GB to. Nothing is cloned or installed at run time, so this path needs no
-access to `gitcode.com` or a PyPI index.
+**Single-file binary**: `./ScienceDiscovery serve` — JiuwenSwarm and the adapter are already inside the executable
+(see [Deployment → what the binary contains](../getting-started/deployment.md#what-the-binary-contains)) and this is
+the default backend, so no flag is needed (`--no-jiuwenswarm` for the native loop instead). The only host requirement
+beyond the usual [bubblewrap](../getting-started/deployment.md#host-dependency-bubblewrap) is disk for the extracted
+payload, which this adds roughly 1.5 GB to. Nothing is cloned or installed at run time, so this path needs no access to
+`gitcode.com` or a PyPI index.
 
 **Source mode** (see [Deployment](../getting-started/deployment.md#local-mode-host-processes)):
 
