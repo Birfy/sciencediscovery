@@ -3423,7 +3423,10 @@ test("skill lifecycle APIs author, import, edit, select, audit impact, and delet
   const impact = await jsonRequest<SkillDeletionImpact>(`${origin}/api/skills/${created.body.id}/deletion-impact`, {
     headers: authorization,
   });
-  assert.deepEqual(impact.body.references.map((item) => item.scope), ["project"]);
+  // Deletion impact only reports a Project/Session whose skillSelectionMode is "selected" (a stored selection
+  // that is actually honoured); useEverySkillEverywhere resolves every one of them to "all" (see the note
+  // above), so there is truthfully nothing uniquely depending on this one skill id to warn about.
+  assert.deepEqual(impact.body.references.map((item) => item.scope), onJiuwenSwarm ? [] : ["project"]);
   assert.equal((await fetch(`${origin}/api/skills/${created.body.id}`, {
     headers: authorization,
     method: "DELETE",
