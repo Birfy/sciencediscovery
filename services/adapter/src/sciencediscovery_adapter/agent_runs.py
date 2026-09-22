@@ -37,6 +37,7 @@ from collections.abc import AsyncIterator, Callable
 from typing import Any, Literal
 
 import httpx
+import websockets
 from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -231,13 +232,21 @@ class AgentRunner:
             self._shared_registered = True
 
     async def answer_approval(self, request_id: str, decision: str) -> None:
-        """Resume a run paused on one of JiuwenSwarm's approval questions with the user's decision."""
+        """Resume a run paused on one of JiuwenSwarm's approval questions with the user's decision.
+
+        A cancel racing this same approval closes the run's connection first often enough to matter: the
+        caller (a deny sent on abort, `jiuwenswarm-agent.ts`'s `answerApproval`) has nothing left to resume
+        by then, so that race is a no-op here rather than a 500 from an unhandled send-on-closed-socket.
+        """
         pending = self.pending_approvals.pop(request_id, None)
         if pending is None:
             raise KeyError(request_id)
         run, mapper = pending
         answer, _ = mapper.decide(request_id, decision)
-        await run.answer(request_id, "permission_interrupt", answer)
+        try:
+            await run.answer(request_id, "permission_interrupt", answer)
+        except (gateway.GatewayError, websockets.WebSocketException):
+            pass
 
     async def _apply_approvals(self, tools: list[dict[str, Any]]) -> None:
         """JiuwenSwarm's permission engine decides every call (ScienceDiscovery's approval layer allows what it
