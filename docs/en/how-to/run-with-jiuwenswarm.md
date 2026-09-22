@@ -34,7 +34,8 @@ The single-file binary carries the same JiuwenSwarm and adapter, installed at bu
 serve` runs on it **by default** — `--jiuwenswarm` is accepted but redundant. Pass `--no-jiuwenswarm` (or
 `SCIENCE_AGENT_EXECUTOR=native`) for the native loop instead. The Docker image bakes them in the same way (see
 [Deployment → Run agent turns on JiuwenSwarm](../getting-started/deployment.md#run-agent-turns-on-jiuwenswarm)), but
-keeps the native loop as its own default: add `--jiuwenswarm` to the container's command to switch it.
+runs on it **by default** too — `--jiuwenswarm` is accepted but redundant there as well. Pass
+`--no-jiuwenswarm` to the container's command (or `SCIENCE_AGENT_EXECUTOR=native`) for the native loop instead.
 
 Data (sessions, projects, models, settings, messages on screen) lives in the usual data directory either way, but the
 **model's conversation context is JiuwenSwarm's own**: it keeps and compresses it itself, and a fresh instance starts
@@ -63,11 +64,11 @@ payload, which this adds roughly 1.5 GB to. Nothing is cloned or installed at ru
 `gitcode.com` or a PyPI index.
 
 **Docker**: `docker compose build` bakes them into the image the same way, from a plain PyPI install — no cloning, no
-extra host requirement beyond the usual Docker one. The native loop stays the image's own default; add
-`--jiuwenswarm` to the container's command to switch it (see [Deployment → Run agent turns on
-JiuwenSwarm](../getting-started/deployment.md#run-agent-turns-on-jiuwenswarm)). First start still creates the
-instance, under the bind-mounted data directory so it survives a container recreation, adding roughly 1.6 GB to the
-image build.
+extra host requirement beyond the usual Docker one. Like the binary, this is the image's default too; pass
+`--no-jiuwenswarm` in the container's command (or `SCIENCE_AGENT_EXECUTOR=native`) for the native loop instead (see
+[Deployment → Run agent turns on JiuwenSwarm](../getting-started/deployment.md#run-agent-turns-on-jiuwenswarm)). First
+start still creates the instance, under the bind-mounted data directory so it survives a container recreation, adding
+roughly 1.6 GB to the image build.
 
 **Source mode** (see [Deployment](../getting-started/deployment.md#local-mode-host-processes)):
 

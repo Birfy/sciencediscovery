@@ -25,7 +25,7 @@ scripts/jiuwenswarm.sh setup                            # 一次性：克隆固�
 ./scripts/start-stack.sh --mode local --jiuwenswarm     # 如果 JiuwenSwarm 没在运行会先启动它，再启动整套栈
 ```
 
-等价的环境变量写法：`SCIENCE_AGENT_ADAPTER=1 SCIENCE_AGENT_EXECUTOR=jiuwenswarm`。浏览器旅程：`CI_E2E_BACKEND=jiuwenswarm .ci/run-e2e.sh mocked`（JiuwenSwarm 需已在运行）。公共端口：适配器占 4310，API 在其后的 4410。以上是源码模式的启动方式。单文件二进制包已经内置了 JiuwenSwarm 和适配器，且默认就跑在它上面：`./ScienceDiscovery serve` 无需任何参数（用 `--no-jiuwenswarm` 改回原生循环）。Docker 镜像同样内置了它们，但原生循环仍是镜像自己的默认——给容器命令加 `--jiuwenswarm` 才会切换（见[部署 → 在 JiuwenSwarm 上运行智能体](../getting-started/deployment.md#在-jiuwenswarm-上运行智能体)）。
+等价的环境变量写法：`SCIENCE_AGENT_ADAPTER=1 SCIENCE_AGENT_EXECUTOR=jiuwenswarm`。浏览器旅程：`CI_E2E_BACKEND=jiuwenswarm .ci/run-e2e.sh mocked`（JiuwenSwarm 需已在运行）。公共端口：适配器占 4310，API 在其后的 4410。以上是源码模式的启动方式。单文件二进制包和 Docker 镜像都已经内置了 JiuwenSwarm 和适配器，且都默认跑在它上面：`./ScienceDiscovery serve` 或 `docker compose up -d` 都无需任何参数（用 `--no-jiuwenswarm` 改回原生循环，Docker 里通过容器命令传入；见[部署 → 在 JiuwenSwarm 上运行智能体](../getting-started/deployment.md#在-jiuwenswarm-上运行智能体)）。
 
 两种后端用的是同一份数据目录（会话、项目、模型、设置、界面上的消息），但**模型的对话上下文是 JiuwenSwarm 自己的**：它自己保存并压缩上下文，全新实例一开始是空的。所以在栈里更早的内置循环上跑过的会话，界面上能看到之前的轮次，但那些轮次不会成为 JiuwenSwarm 的对话上下文；如果在意，请新开一个会话。反过来没有问题：内置循环可以读取 JiuwenSwarm 那些运行的记录。
 
@@ -44,7 +44,7 @@ curl -s -H "Authorization: Bearer $SCIENCE_AGENT_AUTH_TOKEN" http://127.0.0.1:43
 
 **单文件二进制包**：`./ScienceDiscovery serve` ——JiuwenSwarm 和适配器已经内置在可执行文件里（见[部署 → 二进制里有什么](../getting-started/deployment.md#二进制里有什么)），且这是默认后端，无需任何参数（用 `--no-jiuwenswarm` 改回原生循环）。除了照常需要的 [bubblewrap](../getting-started/deployment.md#宿主依赖bubblewrap) 外，唯一的宿主要求是解包后的磁盘空间，这会额外占用约 1.5 GB。运行时不会克隆或安装任何东西，所以这条路径不需要访问 `gitcode.com` 或 PyPI 源。
 
-**Docker**：`docker compose build` 用同样的方式（直接从 PyPI 安装，不克隆）把它们打进镜像，除了 Docker 本身的要求外没有额外的宿主要求。原生循环仍是镜像自己的默认，给容器命令加上 `--jiuwenswarm` 才会切换（见[部署 → 在 JiuwenSwarm 上运行智能体](../getting-started/deployment.md#在-jiuwenswarm-上运行智能体)）。首次启动仍会创建实例，落在挂载的数据目录下，因此能挺过容器重建；构建镜像时这部分会额外占用约 1.6 GB。
+**Docker**：`docker compose build` 用同样的方式（直接从 PyPI 安装，不克隆）把它们打进镜像。和二进制包一样，这也是镜像的默认后端；给容器命令加上 `--no-jiuwenswarm`（或设 `SCIENCE_AGENT_EXECUTOR=native`）才会改回原生循环（见[部署 → 在 JiuwenSwarm 上运行智能体](../getting-started/deployment.md#在-jiuwenswarm-上运行智能体)）。除了 Docker 本身的要求外没有额外的宿主要求。首次启动仍会创建实例，落在挂载的数据目录下，因此能挺过容器重建；构建镜像时这部分会额外占用约 1.6 GB。
 
 **源码模式**（见[部署](../getting-started/deployment.md#本地模式宿主进程)）：
 

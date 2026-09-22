@@ -190,7 +190,7 @@ Ascend host NPU workloads use the same local-mode entry point. The Runner expose
 
 ## Docker deployment
 
-One image contains the complete stack. The container entry point `docker-entrypoint.sh` wraps `scripts/start-stack.sh --mode docker`, which starts the Bubblewrap runner and the control API with the Web UI in one container in the same order as local mode; the bundled Python MCP servers are launched by the API on demand, and Docker-specific checks run only in this mode. The builder uses pnpm and uv. The runtime image contains Node, prebuilt service Python environments, Bubblewrap, and a fixed micromamba selected and verified for `TARGETARCH`. The image also bakes in [JiuwenSwarm](../how-to/run-with-jiuwenswarm.md) and its adapter, the same way the single-file binary does; `--jiuwenswarm` on `start-stack.sh --mode docker` runs agent turns on it instead of the native loop (see [Run agent turns on JiuwenSwarm](../how-to/run-with-jiuwenswarm.md)). The host needs only Docker.
+One image contains the complete stack. The container entry point `docker-entrypoint.sh` wraps `scripts/start-stack.sh --mode docker`, which starts the Bubblewrap runner and the control API with the Web UI in one container in the same order as local mode; the bundled Python MCP servers are launched by the API on demand, and Docker-specific checks run only in this mode. The builder uses pnpm and uv. The runtime image contains Node, prebuilt service Python environments, Bubblewrap, and a fixed micromamba selected and verified for `TARGETARCH`. The image also bakes in [JiuwenSwarm](../how-to/run-with-jiuwenswarm.md) and its adapter, the same way the single-file binary does, and runs agent turns on it **by default**; `--no-jiuwenswarm` on `start-stack.sh --mode docker` switches back to the native loop (see [Run agent turns on JiuwenSwarm](../how-to/run-with-jiuwenswarm.md)). The host needs only Docker.
 
 This section walks through prepare → build → start → connect in the browser → configure a model, followed by day-to-day management, the data directory, several instances, environment variables, sandbox requirements, and frequently asked questions. Run every command from the repository root.
 
@@ -277,20 +277,20 @@ The image ships no model. The "Configure a model" entry on the home page leads t
 
 ### Run agent turns on JiuwenSwarm
 
-The image already has [JiuwenSwarm](../how-to/run-with-jiuwenswarm.md) and its adapter baked in; nothing more to install. Add `--jiuwenswarm` to the container's command to run agent turns on it instead of the native loop:
+The image already has [JiuwenSwarm](../how-to/run-with-jiuwenswarm.md) and its adapter baked in, and **runs on it by default** — nothing to install or configure. First start creates the instance under `./data`, so it survives `docker compose down` and image rebuilds the same way as everything else there. The public port serves the adapter, which proxies routes it has not migrated to the API behind it (`+ 100` by default); the browser URL and token flow are unchanged. `GET /agent/info` on the public port says which backend is running.
+
+For the native loop instead, add `--no-jiuwenswarm` to the container's command:
 
 ```yaml
 # docker-compose.override.yml
 services:
   sciencediscovery:
-    command: ["--jiuwenswarm"]
+    command: ["--no-jiuwenswarm"]
 ```
 
 ```bash
 docker compose up -d
 ```
-
-The public port then serves the adapter, which proxies routes it has not migrated to the API behind it (`+ 100` by default); the browser URL and token flow are unchanged. `GET /agent/info` on the public port says which backend is running. The instance's own state (skills, permission grants, conversation context) lives under `./data`, alongside everything else, so it survives `docker compose down` and image rebuilds the same way.
 
 ### Day-to-day management
 

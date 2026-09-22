@@ -194,7 +194,7 @@ SSH 自动部署使用自带 Node runtime 的 Runner SEA 单文件，不要求�
 
 ## Docker 部署
 
-单个镜像承载完整技术栈：容器入口 `docker-entrypoint.sh` 转调 `scripts/start-stack.sh --mode docker`，在一个容器内按与本地模式相同的顺序启动 bubblewrap runner 和带 Web UI 的控制 API，随包的 Python MCP server 由 API 按需拉起；Docker 专属预检只在该模式执行。builder 阶段使用 pnpm 与 uv；运行镜像携带 Node、预构建的服务 Python 环境、bubblewrap，以及按 `TARGETARCH` 下载并校验的固定版本 micromamba。镜像同样内置了 [JiuwenSwarm](../how-to/run-with-jiuwenswarm.md) 与其适配器，做法与单文件二进制包相同；给 `start-stack.sh --mode docker` 加上 `--jiuwenswarm` 即可让智能体轮次跑在它上面而非原生循环（见[在 JiuwenSwarm 上运行智能体](../how-to/run-with-jiuwenswarm.md)）。宿主机只需要 Docker。
+单个镜像承载完整技术栈：容器入口 `docker-entrypoint.sh` 转调 `scripts/start-stack.sh --mode docker`，在一个容器内按与本地模式相同的顺序启动 bubblewrap runner 和带 Web UI 的控制 API，随包的 Python MCP server 由 API 按需拉起；Docker 专属预检只在该模式执行。builder 阶段使用 pnpm 与 uv；运行镜像携带 Node、预构建的服务 Python 环境、bubblewrap，以及按 `TARGETARCH` 下载并校验的固定版本 micromamba。镜像同样内置了 [JiuwenSwarm](../how-to/run-with-jiuwenswarm.md) 与其适配器，做法与单文件二进制包相同，且**默认**就跑在它上面；`start-stack.sh --mode docker` 加上 `--no-jiuwenswarm` 才会改回原生循环（见[在 JiuwenSwarm 上运行智能体](../how-to/run-with-jiuwenswarm.md)）。宿主机只需要 Docker。
 
 本节按「准备 → 构建 → 启动 → 浏览器连接 → 配置模型」给出完整步骤，之后是日常管理、数据目录、多实例、环境变量、沙箱要求与常见问题。命令都在仓库根目录执行。
 
@@ -281,20 +281,20 @@ ssh -N -L 4310:127.0.0.1:4310 <用户>@<远程主机>   # 然后在本地浏览�
 
 ### 在 JiuwenSwarm 上运行智能体
 
-镜像已经内置了 [JiuwenSwarm](../how-to/run-with-jiuwenswarm.md) 与适配器，无需额外安装。给容器的命令加上 `--jiuwenswarm` 即可让智能体轮次跑在它上面而非原生循环：
+镜像已经内置了 [JiuwenSwarm](../how-to/run-with-jiuwenswarm.md) 与适配器，且**默认**就跑在它上面，无需任何配置。首次启动会在 `./data` 下创建实例，和其他数据一样能挺过 `docker compose down` 和镜像重建。公共端口由适配器提供服务，未迁移的路由会代理到其后的 API（默认端口 +100）；浏览器地址和令牌流程不变。公共端口上的 `GET /agent/info` 会说明当前跑的是哪个后端。
+
+想改回原生循环，给容器命令加上 `--no-jiuwenswarm`：
 
 ```yaml
 # docker-compose.override.yml
 services:
   sciencediscovery:
-    command: ["--jiuwenswarm"]
+    command: ["--no-jiuwenswarm"]
 ```
 
 ```bash
 docker compose up -d
 ```
-
-之后公共端口由适配器提供服务，未迁移的路由会代理到其后的 API（默认端口 +100）；浏览器地址和令牌流程不变。公共端口上的 `GET /agent/info` 会说明当前跑的是哪个后端。实例自身的状态（技能、权限授权、对话上下文）与其他数据一样存在 `./data` 下，所以同样能挺过 `docker compose down` 和镜像重建。
 
 ### 日常管理
 
