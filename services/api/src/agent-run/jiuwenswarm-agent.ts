@@ -829,12 +829,18 @@ async function startBridge(
     if (process.env.SCIENCE_AGENT_JIUWENSWARM_DEBUG === "1") {
       console.warn(`[jiuwenswarm-bridge] ${tool.name}(${JSON.stringify(args).slice(0, 160)}) -> ${isError ? "ERROR " : ""}${dispatched.content.slice(0, 300)}`);
     }
-    emit({
-      type: "tool_execution_end", toolCallId, toolName: tool.name, isError,
-      result: { content: [{ type: "text", text: dispatched.content }], ...(dispatched.details !== undefined ? { details: dispatched.details } : {}) },
-    });
-    transcript.toolResult(toolCallId, tool.name, dispatched.content);
+    try {
+      emit({
+        type: "tool_execution_end", toolCallId, toolName: tool.name, isError,
+        result: { content: [{ type: "text", text: dispatched.content }], ...(dispatched.details !== undefined ? { details: dispatched.details } : {}) },
+      });
+      transcript.toolResult(toolCallId, tool.name, dispatched.content);
+    } catch (error) {
+      // The model must still get its result: a failure reporting the call must not leave JiuwenSwarm waiting on it.
+      console.error(`[jiuwenswarm-bridge] reporting the end of ${tool.name} failed: ${error instanceof Error ? error.stack : String(error)}`);
+    }
     reply(200, { text: dispatched.content, isError });
+    if (process.env.SCIENCE_AGENT_JIUWENSWARM_DEBUG === "1") console.warn(`[jiuwenswarm-bridge] answered ${tool.name} (${toolCallId})`);
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address() as AddressInfo;
