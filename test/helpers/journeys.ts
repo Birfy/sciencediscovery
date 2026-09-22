@@ -215,7 +215,12 @@ export function scriptedModel(
         // must not hide the actual user request or completion notification.
         const latestUser = [...messages].reverse().find((message) => message.role === "user"
           && !(typeof message.content === "string" && message.content.startsWith("<runtime_context_data ")))?.content;
-        if (typeof latestUser === "string" && latestUser.startsWith("[Execution notifications]")) {
+        // JiuwenSwarm does not forward a continuing session's user turn unchanged: it wraps the
+        // notification content in its own inbound-channel-message envelope (source/timezone/timestamp
+        // JSON) rather than sending our "[Execution notifications]" prefix as the bare message. The
+        // marker text still appears somewhere inside that envelope, so match on inclusion rather than
+        // the prefix to recognise the turn under either executor.
+        if (typeof latestUser === "string" && latestUser.includes("[Execution notifications]")) {
           // Completion is a notification turn, not the next scripted user task.
           // Acknowledge the prior answer without replaying commands or consuming
           // the next user turn's fixture (including a child's reset sequence).
