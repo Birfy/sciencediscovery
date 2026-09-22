@@ -26,10 +26,13 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage: ./scripts/start-stack.sh --mode local --jiuwenswarm [--no-build] [--no-node-build]
-       ./scripts/start-stack.sh --mode docker --jiuwenswarm [--no-build]
+       ./scripts/start-stack.sh --mode docker [--no-jiuwenswarm] [--no-build]
 
   --mode local    read .env, optionally install/build, and use data/envs
+                  (native loop by default; --jiuwenswarm opts in)
   --mode docker   use the prebuilt image environments and container checks
+                  (JiuwenSwarm by default, since the image always bakes it
+                  in; --no-jiuwenswarm opts out)
   --no-build      skip install/build work (implicit in docker mode)
   --no-node-build skip only the Node install/build; still provision the Python
                   service environments, whose editable installs record absolute
@@ -39,11 +42,15 @@ Usage: ./scripts/start-stack.sh --mode local --jiuwenswarm [--no-build] [--no-no
                   (SCIENCE_AGENT_EXECUTOR=jiuwenswarm) and starts the
                   JiuwenSwarm instance if it is not already running. In local
                   mode, install JiuwenSwarm once with scripts/jiuwenswarm.sh
-                  setup first; the Docker image bakes it in, so this flag
-                  alone is enough there — first start still creates the
-                  instance under the bind-mounted data directory. See
-                  docs/en/how-to/run-with-jiuwenswarm.md. Without this flag the
-                  stack falls back to its older built-in loop.
+                  setup first; the Docker image bakes it in and already
+                  defaults to it, so this flag is redundant there — first
+                  start still creates the instance under the bind-mounted
+                  data directory. See docs/en/how-to/run-with-jiuwenswarm.md.
+  --no-jiuwenswarm
+                  run agent turns on the native loop instead. Only meaningful
+                  in Docker mode, where it overrides the default; local mode
+                  is already native unless --jiuwenswarm is passed. Also
+                  settable as SCIENCE_AGENT_EXECUTOR=native.
 
 Environment:
   SCIENCE_DISCOVERY_HEALTH_TIMEOUT_SECONDS
@@ -58,6 +65,11 @@ mode_seen=0
 no_build=0
 no_node_build=0
 use_jiuwenswarm=0
+# Tracks whether the operator made a deliberate choice (flag or a
+# pre-set SCIENCE_AGENT_EXECUTOR), so the Docker-mode default below never
+# overwrites one.
+jiuwenswarm_explicit=0
+[[ -n "${SCIENCE_AGENT_EXECUTOR:-}" ]] && jiuwenswarm_explicit=1
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
     --mode)
@@ -92,7 +104,14 @@ while [[ "$#" -gt 0 ]]; do
       ;;
     --jiuwenswarm)
       use_jiuwenswarm=1
+      jiuwenswarm_explicit=1
       export SCIENCE_AGENT_ADAPTER=1 SCIENCE_AGENT_EXECUTOR=jiuwenswarm
+      shift
+      ;;
+    --no-jiuwenswarm)
+      use_jiuwenswarm=0
+      jiuwenswarm_explicit=1
+      unset SCIENCE_AGENT_ADAPTER SCIENCE_AGENT_EXECUTOR
       shift
       ;;
     -h|--help)
@@ -111,6 +130,16 @@ if [[ "$mode" != "local" && "$mode" != "docker" ]]; then
   echo "--mode must be local or docker." >&2
   usage >&2
   exit 2
+fi
+
+# The Docker image bakes JiuwenSwarm and the adapter in unconditionally (see
+# Dockerfile), so — unlike local mode, which stays on the native loop unless
+# asked — Docker mode defaults to running on JiuwenSwarm too, the same
+# default the release binary uses. --no-jiuwenswarm (or a pre-set
+# SCIENCE_AGENT_EXECUTOR) opts back out.
+if [[ "$mode" == "docker" && "$jiuwenswarm_explicit" -eq 0 ]]; then
+  use_jiuwenswarm=1
+  export SCIENCE_AGENT_ADAPTER=1 SCIENCE_AGENT_EXECUTOR=jiuwenswarm
 fi
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
