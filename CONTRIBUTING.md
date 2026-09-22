@@ -14,6 +14,18 @@ Run the stack once before running the full check suite — the API agent-path te
 
 Alternatively, provide a standalone `services/gateway/.venv`.
 
+The agent loop runs on [JiuwenSwarm](https://gitcode.com/openJiuwen/jiuwenswarm); set it up once before working on
+anything agent-path related — a chat turn, tools, permissions, skills, or context assembly:
+
+```bash
+scripts/jiuwenswarm.sh setup                          # once: clone the pinned tag, install it, create the instance
+./scripts/start-stack.sh --mode local --jiuwenswarm    # starts JiuwenSwarm if needed, then the stack
+```
+
+See [Run agent turns on JiuwenSwarm](docs/en/how-to/run-with-jiuwenswarm.md) for requirements, every environment
+variable, and troubleshooting, and [JiuwenSwarm migration: status and hand-over](docs/en/reference/jiuwenswarm-migration-status.md)
+for what is verified and what is still open.
+
 ## Development commands
 
 ```bash
@@ -29,13 +41,25 @@ pnpm --filter @sciencediscovery/web dev   # UI hot reload on :5173 (proxies API 
 ## Agent-loop smoke tests
 
 Targeted adapter/integration smokes, not wired into `pnpm smoke`; run from the
-repository root. These scripts instantiate `createNativeAgent` in-process and
-do not test the product startup and public client path, so they are not E2E:
+repository root. These do not test the product startup and public client path,
+so they are not E2E:
 
 ```bash
 ./test/api/run_m1_smoke.sh       # Node adapter (hermetic)
-./test/api/run_real_smoke.sh     # native adapter → live model → tool callbacks
+./test/api/run_real_smoke.sh     # live model → tool callbacks
 ```
+
+Against a running JiuwenSwarm stack, `test/contract/jw-only/live.mjs` checks
+what only that backend does — conversation continuity, todo planning, context
+compression, history-restart:
+
+```bash
+./scripts/start-stack.sh --mode local --jiuwenswarm
+node test/contract/jw-only/live.mjs
+```
+
+Browser E2E against JiuwenSwarm: `CI_E2E_BACKEND=jiuwenswarm .ci/run-e2e.sh mocked` (JiuwenSwarm must already be
+running).
 
 ## User-perspective E2E
 

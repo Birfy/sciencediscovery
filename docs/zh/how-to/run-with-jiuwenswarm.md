@@ -1,6 +1,6 @@
 # 在 JiuwenSwarm 上运行智能体
 
-ScienceDiscovery 可以让智能体循环跑在 [JiuwenSwarm](https://gitcode.com/openJiuwen/jiuwenswarm) 上，而不是内置循环。这是 JiuwenSwarm 迁移（issue 84）引入的**可选、实验性**后端。默认仍是内置循环；不按下面的方法选择，就没有任何变化。
+ScienceDiscovery 的智能体循环跑在 [JiuwenSwarm](https://gitcode.com/openJiuwen/jiuwenswarm) 上。本文说明如何安装它并以它启动整套栈；这是本项目文档化、构建与测试所依据的后端。（栈里还留有更早的内置循环，本文不涉及，需要对比或回退时见 [JiuwenSwarm 迁移：现状与交接](../reference/jiuwenswarm-migration-status.md)。）
 
 不变的部分：网页界面、会话、消息、运行事件、产物与溯源。变化的部分：模型循环、对话上下文（由 JiuwenSwarm 保存并压缩）、系统提示词（JiuwenSwarm 自己的，加上 ScienceDiscovery 的），以及默认情况下的**工具**：模型拿到的是 JiuwenSwarm 自己的工具（bash、文件读写编辑、grep、网页抓取、子代理、todo、记忆、技能、定时任务），再加上 JiuwenSwarm 没有对应物的 ScienceDiscovery 工具（在 Runner 上执行的 `run_shell`、产物、证据与论断、论文、idea tree、evolve、`task`）。
 
@@ -19,17 +19,16 @@ ScienceDiscovery 可以让智能体循环跑在 [JiuwenSwarm](https://gitcode.co
 
 哪些已实现、哪些没有：[JiuwenSwarm 迁移：现状与交接](../reference/jiuwenswarm-migration-status.md)。
 
-## 选择后端
+## 以 JiuwenSwarm 启动整套栈
 
-| | 内置循环（默认） | JiuwenSwarm |
-|---|---|---|
-| 启动 | `./scripts/start-stack.sh --mode local` | `./scripts/start-stack.sh --mode local --jiuwenswarm` |
-| 等价的环境变量写法 | （什么都不设） | `SCIENCE_AGENT_ADAPTER=1 SCIENCE_AGENT_EXECUTOR=jiuwenswarm` |
-| 浏览器旅程 | `.ci/run-e2e.sh mocked` | `CI_E2E_BACKEND=jiuwenswarm .ci/run-e2e.sh mocked`（JiuwenSwarm 需已在运行） |
-| 公共端口 | API 占 4310 | 适配器占 4310，API 在 4410 |
-| 模式 | 本地、Docker、二进制 | **只支持本地（源码）模式** |
+```bash
+scripts/jiuwenswarm.sh setup                            # 一次性：克隆固定版本、安装、创建实例
+./scripts/start-stack.sh --mode local --jiuwenswarm     # 如果 JiuwenSwarm 没在运行会先启动它，再启动整套栈
+```
 
-后端在栈启动时选定，界面里没有切换开关。要回到内置循环，不带该参数（也不设那两个变量）重新启动即可。两种后端用的是同一份数据目录（会话、项目、模型、设置、界面上的消息），但**模型的对话上下文不共用**：JiuwenSwarm 自己保存上下文，并且一开始是空的。所以在内置循环上开始的会话，界面上能看到之前的轮次，但 JiuwenSwarm 不记得它们；切换后如果在意，请新开一个会话。反过来没有问题：内置循环会读取 JiuwenSwarm 那些运行的记录。
+等价的环境变量写法：`SCIENCE_AGENT_ADAPTER=1 SCIENCE_AGENT_EXECUTOR=jiuwenswarm`。浏览器旅程：`CI_E2E_BACKEND=jiuwenswarm .ci/run-e2e.sh mocked`（JiuwenSwarm 需已在运行）。公共端口：适配器占 4310，API 在其后的 4410。只支持本地（源码）模式——二进制包和 Docker 镜像目前还不含适配器和 JiuwenSwarm。
+
+两种后端用的是同一份数据目录（会话、项目、模型、设置、界面上的消息），但**模型的对话上下文是 JiuwenSwarm 自己的**：它自己保存并压缩上下文，全新实例一开始是空的。所以在栈里更早的内置循环上跑过的会话，界面上能看到之前的轮次，但那些轮次不会成为 JiuwenSwarm 的对话上下文；如果在意，请新开一个会话。反过来没有问题：内置循环可以读取 JiuwenSwarm 那些运行的记录。
 
 **确认当前跑的是哪个后端：**
 
