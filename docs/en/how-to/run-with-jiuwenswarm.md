@@ -1,6 +1,6 @@
 # Run agent turns on JiuwenSwarm
 
-ScienceDiscovery can run its agent loop on [JiuwenSwarm](https://gitcode.com/openJiuwen/jiuwenswarm) instead of the built-in loop. This is an **optional, experimental** backend introduced by the JiuwenSwarm migration (issue 84). The built-in loop stays the default; nothing changes unless you choose JiuwenSwarm as described below.
+ScienceDiscovery runs its agent loop on [JiuwenSwarm](https://gitcode.com/openJiuwen/jiuwenswarm). This page covers installing it and starting the stack on it; it is the backend this project documents, builds, and tests against. (The stack also contains an older built-in loop, not covered here — see [JiuwenSwarm migration: status and hand-over](../reference/jiuwenswarm-migration-status.md) if you need it for comparison or rollback.)
 
 What stays the same: the web UI, sessions, messages, run events, artifacts and provenance. What moves: the model loop, the conversation context (JiuwenSwarm keeps and compresses it), the system prompt (JiuwenSwarm's own, with ScienceDiscovery's added) and, by default, **the tools**: the model gets JiuwenSwarm's own (bash, file read/write/edit, grep, web fetch, sub-agents, todo, memory, skills, schedules) plus the ScienceDiscovery tools JiuwenSwarm has no equivalent for (`run_shell` on the Runner, artifacts, evidence and claims, papers, idea tree, evolve, `task`).
 
@@ -19,17 +19,23 @@ browser ─▶ adapter (public port) ─▶ API (port + 100)
 
 What exists and what does not: [JiuwenSwarm migration: status and hand-over](../reference/jiuwenswarm-migration-status.md).
 
-## Choose the backend
+## Start the stack on JiuwenSwarm
 
-| | Built-in loop (default) | JiuwenSwarm |
-|---|---|---|
-| Start with | `./scripts/start-stack.sh --mode local` | `./scripts/start-stack.sh --mode local --jiuwenswarm` |
-| Same thing by variables | (nothing set) | `SCIENCE_AGENT_ADAPTER=1 SCIENCE_AGENT_EXECUTOR=jiuwenswarm` |
-| Browser journeys | `.ci/run-e2e.sh mocked` | `CI_E2E_BACKEND=jiuwenswarm .ci/run-e2e.sh mocked` (JiuwenSwarm must already be running) |
-| Public port | the API on 4310 | the adapter on 4310, the API on 4410 |
-| Modes | local, Docker, binary | **local (source) only** |
+```bash
+scripts/jiuwenswarm.sh setup                            # once: clone the pinned tag, install it, create the instance
+./scripts/start-stack.sh --mode local --jiuwenswarm     # starts JiuwenSwarm if it is not running, then the stack
+```
 
-The choice is made when the stack starts; there is no switch in the UI. To go back, start without the flag (and without the two variables). Data (sessions, projects, models, settings, messages on screen) is the same directory either way, but the **model's conversation context is not shared**: JiuwenSwarm keeps its own, and it starts empty. A session begun on the built-in loop therefore shows its earlier turns but JiuwenSwarm does not remember them, so start a new session after switching if that matters. The other way round is fine: the built-in loop reads the record of what JiuwenSwarm did.
+The same thing by variables: `SCIENCE_AGENT_ADAPTER=1 SCIENCE_AGENT_EXECUTOR=jiuwenswarm`. Browser journeys:
+`CI_E2E_BACKEND=jiuwenswarm .ci/run-e2e.sh mocked` (JiuwenSwarm must already be running). Public port: the adapter on
+4310, with the API behind it on 4410. Local (source) mode only — the binary and Docker images do not yet include the
+adapter or JiuwenSwarm.
+
+Data (sessions, projects, models, settings, messages on screen) lives in the usual data directory either way, but the
+**model's conversation context is JiuwenSwarm's own**: it keeps and compresses it itself, and a fresh instance starts
+empty. A session that was run against the stack's older built-in loop therefore shows its earlier turns on screen but
+JiuwenSwarm does not remember them as conversation context — start a new session if that matters. The other way round
+is fine: the built-in loop can read the record of what JiuwenSwarm did.
 
 **Check which backend is running:**
 
@@ -90,6 +96,7 @@ Everything is environment variables on the stack (in `.env`, or exported before 
 | `SCIENCE_AGENT_JIUWENSWARM_PLANNING` | `todo` | Who keeps the plan. `todo`: the model uses JiuwenSwarm's own todo tools and its list becomes the plan. `update_plan`: ScienceDiscovery's own tool instead (what the mocked browser journeys script) |
 | `SCIENCE_AGENT_JIUWENSWARM_TOOLS` | `jiuwenswarm` | `jiuwenswarm`: JiuwenSwarm's own tools plus ScienceDiscovery's where it has none (on a name clash JiuwenSwarm's wins). `ours`: ScienceDiscovery's only, every call through its permissions and Runner (what the mocked browser journeys use) |
 | `SCIENCE_AGENT_JIUWENSWARM_SKILLS` | `jiuwenswarm` | `jiuwenswarm`: the session's enabled skills are installed in JiuwenSwarm (`skills.import_local`) and used its way: its prompt lists them, the model loads one with `skill_tool`; ScienceDiscovery's skills catalog and `read_skill` are left out. A skill whose name JiuwenSwarm already uses (`skill-creator`) is installed as `sciencediscovery-<id>`. `ours`: ScienceDiscovery's catalog and `read_skill` (also used with `PROMPT=replace` or `TOOLS=ours`) |
+| `SCIENCE_AGENT_JIUWENSWARM_SUBAGENTS` | `jiuwenswarm` | `jiuwenswarm`: the model delegates with JiuwenSwarm's own `subagent_spawn`/`subagent_wait`; ScienceDiscovery's `task` is not offered. Those sub-agents run inside JiuwenSwarm with its own built-in tools only — no ScienceDiscovery tool, sandbox, workspace handoff or provenance reaches them. `task`: ScienceDiscovery's own tool, as before (also used with `TOOLS=ours`) |
 | `SCIENCE_AGENT_JIUWENSWARM_PROMPT` | `prepend` | `prepend`: ScienceDiscovery's product prompt, then JiuwenSwarm's whole prompt, then the run contract. `replace`: only ScienceDiscovery's reaches the model |
 | `SCIENCE_AGENT_LLM_MAX_TOKENS` | `16384` | Output budget per model call (shared with the built-in loop); raise it for reasoning models |
 | `SCIENCE_AGENT_LLM_MAX_RETRIES`, `SCIENCE_AGENT_LLM_TIMEOUT_SECONDS` | `2`, `600` | Retries (429 and other transient errors) and per-call timeout (shared) |

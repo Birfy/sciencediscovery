@@ -220,14 +220,15 @@ export E2E_JOURNEY_REPORTS="$results_root/journey-reports"
 export E2E_ALLOW_STACK_RESET=1
 
 if [[ "$backend" == "jiuwenswarm" ]]; then
-  # The gateway is a prerequisite (scripts/jiuwenswarm.sh); say so up front
-  # rather than as a run that fails inside the first agent turn.
   export SCIENCE_AGENT_ADAPTER=1
   export SCIENCE_AGENT_EXECUTOR=jiuwenswarm
   # JiuwenSwarm plans with its own todo tools by default. The mocked journeys script the model's calls
   # to ScienceDiscovery's `update_plan`, so they run with that tool; the todo path is covered by
   # test/contract/jw-only/live.mjs todo-plan.
   export SCIENCE_AGENT_JIUWENSWARM_PLANNING=update_plan
+  # Likewise they script ScienceDiscovery's read_file/list_files with its argument shapes; JiuwenSwarm's own
+  # tools are covered by test/contract/jw-only/live.mjs native-tools.
+  export SCIENCE_AGENT_JIUWENSWARM_TOOLS=ours
   # A JiuwenSwarm instance of this layer's own, so a run never shares skills, config or sessions with the
   # instance a developer uses (the install itself, JIUWENSWARM_ROOT, is shared).
   export JIUWENSWARM_INSTANCE="${JIUWENSWARM_INSTANCE:-sd-e2e}"

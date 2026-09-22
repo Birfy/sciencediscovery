@@ -149,11 +149,16 @@ Source mode supports Linux x86_64/aarch64 and macOS x64/arm64. Both platforms us
 - Linux needs Bubblewrap 0.6+ (0.8+ recommended) and usable unprivileged user namespaces.
 - macOS uses the built-in Seatbelt sandbox through `/usr/bin/sandbox-exec`; Bubblewrap is not required.
 
+The agent loop runs on [JiuwenSwarm](https://gitcode.com/openJiuwen/jiuwenswarm); install it once, then start the
+stack with `--jiuwenswarm`. See [Run agent turns on JiuwenSwarm](run-with-jiuwenswarm.md) for the full requirements,
+every environment variable, and troubleshooting.
+
 From the repository root, run:
 
 ```bash
-./scripts/start-stack.sh --mode local              # install, build, and start all services
-./scripts/start-stack.sh --mode local --no-build   # start only after a previous build
+scripts/jiuwenswarm.sh setup                                   # once: clone the pinned tag, install it, create the instance
+./scripts/start-stack.sh --mode local --jiuwenswarm             # install, build, and start all services on JiuwenSwarm
+./scripts/start-stack.sh --mode local --jiuwenswarm --no-build  # start only after a previous build
 ```
 
 SSH auto-deployment uses a single-file Runner SEA with its own Node runtime, so the target machine does not need Node installed. A full local start on Linux, a Docker build, and a binary release all prepare both Linux x64 and arm64 Runners; developers who build only some packages can run `pnpm runner:binary` after building the Runner and the Executor. The files land in `services/runner/dist/sea/`, ship with the product, and are not committed to the source tree.
@@ -168,7 +173,9 @@ In local mode the shared entry point reads the root `.env`, checks the dependenc
 |---|---|---|
 | `services/gateway` | no port | Interpreter environment for the bundled Python MCP servers |
 | `services/runner` | 127.0.0.1:4311 | Rootless Bubblewrap (Linux) or Seatbelt (macOS) executor (background) |
-| `services/api` | 127.0.0.1:4310 | Control API and Web UI (foreground) |
+| JiuwenSwarm | `~/.jiuwenswarm-instances/sciencediscovery` | Runs the agent loop; started by `scripts/jiuwenswarm.sh` if not already running |
+| adapter | 127.0.0.1:4310 | Public port; reverse-proxies the API and bridges JiuwenSwarm's model and tool calls |
+| `services/api` | 127.0.0.1:4410 | Control API and Web UI, behind the adapter (foreground) |
 
 After startup, the terminal prints the `Open to sign in` URL and the local service access token. In another terminal, run `curl -fsS http://127.0.0.1:4310/health`, then open the `Open to sign in` URL in a browser; the browser saves the local service access token automatically and signs in. Ctrl-C stops the background services. `./scripts/run-local.sh [--no-build]` remains a thin compatibility wrapper, and `pnpm start` and `pnpm server` continue to use it. For unattended use, run it under a process manager such as a Linux systemd user unit or tmux on either Linux or macOS; Docker remains a Linux-only alternative. The runner always binds only to loopback.
 
