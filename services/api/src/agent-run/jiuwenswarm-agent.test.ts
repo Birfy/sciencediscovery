@@ -347,11 +347,21 @@ test("abort cancels the run and drops the connection so the adapter stops it", a
   }
 });
 
-test("the run timeout aborts a stuck run", async () => {
+test("the run timeout aborts a stuck run and says it timed out, as the built-in loop does", async () => {
   const adapter = await fakeAdapter((_request, response) => { response.writeHead(200); response.write(""); });
   try {
     const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ runTimeoutMs: 50 }));
-    await assert.rejects(agent.execute("go"), /Agent run cancelled/);
+    await assert.rejects(agent.execute("go"), /Agent run timeout: gateway turn exceeded 50 ms/);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("a run with no progress for its idle timeout stops with the idle timeout's message", async () => {
+  const adapter = await fakeAdapter((_request, response) => { response.writeHead(200); response.write(""); });
+  try {
+    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ runIdleTimeoutMs: 60 } as never));
+    await assert.rejects(agent.execute("go"), /Agent run stalled: no gateway progress for 60 ms/);
   } finally {
     await adapter.close();
   }

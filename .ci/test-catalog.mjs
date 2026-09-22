@@ -108,6 +108,8 @@ export const utGuestPackages = [
 
 const guestPackageFilters = utGuestPackages.flatMap(({ name }) => ["--filter", name]);
 const hostPackageFilters = utGuestPackages.flatMap(({ name }) => ["--filter", `!${name}`]);
+/** What runs a command with JiuwenSwarm, the agent backend, and its adapter (scripts/with-jiuwenswarm.sh). */
+export const jiuwenSwarmWrapper = ["bash", "scripts/with-jiuwenswarm.sh"];
 
 /** Every UT workload, each carrying exactly one tier. */
 export const utWorkloads = [
@@ -115,7 +117,9 @@ export const utWorkloads = [
   { command: ["pnpm", "typecheck"], id: "typecheck", tier: "host" },
   { command: ["pnpm", "ci:selftest"], id: "ci-contract", tier: "host" },
   { command: ["pnpm", "binary:test"], id: "binary-scripts", tier: "host" },
-  { command: ["pnpm", "--recursive", ...hostPackageFilters, "test"], id: "workspace-packages", tier: "host" },
+  // Agent turns in these tests run on a real JiuwenSwarm behind a real adapter: the wrapper installs and starts
+  // one of each for the whole run, and the packages' tests reach it through SCIENCE_AGENT_ADAPTER_URL.
+  { command: [...jiuwenSwarmWrapper, "pnpm", "--recursive", ...hostPackageFilters, "test"], id: "workspace-packages", tier: "host" },
   { command: ["pnpm", "paper:test"], id: "paper", tier: "host" },
   { command: ["pnpm", "gateway:test"], id: "gateway", tier: "host" },
   { command: ["pnpm", "memory-graph:test"], id: "memory-graph", tier: "host" },
@@ -159,7 +163,7 @@ export const testCases = [
     resultPath: "ut-host",
     tags: [
       "arch:amd64", "arch:arm64", "container:supported", "layer:ut",
-      "llm:none", "network:none", "npu:none", "sandbox:none", "ut:host",
+      "llm:none", "network:local", "npu:none", "sandbox:none", "ut:host",
     ],
   },
   {

@@ -211,7 +211,8 @@ export async function utContractProblems(catalog = defaultCatalog, repositoryRoo
   // so a hand-edited filter cannot orphan a package.
   const expected = {
     "sandbox-packages": ["pnpm", ...[...guestNames].flatMap((name) => ["--filter", name]), "test"],
-    "workspace-packages": ["pnpm", "--recursive", ...[...guestNames].flatMap((name) => ["--filter", `!${name}`]), "test"],
+    // The host packages' agent turns run on JiuwenSwarm, which the wrapper starts for the whole command.
+    "workspace-packages": [...(catalog.jiuwenSwarmWrapper ?? []), "pnpm", "--recursive", ...[...guestNames].flatMap((name) => ["--filter", `!${name}`]), "test"],
   };
   for (const [id, command] of Object.entries(expected)) {
     const workload = utWorkloads.find((candidate) => candidate.id === id);

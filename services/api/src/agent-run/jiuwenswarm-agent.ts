@@ -24,12 +24,15 @@ import { DurableContextStore } from "@sciencediscovery/context";
 import { startModelGateway } from "./jiuwenswarm-model-gateway.js";
 import { importSkillsToJiuwenSwarm, skillLoadedBy } from "./jiuwenswarm-skills.js";
 import { JiuwenSwarmTrajectory } from "./jiuwenswarm-trajectory.js";
+import { RunDeadlines } from "./run-deadlines.js";
 import { jiuwenSwarmWebResult } from "./jiuwenswarm-web-settings.js";
 
 import { resolveModelClientPolicy, type streamModelTurn } from "@sciencediscovery/model";
 
 import {
   composeSystemPrompt,
+  DEFAULT_AGENT_IDLE_TIMEOUT_MS,
+  DEFAULT_AGENT_TURN_TIMEOUT_MS,
   formatRunContract,
   createToolRegistry,
   modelEndpointFor,
@@ -164,6 +167,10 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
   private loadSkill?: (id: string) => void;
   /** The run's trajectory (model inputs, answers, tool observations), recorded as the built-in loop records it. */
   private trajectory?: JiuwenSwarmTrajectory;
+  /** The run's turn and idle deadlines, as the built-in loop keeps them. */
+  private deadlines?: RunDeadlines;
+  /** Waits begun before the deadlines exist (an approval asked while the run is set up). */
+  private pendingWaits = 0;
 
   constructor(private readonly config: JiuwenSwarmAgentConfig, private readonly options: NativeAgentOptions) {}
 
@@ -176,9 +183,16 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
     this.controller.abort();
   }
 
-  /** The loop is remote, so there is no local idle clock to pause. */
+  /** The run waits on something outside it (an approval): its deadlines stand still meanwhile. */
   beginExternalWait(): () => void {
-    return () => undefined;
+    if (this.deadlines) return this.deadlines.beginWait();
+    this.pendingWaits += 1;
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      this.pendingWaits = Math.max(0, this.pendingWaits - 1);
+    };
   }
 
   async prompt(text: string): Promise<void> {
@@ -186,6 +200,7 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
   }
 
   private emit(event: AgentEvent): void {
+    this.deadlines?.progress();
     const evidence = this.trajectory?.evidence(event as { type: string; responseId?: unknown; turn?: unknown });
     const tagged = evidence ? { ...event, evidence } as AgentEvent : event;
     for (const listener of this.listeners) listener(tagged);
@@ -235,7 +250,11 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
     }).catch((error: unknown) => console.warn(`[jiuwenswarm-agent] trajectory not recorded: ${error instanceof Error ? error.message : String(error)}`));
     const modelGateway = await startModelGateway(endpoint, policy, this.controller.signal, this.config.modelStreamer,
       trajectory.enabled ? { request: (input) => trajectory.modelRequest(input), completed: (turn, history) => trajectory.modelCompleted(turn, history) } : undefined);
-    const timeout = this.options.runTimeoutMs ? setTimeout(() => this.controller.abort(), this.options.runTimeoutMs) : undefined;
+    const deadlines = new RunDeadlines(this.options.runTimeoutMs ?? DEFAULT_AGENT_TURN_TIMEOUT_MS,
+      this.options.runIdleTimeoutMs ?? DEFAULT_AGENT_IDLE_TIMEOUT_MS, () => this.controller.abort());
+    this.deadlines = deadlines;
+    for (let wait = 0; wait < this.pendingWaits; wait += 1) deadlines.beginWait();
+    deadlines.start();
     try {
       const finalText = await this.stream(text, tools, bridge.url, bridgeToken, announcements, transcript, modelGateway, jiuwenSwarmPlans);
       // The model was cut at max_tokens and JiuwenSwarm ended the run there. Say so as the native loop does;
@@ -252,11 +271,13 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
         finalMessages: [{ role: "user", content: text }, ...transcript.finish(finalText).map((message) => modelGateway.restore(message))] as never,
       };
     } catch (error) {
+      // Keep "timeout" in these errors: classifySubagentFailure matches /timeout/i for a sub-agent's timed_out status.
+      if (deadlines.expired) throw deadlines.error();
       if (this.controller.signal.aborted) throw new Error("Agent run cancelled");
       console.warn(`[jiuwenswarm-agent] run of ${this.options.sessionId} failed: ${error instanceof Error ? error.message : String(error)}`);
       throw error;
     } finally {
-      if (timeout) clearTimeout(timeout);
+      deadlines.stop();
       await bridge.close();
       await modelGateway.close();
       await trajectory.finish().catch((error: unknown) => console.warn(`[jiuwenswarm-agent] trajectory not committed: ${error instanceof Error ? error.message : String(error)}`));
@@ -415,6 +436,7 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
     let finalText = "";
     let failure: string | undefined;
     for await (const line of ndjson(response.body)) {
+      this.deadlines?.progress();
       if ("event" in line && line.event.type === "permission.required") this.answerApproval(line.event.request as ApprovalQuestion);
       if ("done" in line) finalText = line.done.finalText;
       else if (line.event.type === "run.failed") failure = String(line.event.error);

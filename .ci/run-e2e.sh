@@ -56,7 +56,7 @@ esac
 
 results_suffix="e2e"
 if [[ "$group" != "mocked" ]]; then results_suffix="e2e-$group"; fi
-if [[ "$backend" != "legacy" ]]; then results_suffix="$results_suffix-$backend"; fi
+if [[ "$backend" != "jiuwenswarm" ]]; then results_suffix="$results_suffix-$backend"; fi
 results_root="${CI_RESULTS_DIR:-/ci-results}/$results_suffix"
 # A test run keeps its own data directory, separate from the one an instance a
 # person runs for themselves uses (`.sciencediscovery-data`). The container path
