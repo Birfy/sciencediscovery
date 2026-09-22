@@ -27,6 +27,7 @@ import { createApiServer, type ServerConfig } from "./server.js";
 
 const authorization = { authorization: "Bearer test-token" };
 const jsonHeaders = { ...authorization, "content-type": "application/json" };
+const onJiuwenSwarm = process.env.SCIENCE_AGENT_EXECUTOR?.trim() === "jiuwenswarm";
 
 const RUNNER_HEALTH: RunnerHealth = {
   cgroupDelegated: false,
@@ -585,12 +586,23 @@ test("cancelling a blocked run persists the approval's terminal state and the to
   assert.equal(eventsResponse.status, 200);
   const events = await eventsResponse.json() as SessionRunEvent[];
 
-  const started = events.find((record) => record.event.type === "tool.started" && record.event.trace.name === "run_shell");
-  assert.ok(started?.event.type === "tool.started");
-  assert.match(JSON.stringify(started.event.trace.args ?? {}), /printf 1/, "the replayed tool call keeps its arguments");
-
   const requiredIndex = events.findIndex((record) => record.event.type === "permission.required");
   assert.ok(requiredIndex >= 0, "the approval request itself is part of the replay");
+
+  if (onJiuwenSwarm) {
+    // JiuwenSwarm's permission engine gates the call before it starts: with the run cancelled while
+    // still waiting on a decision that never came, the call never actually began, so "tool.started"
+    // (which the built-in loop emits as soon as the model asks for the call, ahead of any approval
+    // gate) never fires here either. The call's arguments are still in the replay, in the approval
+    // request's own summary text.
+    const required = events[requiredIndex]!;
+    assert.ok(required.event.type === "permission.required");
+    assert.match(required.event.request.summary, /printf 1/, "the replayed approval request keeps the call's arguments");
+  } else {
+    const started = events.find((record) => record.event.type === "tool.started" && record.event.trace.name === "run_shell");
+    assert.ok(started?.event.type === "tool.started");
+    assert.match(JSON.stringify(started.event.trace.args ?? {}), /printf 1/, "the replayed tool call keeps its arguments");
+  }
 
   const resolvedRecords = events.filter((record) => record.event.type === "permission.resolved");
   assert.equal(resolvedRecords.length, 1, "the terminal state is published exactly once");
