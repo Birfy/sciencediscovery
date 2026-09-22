@@ -149,27 +149,34 @@ assert_no_build_paths() { # <payload root>
   # has HOME=/root, and a substring search for that flags the Model Context
   # Protocol's own `/roots/list_changed` on the right and a fixture path like
   # `/workspace/root script.sh` on the left. Neither discloses anything.
-  for needle in "$repository_root" "$shared_dir" "$output" "${HOME:-}" "${USERPROFILE:-}"; do
+  #
+  # jiuwenswarm/ and adapter/ hold JiuwenSwarm's own huge, unmodified PyPI
+  # dependency closure (transformers, google-adk, lxml, ...). At that scale,
+  # the needles below that are only ever generic words rather than specific
+  # build-machine identifiers turn up constantly in unrelated upstream source
+  # and stop meaning anything: a bare $HOME like this build's /root inside an
+  # XML `</root>` tag or SSH tooling's default `/root/.ssh`; JiuwenSwarm's own
+  # git-worktree-based agent sandboxing feature literally uses a `.worktrees`
+  # directory, coincidentally the same convention this check otherwise polices
+  # for this build agent's own workspace. install_flat_python already strips
+  # the one thing a --target install of a *local* wheel can leak there
+  # (direct_url.json), and $repository_root/$shared_dir/$output — genuinely
+  # specific to this build, never a plausible coincidence — stay fully
+  # scanned everywhere, so excluding those two trees from the generic needles
+  # only drops noise, not coverage.
+  for needle in "$repository_root" "$shared_dir" "$output"; do
     if [[ -n "$needle" ]]; then
       pattern="$(printf '%s' "$needle" | sed 's/[][\\.*^$(){}?+|/]/\\&/g')"
-      # jiuwenswarm/ and adapter/ hold JiuwenSwarm's own huge, unmodified
-      # PyPI dependency closure (transformers, google-adk, lxml, ...); at the
-      # scale of that tree, a bare $HOME like this build's /root turns up
-      # constantly in upstream source with no relation to this build machine
-      # (an XML `</root>` tag, a `root:` config key, SSH tooling's default
-      # `/root/.ssh`). install_flat_python already strips the one thing a
-      # --target install of a *local* wheel can leak there (direct_url.json),
-      # and $repository_root/$shared_dir/$output stay fully scanned below, so
-      # skipping the generic $HOME/$USERPROFILE needle only in those two
-      # trees drops noise, not coverage.
-      if [[ "$needle" == "${HOME:-__unset__}" || "$needle" == "${USERPROFILE:-__unset__}" ]]; then
-        leaks+="$(grep -rIlE --exclude-dir=jiuwenswarm --exclude-dir=adapter -- "(^|[^[:alnum:]])$pattern([^[:alnum:]]|\$)" "$root" || true)"$'\n'
-      else
-        leaks+="$(grep -rIlE -- "(^|[^[:alnum:]])$pattern([^[:alnum:]]|\$)" "$root" || true)"$'\n'
-      fi
+      leaks+="$(grep -rIlE -- "(^|[^[:alnum:]])$pattern([^[:alnum:]]|\$)" "$root" || true)"$'\n'
     fi
   done
-  leaks+="$(grep -rIlE '\.missioncrew|MissionCrew|\.worktrees' "$root" || true)"
+  for needle in "${HOME:-}" "${USERPROFILE:-}"; do
+    if [[ -n "$needle" ]]; then
+      pattern="$(printf '%s' "$needle" | sed 's/[][\\.*^$(){}?+|/]/\\&/g')"
+      leaks+="$(grep -rIlE --exclude-dir=jiuwenswarm --exclude-dir=adapter -- "(^|[^[:alnum:]])$pattern([^[:alnum:]]|\$)" "$root" || true)"$'\n'
+    fi
+  done
+  leaks+="$(grep -rIlE --exclude-dir=jiuwenswarm --exclude-dir=adapter '\.missioncrew|MissionCrew|\.worktrees' "$root" || true)"
   leaks="$(printf '%s\n' "$leaks" | sed '/^$/d' | sort -u)"
   if [[ -n "$leaks" ]]; then
     echo "Payload files leak build-machine paths:" >&2
