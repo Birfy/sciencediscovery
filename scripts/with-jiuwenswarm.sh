@@ -90,5 +90,16 @@ curl --silent --fail "http://127.0.0.1:$adapter_port/agent/info" | grep -q '"rea
 export SCIENCE_AGENT_EXECUTOR=jiuwenswarm
 export SCIENCE_AGENT_ADAPTER_URL="http://127.0.0.1:$adapter_port"
 unset SCIENCE_AGENT_ADAPTER_TOKEN
+# UT's own scripted model stubs (server.test.ts's startSubagentModel and friends) call a tool
+# literally named "task", the same name JiuwenSwarm's own subagent_spawn/subagent_wait substitution
+# takes over by default (jiuwenswarm-agent.ts deletes "task" from the tools a run offers once that
+# substitution is on). A stub that cannot read the system prompt keeps calling the now-nonexistent
+# "task" and the adapter answers "Ability not found in resource_mgr: task" — deterministic, not a
+# race, and unrelated to whatever the test itself means to exercise. .ci/run-e2e.sh hit the identical
+# mismatch for its own scripted journeys and works around it with SCIENCE_AGENT_JIUWENSWARM_TOOLS=ours;
+# UT only needs the narrower override, since the substitution logic itself already has its own fast,
+# mocked-adapter unit test (jiuwenswarm-agent.test.ts's "delegation is JiuwenSwarm's subagent_spawn/wait
+# unless SCIENCE_AGENT_JIUWENSWARM_SUBAGENTS=task", which builds its own env object and ignores this one).
+export SCIENCE_AGENT_JIUWENSWARM_SUBAGENTS=task
 echo "Agent turns run on JiuwenSwarm (instance $JIUWENSWARM_INSTANCE) through the adapter at $SCIENCE_AGENT_ADAPTER_URL." >&2
 "$@"
