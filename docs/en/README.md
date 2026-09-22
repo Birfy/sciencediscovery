@@ -6,8 +6,8 @@ This is the complete English documentation set.
 
 ## Getting started
 
-- [Quick start](getting-started/quick-start.md) — install, start the stack, configure a model, and complete a first agent task.
-- [Deployment](getting-started/deployment.md) — local mode, Docker, and building a single-file binary from source.
+- [Quick start](getting-started/quick-start.md) — after you install ScienceDiscovery from the [repository README](../../README.md#installation), start the service, configure a model, and complete a first task.
+- [Deployment](getting-started/deployment.md) — other ways to install and run ScienceDiscovery when the prebuilt binary does not suit your host or workflow: a source-built single-file binary, local source mode, or Docker.
 
 ## Core capabilities
 
@@ -21,11 +21,16 @@ This is the complete English documentation set.
 
 ## How-to guides
 
+### Connect and configure
+
 - [Configure custom MCP servers](how-to/configure-custom-mcp.md) — local/remote connections, secret editing, OAuth, Inspector and Session tool selection.
-- [Run agent turns on JiuwenSwarm](how-to/run-with-jiuwenswarm.md) — optional, experimental executor: install a pinned JiuwenSwarm, start the stack with the adapter, and understand the expected behavior.
 - [Configure the network proxy](how-to/configure-network-proxy.md) — add a proxy on the settings page and choose a policy for LLM, web, and MCP traffic.
-- [Run an evolution search](how-to/run-an-evolution-search.md) — propose a `/evolve-design` search, size its shards, watch it run, and read the held-out result.
 - [Install Neo4j and configure ScienceMemory](how-to/science-memory-setup.md) — install an external Neo4j, enable ScienceMemory in system settings, and explore chains in the frontend graph.
+
+### Run and operate
+
+- [Run an evolution search](how-to/run-an-evolution-search.md) — propose a `/evolve-design` search, size its shards, watch it run, and read the held-out result.
+- [Run agent turns on JiuwenSwarm](how-to/run-with-jiuwenswarm.md) — optional, experimental executor: install a pinned JiuwenSwarm, start the stack with the adapter, and understand the expected behavior.
 
 ## Reference
 
