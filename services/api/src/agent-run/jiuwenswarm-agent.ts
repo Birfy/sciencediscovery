@@ -30,6 +30,7 @@ import { resolveModelClientPolicy, type streamModelTurn } from "@sciencediscover
 
 import {
   composeSystemPrompt,
+  DEFAULT_AGENT_IDLE_TIMEOUT_MS,
   formatRunContract,
   createToolRegistry,
   modelEndpointFor,
@@ -186,6 +187,17 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
   private loadSkill?: (id: string) => void;
   /** The run's trajectory (model inputs, answers, tool observations), recorded as the built-in loop records it. */
   private trajectory?: JiuwenSwarmTrajectory;
+  /**
+   * No local model loop to watch a stream chunk from, so "progress" is any NDJSON line the adapter forwards
+   * from JiuwenSwarm (a model delta, a tool event, a plan update, ...). Mirrors native-agent's markProgress /
+   * runIdleTimeoutMs so the same "Agent run stalled: no gateway progress for N ms" wording (and the timeout
+   * classification and UI notice it drives, see services/api/src/timeouts/index.ts) also covers a stuck
+   * JiuwenSwarm run.
+   */
+  private idleTimeoutId?: ReturnType<typeof setTimeout>;
+  private idleTimedOut = false;
+  private externalWaitCount = 0;
+  private runIdleTimeoutMs = DEFAULT_AGENT_IDLE_TIMEOUT_MS;
 
   constructor(private readonly config: JiuwenSwarmAgentConfig, private readonly options: NativeAgentOptions) {}
 
@@ -198,9 +210,30 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
     this.controller.abort();
   }
 
-  /** The loop is remote, so there is no local idle clock to pause. */
+  /** Resets the idle deadline; a no-op while an external wait (approval, sub-agent) is open. */
+  private markProgress(): void {
+    if (this.idleTimeoutId) clearTimeout(this.idleTimeoutId);
+    this.idleTimeoutId = this.externalWaitCount > 0 || this.runIdleTimeoutMs <= 0 ? undefined
+      : setTimeout(() => {
+          this.idleTimedOut = true;
+          this.controller.abort();
+        }, this.runIdleTimeoutMs);
+  }
+
+  /**
+   * A human approval or a sub-agent wait is expected to take arbitrarily long, so it must not count as
+   * "stalled". Nesting-safe: the idle clock only resumes once every open wait has released.
+   */
   beginExternalWait(): () => void {
-    return () => undefined;
+    this.externalWaitCount += 1;
+    if (this.idleTimeoutId) { clearTimeout(this.idleTimeoutId); this.idleTimeoutId = undefined; }
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      this.externalWaitCount = Math.max(0, this.externalWaitCount - 1);
+      if (this.externalWaitCount === 0) this.markProgress();
+    };
   }
 
   async prompt(text: string): Promise<void> {
@@ -262,6 +295,8 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
     const modelGateway = await startModelGateway(endpoint, policy, this.controller.signal, this.config.modelStreamer,
       trajectory.enabled ? { request: (input) => trajectory.modelRequest(input), completed: (turn, history) => trajectory.modelCompleted(turn, history) } : undefined);
     const timeout = this.options.runTimeoutMs ? setTimeout(() => this.controller.abort(), this.options.runTimeoutMs) : undefined;
+    this.runIdleTimeoutMs = this.options.runIdleTimeoutMs ?? DEFAULT_AGENT_IDLE_TIMEOUT_MS;
+    this.markProgress();
     try {
       const finalText = await this.stream(text, tools, bridge.url, bridgeToken, announcements, transcript, modelGateway, jiuwenSwarmPlans, jiuwenSwarmSubagents);
       // The model was cut at max_tokens and JiuwenSwarm ended the run there. Say so as the native loop does;
@@ -278,10 +313,14 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
         finalMessages: [{ role: "user", content: text }, ...transcript.finish(finalText).map((message) => modelGateway.restore(message))] as never,
       };
     } catch (error) {
+      // Keep "no gateway progress" in this message: services/api/src/timeouts/index.ts matches it to
+      // classify and render the same idle-timeout notice the built-in loop produces.
+      if (this.idleTimedOut) throw new Error(`Agent run stalled: no gateway progress for ${this.runIdleTimeoutMs} ms`);
       if (this.controller.signal.aborted) throw new Error("Agent run cancelled");
       console.warn(`[jiuwenswarm-agent] run of ${this.options.sessionId} failed: ${error instanceof Error ? error.message : String(error)}`);
       throw error;
     } finally {
+      if (this.idleTimeoutId) clearTimeout(this.idleTimeoutId);
       if (timeout) clearTimeout(timeout);
       await bridge.close();
       await modelGateway.close();
@@ -333,10 +372,12 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
    */
   private answerApproval(question: ApprovalQuestion): void {
     const ask = this.options.requestApproval;
-    const decided = ask
+    // A human can take arbitrarily long to answer; that wait must not itself look "stalled".
+    const release = this.beginExternalWait();
+    const decided = (ask
       ? ask({ resource: question.resource ?? question.summary ?? "tool call", summary: question.summary ?? question.resource ?? "tool call",
         ...(question.toolCallId ? { toolCallId: question.toolCallId } : {}) }, this.controller.signal)
-      : Promise.resolve("deny" as const);
+      : Promise.resolve("deny" as const)).finally(release);
     void decided.catch(() => "deny" as const).then(async (decision) => {
       const response = await (this.config.fetch ?? fetch)(`${this.config.adapterUrl}/agent/approvals/${encodeURIComponent(question.id)}`, {
         method: "POST",
@@ -446,6 +487,7 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
     let finalText = "";
     let failure: string | undefined;
     for await (const line of ndjson(response.body)) {
+      this.markProgress();
       if ("event" in line && line.event.type === "permission.required") this.answerApproval(line.event.request as ApprovalQuestion);
       if ("done" in line) finalText = line.done.finalText;
       else if (line.event.type === "run.failed") failure = String(line.event.error);

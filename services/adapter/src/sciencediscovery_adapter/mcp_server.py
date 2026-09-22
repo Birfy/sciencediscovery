@@ -24,6 +24,7 @@ purpose: no session ids, no server-sent stream.
 
 from __future__ import annotations
 
+import logging
 import secrets
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -33,6 +34,8 @@ from fastapi import APIRouter, Request, Response
 from fastapi.responses import JSONResponse
 
 from .schema import open_schema, restore_dropped_empties
+
+logger = logging.getLogger(__name__)
 
 PROTOCOL_VERSION = "2025-03-26"
 
@@ -124,16 +127,24 @@ async def handle_rpc(registry: ToolsetRegistry, message: dict[str, Any]) -> dict
         tag = arguments.pop(RUN_ARG, None)
         toolset = registry.get(tag) if isinstance(tag, str) else None
         if toolset is None:
+            logger.warning("tools/call %r: run tag %r is not live (ended, or not a run's own call)", name, tag)
             text = "This tool call belongs to no running run (it has ended, or the call was not made by its model)."
             return _result(request_id, {"content": [{"type": "text", "text": text}], "isError": True})
         tool = next((t for t in toolset.tools if t["name"] == name), None)
         if tool is None:
+            logger.warning(
+                "tools/call %r: not one of run %r's tools (it has %s)",
+                name, tag, sorted(t["name"] for t in toolset.tools),
+            )
             return _result(request_id, {"content": [{"type": "text", "text": f"{name} is not one of this run's tools"}], "isError": True})
         arguments = restore_dropped_empties(tool.get("inputSchema") or {}, arguments)
         try:
             text, is_error = await toolset.call(str(name), arguments)
         except Exception as error:  # the callback is another process; surface, don't crash the run
+            logger.exception("tools/call %r (run %r) failed", name, tag)
             text, is_error = f"tool bridge failed: {type(error).__name__}: {error}", True
+        if is_error:
+            logger.warning("tools/call %r (run %r) returned isError: %s", name, tag, text[:500])
         return _result(request_id, {"content": [{"type": "text", "text": text}], "isError": is_error})
     return _error(request_id, -32601, f"method not found: {method}")
 

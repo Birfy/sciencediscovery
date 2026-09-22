@@ -357,6 +357,41 @@ test("the run timeout aborts a stuck run", async () => {
   }
 });
 
+test("the idle timeout stalls a run with no gateway progress, with the wording services/api/src/timeouts classifies", async () => {
+  const adapter = await fakeAdapter((_request, response) => {
+    response.writeHead(200);
+    response.write(line({ event: { type: "agent.phase", phase: "thinking", turn: 1 } }));
+    // No further line, ever: the adapter/JiuwenSwarm went quiet mid-run.
+  });
+  try {
+    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ runIdleTimeoutMs: 50 }));
+    await assert.rejects(agent.execute("go"), /Agent run stalled: no gateway progress for 50 ms/);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("a JiuwenSwarm approval question pauses the idle clock: a human answer slower than the idle timeout still completes the run", async () => {
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    if (body.decision) { response.writeHead(200, { "content-type": "application/json" }); response.end("{}"); return; }
+    response.writeHead(200);
+    response.write(line({ event: { type: "permission.required", request: { id: "q1", resource: "run_shell: rm -rf out", summary: "run_shell", toolCallId: "q1" } } }));
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    response.end(line({ done: { finalText: "ok" } }));
+  });
+  try {
+    const requestApproval = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 120)); // longer than runIdleTimeoutMs below
+      return "allow_matching" as const;
+    };
+    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ requestApproval, runIdleTimeoutMs: 50 } as never));
+    const result = await agent.execute("go");
+    assert.equal(result.finalMessages.at(-1)?.content, "ok");
+  } finally {
+    await adapter.close();
+  }
+});
+
 test("a handle runs once", async () => {
   const adapter = await fakeAdapter((_request, response) => { response.writeHead(200); response.end(line({ done: { finalText: "" } })); });
   try {
