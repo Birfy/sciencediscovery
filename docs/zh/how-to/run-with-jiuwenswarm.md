@@ -90,6 +90,7 @@ scripts/jiuwenswarm.sh setup     # 一次性：克隆固定版本（workswarm0.2
 | `SCIENCE_AGENT_JIUWENSWARM_PLANNING` | `todo` | 谁来维护计划。`todo`：模型用 JiuwenSwarm 自己的 todo 工具，它的清单就是计划。`update_plan`：改用 ScienceDiscovery 自己的工具（模拟浏览器旅程里脚本化的就是它） |
 | `SCIENCE_AGENT_JIUWENSWARM_TOOLS` | `jiuwenswarm` | `jiuwenswarm`：JiuwenSwarm 自己的工具，加上它没有的 ScienceDiscovery 工具（重名时用 JiuwenSwarm 的）。`ours`：只用 ScienceDiscovery 的，每次调用都经过它的权限和 Runner（模拟浏览器旅程用的就是这个） |
 | `SCIENCE_AGENT_JIUWENSWARM_SKILLS` | `jiuwenswarm` | `jiuwenswarm`：会话启用的技能导入 JiuwenSwarm（`skills.import_local`），按它的机制使用：它的提示词列出技能，模型用 `skill_tool` 加载；不再发送 ScienceDiscovery 的技能目录和 `read_skill`。与 JiuwenSwarm 自带技能重名的（`skill-creator`）以 `sciencediscovery-<id>` 导入。`ours`：用 ScienceDiscovery 的技能目录和 `read_skill`（`PROMPT=replace` 或 `TOOLS=ours` 时也是这样） |
+| `SCIENCE_AGENT_JIUWENSWARM_SUBAGENTS` | `jiuwenswarm` | `jiuwenswarm`：模型用 JiuwenSwarm 自己的 `subagent_spawn`/`subagent_wait` 委派任务，不再提供 ScienceDiscovery 的 `task`。这些子代理跑在 JiuwenSwarm 内部，只有它自带的工具——ScienceDiscovery 的工具、沙箱、工作区交接和溯源都到不了它们。`task`：仍用 ScienceDiscovery 自己的工具（`TOOLS=ours` 时也是这样） |
 | `SCIENCE_AGENT_JIUWENSWARM_PROMPT` | `prepend` | `prepend`：先是 ScienceDiscovery 的产品提示词，再是 JiuwenSwarm 的完整提示词，最后是运行契约。`replace`：只有 ScienceDiscovery 的到达模型 |
 | `SCIENCE_AGENT_LLM_MAX_TOKENS` | `16384` | 每次模型调用的输出预算（与内置循环共用）；推理模型请调大 |
 | `SCIENCE_AGENT_LLM_MAX_RETRIES`、`SCIENCE_AGENT_LLM_TIMEOUT_SECONDS` | `2`、`600` | 重试次数（429 等瞬时错误）和单次调用超时（共用） |
