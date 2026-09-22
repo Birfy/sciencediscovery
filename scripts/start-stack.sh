@@ -26,7 +26,7 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage: ./scripts/start-stack.sh --mode local --jiuwenswarm [--no-build] [--no-node-build]
-       ./scripts/start-stack.sh --mode docker [--no-build]
+       ./scripts/start-stack.sh --mode docker --jiuwenswarm [--no-build]
 
   --mode local    read .env, optionally install/build, and use data/envs
   --mode docker   use the prebuilt image environments and container checks
@@ -34,11 +34,14 @@ Usage: ./scripts/start-stack.sh --mode local --jiuwenswarm [--no-build] [--no-no
   --no-node-build skip only the Node install/build; still provision the Python
                   service environments, whose editable installs record absolute
                   paths and cannot be prepared elsewhere
-  --jiuwenswarm   run agent turns on JiuwenSwarm (local mode only): puts the
-                  adapter in front of the API (SCIENCE_AGENT_ADAPTER=1), selects
-                  the executor (SCIENCE_AGENT_EXECUTOR=jiuwenswarm) and starts
-                  the JiuwenSwarm instance if it is installed but not running.
-                  Install it once with scripts/jiuwenswarm.sh setup. See
+  --jiuwenswarm   run agent turns on JiuwenSwarm: puts the adapter in front of
+                  the API (SCIENCE_AGENT_ADAPTER=1), selects the executor
+                  (SCIENCE_AGENT_EXECUTOR=jiuwenswarm) and starts the
+                  JiuwenSwarm instance if it is not already running. In local
+                  mode, install JiuwenSwarm once with scripts/jiuwenswarm.sh
+                  setup first; the Docker image bakes it in, so this flag
+                  alone is enough there — first start still creates the
+                  instance under the bind-mounted data directory. See
                   docs/en/how-to/run-with-jiuwenswarm.md. Without this flag the
                   stack falls back to its older built-in loop.
 
@@ -103,11 +106,6 @@ while [[ "$#" -gt 0 ]]; do
       ;;
   esac
 done
-
-if [[ "$use_jiuwenswarm" -eq 1 && "$mode" == "docker" ]]; then
-  echo "--jiuwenswarm is available in local mode only; the Docker image does not include the adapter or JiuwenSwarm." >&2
-  exit 2
-fi
 
 if [[ "$mode" != "local" && "$mode" != "docker" ]]; then
   echo "--mode must be local or docker." >&2
@@ -479,6 +477,23 @@ prepare_docker() {
   data_dir="$(absolute_from_repository "$data_dir")"
   export SCIENCE_AGENT_DATA_DIR="$data_dir"
 
+  # Opt-in front door (SCIENCE_AGENT_ADAPTER=1, set by --jiuwenswarm above):
+  # same baked-environment convention as gateway_python, the adapter's own
+  # venv the Dockerfile syncs into $envs_root/adapter.
+  if [[ "${SCIENCE_AGENT_ADAPTER:-0}" == "1" ]]; then
+    adapter_python="${SCIENCE_AGENT_ADAPTER_PYTHON_PATH:-$envs_root/adapter/bin/python}"
+    if [[ ! -x "$adapter_python" ]]; then
+      echo "The adapter Python environment is missing at $adapter_python. Rebuild the image." >&2
+      exit 1
+    fi
+  fi
+
+  # JiuwenSwarm's own venv is baked read-only under /opt (JIUWENSWARM_SRC,
+  # set by the Dockerfile); only its instance state belongs on the persisted
+  # volume, so JIUWENSWARM_ROOT points there instead of the image-relative
+  # default scripts/jiuwenswarm.sh otherwise assumes.
+  export JIUWENSWARM_ROOT="${JIUWENSWARM_ROOT:-$data_dir/jiuwenswarm}"
+
   # A uid/gid mismatch on the host bind mount is the most common first-run
   # failure. Report it before any service starts.
   mkdir -p "$data_dir" 2>/dev/null || true
@@ -588,6 +603,15 @@ start_stack() {
     if [[ -z "$adapter_python" ]]; then
       echo "SCIENCE_AGENT_EXECUTOR=jiuwenswarm needs the adapter: also set SCIENCE_AGENT_ADAPTER=1." >&2
       exit 1
+    fi
+    # Docker mode has no separate shell to run a one-time `jiuwenswarm.sh
+    # setup` in before the container ever starts (unlike local mode, which
+    # documents that as a deliberate first step): the image bakes the venv,
+    # so setup here is cheap and idempotent, and only creates this
+    # container's own instance under the bind-mounted data directory on its
+    # actual first run.
+    if [[ "$mode" == "docker" && "$use_jiuwenswarm" -eq 1 ]]; then
+      "$script_dir/jiuwenswarm.sh" setup >&2 || exit 1
     fi
     # Where the JiuwenSwarm instance listens; scripts/jiuwenswarm.sh knows its ports.
     if [[ -z "${JIUWENSWARM_GATEWAY_URL:-}" || -z "${JIUWENSWARM_MGMT_URL:-}" ]]; then
