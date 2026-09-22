@@ -1,20 +1,42 @@
 # Deploy ScienceDiscovery
 
-The root [README](../../../README.md) provides the shortest startup path. This guide covers deployment operations; see [Configuration reference](../reference/configuration.md) for environment variables, default ports, quotas, and storage layout.
+The root [README](../../../README.md) provides the shortest startup path. This guide
+covers the other ways to install and run ScienceDiscovery: building a portable binary
+from source, advanced container operations, and local source mode for development and
+debugging. See [Configuration reference](../reference/configuration.md) for environment
+variables, default ports, quotas, and storage layout.
 
 ## Three deployment modes
 
-| Mode | What the user receives | Host dependencies | Intended use |
-|---|---|---|---|
-| [Source-built single-file binary](#single-file-binary-deployment) | **One** executable per architecture | Source toolchain at build time; Bubblewrap at runtime | Portable internal release artifacts |
-| [Docker image](#docker-deployment) | Container image and Compose file | Docker Engine 24+ and Compose v2 | Container-based operations |
-| [Local mode](#local-mode-host-processes) | Source repository | Node, pnpm, uv, and Python; Linux uses Bubblewrap, while macOS uses the built-in Seatbelt sandbox | Development and debugging |
+| Mode | Supported operating systems | What the user receives | Host dependencies | Intended use |
+|---|---|---|---|---|
+| [Single-file binary](#single-file-binary-deployment) | Linux x86_64/aarch64 | Prebuilt executable, or a source-built artifact | Bubblewrap at runtime, source toolchain only when building | Shortest path for new users, or portable internal release artifacts |
+| [Docker image](#docker-deployment) | Linux x86_64/aarch64 | Container image and Compose file | Docker Engine 24+ and Compose v2 | Advanced container operations |
+| [Local mode](#local-mode-host-processes) | Linux x86_64/aarch64, macOS x64/arm64 | Source repository | Node, pnpm, uv, and Python. Linux uses Bubblewrap, while macOS uses the built-in Seatbelt sandbox | Development and debugging |
 
 **These paths are independent. Choose one and do not mix them.** The binary path never uses Docker: the executable embeds Node, CPython, gateway dependencies, the web assets, and micromamba. Use the image path for container deployment instead of putting the binary inside an image.
 
 None of the modes bundles Neo4j. ScienceMemory needs an external Neo4j server and remains disabled when it is not configured; this does not affect the web or conversation path.
 
 ## Single-file binary deployment
+
+### Download and run a published binary
+
+The prebuilt binary is the shortest path for a new user. On the
+[Releases page](https://github.com/openJiuwen-ai/sciencediscovery/releases), download
+the asset whose filename matches the host architecture:
+
+```text
+ScienceDiscovery-<version>-linux-x86_64
+ScienceDiscovery-<version>-linux-aarch64
+```
+
+Then substitute the filename you downloaded:
+
+```bash
+chmod +x ScienceDiscovery-<version>-linux-<architecture>
+./ScienceDiscovery-<version>-linux-<architecture> serve
+```
 
 ### Build and run
 
@@ -41,6 +63,32 @@ artifact="dist/binary-release-local/ScienceDiscovery-local-linux-$arch"
 ```
 
 `serve` starts the Bubblewrap runner, then the control API with the Web UI, using the same health checks as [local mode](#local-mode-host-processes), then prints the `Open to sign in` URL and the local service access token. Those two are the whole resident stack: the agent loop, the model calls, and the web providers all run inside the API process, and the bundled Python MCP servers are spawned on demand rather than supervised. It listens on <http://127.0.0.1:4310> by default. Open the `Open to sign in` URL from the startup output; the browser saves the local service access token automatically and signs in. (If opening <http://127.0.0.1:4310> directly, the Connection guide allows pasting the local service access token.) Keep the sign-in URL private. When `SCIENCE_AGENT_AUTH_TOKEN` is set, that configured token is used. Ctrl-C stops all services in reverse order.
+
+## First-run troubleshooting for binary and local mode
+
+This section applies to the published binary and local source mode. For container-specific problems, use the [Docker FAQ](#frequently-asked-questions).
+
+**The browser rejects the local service access token.** Open the `Open to sign in` URL
+printed by `serve`. If you opened the local URL directly or the token was rejected, the
+Web UI opens its Connection settings. Paste the local service access token from the
+startup output there, not a model API key. Make sure the token and browser belong to the
+same data directory.
+
+**`/health` reports `"status":"degraded"`.** The runner is unavailable. Check the first
+startup error in the terminal, then check the logs below. On a normal start, run
+`curl -fsS http://127.0.0.1:4310/health`. Its top-level `status` should be `ok`.
+
+**`bwrap` is missing or the sandbox check fails on Linux.** Install Bubblewrap with the
+commands in [Host dependency: Bubblewrap](#host-dependency-bubblewrap). If it is
+installed but user namespaces are unavailable, follow
+[Sandbox and host requirements](#sandbox-and-host-requirements). macOS local source mode
+uses Seatbelt instead of Bubblewrap.
+
+**Where to find logs.** By default, binary and local mode write rotating service logs
+under `<data-dir>/logs`, where `<data-dir>` is `./.sciencediscovery-data` unless you pass
+`--data-dir` or set `SCIENCE_DISCOVERY_DATA_DIR`. See
+[Storage layout](../reference/configuration.md#storage-layout) for the log names and
+overrides.
 
 The first `serve` extracts the embedded runtime to `~/.cache/science-discovery/payload/<payload-id>` (change it with `XDG_CACHE_HOME` or `SCIENCE_DISCOVERY_PAYLOAD_CACHE_DIR`). Later runs reuse it. The directory contains the payload digest, so an upgrade does not overwrite an older extraction. If only the former `~/.cache/science-agent` cache exists, the launcher imports it once by renaming it to the new location and prints a compatibility message. If the new location already exists, the launcher keeps it unchanged and logs that the import was skipped.
 
