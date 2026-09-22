@@ -522,7 +522,13 @@ EOF
     export SCIENCE_AGENT_PACKAGE_CACHE_DIR="$package_cache_dir"
   fi
 
-  if [[ -z "${HOME:-}" || ! -w "${HOME:-/}" ]]; then
+  # JiuwenSwarm creates its instance workspace under $HOME/.jiuwenswarm-instances/
+  # with no option to place it elsewhere (see scripts/jiuwenswarm.sh), so when
+  # it is in play HOME is forced onto the persisted volume even if the
+  # container's own HOME already happens to be writable: skills, permission
+  # grants and conversation state need to survive a container recreation,
+  # not just this one process.
+  if [[ -z "${HOME:-}" || ! -w "${HOME:-/}" || "${SCIENCE_AGENT_ADAPTER:-0}" == "1" ]]; then
     HOME="$data_dir/.home"
     mkdir -p "$HOME"
     export HOME
