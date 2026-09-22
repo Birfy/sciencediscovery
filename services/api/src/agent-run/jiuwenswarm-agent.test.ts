@@ -158,7 +158,7 @@ test("plugin-contributed tools (update_plan) are offered to the adapter and run 
     response.end(line({ done: { finalText: "planned" } }));
   });
   try {
-    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ planStore: planStore as never }));
+    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url, planning: "update_plan" })(options({ planStore: planStore as never }));
     const events = collect(agent);
     await agent.execute("plan it");
     assert.ok(offered.includes("update_plan"), `offered: ${offered.join(", ")}`);
@@ -347,11 +347,56 @@ test("abort cancels the run and drops the connection so the adapter stops it", a
   }
 });
 
-test("the run timeout aborts a stuck run", async () => {
+test("the run timeout aborts a stuck run and says it timed out, as the built-in loop does", async () => {
   const adapter = await fakeAdapter((_request, response) => { response.writeHead(200); response.write(""); });
   try {
     const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ runTimeoutMs: 50 }));
-    await assert.rejects(agent.execute("go"), /Agent run cancelled/);
+    await assert.rejects(agent.execute("go"), /Agent run timeout: gateway turn exceeded 50 ms/);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("a run with no progress for its idle timeout stops with the idle timeout's message", async () => {
+  const adapter = await fakeAdapter((_request, response) => { response.writeHead(200); response.write(""); });
+  try {
+    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ runIdleTimeoutMs: 60 } as never));
+    await assert.rejects(agent.execute("go"), /Agent run stalled: no gateway progress for 60 ms/);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("the idle timeout stalls a run with no gateway progress, with the wording services/api/src/timeouts classifies", async () => {
+  const adapter = await fakeAdapter((_request, response) => {
+    response.writeHead(200);
+    response.write(line({ event: { type: "agent.phase", phase: "thinking", turn: 1 } }));
+    // No further line, ever: the adapter/JiuwenSwarm went quiet mid-run.
+  });
+  try {
+    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ runIdleTimeoutMs: 50 }));
+    await assert.rejects(agent.execute("go"), /Agent run stalled: no gateway progress for 50 ms/);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("a JiuwenSwarm approval question pauses the idle clock: a human answer slower than the idle timeout still completes the run", async () => {
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    if (body.decision) { response.writeHead(200, { "content-type": "application/json" }); response.end("{}"); return; }
+    response.writeHead(200);
+    response.write(line({ event: { type: "permission.required", request: { id: "q1", resource: "run_shell: rm -rf out", summary: "run_shell", toolCallId: "q1" } } }));
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    response.end(line({ done: { finalText: "ok" } }));
+  });
+  try {
+    const requestApproval = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 120)); // longer than runIdleTimeoutMs below
+      return "allow_matching" as const;
+    };
+    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ requestApproval, runIdleTimeoutMs: 50 } as never));
+    const result = await agent.execute("go");
+    assert.equal(result.finalMessages.at(-1)?.content, "ok");
   } finally {
     await adapter.close();
   }
@@ -607,7 +652,7 @@ test("the tools offered are exactly the native registry's, every one with its ow
     response.end(line({ done: { finalText: "ok" } }));
   });
   try {
-    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(opts).execute("go");
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url, planning: "update_plan" })(opts).execute("go");
     const names = offered.map((tool) => tool.name).sort();
     assert.deepEqual(names, [...expected.keys(), "tool_search"].sort());
     for (const tool of offered) {
@@ -679,7 +724,7 @@ test("two update_plan calls in one response: the earlier one is superseded, as i
   const second = { plan: [{ step: "second", status: "pending" }] };
   const adapter = await respondWithTwoCalls(["update_plan", "update_plan"], [{ name: "update_plan", args: first }, { name: "update_plan", args: second }]);
   try {
-    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ planStore: planStore as never })).execute("plan");
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url, planning: "update_plan" })(options({ planStore: planStore as never })).execute("plan");
     assert.deepEqual(updates, [{ plan: [{ status: "pending", step: "second" }] }]);
   } finally {
     await adapter.close();
@@ -721,7 +766,7 @@ test("the run's timeout is passed on as the longest a single tool call may take"
   }
 });
 
-test("a run names the JiuwenSwarm session that holds its agent's conversation, and gives the model's window", async () => {
+test("a run names the JiuwenSwarm session that holds its agent's conversation", async () => {
   const sent: any[] = [];
   const adapter = await fakeAdapter(async ({ body }, response) => {
     sent.push(body);
@@ -731,12 +776,10 @@ test("a run names the JiuwenSwarm session that holds its agent's conversation, a
   try {
     const factory = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url });
     const base = options();
-    await factory({ ...base, config: { ...base.config, contextWindow: 131072 }, versioning: { agentId: "main:thread-1" } as never }).execute("a");
+    await factory({ ...base, versioning: { agentId: "main:thread-1" } as never }).execute("a");
     await factory({ ...base, versioning: { agentId: "subagent:Sub Agent/7" } as never }).execute("b");
     assert.equal(sent[0].sessionKey, "session-1", "the main agent's conversation is the session's own");
-    assert.equal(sent[0].model.contextWindow, 131072);
     assert.equal(sent[1].sessionKey, "session-1--subagent-Sub-Agent-7");
-    assert.equal("contextWindow" in sent[1].model, false);
   } finally {
     await adapter.close();
   }
@@ -752,13 +795,37 @@ function planRecorder() {
   return { store, updates };
 }
 
-test("by default the model plans with our update_plan and JiuwenSwarm's todo tools are not offered", async () => {
+test("by default the model plans with JiuwenSwarm's todo tools, not our update_plan", async () => {
   let sent: any;
   const adapter = await fakeAdapter(async ({ body }, response) => { sent = body; response.writeHead(200); response.end(line({ done: { finalText: "ok" } })); });
   try {
     await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ planStore: planRecorder().store as never })).execute("go");
+    assert.deepEqual(sent.nativeTools, ["todo_create", "todo_modify", "todo_list", "todo_get"]);
+    assert.equal(sent.tools.some((tool: { name: string }) => tool.name === "update_plan"), false);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("planning can be switched back to our update_plan, and then JiuwenSwarm's todo tools are not offered", async () => {
+  let sent: any;
+  const adapter = await fakeAdapter(async ({ body }, response) => { sent = body; response.writeHead(200); response.end(line({ done: { finalText: "ok" } })); });
+  try {
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url, planning: "update_plan" })(options({ planStore: planRecorder().store as never })).execute("go");
     assert.ok(sent.tools.some((tool: { name: string }) => tool.name === "update_plan"));
     assert.equal("nativeTools" in sent, false);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("a run with no plan store offers no plan tool of either kind", async () => {
+  let sent: any;
+  const adapter = await fakeAdapter(async ({ body }, response) => { sent = body; response.writeHead(200); response.end(line({ done: { finalText: "ok" } })); });
+  try {
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options()).execute("go");
+    assert.equal("nativeTools" in sent, false);
+    assert.equal(sent.tools.some((tool: { name: string }) => tool.name === "update_plan"), false);
   } finally {
     await adapter.close();
   }
@@ -779,7 +846,7 @@ test("in todo planning JiuwenSwarm's todo tools replace update_plan, and its tod
     response.end(line({ done: { finalText: "ok" } }));
   });
   try {
-    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url, planning: "todo" })(options({ planStore: store as never }));
+    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ planStore: store as never }));
     const events = collect(agent);
     const result = await agent.execute("plan it");
     assert.deepEqual(sent.nativeTools, ["todo_create", "todo_modify", "todo_list", "todo_get"]);
@@ -819,10 +886,94 @@ test("a JiuwenSwarm-run tool does not hold up the calls behind it at the bridge"
   }
 });
 
-test("todo planning is chosen by SCIENCE_AGENT_JIUWENSWARM_PLANNING", () => {
+test("planning is JiuwenSwarm's todo unless SCIENCE_AGENT_JIUWENSWARM_PLANNING=update_plan", () => {
   const env = { SCIENCE_AGENT_EXECUTOR: "jiuwenswarm", SCIENCE_AGENT_ADAPTER_URL: "http://a" };
-  assert.equal(jiuwenSwarmConfigFromEnv(env)?.planning, undefined);
-  assert.equal(jiuwenSwarmConfigFromEnv({ ...env, SCIENCE_AGENT_JIUWENSWARM_PLANNING: "todo" })?.planning, "todo");
+  assert.equal(jiuwenSwarmConfigFromEnv(env)?.planning, undefined, "unset means todo");
+  assert.equal(jiuwenSwarmConfigFromEnv({ ...env, SCIENCE_AGENT_JIUWENSWARM_PLANNING: "todo" })?.planning, undefined);
+  assert.equal(jiuwenSwarmConfigFromEnv({ ...env, SCIENCE_AGENT_JIUWENSWARM_PLANNING: "update_plan" })?.planning, "update_plan");
+});
+
+/** A `task`-capable run: options() plus a stub runSubagent, which is what gives the tool registry `task`. */
+function withRunSubagent(extra: Partial<NativeAgentOptions> = {}): NativeAgentOptions {
+  return options({ runSubagent: (async () => ({ id: "sub-1", status: "completed" })) as never, ...extra });
+}
+
+test("by default the model delegates with JiuwenSwarm's subagent_spawn/subagent_wait, not our task", async () => {
+  let sent: any;
+  const adapter = await fakeAdapter(async ({ body }, response) => { sent = body; response.writeHead(200); response.end(line({ done: { finalText: "ok" } })); });
+  try {
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(withRunSubagent()).execute("go");
+    assert.deepEqual(sent.nativeTools, ["subagent_spawn", "subagent_wait"]);
+    assert.equal(sent.tools.some((tool: { name: string }) => tool.name === "task"), false);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("subagents can be switched back to our task, and then JiuwenSwarm's sub-agent tools are not offered", async () => {
+  let sent: any;
+  const adapter = await fakeAdapter(async ({ body }, response) => { sent = body; response.writeHead(200); response.end(line({ done: { finalText: "ok" } })); });
+  try {
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url, subagents: "task" })(withRunSubagent()).execute("go");
+    assert.ok(sent.tools.some((tool: { name: string }) => tool.name === "task"));
+    assert.equal("nativeTools" in sent, false);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("with ScienceDiscovery's own tools, task stays even though subagents defaults to jiuwenswarm", async () => {
+  let sent: any;
+  const adapter = await fakeAdapter(async ({ body }, response) => { sent = body; response.writeHead(200); response.end(line({ done: { finalText: "ok" } })); });
+  try {
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url, tools: "ours" })(withRunSubagent()).execute("go");
+    assert.ok(sent.tools.some((tool: { name: string }) => tool.name === "task"));
+    assert.equal("nativeTools" in sent, false);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("a run with no delegation capability offers no delegation tool of either kind", async () => {
+  let sent: any;
+  const adapter = await fakeAdapter(async ({ body }, response) => { sent = body; response.writeHead(200); response.end(line({ done: { finalText: "ok" } })); });
+  try {
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options()).execute("go");
+    assert.equal("nativeTools" in sent, false);
+    assert.equal(sent.tools.some((tool: { name: string }) => tool.name === "task"), false);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("a subagent_spawn call is reported as a native tool call, not run through the bridge", async () => {
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    response.writeHead(200);
+    response.write(line({ event: { type: "tool.started", trace: { id: "call-spawn", name: "subagent_spawn", args: { subagent_type: "general_agent", task_description: "do it" }, status: "running" } } }));
+    response.write(line({ event: { type: "tool.completed", trace: { id: "call-spawn", name: "subagent_spawn", args: {}, status: "completed", output: "spawned sub_1" } } }));
+    response.end(line({ done: { finalText: "ok" } }));
+  });
+  try {
+    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(withRunSubagent());
+    const events = collect(agent);
+    const result = await agent.execute("delegate it");
+    const start = events.find((event) => event.type === "tool_execution_start") as any;
+    const end = events.find((event) => event.type === "tool_execution_end") as any;
+    assert.equal(start.toolName, "subagent_spawn");
+    assert.equal(end.result.content[0].text, "spawned sub_1");
+    const messages = result.finalMessages as any[];
+    assert.equal(messages.some((message) => message.role === "assistant" && message.tool_calls?.[0]?.id === "call-spawn"), true);
+    assert.equal(messages.some((message) => message.role === "tool" && message.tool_call_id === "call-spawn" && message.content === "spawned sub_1"), true);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("delegation is JiuwenSwarm's subagent_spawn/wait unless SCIENCE_AGENT_JIUWENSWARM_SUBAGENTS=task", () => {
+  const env = { SCIENCE_AGENT_EXECUTOR: "jiuwenswarm", SCIENCE_AGENT_ADAPTER_URL: "http://a" };
+  assert.equal(jiuwenSwarmConfigFromEnv(env)?.subagents, undefined, "unset means jiuwenswarm");
+  assert.equal(jiuwenSwarmConfigFromEnv({ ...env, SCIENCE_AGENT_JIUWENSWARM_SUBAGENTS: "jiuwenswarm" })?.subagents, undefined);
+  assert.equal(jiuwenSwarmConfigFromEnv({ ...env, SCIENCE_AGENT_JIUWENSWARM_SUBAGENTS: "task" })?.subagents, "task");
 });
 
 /** The adapter side of a run that asks the model once, through the run's gateway, as JiuwenSwarm does. */
@@ -889,5 +1040,327 @@ test("no part of the conversation is sent to the adapter: JiuwenSwarm holds the 
     assert.equal(JSON.stringify(sent).includes("earlier answer"), false);
   } finally {
     await adapter.close();
+  }
+});
+
+test("JiuwenSwarm's own prompt is kept with ours before it by default, and replaced only when asked", async () => {
+  const sent: any[] = [];
+  const adapter = await fakeAdapter(async ({ body }, response) => { sent.push(body); response.writeHead(200); response.end(line({ done: { finalText: "ok" } })); });
+  try {
+    const { store } = planRecorder();
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(withRunSubagent({ planStore: store as never })).execute("a");
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url, prompt: "replace" })(withRunSubagent({ planStore: store as never })).execute("b");
+    assert.equal(sent[0].systemPromptMode, "prepend");
+    assert.equal(sent[1].systemPromptMode, "replace");
+    assert.equal(sent[0].systemPrompt.includes("## Planning"), false, "JiuwenSwarm's own todo section does the teaching");
+    assert.match(sent[1].systemPrompt, /## Planning[\s\S]*todo_create/, "its prompt is gone, so the model is told here");
+    assert.equal(sent[0].systemPrompt.includes("## Delegation"), false, "JiuwenSwarm's own prompt already documents subagent_spawn");
+    assert.match(sent[1].systemPrompt, /## Delegation[\s\S]*subagent_spawn/, "its prompt is gone, so the model is told here");
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("the prompt mode is chosen by SCIENCE_AGENT_JIUWENSWARM_PROMPT", () => {
+  const env = { SCIENCE_AGENT_EXECUTOR: "jiuwenswarm", SCIENCE_AGENT_ADAPTER_URL: "http://a" };
+  assert.equal(jiuwenSwarmConfigFromEnv(env)?.prompt, undefined, "unset means append");
+  assert.equal(jiuwenSwarmConfigFromEnv({ ...env, SCIENCE_AGENT_JIUWENSWARM_PROMPT: "replace" })?.prompt, "replace");
+});
+
+test("by default the model gets JiuwenSwarm's own tools but not those acting on the host, and a call to one is reported from the event stream", async () => {
+  let sent: any;
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    sent = body;
+    response.writeHead(200);
+    response.write(line({ event: { type: "tool.started", trace: { id: "b1", name: "memory_search", args: { query: "x" }, status: "running", native: true } } }));
+    response.write(line({ event: { type: "tool.completed", trace: { id: "b1", name: "memory_search", args: {}, status: "completed", output: "a note", native: true } } }));
+    response.end(line({ done: { finalText: "ok" } }));
+  });
+  try {
+    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options());
+    const events = collect(agent);
+    await agent.execute("go");
+    assert.equal(sent.jiuwenSwarmTools, "all");
+    assert.equal(sent.systemPrompt.includes("Use only the registered workspace tools"), false);
+    // Commands and file writes stay in ScienceDiscovery's sandbox: JiuwenSwarm's host tools are hidden, and the prompt says so.
+    assert.deepEqual(sent.hiddenJiuwenSwarmTools, ["bash", "read_file", "write_file", "edit_file", "glob", "list_files", "grep", "read_pdf"]);
+    assert.match(sent.systemPrompt, /run in the sandbox through run_shell/);
+    const start = events.find((event) => event.type === "tool_execution_start") as any;
+    const end = events.find((event) => event.type === "tool_execution_end") as any;
+    assert.equal(start.toolName, "memory_search");
+    assert.equal(end.result.content[0].text, "a note");
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("SCIENCE_AGENT_JIUWENSWARM_TOOLS=ours keeps the model to ScienceDiscovery's tools", async () => {
+  let sent: any;
+  const adapter = await fakeAdapter(async ({ body }, response) => { sent = body; response.writeHead(200); response.end(line({ done: { finalText: "ok" } })); });
+  try {
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url, tools: "ours" })(options()).execute("go");
+    assert.equal(sent.jiuwenSwarmTools, "listed");
+    const env = { SCIENCE_AGENT_EXECUTOR: "jiuwenswarm", SCIENCE_AGENT_ADAPTER_URL: "http://a" };
+    assert.equal(jiuwenSwarmConfigFromEnv(env)?.tools, undefined);
+    assert.equal(jiuwenSwarmConfigFromEnv({ ...env, SCIENCE_AGENT_JIUWENSWARM_TOOLS: "ours" })?.tools, "ours");
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("the run contract is sent apart, to go after JiuwenSwarm's prompt, and is not in ours", async () => {
+  let sent: any;
+  const adapter = await fakeAdapter(async ({ body }, response) => { sent = body; response.writeHead(200); response.end(line({ done: { finalText: "ok" } })); });
+  try {
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ runContract: "Find the number." })).execute("go");
+    assert.match(sent.systemPromptTail, /<run_contract>[\s\S]*Find the number\.[\s\S]*<\/run_contract>/);
+    assert.equal(sent.systemPrompt.includes("<run_contract>"), false);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("with JiuwenSwarm's tools, web search and fetching are JiuwenSwarm's, in the tools and in the prompt", async () => {
+  const sent: any[] = [];
+  const adapter = await fakeAdapter(async ({ body }, response) => { sent.push(body); response.writeHead(200); response.end(line({ done: { finalText: "ok" } })); });
+  const opts = () => options({ webSearch: (async () => []) as never, webFetch: (async () => ({})) as never });
+  try {
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(opts()).execute("a");
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url, tools: "ours" })(opts()).execute("b");
+    const names = (body: any) => body.tools.map((tool: { name: string }) => tool.name);
+    assert.equal(names(sent[0]).includes("web_search") || names(sent[0]).includes("web_fetch"), false);
+    assert.equal(/\bweb_search\b|\bweb_fetch\b/.test(sent[0].systemPrompt), false, "the prompt names JiuwenSwarm's tools");
+    assert.ok(names(sent[1]).includes("web_search") && names(sent[1]).includes("web_fetch"), "ours with SCIENCE_AGENT_JIUWENSWARM_TOOLS=ours");
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("a finished JiuwenSwarm search is recorded through the run's web recorder", async () => {
+  const recorded: any[] = [];
+  const adapter = await fakeAdapter(async (_request, response) => {
+    response.writeHead(200);
+    response.write(line({ event: { type: "tool.started", trace: { id: "s1", name: "free_search", args: { query: "q" }, status: "running", native: true } } }));
+    response.write(line({ event: { type: "tool.completed", trace: { id: "s1", name: "free_search", args: {}, status: "completed", native: true,
+      output: "Free search results (Bing) for: q\n1. T\n   URL: https://t.example" } } }));
+    response.end(line({ done: { finalText: "ok" } }));
+  });
+  try {
+    const recordWebResult = async (id: string, result: unknown) => { recorded.push({ id, result }); };
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ recordWebResult } as never)).execute("go");
+    assert.deepEqual(recorded, [{ id: "s1", result: { kind: "search", toolName: "free_search", rows: [{ url: "https://t.example", title: "T" }] } }]);
+  } finally {
+    await adapter.close();
+  }
+});
+
+function skill(id: string, description = `${id} things`) {
+  return {
+    content: `---\nname: ${id}\ndescription: ${description}\n---\nFollow the steps.`, description, hash: `hash-${id}`, id,
+    packagePath: `$SCIENCEDISCOVERY_SKILLS_DIR/${id}`, readResource: () => { throw new Error("no resources"); },
+    resources: [], revision: 1, version: "1.0.0",
+  };
+}
+
+const skillOptions = (extra: Record<string, unknown> = {}) => options({
+  skills: [skill("evolve-design"), skill("skill-creator")], skillPackagesRoot: "/data/skill-snapshots/abc", ...extra,
+} as never);
+
+test("the run's skills are installed in JiuwenSwarm and loaded its way: no catalog of ours, no read_skill", async () => {
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    if (body.skills) {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ skills: { "evolve-design": { name: "evolve-design" }, "skill-creator": { name: "sciencediscovery-skill-creator" } } }));
+      return;
+    }
+    response.writeHead(200);
+    response.end(line({ done: { finalText: "ok" } }));
+  });
+  try {
+    const created: unknown[] = [];
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(skillOptions({ createSkill: async (draft: unknown) => { created.push(draft); return { id: "d1" }; } })).execute("go");
+    const [install, run] = adapter.requests.map((request) => request.body);
+    assert.deepEqual(install.skills, [
+      { hash: "hash-evolve-design", id: "evolve-design", path: "/data/skill-snapshots/abc/evolve-design" },
+      { hash: "hash-skill-creator", id: "skill-creator", path: "/data/skill-snapshots/abc/skill-creator" },
+    ]);
+    const names = run.tools.map((tool: { name: string }) => tool.name);
+    assert.equal(names.includes("read_skill") || names.includes("read_skill_resource"), false);
+    assert.equal(/<available_skills>|read_skill/.test(run.systemPrompt), false, "JiuwenSwarm's prompt lists the skills, ours does not");
+    const createSkill = run.tools.find((tool: { name: string }) => tool.name === "create_skill");
+    assert.match(createSkill.description, /load the sciencediscovery-skill-creator skill with skill_tool/);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("loading skill-creator with JiuwenSwarm's skill_tool lets create_skill run, as read_skill did", async () => {
+  let reply: any;
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    if (body.skills) {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ skills: { "evolve-design": { name: "evolve-design" }, "skill-creator": { name: "sciencediscovery-skill-creator" } } }));
+      return;
+    }
+    response.writeHead(200);
+    response.write(line({ event: { type: "tool.started", trace: { id: "k1", name: "skill_tool", args: { skill_name: "sciencediscovery-skill-creator" }, status: "running", native: true } } }));
+    response.write(line({ event: { type: "tool.completed", trace: { id: "k1", name: "skill_tool", args: {}, status: "completed", output: "# skill-creator", native: true } } }));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const args = { name: "my-skill", description: "Does a thing.", instructions: "Do the thing." };
+    response.write(line({ event: { type: "tool.started", trace: { id: "c1", name: "create_skill", args, status: "running" } } }));
+    const call = await fetch(body.bridge.url, {
+      method: "POST",
+      headers: { authorization: `Bearer ${body.bridge.token}`, "content-type": "application/json" },
+      body: JSON.stringify({ name: "create_skill", arguments: args }),
+    });
+    reply = await call.json();
+    response.end(line({ done: { finalText: "ok" } }));
+  });
+  try {
+    const created: any[] = [];
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(skillOptions({ createSkill: async (draft: unknown) => { created.push(draft); return { id: "d1" }; } })).execute("go");
+    assert.equal(reply.isError, false, reply.text);
+    assert.equal(created[0].name, "my-skill");
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("a skill JiuwenSwarm could not install stays ours: read_skill and our catalog offer just that one", async () => {
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    if (body.skills) {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ skills: { "evolve-design": { name: "evolve-design" }, "skill-creator": { error: "refused" } } }));
+      return;
+    }
+    response.writeHead(200);
+    response.end(line({ done: { finalText: "ok" } }));
+  });
+  try {
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(skillOptions()).execute("go");
+    const run = adapter.requests[1].body;
+    assert.ok(run.tools.some((tool: { name: string }) => tool.name === "read_skill"));
+    assert.match(run.systemPrompt, /<name>skill-creator<\/name>/);
+    assert.doesNotMatch(run.systemPrompt, /<name>evolve-design<\/name>/);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("with SCIENCE_AGENT_JIUWENSWARM_SKILLS=ours nothing is installed and the skills are offered our way", async () => {
+  const adapter = await fakeAdapter(async (_request, response) => { response.writeHead(200); response.end(line({ done: { finalText: "ok" } })); });
+  try {
+    const config = { ...jiuwenSwarmConfigFromEnv({ SCIENCE_AGENT_EXECUTOR: "jiuwenswarm", SCIENCE_AGENT_ADAPTER_URL: adapter.url, SCIENCE_AGENT_JIUWENSWARM_SKILLS: "ours" })! };
+    await createJiuwenSwarmAgentFactory(config)(skillOptions()).execute("go");
+    assert.equal(adapter.requests.length, 1, "no skill import");
+    assert.ok(adapter.requests[0].body.tools.some((tool: { name: string }) => tool.name === "read_skill"));
+    assert.match(adapter.requests[0].body.systemPrompt, /<available_skills>/);
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("each tool carries what JiuwenSwarm's permission engine does before a call: ask for what executes, allow the rest", async () => {
+  const adapter = await fakeAdapter(async (_request, response) => { response.writeHead(200); response.end(line({ done: { finalText: "ok" } })); });
+  try {
+    const connector = { label: "Search", name: "mcp__pubmed__search", description: "Search.", parameters: Type.Object({}), execute: async () => ({ content: [] }) };
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ extraTools: [connector as never] })).execute("go");
+    const levels = Object.fromEntries(adapter.requests[0].body.tools.map((tool: { name: string; approval: string }) => [tool.name, tool.approval]));
+    assert.equal(levels.run_shell, "ask");
+    assert.equal(levels.mcp__pubmed__search, "ask");
+    assert.equal(levels.read_file, "allow");
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("a JiuwenSwarm approval question is put to the user as ours and the answer goes back to the adapter", async () => {
+  let answered: any;
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    if (body.decision) {
+      answered = body;
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end("{}");
+      return;
+    }
+    response.writeHead(200);
+    response.write(line({ event: { type: "permission.required", request: { id: "q1", resource: "run_shell: rm -rf out", summary: "run_shell: rm -rf out", toolCallId: "q1" } } }));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    response.end(line({ done: { finalText: "ok" } }));
+  });
+  try {
+    const asked: unknown[] = [];
+    const requestApproval = async (request: unknown) => { asked.push(request); return "allow_matching" as const; };
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ requestApproval } as never)).execute("go");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.deepEqual(asked, [{ resource: "run_shell: rm -rf out", summary: "run_shell: rm -rf out", toolCallId: "q1" }]);
+    assert.deepEqual(answered, { decision: "allow_matching" });
+    assert.equal(adapter.requests.at(-1).body.decision, "allow_matching");
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("an approval question names run_shell's stable resource, so a standing grant made outside the run still applies to it", async () => {
+  let asked: any;
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    if (body.decision) { response.writeHead(200, { "content-type": "application/json" }); response.end("{}"); return; }
+    response.writeHead(200);
+    response.write(line({ event: { type: "permission.required", request: { id: "q1", resource: "run_shell: rm -rf out", summary: "run_shell: rm -rf out", toolName: "run_shell", toolCallId: "q1" } } }));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    response.end(line({ done: { finalText: "ok" } }));
+  });
+  try {
+    const requestApproval = async (request: unknown) => { asked = request; return "allow_once" as const; };
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ requestApproval } as never)).execute("go");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    // The resource ScienceDiscovery's own run_shell privilege check always uses (workspace-bindings.ts), not
+    // the per-call "run_shell: rm -rf out" text, which a standing/session grant would never match.
+    assert.equal(asked.resource, "workspace-code");
+    assert.equal(asked.summary, "run_shell: rm -rf out");
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("the run's trajectory is recorded from the model calls JiuwenSwarm makes, and the run's events carry its evidence", async () => {
+  const { mkdtemp, rm: remove } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const dataDir = await mkdtemp(join(tmpdir(), "jw-trajectory-"));
+  const workspaceRoot = await mkdtemp(join(tmpdir(), "jw-workspace-"));
+  const turn = { assistantMessage: { role: "assistant", content: "Answer." }, toolCalls: [] };
+  const streamer = (async () => turn) as never;
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    response.writeHead(200);
+    // One call with tools (a turn of the run) and one without (a title), as JiuwenSwarm makes them.
+    for (const tools of [[{ type: "function", function: { name: "echo", description: "e", parameters: { type: "object" } } }], []]) {
+      await fetch(`${body.model.baseUrl}/chat/completions`, {
+        method: "POST", headers: { authorization: `Bearer ${body.model.apiKey}` },
+        body: JSON.stringify({ stream: false, tools, messages: [{ role: "system", content: "sys" }, { role: "user", content: "go" }] }),
+      }).then((reply) => reply.text());
+    }
+    response.write(line({ event: { type: "assistant.response.started", responseId: "r1", turn: 1 } }));
+    response.write(line({ event: { type: "assistant.delta", responseId: "r1", delta: "Answer.", turn: 1 } }));
+    response.end(line({ done: { finalText: "Answer." } }));
+  });
+  try {
+    const records: any[] = [];
+    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url, modelStreamer: streamer })(options({
+      config: { baseUrl: "http://llm.test/v1", dataDir, model: "gpt-x", apiToken: "sk-test", apiProtocol: "openai-chat-completions" },
+      workspaceRoot,
+      versioning: { agentId: "main:session-1", trajectoryId: "run-1", requestExecutionId: "run-1", recordEvent: async (event: unknown) => { records.push(event); } },
+    } as never));
+    const events = collect(agent);
+    await agent.execute("go");
+    const names = records.map((record) => record.name);
+    assert.deepEqual(names.filter((name) => name !== "context_recovery"), ["context.captured", "model.completed", "state.committed"], "one turn: the title call is not one");
+    assert.ok(records[0].evidence.contextRef?.digest, "the captured context is in the version store");
+    const started = events.find((event) => event.type === "response_start") as any;
+    assert.equal(started.evidence?.contextRef?.digest, records[0].evidence.contextRef.digest, "the response is tied to the model input it answered");
+  } finally {
+    await adapter.close();
+    await remove(dataDir, { recursive: true, force: true });
+    await remove(workspaceRoot, { recursive: true, force: true });
   }
 });

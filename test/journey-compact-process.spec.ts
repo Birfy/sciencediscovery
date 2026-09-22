@@ -317,7 +317,9 @@ test("Skill 入口按自己的任务与草稿状态去框", { tag: "@mocked" }, 
     [{ text: "普通分析已完成。" }],
     [{ delayMs: 6500, text: "这次分析没有足够可复用知识，不创建提案。" }],
     [
-      { tool: "read_skill", arguments: { skillId: "skill-creator" } },
+      // Skills are JiuwenSwarm's: it loads ScienceDiscovery's skill-creator, installed there under this name
+      // (JiuwenSwarm has a skill-creator of its own), with its skill_tool.
+      { tool: "skill_tool", arguments: { skill_name: "sciencediscovery-skill-creator" } },
       { tool: "create_skill", arguments: { name: skillName, description: "Validate a small local table.",
         instructions: "# Table validation\n\nRead the input table and report its row count without changing its values." } },
       { text: "草稿已生成，等待用户审核。" },

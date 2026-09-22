@@ -28,6 +28,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
+from .mcp_server import RUN_ARG
+
 # Frames that carry no run-visible state. Listed so that "ignored on purpose"
 # stays distinguishable from "not mapped yet" in `RunEventMapper.unmapped`.
 # `chat.usage_summary` repeats the sum of the per-call `chat.usage_metadata` events.
@@ -237,12 +239,20 @@ class RunEventMapper:
             args = json.loads(input_text)
         except ValueError:
             args = {}
+        if isinstance(args, dict) and RUN_ARG in args:
+            # The run's tag, which the proxy put in for the shared MCP server, is not part of what the model called with.
+            args = {key: value for key, value in args.items() if key != RUN_ARG}
+            input_text = json.dumps(args, ensure_ascii=False)
         trace: dict[str, Any] = {
             "id": tool_id, "name": self._display_name(str(call.get("name") or "tool")), "input": input_text,
             "args": args if isinstance(args, dict) else {}, "status": "running",
         }
         if call.get("display_name"):
             trace["summary"] = str(call["display_name"])
+        raw_name = str(call.get("name") or "")
+        if self.mcp_prefixes and not any(raw_name.startswith(prefix) for prefix in self.mcp_prefixes):
+            # One of JiuwenSwarm's own tools: it runs there, nobody calls the bridge for it.
+            trace["native"] = True
         self._tools[tool_id] = trace
         return [*self._empty_response(), *self._settle_response(), {"type": "tool.started", "trace": dict(trace)}]
 

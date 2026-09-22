@@ -159,6 +159,8 @@ import {
   DEFAULT_SYSTEM_TIMEOUT_SETTINGS,
   DEFAULT_MEMORY_GRAPH_SETTINGS,
   DEFAULT_WEB_SETTINGS,
+  WEB_KEY_PROVIDERS,
+  type WebKeyProvider,
   REVIEWER_SPECIALIST_LEVELS,
   REVIEWER_FEEDBACK_POLICIES,
   SKILL_SELECTION_FIELDS,
@@ -439,6 +441,8 @@ export class SessionStore {
   private settingsMutationQueue: Promise<void> = Promise.resolve();
   private secretKey?: Buffer;
   private skillIds = new Set<string>(BUNDLED_SKILL_IDS);
+  /** Every Session uses every installed skill, whatever its settings say (the JiuwenSwarm backend: its skills are one set). */
+  private everySkillEverywhere = false;
   private connectorIds = knownConnectorIdSet();
   private readonly initialTimeoutSettings: SystemTimeoutSettings;
   private readonly initialQuotaSettings: SystemQuotaSettings;
@@ -1582,6 +1586,15 @@ export class SessionStore {
     await this.saveCatalog();
   }
 
+  /**
+   * With the JiuwenSwarm backend there is no skill selection per Project or Session: JiuwenSwarm has one set of skills
+   * for every session, switched on and off there. Stored selections are kept, and apply again with the built-in backend.
+   */
+  useEverySkillEverywhere(): void {
+    this.everySkillEverywhere = true;
+    this.syncSessionCompatibilityForProject();
+  }
+
   setAvailableSkillIds(ids: Iterable<string>): void {
     this.skillIds = new Set(ids);
     // In `all` mode the effective set is the catalog itself, so installing or
@@ -1645,6 +1658,7 @@ export class SessionStore {
 
     // `all` (the default) means the whole installed catalog; `selected` intersects
     // the stored whitelist with what is still installed.
+    if (this.everySkillEverywhere) effective.skillSelectionMode = "all";
     if (effective.skillSelectionMode === "all") {
       effective.enabledSkillIds = [...this.skillIds];
       sources.enabledSkillIds = sources.skillSelectionMode;
@@ -1813,14 +1827,14 @@ export class SessionStore {
     );
     return {
       ...structuredClone(this.catalog.webSettings),
-      providers: (["jina", "tavily", "exa", "brave"] as const).map((provider) => ({
+      providers: WEB_KEY_PROVIDERS.map((provider) => ({
         hasApiKey: configured.has(provider),
         provider,
       })),
     };
   }
 
-  getWebProviderApiKey(provider: "brave" | "exa" | "jina" | "tavily"): string | undefined {
+  getWebProviderApiKey(provider: WebKeyProvider): string | undefined {
     if (!this.database) return undefined;
     const row = this.database.prepare("SELECT encrypted_token FROM web_provider_secrets WHERE provider = ?")
       .get(provider) as { encrypted_token: string } | undefined;
@@ -1831,9 +1845,9 @@ export class SessionStore {
     const { providerApiKeys, ...settingsInput } = input;
     const nextSettings = normalizeWebSettings({ ...this.catalog.webSettings, ...settingsInput });
     this.assertProxyPolicyKnown(nextSettings.proxyPolicy, "proxyPolicy");
-    const normalizedApiKeys = new Map<"brave" | "exa" | "jina" | "tavily", string | null>();
+    const normalizedApiKeys = new Map<WebKeyProvider, string | null>();
     if (providerApiKeys) {
-      for (const provider of ["brave", "exa", "jina", "tavily"] as const) {
+      for (const provider of WEB_KEY_PROVIDERS) {
         if (!(provider in providerApiKeys)) continue;
         const value = providerApiKeys[provider];
         normalizedApiKeys.set(provider, value === null ? null : normalizeApiToken(value) ?? null);
@@ -4443,6 +4457,30 @@ export class SessionStore {
       source: input.source,
       ...(input.toolCallId ? { toolCallId: input.toolCallId } : {}),
     };
+  }
+
+  /**
+   * The JiuwenSwarm backend: its permission engine already decided about the tool call (and asked the user when its
+   * policy says so), so the privileged action is allowed here and recorded as JiuwenSwarm's decision.
+   */
+  async authorizeByJiuwenSwarm(
+    sessionId: string,
+    action: PermissionAction,
+    resourceValue: string,
+    context: { executionId?: string; toolCallId?: string } = {},
+  ): Promise<{ allowed: true; authorization: PermissionAuthorization }> {
+    const session = this.assertSessionWritable(sessionId);
+    const authorization = this.createPermissionAuthorization({
+      action,
+      ...context,
+      outcome: "allowed",
+      permissionEpochId: session.permissionEpochId,
+      resource: resourceValue.trim().slice(0, 500),
+      session,
+      source: "jiuwenswarm",
+    });
+    await this.appendPermissionAuthorizations([authorization]);
+    return { allowed: true, authorization: structuredClone(authorization) };
   }
 
   async requestPermission(

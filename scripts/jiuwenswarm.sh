@@ -22,6 +22,8 @@
 #   scripts/jiuwenswarm.sh status
 #   scripts/jiuwenswarm.sh env       print the exports the adapter needs (eval "$(scripts/jiuwenswarm.sh env)")
 #
+# JIUWENSWARM_CONTEXT_WINDOW_TOKENS=<n> (optional) sets the window JiuwenSwarm compresses conversations against.
+#
 # JiuwenSwarm is installed into its own directory and virtualenv; it is never
 # installed into the ScienceDiscovery environments. Its instance workspace is
 # created by JiuwenSwarm under ~/.jiuwenswarm-instances/<name> (it has no option to
@@ -76,17 +78,39 @@ apply_config() {
   local config
   config="$(instance_workspace)/config/config.yaml"
   [[ -f "$config" ]] || { echo "$config not found; run setup first." >&2; exit 1; }
-  python3 - "$config" <<'PY'
+  python3 - "$config" "${JIUWENSWARM_CONTEXT_WINDOW_TOKENS:-}" <<'PY'
 import re, sys
 path = sys.argv[1]
+window = sys.argv[2].strip()
 text = open(path, encoding="utf-8").read()
 # MCP tools must be direct tools: the adapter reaches the model through its own proxy under
 # the tool names ScienceDiscovery defined, and a deferred tool would need tool_search first.
 text, count = re.subn(r"^progressive_tool_enabled:.*$", "progressive_tool_enabled: false", text, flags=re.M)
 if count == 0:
     text = "progressive_tool_enabled: false\n" + text
+# The size JiuwenSwarm compresses a conversation against (at 80% of it). JiuwenSwarm 0.2.6 has no per-model or
+# per-run setting that takes effect (a model entry's window is ignored for a non-built-in model), only this
+# global one; unset it keeps JiuwenSwarm's own default (200000 tokens).
+marker = "  # set by scripts/jiuwenswarm.sh"
+text = re.sub(r"^    context_window_tokens:.*" + re.escape(marker) + r"\n", "", text, flags=re.M)
+if window:
+    if not window.isdigit() or int(window) <= 0:
+        sys.exit("JIUWENSWARM_CONTEXT_WINDOW_TOKENS must be a positive integer")
+    text, count = re.subn(r"^(  context_engine_config:\n)", r"\1    context_window_tokens: " + window + marker + "\n", text, count=1, flags=re.M)
+    if count == 0:
+        sys.exit("context_engine_config not found in " + path)
 open(path, "w", encoding="utf-8").write(text)
-print("config: progressive_tool_enabled: false")
+print("config: progressive_tool_enabled: false" + (f", context_window_tokens: {window}" if window else ""))
+# JiuwenSwarm registers its free search only at start-up, from these two switches. ScienceDiscovery's web settings
+# set them (config.set) and default to on; until the API has applied them once, start with that default.
+import os
+env_path = os.path.join(os.path.dirname(path), ".env")
+env = open(env_path, encoding="utf-8").read() if os.path.exists(env_path) else ""
+missing = [name for name in ("FREE_SEARCH_DDG_ENABLED", "FREE_SEARCH_BING_ENABLED")
+           if not re.search(r"^" + name + r"=", env, flags=re.M)]
+if missing:
+    with open(env_path, "a", encoding="utf-8") as handle:
+        handle.write(("" if not env or env.endswith("\n") else "\n") + "".join(f'{name}="true"\n' for name in missing))
 PY
 }
 
@@ -133,6 +157,7 @@ cmd_start() {
   # Detach completely (stdin, stdout, stderr): a background job that keeps the caller's stdout open
   # makes `scripts/jiuwenswarm.sh start | tee ...`, or any script capturing its output, wait forever.
   cd "$jw_root"
+  # Web search is configured from ScienceDiscovery's web settings, which the API applies with config.set.
   JIUWENSWARM_DATA_DIR="$jw_data_dir" nohup "$jw_bin/jiuwenswarm-start" --name "$jw_instance" app \
     >"$jw_log" 2>&1 </dev/null &
   disown

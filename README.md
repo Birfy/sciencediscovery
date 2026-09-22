@@ -33,7 +33,7 @@ chmod +x ScienceDiscovery-0.2.0-linux-x86_64
 
 Open the **`Open to sign in`** URL that `serve` prints. The browser stores the local service access token automatically, so there is nothing to copy. That token is distinct from a model API key, and the URL grants access to this machine's workspace — keep it private. The web interface is served at <http://127.0.0.1:4310>; the terminal window only runs the service.
 
-For arm64, use [`ScienceDiscovery-0.2.0-linux-aarch64`](https://github.com/openJiuwen-ai/sciencediscovery/releases/download/0.2.0/ScienceDiscovery-0.2.0-linux-aarch64). Bubblewrap is the only host dependency. Source mode (Linux and macOS) and Docker are covered in the [deployment guide](docs/en/getting-started/deployment.md).
+For arm64, use [`ScienceDiscovery-0.2.0-linux-aarch64`](https://github.com/openJiuwen-ai/sciencediscovery/releases/download/0.2.0/ScienceDiscovery-0.2.0-linux-aarch64). Bubblewrap is the only host dependency. Source mode (Linux and macOS) and Docker are covered in the [deployment guide](docs/en/getting-started/deployment.md); source mode is also how you run the agent loop on [JiuwenSwarm](docs/en/how-to/run-with-jiuwenswarm.md), this project's agent backend.
 
 ## Configure a model
 
@@ -80,17 +80,17 @@ Managed scientific environments run on a pinned micromamba, so no system Python,
 
 ## Architecture
 
-A browser UI communicates with a Node control API. Each agent run is driven by a Python Gateway, while workspace tools, sandbox execution, scientific connectors, PDF extraction, permissions, provenance and review checks are enforced by the Node control plane.
+A browser UI talks to an adapter that puts the agent loop on [JiuwenSwarm](https://gitcode.com/openJiuwen/jiuwenswarm): the adapter sits on the public port and reverse-proxies the Node control API behind it, JiuwenSwarm runs the model loop and calls back into the API for every tool, and workspace tools, sandbox execution, scientific connectors, PDF extraction, permissions, provenance and review checks stay enforced by the Node control plane. See [Run agent turns on JiuwenSwarm](docs/en/how-to/run-with-jiuwenswarm.md) for the install step, the environment variables and the full topology diagram.
 
 > [!WARNING]
-> ScienceDiscovery is not a multi-user production service. The API, runner, and gateway listen on loopback by default; the API uses one bearer token and does not terminate TLS. Exposing the API on another interface must be an explicit deployment choice on a trusted, secured network. Python, R, and shell commands run in a fail-closed platform sandbox (Bubblewrap on Linux and Seatbelt in macOS source mode); the control API, gateway, PDF worker, and outbound model/provider calls run outside that sandbox as trusted control-plane operations.
+> ScienceDiscovery is not a multi-user production service. The adapter and the API listen on loopback by default; access uses one bearer token and there is no TLS termination. Exposing either interface elsewhere must be an explicit deployment choice on a trusted, secured network. Python, R, and shell commands run in a fail-closed platform sandbox (Bubblewrap on Linux and Seatbelt in macOS source mode); the control API, the adapter, JiuwenSwarm, the PDF worker, and outbound model/provider calls run outside that sandbox as trusted control-plane operations.
 
 ## Documentation
 
 | Section | Guides |
 |---|---|
 | **Getting started** | [Quick start](docs/en/getting-started/quick-start.md) · [Deployment](docs/en/getting-started/deployment.md) |
-| **How-to** | [Custom MCP](docs/en/how-to/configure-custom-mcp.md) · [Network proxy](docs/en/how-to/configure-network-proxy.md) · [ScienceMemory](docs/en/how-to/science-memory-setup.md) |
+| **How-to** | [Run on JiuwenSwarm](docs/en/how-to/run-with-jiuwenswarm.md) · [Custom MCP](docs/en/how-to/configure-custom-mcp.md) · [Network proxy](docs/en/how-to/configure-network-proxy.md) · [ScienceMemory](docs/en/how-to/science-memory-setup.md) |
 | **Reference** | [Configuration](docs/en/reference/configuration.md) · [REST API](docs/en/reference/rest-api.md) · [Built-in tools](docs/en/reference/builtin-tools.md) · [Runtime behavior](docs/en/reference/runtime-behavior.md) |
 | **Developer documentation** | [Architecture](docs/en/developer-docs/architecture.md) and the [developer index](docs/en/developer-docs/README.md) |
 

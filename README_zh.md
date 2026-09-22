@@ -33,7 +33,7 @@ chmod +x ScienceDiscovery-0.2.0-linux-x86_64
 
 打开 `serve` 输出的 **`Open to sign in`** 链接，浏览器将自动保存本地服务访问令牌，无需手动复制。该令牌不同于模型 API Key；此链接可访问本机工作区，请勿外传。Web 界面位于 <http://127.0.0.1:4310>，终端窗口仅运行服务进程。
 
-arm64 请使用 [`ScienceDiscovery-0.2.0-linux-aarch64`](https://github.com/openJiuwen-ai/sciencediscovery/releases/download/0.2.0/ScienceDiscovery-0.2.0-linux-aarch64)。宿主唯一依赖是 Bubblewrap。本地源码模式（Linux 与 macOS）和 Docker 参见[部署指南](docs/zh/getting-started/deployment.md)。
+arm64 请使用 [`ScienceDiscovery-0.2.0-linux-aarch64`](https://github.com/openJiuwen-ai/sciencediscovery/releases/download/0.2.0/ScienceDiscovery-0.2.0-linux-aarch64)。宿主唯一依赖是 Bubblewrap。本地源码模式（Linux 与 macOS）和 Docker 参见[部署指南](docs/zh/getting-started/deployment.md)；智能体后端 [JiuwenSwarm](docs/zh/how-to/run-with-jiuwenswarm.md) 也是在本地源码模式下运行。
 
 ## 配置模型
 
@@ -80,17 +80,17 @@ cat prompt.txt | ./ScienceDiscovery run --stdin --auto-approve | jq .
 
 ## 架构概览
 
-浏览器 UI 与 Node 控制 API 通信；每次智能体运行由 Python Gateway 驱动，而工作区工具、沙箱执行、科研连接器、PDF 抽取、权限、溯源与审阅校验由 Node 控制面统一管控。
+浏览器 UI 连接的是一个适配器，由它把智能体循环放到 [JiuwenSwarm](https://gitcode.com/openJiuwen/jiuwenswarm) 上运行：适配器占据对外端口，把 Node 控制 API 反向代理在它身后，JiuwenSwarm 负责模型循环并通过回调进入 API 执行每一次工具调用；工作区工具、沙箱执行、科研连接器、PDF 抽取、权限、溯源与审阅校验仍由 Node 控制面统一管控。安装步骤、环境变量与完整拓扑图见[在 JiuwenSwarm 上运行智能体](docs/zh/how-to/run-with-jiuwenswarm.md)。
 
 > [!WARNING]
-> ScienceDiscovery 不是多用户生产服务。API、runner 与 gateway 默认只监听回环；API 使用一个 bearer token 且不终止 TLS。监听其他网卡必须是可信、受保护网络中的显式部署选择。Python、R 和 shell 命令在 fail-closed 的平台沙箱中运行（Linux 使用 Bubblewrap，macOS 源码模式使用 Seatbelt）；控制 API、gateway、PDF worker 以及发往已配置模型/数据提供方的请求在沙箱外作为受信任控制面操作执行。
+> ScienceDiscovery 不是多用户生产服务。适配器与 API 默认只监听回环；访问使用一个 bearer token，且不终止 TLS。监听其他网卡必须是可信、受保护网络中的显式部署选择。Python、R 和 shell 命令在 fail-closed 的平台沙箱中运行（Linux 使用 Bubblewrap，macOS 源码模式使用 Seatbelt）；控制 API、适配器、JiuwenSwarm、PDF worker 以及发往已配置模型/数据提供方的请求在沙箱外作为受信任控制面操作执行。
 
 ## 文档
 
 | 分类 | 文档 |
 |---|---|
 | **快速开始** | [快速开始](docs/zh/getting-started/quick-start.md) · [部署](docs/zh/getting-started/deployment.md) |
-| **How-to** | [自定义 MCP](docs/zh/how-to/configure-custom-mcp.md) · [网络代理](docs/zh/how-to/configure-network-proxy.md) · [ScienceMemory](docs/zh/how-to/science-memory-setup.md) |
+| **How-to** | [在 JiuwenSwarm 上运行](docs/zh/how-to/run-with-jiuwenswarm.md) · [自定义 MCP](docs/zh/how-to/configure-custom-mcp.md) · [网络代理](docs/zh/how-to/configure-network-proxy.md) · [ScienceMemory](docs/zh/how-to/science-memory-setup.md) |
 | **参考** | [配置](docs/zh/reference/configuration.md) · [REST API](docs/zh/reference/rest-api.md) · [内置工具](docs/zh/reference/builtin-tools.md) · [运行时行为](docs/zh/reference/runtime-behavior.md) |
 | **开发者文档** | [整体架构](docs/zh/developer-docs/architecture.md) 及[开发者文档导航](docs/zh/developer-docs/README.md) |
 

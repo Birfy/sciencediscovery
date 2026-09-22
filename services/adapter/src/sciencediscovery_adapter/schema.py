@@ -49,6 +49,23 @@ def relax_schema(schema: Any) -> Any:
     return relaxed
 
 
+def open_schema(schema: Any) -> Any:
+    """`relax_schema`, and also without `enum`, `const` and `required`: what a tool shared by every run is given as.
+
+    One run's enum (its skills, its Runners) is not another's; the run's own tool checks its arguments.
+    """
+    relaxed = relax_schema(schema)
+
+    def strip(node: Any) -> Any:
+        if isinstance(node, list):
+            return [strip(item) for item in node]
+        if not isinstance(node, dict):
+            return node
+        return {key: strip(value) for key, value in node.items() if key not in ("enum", "const", "required")}
+
+    return strip(relaxed)
+
+
 _EMPTY_BY_TYPE = {"array": list, "object": dict}
 
 

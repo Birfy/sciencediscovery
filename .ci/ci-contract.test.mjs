@@ -39,6 +39,7 @@ function mutableCatalog() {
     testCases: structuredClone(catalog.testCases),
     utGuestPackages: structuredClone(catalog.utGuestPackages),
     utWorkloads: structuredClone(catalog.utWorkloads),
+    jiuwenSwarmWrapper: [...catalog.jiuwenSwarmWrapper],
   };
 }
 

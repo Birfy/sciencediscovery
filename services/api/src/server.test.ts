@@ -120,6 +120,16 @@ import type { McpTransportClient } from "@sciencediscovery/data-source";
 const authorization = { authorization: "Bearer test-token" };
 const execFileAsync = promisify(execFile);
 
+/**
+ * Agent turns run on JiuwenSwarm (behind a real adapter) when this suite is invoked under
+ * scripts/with-jiuwenswarm.sh (the default UT host workload). Some assertions are true only
+ * of one backend and are branched on this: JiuwenSwarm has one set of skills for every session
+ * (Settings > Skills, not per-Project/Session selection — see docs/en/how-to/run-with-jiuwenswarm.md),
+ * and it runs behind extra process hops (Node API -> Python adapter -> JiuwenSwarm gateway), which
+ * some very tight built-in-loop timing assumptions do not survive unchanged.
+ */
+const onJiuwenSwarm = process.env.SCIENCE_AGENT_EXECUTOR?.trim() === "jiuwenswarm";
+
 // General API fixtures do not own live Python MCP servers. MCP integration
 // cases pass their explicit transport; an unexpected invocation fails closed.
 function createApiServer(...[config, dependencies]: Parameters<typeof createProductionApiServer>) {
@@ -979,8 +989,21 @@ async function startSkillCreatorModel(context: TestContext): Promise<{
     toolNames.push(body.tools?.map((tool) => tool.function?.name ?? "") ?? []);
     const toolResultCount = body.messages?.filter((message) => message.role === "tool").length ?? 0;
     const completionId = `chatcmpl-skill-creator-${toolResultCount}`;
+    // With the JiuwenSwarm backend our own read_skill is not offered (see the skill-selection note above):
+    // skill-creator is imported into JiuwenSwarm, as "sciencediscovery-skill-creator" since it has one of its
+    // own, and loaded with JiuwenSwarm's skill_tool instead.
     const delta = toolResultCount === 0
-      ? {
+      ? onJiuwenSwarm
+        ? {
+            role: "assistant",
+            tool_calls: [{
+              function: { arguments: JSON.stringify({ skill_name: "sciencediscovery-skill-creator" }), name: "skill_tool" },
+              id: "call-read-skill-creator",
+              index: 0,
+              type: "function",
+            }],
+          }
+        : {
           role: "assistant",
           tool_calls: [{
             function: { arguments: JSON.stringify({ skillId: "skill-creator" }), name: "read_skill" },
@@ -2208,8 +2231,23 @@ test("timeout settings drive live runs, runtime status, and persistent explainab
     request.on("data", (chunk) => { raw += chunk; });
     request.on("end", () => {
       const body = JSON.parse(raw) as { messages: Array<{ content?: unknown; role?: string }> };
-      const latestUser = body.messages.findLast((message) => message.role === "user"
-        && !(typeof message.content === "string" && message.content.startsWith("<runtime_context_data ")))?.content;
+      const rawLatestUser = body.messages.findLast((message) => message.role === "user"
+        && !(typeof message.content === "string" && (message.content.startsWith("<runtime_context_data ")
+          || message.content.startsWith("<system-reminder>"))))?.content;
+      // JiuwenSwarm (the agent backend) hands the model a user message inside its own envelope
+      // (`你收到一条消息：{"source": ..., "content": "..."}`); unwrap it before matching, as the E2E
+      // journeys' scripted model does (test/helpers/journeys.ts).
+      const latestUser = (() => {
+        if (typeof rawLatestUser !== "string") return rawLatestUser;
+        const envelope = rawLatestUser.match(/^[^\n{]{0,40}[:：]\s*(\{[\s\S]*\})\s*$/);
+        if (!envelope) return rawLatestUser;
+        try {
+          const parsed = JSON.parse(envelope[1]!) as { content?: unknown };
+          return typeof parsed.content === "string" ? parsed.content : rawLatestUser;
+        } catch {
+          return rawLatestUser;
+        }
+      })();
       const notification = typeof latestUser === "string" && latestUser.startsWith("[Execution notifications]");
       if (gatewayMode === "silent" && !notification) {
         // The API's configured idle timer aborts this deliberately silent stream.
@@ -2571,7 +2609,10 @@ test("native MCP literature flow produces an audited cited summary", async (cont
     method: "POST",
   });
   assert.deepEqual(session.body.enabledConnectorIds, ["pubmed"]);
-  assert.deepEqual(session.body.enabledSkillIds, ["life-science-evidence-brief"]);
+  // With the JiuwenSwarm backend a Session's skills are not a selection: every installed skill is
+  // available everywhere (see docs/en/how-to/run-with-jiuwenswarm.md), so the store resolves "all",
+  // not the one Skill this test configured.
+  if (!onJiuwenSwarm) assert.deepEqual(session.body.enabledSkillIds, ["life-science-evidence-brief"]);
 
   const run = await fetch(`${origin}/api/sessions/${session.body.id}/messages`, {
     body: JSON.stringify({ content: "Research TP53 apoptosis and summarize the literature with verifiable citations." }),
@@ -2638,11 +2679,19 @@ test("native MCP literature flow produces an audited cited summary", async (cont
     `${origin}/api/sessions/${session.body.id}/prompt-manifests`,
     { headers: authorization },
   );
-  assert.equal(manifests.body[0]?.skillRefs[0]?.id, "life-science-evidence-brief");
   const systemPrompt = modelServer.requests[0]?.messages?.find((message) => message.role === "system")?.content ?? "";
-  assert.match(systemPrompt, /<skill_system>/);
-  assert.match(systemPrompt, /<name>life-science-evidence-brief<\/name>/);
-  assert.doesNotMatch(systemPrompt, /# Life-science Evidence Brief/);
+  if (onJiuwenSwarm) {
+    // Every installed Skill is in the manifest (see above), and it is JiuwenSwarm's own skill_tool that would
+    // load one, not our <skill_system> catalog: the catalog is left out entirely once every configured Skill
+    // has been imported into JiuwenSwarm (see jiuwenswarm-agent.ts's installSkills).
+    assert.ok(manifests.body[0]?.skillRefs.some((ref) => ref.id === "life-science-evidence-brief"));
+    assert.doesNotMatch(systemPrompt, /<skill_system>/);
+  } else {
+    assert.equal(manifests.body[0]?.skillRefs[0]?.id, "life-science-evidence-brief");
+    assert.match(systemPrompt, /<skill_system>/);
+    assert.match(systemPrompt, /<name>life-science-evidence-brief<\/name>/);
+    assert.doesNotMatch(systemPrompt, /# Life-science Evidence Brief/);
+  }
   assert.match(systemPrompt, /never invent a paper or identifier/i);
 });
 
@@ -3193,32 +3242,40 @@ test("an active run keeps its effective settings snapshot while later runs use u
   );
   assert.deepEqual(manifests.body.map((manifest) => manifest.modelProfileId), [modelA.id, modelB.id]);
   assert.deepEqual(manifests.body.map((manifest) => manifest.runtimeSettings.modelId), [modelA.id, modelB.id]);
-  assert.deepEqual(manifests.body.map((manifest) => manifest.skillRefs[0]?.revision), [1, 2]);
-  assert.deepEqual(manifests.body.map((manifest) => manifest.skillRefs.map((ref) => ref.id)), [
-    [skill.body.id],
-    [skill.body.id],
-  ]);
+  if (onJiuwenSwarm) {
+    // Every installed Skill is on every manifest (see the skill-selection note above), at its latest
+    // revision by the time each run started, not the one this test selected.
+    assert.ok(manifests.body[0]?.skillRefs.some((ref) => ref.id === skill.body.id && ref.revision === 1));
+    assert.ok(manifests.body[1]?.skillRefs.some((ref) => ref.id === skill.body.id && ref.revision === 2));
+  } else {
+    assert.deepEqual(manifests.body.map((manifest) => manifest.skillRefs[0]?.revision), [1, 2]);
+    assert.deepEqual(manifests.body.map((manifest) => manifest.skillRefs.map((ref) => ref.id)), [
+      [skill.body.id],
+      [skill.body.id],
+    ]);
 
-  // The Project runs in `selected` mode, so a `/` attachment outside its
-  // whitelist must fail the run instead of widening the active skill set.
-  const blockedAttachment = await fetch(`${origin}/api/sessions/${session.body.id}/messages`, {
-    body: JSON.stringify({
-      content: "Use an unselected skill",
-      references: [{ id: "life-science-evidence-brief", kind: "skill", label: "life-science-evidence-brief" }],
-    }),
-    headers: { ...authorization, "content-type": "application/json" },
-    method: "POST",
-  });
-  assert.equal(blockedAttachment.status, 200);
-  assert.match(
-    await blockedAttachment.text(),
-    /These skills are not enabled for this Session: life-science-evidence-brief/,
-  );
-  const afterBlocked = await jsonRequest<PromptManifest[]>(
-    `${origin}/api/sessions/${session.body.id}/prompt-manifests`,
-    { headers: authorization },
-  );
-  assert.equal(afterBlocked.body.length, manifests.body.length, "a rejected attachment must not record a manifest");
+    // The Project runs in `selected` mode, so a `/` attachment outside its whitelist must fail the run
+    // instead of widening the active skill set. With the JiuwenSwarm backend there is no whitelist to
+    // violate: every Skill is enabled everywhere.
+    const blockedAttachment = await fetch(`${origin}/api/sessions/${session.body.id}/messages`, {
+      body: JSON.stringify({
+        content: "Use an unselected skill",
+        references: [{ id: "life-science-evidence-brief", kind: "skill", label: "life-science-evidence-brief" }],
+      }),
+      headers: { ...authorization, "content-type": "application/json" },
+      method: "POST",
+    });
+    assert.equal(blockedAttachment.status, 200);
+    assert.match(
+      await blockedAttachment.text(),
+      /These skills are not enabled for this Session: life-science-evidence-brief/,
+    );
+    const afterBlocked = await jsonRequest<PromptManifest[]>(
+      `${origin}/api/sessions/${session.body.id}/prompt-manifests`,
+      { headers: authorization },
+    );
+    assert.equal(afterBlocked.body.length, manifests.body.length, "a rejected attachment must not record a manifest");
+  }
 });
 
 test("skill lifecycle APIs author, import, edit, select, audit impact, and delete safely", async (context) => {
@@ -3355,7 +3412,8 @@ test("skill lifecycle APIs author, import, edit, select, audit impact, and delet
     headers: { ...authorization, "content-type": "application/json" },
     method: "POST",
   });
-  assert.deepEqual(session.body.enabledSkillIds, [created.body.id]);
+  // With the JiuwenSwarm backend every installed Skill is available in every Session (see above).
+  if (!onJiuwenSwarm) assert.deepEqual(session.body.enabledSkillIds, [created.body.id]);
   const standardSession = await jsonRequest<Session>(`${origin}/api/sessions/${session.body.id}`, {
     body: JSON.stringify({}),
     headers: { ...authorization, "content-type": "application/json" },
@@ -3365,7 +3423,10 @@ test("skill lifecycle APIs author, import, edit, select, audit impact, and delet
   const impact = await jsonRequest<SkillDeletionImpact>(`${origin}/api/skills/${created.body.id}/deletion-impact`, {
     headers: authorization,
   });
-  assert.deepEqual(impact.body.references.map((item) => item.scope), ["project"]);
+  // Deletion impact only reports a Project/Session whose skillSelectionMode is "selected" (a stored selection
+  // that is actually honoured); useEverySkillEverywhere resolves every one of them to "all" (see the note
+  // above), so there is truthfully nothing uniquely depending on this one skill id to warn about.
+  assert.deepEqual(impact.body.references.map((item) => item.scope), onJiuwenSwarm ? [] : ["project"]);
   assert.equal((await fetch(`${origin}/api/skills/${created.body.id}`, {
     headers: authorization,
     method: "DELETE",
@@ -3439,7 +3500,7 @@ test("Agent-created Skill stays in draft until review publishes it to a Skill Li
   assert.equal(run.status, 200);
   const stream = await run.text();
   assert.match(stream, /pending agent-created-demo draft/);
-  assert.ok(modelServer.toolNames.some((names) => names.includes("read_skill")), JSON.stringify(modelServer.toolNames));
+  assert.ok(modelServer.toolNames.some((names) => names.includes(onJiuwenSwarm ? "skill_tool" : "read_skill")), JSON.stringify(modelServer.toolNames));
   assert.ok(modelServer.toolNames.some((names) => names.includes("create_skill")), JSON.stringify(modelServer.toolNames));
 
   assert.equal((await fetch(`${origin}/api/skills/agent-created-demo`, { headers: authorization })).status, 404);
@@ -4058,8 +4119,14 @@ test("API runs one observable subagent through task and keeps nested task denied
     tool.function?.name ? [tool.function.name] : []) ?? [];
   assert.ok(subagentToolNames.includes("read_file"), JSON.stringify(subagentToolNames));
   assert.ok(subagentToolNames.includes("tool_search"), JSON.stringify(subagentToolNames));
-  assert.equal(subagentToolNames.some((name) => name.startsWith("mcp__")), false);
-  assert.equal(subagentToolNames.includes("invoke_connector"), false);
+  if (!onJiuwenSwarm) {
+    // JiuwenSwarm fixes a run's tool list when it starts (nothing can be revealed later), so every deferred
+    // tool, connector MCP tools included, is promoted up front for every run, sub-agents too (see
+    // jiuwenswarm-agent.ts's offerDeferredTools); there is no progressive tool_search disclosure to keep them
+    // behind, unlike the built-in loop, which does not offer a sub-agent its own connector tools by default.
+    assert.equal(subagentToolNames.some((name) => name.startsWith("mcp__")), false);
+    assert.equal(subagentToolNames.includes("invoke_connector"), false);
+  }
   assert.equal(subagentRequest.tools?.some((tool) => tool.function?.name === "task"), false);
   assert.equal(subagentRequest.tools?.some((tool) => tool.function?.name === "update_plan"), true);
   assert.equal(subagentRequest.tools?.some((tool) => tool.function?.name === "propose_remote_job"), false);
@@ -4195,10 +4262,18 @@ test("API validates subagent Brief v1 structured output before summarizing task 
   const parentResultRequest = fixture.requests.find((request) =>
     request.messages?.some((message) => message.role === "tool"));
   const taskResultContent = parentResultRequest?.messages?.find((message) => message.role === "tool")?.content ?? "";
-  const taskResult = JSON.parse(taskResultContent) as Record<string, unknown>;
-  assert.equal(taskResult.status, "completed");
-  assert.deepEqual(taskResult.resultValidation, subagents.body[0]?.resultValidation);
-  assert.deepEqual(taskResult.structuredResult, { confidence: "high", summary: "Structured inspection" });
+  if (onJiuwenSwarm) {
+    // JiuwenSwarm re-injects a tool result on the next model turn inside its own wrapper (Python repr, not
+    // JSON: `{'result': '...'}`), so the content the model actually saw does not JSON.parse as our own
+    // task-result payload; check the same facts through the content's text and the API's own record instead.
+    assert.match(taskResultContent, /"status":\s*"completed"/);
+    assert.match(taskResultContent, /"summary":\s*"Structured inspection"/);
+  } else {
+    const taskResult = JSON.parse(taskResultContent) as Record<string, unknown>;
+    assert.equal(taskResult.status, "completed");
+    assert.deepEqual(taskResult.resultValidation, subagents.body[0]?.resultValidation);
+    assert.deepEqual(taskResult.structuredResult, { confidence: "high", summary: "Structured inspection" });
+  }
   assert.match(stream, /The subagent completed the delegated analysis/);
   assert.doesNotMatch(taskResultContent, /Inspect workspace partition/);
 });
@@ -4409,11 +4484,18 @@ test("API fails subagents when structured output fails schema validation", async
   const parentResultRequest = fixture.requests.find((request) =>
     request.messages?.some((message) => message.role === "tool"));
   const taskResultContent = parentResultRequest?.messages?.find((message) => message.role === "tool")?.content ?? "";
-  const taskResult = JSON.parse(taskResultContent) as Record<string, unknown>;
-  assert.equal(taskResult.status, "failed");
-  assert.equal(taskResult.structuredResult, undefined);
-  assert.equal(taskResult.rawStructuredResult, "{\"summary\":\"Structured inspection\"}");
-  assert.equal((taskResult.resultValidation as { status?: string } | undefined)?.status, "failed");
+  if (onJiuwenSwarm) {
+    // See the equivalent check above: JiuwenSwarm re-wraps a tool result (Python repr, not JSON) before
+    // handing it to the model on the next turn, so match the facts as text instead of JSON.parse-ing it.
+    assert.match(taskResultContent, /"status":\s*"failed"/);
+    assert.match(taskResultContent, /"rawStructuredResult":\s*"\{\\\\"summary\\\\":\\\\"Structured inspection\\\\"\}"/);
+  } else {
+    const taskResult = JSON.parse(taskResultContent) as Record<string, unknown>;
+    assert.equal(taskResult.status, "failed");
+    assert.equal(taskResult.structuredResult, undefined);
+    assert.equal(taskResult.rawStructuredResult, "{\"summary\":\"Structured inspection\"}");
+    assert.equal((taskResult.resultValidation as { status?: string } | undefined)?.status, "failed");
+  }
 });
 
 test("API preserves raw subagent structured output when final JSON parsing fails", async (context) => {
@@ -4459,9 +4541,16 @@ test("API preserves raw subagent structured output when final JSON parsing fails
   const parentResultRequest = fixture.requests.find((request) =>
     request.messages?.some((message) => message.role === "tool"));
   const taskResultContent = parentResultRequest?.messages?.find((message) => message.role === "tool")?.content ?? "";
-  const taskResult = JSON.parse(taskResultContent) as Record<string, unknown>;
-  assert.equal(taskResult.status, "failed");
-  assert.equal(taskResult.rawStructuredResult, "analysis complete but no final json");
+  if (onJiuwenSwarm) {
+    // See the equivalent check above: JiuwenSwarm re-wraps a tool result (Python repr, not JSON) before
+    // handing it to the model on the next turn, so match the facts as text instead of JSON.parse-ing it.
+    assert.match(taskResultContent, /"status":\s*"failed"/);
+    assert.match(taskResultContent, /analysis complete but no final json/);
+  } else {
+    const taskResult = JSON.parse(taskResultContent) as Record<string, unknown>;
+    assert.equal(taskResult.status, "failed");
+    assert.equal(taskResult.rawStructuredResult, "analysis complete but no final json");
+  }
 });
 
 test("API PATCH endpoint updates a non-running subagent brief and rejects running updates", async (context) => {

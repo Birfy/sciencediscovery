@@ -88,19 +88,53 @@ async def test_removing_an_absent_entry_changes_nothing():
     assert gateway.replacements == []
 
 
-async def test_prune_removes_leftover_run_aliases_and_keeps_everything_else():
-    gw = FakeGateway([entry("real", default=True), entry("sd-aaaa"), entry("sd-bbbb"), entry("other")])
-    assert await ModelSync(gw.rpc, URL).prune("sd-") == 2
+ADAPTER = "http://adapter:4310"
+
+
+async def test_prune_removes_the_adapters_entries_and_the_placeholder_and_keeps_the_rest():
+    gw = FakeGateway([entry("real", default=True), entry("DeepSeek-V4-abc123", base=f"{ADAPTER}/llm/abc/v1"),
+                      entry("sd-old", base=f"{ADAPTER}/llm/def/v1"), entry("your-model-name", base="https://example.com/compatible-mode/v1"),
+                      entry("other", base="http://elsewhere/v1")])
+    assert await ModelSync(gw.rpc, URL).prune(ADAPTER) == 3
     assert [m["model_name"] for m in gw.models] == ["real", "other"]
 
 
 async def test_prune_with_nothing_to_remove_writes_nothing():
     gw = FakeGateway([entry("real", default=True)])
-    assert await ModelSync(gw.rpc, URL).prune("sd-") == 0
+    assert await ModelSync(gw.rpc, URL).prune(ADAPTER) == 0
     assert gw.replacements == []
 
 
-async def test_prune_keeps_a_default_when_the_default_was_a_leftover():
-    gw = FakeGateway([entry("sd-aaaa", default=True), entry("real")])
-    await ModelSync(gw.rpc, URL).prune("sd-")
+async def test_prune_keeps_a_default_when_the_default_was_removed():
+    gw = FakeGateway([entry("your-model-name", base="https://example.com/v1", default=True), entry("real")])
+    await ModelSync(gw.rpc, URL).prune(ADAPTER)
     assert [(m["model_name"], m["is_default"]) for m in gw.models] == [("real", True)]
+
+
+async def test_ensure_default_makes_one_default_and_clears_the_others():
+    gw = FakeGateway([entry("your-model-name", default=True), entry("sd-run1")])
+    await ModelSync(gw.rpc, URL).ensure_default(ModelProfile("sd-default", "http://a/llm/default/v1", "key"))
+    assert [(m["model_name"], m["is_default"]) for m in gw.models] == [("sd-default", True), ("your-model-name", False), ("sd-run1", False)]
+
+
+async def test_ensure_default_writes_nothing_when_it_already_is_the_only_default():
+    gw = FakeGateway([entry("other")])
+    sync = ModelSync(gw.rpc, URL)
+    profile = ModelProfile("sd-default", "http://a/llm/default/v1", "key")
+    await sync.ensure_default(profile)
+    writes = len(gw.replacements)
+    await sync.ensure_default(profile)
+    assert len(gw.replacements) == writes
+
+
+async def test_ensure_default_repairs_an_entry_whose_endpoint_changed():
+    gw = FakeGateway([entry("sd-default", base="http://old/v1", default=True)])
+    await ModelSync(gw.rpc, URL).ensure_default(ModelProfile("sd-default", "http://new/v1", "key"))
+    assert gw.models[0]["api_base"] == "http://new/v1" and gw.models[0]["is_default"] is True
+
+
+async def test_prune_keeps_the_entries_it_is_told_to_keep_even_when_they_are_ours():
+    gw = FakeGateway([entry("sciencediscovery-default", base=f"{ADAPTER}/llm/default/v1", default=True),
+                      entry("your-model-name", base="https://example.com/v1")])
+    assert await ModelSync(gw.rpc, URL).prune(ADAPTER, keep=frozenset({"sciencediscovery-default"})) == 1
+    assert [m["model_name"] for m in gw.models] == ["sciencediscovery-default"]

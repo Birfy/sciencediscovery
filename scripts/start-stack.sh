@@ -17,11 +17,16 @@
 # Local mode provisions host dependencies as needed; Docker mode only validates
 # its prebuilt image and bind-mounted runtime paths. Both modes reuse the same
 # process ordering, health waits, and shutdown handling.
+#
+# The agent loop runs on JiuwenSwarm (see docs/en/how-to/run-with-jiuwenswarm.md):
+# in local mode, install it once with `scripts/jiuwenswarm.sh setup`, then pass
+# --jiuwenswarm below.
 set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: ./scripts/start-stack.sh --mode local|docker [--no-build] [--no-node-build] [--jiuwenswarm]
+Usage: ./scripts/start-stack.sh --mode local --jiuwenswarm [--no-build] [--no-node-build]
+       ./scripts/start-stack.sh --mode docker [--no-build]
 
   --mode local    read .env, optionally install/build, and use data/envs
   --mode docker   use the prebuilt image environments and container checks
@@ -29,13 +34,13 @@ Usage: ./scripts/start-stack.sh --mode local|docker [--no-build] [--no-node-buil
   --no-node-build skip only the Node install/build; still provision the Python
                   service environments, whose editable installs record absolute
                   paths and cannot be prepared elsewhere
-  --jiuwenswarm   run agent turns on JiuwenSwarm instead of the built-in loop
-                  (local mode only): puts the adapter in front of the API
-                  (SCIENCE_AGENT_ADAPTER=1), selects the executor
-                  (SCIENCE_AGENT_EXECUTOR=jiuwenswarm) and starts the JiuwenSwarm
-                  instance if it is installed but not running. Install it once
-                  with scripts/jiuwenswarm.sh setup. See
-                  docs/en/how-to/run-with-jiuwenswarm.md.
+  --jiuwenswarm   run agent turns on JiuwenSwarm (local mode only): puts the
+                  adapter in front of the API (SCIENCE_AGENT_ADAPTER=1), selects
+                  the executor (SCIENCE_AGENT_EXECUTOR=jiuwenswarm) and starts
+                  the JiuwenSwarm instance if it is installed but not running.
+                  Install it once with scripts/jiuwenswarm.sh setup. See
+                  docs/en/how-to/run-with-jiuwenswarm.md. Without this flag the
+                  stack falls back to its older built-in loop.
 
 Environment:
   SCIENCE_DISCOVERY_HEALTH_TIMEOUT_SECONDS

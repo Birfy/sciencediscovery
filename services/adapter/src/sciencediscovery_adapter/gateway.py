@@ -34,7 +34,14 @@ def _ends_run(frame: dict[str, Any]) -> bool:
     `chat.final` is not it: a run that pauses for approval emits an empty
     `chat.final`, then carries on after the answer. The gateway closes every run
     with `chat.processing_status` `is_complete`, and a refused request or a
-    `chat.error` (which is followed by that status too) needs no answer.
+    `chat.error` (which is followed by that status too) needs no answer. But a
+    run paused on `chat.ask_user_question` (a permission question included)
+    also gets an `is_complete` `chat.processing_status`, on JiuwenSwarm 0.2.6 —
+    measured live, not documented — without waiting for the answer first, mixed
+    in with a handful of bookkeeping frames of its own (an empty `chat.final`,
+    usage/context accounting) whose count varies by call. That one does not end
+    the run either: see `ChatRun._question_pending`, which this function alone
+    cannot tell apart from a genuine end since it sees one frame at a time.
     """
     if frame.get("type") == "res":
         return frame.get("ok") is False
@@ -43,6 +50,37 @@ def _ends_run(frame: dict[str, Any]) -> bool:
     if event == "chat.processing_status":
         return bool(payload.get("is_complete")) and not payload.get("is_processing")
     return event == "chat.interrupt_result"
+
+
+def _asked_question_id(frame: dict[str, Any]) -> str | None:
+    """The `request_id` of a `chat.ask_user_question` frame (`None` for any other frame)."""
+    if frame.get("event") != "chat.ask_user_question":
+        return None
+    request_id = (frame.get("payload") or {}).get("request_id")
+    return str(request_id) if request_id else None
+
+
+# Bookkeeping the gateway interleaves with a paused run's own frames (measured live): none of it is the
+# model or a tool actually doing something, so none of it means the run has resumed.
+_BOOKKEEPING_EVENTS = frozenset({"context.usage", "chat.usage_metadata", "chat.usage_summary"})
+
+
+def _advances_run(frame: dict[str, Any]) -> bool:
+    """True for a frame that is the model or a tool actually doing something, once a question is pending
+    (see `ChatRun._question_pending`) — the run has genuinely resumed, so the next `_ends_run` frame is real.
+
+    False for bookkeeping (`_BOOKKEEPING_EVENTS`), an empty `chat.final` (the pause's own marker, same as
+    `_ends_run`'s docstring), a bare `res` acknowledgement, `chat.processing_status` itself (a status, not
+    work — and the frame `_ends_run` is about to read `_question_pending` for; this function must not have
+    already cleared it), and `chat.ask_user_question` (handled by its caller, which sets `_question_pending`
+    rather than asking this function).
+    """
+    event = frame.get("event")
+    if event is None or event in _BOOKKEEPING_EVENTS or event in ("chat.ask_user_question", "chat.processing_status"):
+        return False
+    if event == "chat.final":
+        return bool((frame.get("payload") or {}).get("content"))
+    return True
 
 
 class ChatRun:
@@ -65,6 +103,11 @@ class ChatRun:
         self.resumed = 0
         # Reconnects in a row that brought no frame; a frame from the run starts the count again.
         self._misses = 0
+        # True from a `chat.ask_user_question` frame until a frame that is the model or a tool actually
+        # doing something (`_advances_run`) — never on `answer()` being called, which races the gateway's
+        # own premature completion already in flight over the same connection (see `_ends_run`). While
+        # true, an `is_complete` `chat.processing_status` is that premature one, not the run ending.
+        self._question_pending = False
 
     async def _connect(self) -> None:
         try:
@@ -150,8 +193,14 @@ class ChatRun:
                 if _resume_answer(frame):
                     continue
             self._misses = 0
+            if _asked_question_id(frame):
+                self._question_pending = True
+            elif _advances_run(frame):
+                self._question_pending = False
             yield frame
             if _ends_run(frame):
+                if self._question_pending:
+                    continue
                 return
 
 

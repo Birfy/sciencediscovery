@@ -26,7 +26,7 @@ from fastapi.responses import Response
 
 from .agent_runs import AgentRunner, agent_router
 from .config import Settings
-from .llm_proxy import LlmRoutes, llm_router
+from .llm_proxy import DEFAULT_ALIAS, LlmRoutes, llm_router
 from .mcp_server import ToolsetRegistry, mcp_router
 from .proxy import proxy_to_legacy
 
@@ -34,12 +34,14 @@ from .proxy import proxy_to_legacy
 async def forget_stale_aliases(runner) -> None:
     """Remove the per-run model aliases an earlier, abnormally ended process left in JiuwenSwarm."""
     try:
-        removed = await runner.models.prune("sd-")
+        # The default entry first: JiuwenSwarm refuses an empty model list, and it is the one entry kept.
+        await runner.ensure_default_model()
+        removed = await runner.models.prune(runner.settings.public_url, keep=frozenset({DEFAULT_ALIAS}))
     except Exception as error:  # JiuwenSwarm may not be up yet; nothing to clean then
         print(f"[adapter] could not clean stale model aliases: {error}", file=sys.stderr, flush=True)
         return
     if removed:
-        print(f"[adapter] removed {removed} stale model alias(es) from JiuwenSwarm", file=sys.stderr, flush=True)
+        print(f"[adapter] removed {removed} stale or placeholder model entr(y/ies) from JiuwenSwarm", file=sys.stderr, flush=True)
 
 
 def create_app(settings: Settings | None = None, *, transport: httpx.AsyncBaseTransport | None = None) -> FastAPI:

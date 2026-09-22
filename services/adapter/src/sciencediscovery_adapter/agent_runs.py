@@ -27,13 +27,14 @@ answer `{"text": "...", "isError": false}` goes back to JiuwenSwarm.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
 import sys
 import uuid
 from collections.abc import AsyncIterator, Callable
-from typing import Any
+from typing import Any, Literal
 
 import httpx
 from fastapi import APIRouter, Header, HTTPException, Request
@@ -43,10 +44,11 @@ from pydantic import BaseModel, Field
 from . import gateway
 from .config import Settings
 from .events import RunEventMapper
-from .llm_proxy import LlmRoute, LlmRoutes
-from .mcp_server import Toolset, ToolsetRegistry
+from .llm_proxy import DEFAULT_ALIAS, LlmRoute, LlmRoutes
+from .mcp_server import SERVER_NAME, Toolset, ToolsetRegistry
 from .models import ModelProfile, ModelSync
 from .schema import relax_schema
+from .skills import SkillSync
 
 # SCIENCE_AGENT_ADAPTER_DEBUG=1 prints every tool event of every run to stderr.
 _DEBUG = os.environ.get("SCIENCE_AGENT_ADAPTER_DEBUG") == "1"
@@ -57,6 +59,9 @@ class ToolSpec(BaseModel):
     name: str
     description: str = ""
     inputSchema: dict[str, Any] = Field(default_factory=lambda: {"type": "object", "properties": {}})
+    # What JiuwenSwarm's permission engine does before a call: "ask" the user, or "allow". Set once per tool name,
+    # the first time a run brings it (JiuwenSwarm's own settings, or a user's "always", win after that).
+    approval: Literal["allow", "ask"] = "allow"
 
 
 class Bridge(BaseModel):
@@ -69,9 +74,6 @@ class ModelSpec(BaseModel):
     baseUrl: str
     apiKey: str = ""
     provider: str = "OpenAI"
-    # The model's context window, in tokens. JiuwenSwarm compresses a conversation against it; without
-    # it the model is an unknown alias and a default is assumed.
-    contextWindow: int | None = None
 
 
 class AgentRunRequest(BaseModel):
@@ -82,8 +84,12 @@ class AgentRunRequest(BaseModel):
     tools: list[ToolSpec] = Field(default_factory=list)
     bridge: Bridge | None = None
     model: ModelSpec | None = None
-    # Replaces JiuwenSwarm's own system prompt for this run (needs `model`).
+    # The caller's system prompt for this run (needs `model`). `systemPromptMode` says what becomes of
+    # JiuwenSwarm's own: "append" keeps it whole and adds this one after it; "replace" swaps it out.
     systemPrompt: str | None = None
+    systemPromptMode: Literal["prepend", "append", "replace"] = "replace"
+    # Added after JiuwenSwarm's prompt in "prepend": the part that changes every turn (the run contract).
+    systemPromptTail: str | None = None
     # The JiuwenSwarm session that holds this agent's conversation: stable across runs, one per agent
     # (the main agent, and each subagent, of one caller session). JiuwenSwarm keeps and compresses the
     # context there; the adapter neither sends nor rebuilds any history. Defaults to `sessionId`.
@@ -91,8 +97,73 @@ class AgentRunRequest(BaseModel):
     # Names of JiuwenSwarm's own tools that stay visible to the model besides the toolset above
     # (for example `todo_create`). They run inside JiuwenSwarm, not over the bridge.
     nativeTools: list[str] = Field(default_factory=list)
+    # "all": every one of JiuwenSwarm's own tools is offered too, and one of ours with the same name gives way.
+    jiuwenSwarmTools: Literal["all", "listed"] = "listed"
+    # JiuwenSwarm's own tools the model must not get (they act on the host; see LlmRoute.hidden_native_tools).
+    hiddenJiuwenSwarmTools: list[str] = Field(default_factory=list, max_length=100)
     # Longest a single tool call may take, in seconds; the run's own timeout, when the caller has one.
     toolTimeoutSeconds: int | None = None
+
+
+# JiuwenSwarm's configuration for web search (`config.set` keys): its two free engines and its paid-search keys.
+JIUWENSWARM_WEB_CONFIG_KEYS = frozenset({
+    "free_search_ddg_enabled", "free_search_bing_enabled",
+    "jina_api_key", "bocha_api_key", "serper_api_key", "perplexity_api_key",
+})
+
+
+class JiuwenSwarmConfig(BaseModel):
+    values: dict[str, str]
+
+
+class SkillPackage(BaseModel):
+    id: str = Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    path: str  # the frozen package on this host, with SKILL.md at its top
+    hash: str
+
+
+class SkillImport(BaseModel):
+    skills: list[SkillPackage] = Field(max_length=200)
+
+
+class SkillEnabled(BaseModel):
+    enabled: bool
+
+
+class AgentLanguage(BaseModel):
+    language: Literal["zh", "en"]
+
+
+class PermissionAnswer(BaseModel):
+    decision: Literal["allow_once", "allow_matching", "deny"]
+
+
+def model_alias_base(model: str) -> str:
+    """A model id as a JiuwenSwarm entry name: letters, digits, `.`, `_` and `-` only, at most 48 characters."""
+    return re.sub(r"[^A-Za-z0-9._-]+", "-", model).strip("-")[:48] or "model"
+
+
+def describe_approval(request: dict[str, Any], route: LlmRoute | None) -> None:
+    """Say what a JiuwenSwarm approval question is about: the tool and the arguments of the call it stopped.
+
+    Its question names the tool (`mcp_sci_run_shell（当前模式默认需确认）…`) but not the call; the model proxy saw
+    the call go by. `toolName` is the bare tool name (`run_shell`), stable across calls: the API uses it, not the
+    per-call text, to classify the privileged action the way the rest of ScienceDiscovery does (so a standing
+    grant for that action, made outside a run, still applies to a call JiuwenSwarm stops). `summary` is the
+    descriptive, per-call text for the approval card; unlike before, it is not reused as the resource. Its own
+    text stays as the summary when no call matches.
+    """
+    call = route.take_call(str(request.get("summary") or "")) if route else None
+    if call is None:
+        return
+    name, arguments = call
+    shown = name.removeprefix(route.tool_prefix) if route and name.startswith(route.tool_prefix) else name
+    main = next((arguments[key] for key in ("command", "scriptPath", "code", "file_path", "path", "url", "query")
+                 if isinstance(arguments.get(key), str) and arguments[key].strip()), None)
+    detail = main if main is not None else json.dumps(arguments, ensure_ascii=False)
+    text = f"{shown}: {detail}" if arguments else shown
+    request["summary"] = text[:500]
+    request["toolName"] = shown
 
 
 def bridge_caller(bridge: Bridge, client: httpx.AsyncClient):
@@ -121,13 +192,69 @@ class AgentRunner:
         self.chat_run = gateway.ChatRun
         self.rpc = gateway.rpc
         self.models = ModelSync(lambda *a, **k: self.rpc(*a, **k), settings.mgmt_url)
+        self.skills = SkillSync(lambda *a, **k: self.rpc(*a, **k), settings.mgmt_url)
+        self._shared_lock = asyncio.Lock()
+        self._shared_registered = False
+        self._shared_timeout_s = 0
+        self._permissions_on = False
+        # Runs paused on one of JiuwenSwarm's approval questions, by the question's id.
+        self.pending_approvals: dict[str, tuple[Any, RunEventMapper]] = {}
+
+    async def ensure_default_model(self) -> None:
+        """Point JiuwenSwarm's default model at the adapter (see `llm_proxy.DEFAULT_ALIAS`)."""
+        await self.models.ensure_default(ModelProfile(
+            DEFAULT_ALIAS, f"{self.settings.public_url}/llm/default/v1", self.routes.default_key, "OpenAI"))
+
+    async def ensure_shared_tools(self, tools: list[dict[str, Any]], timeout_s: int) -> None:
+        """Give JiuwenSwarm the one MCP server for every run's tools (see mcp_server), and its list again when a run
+        brought a tool (or an argument) it did not have. A reconnect makes JiuwenSwarm read the list afresh."""
+        async with self._shared_lock:
+            new = [tool for tool in tools if tool["name"] not in self.registry.shared]
+            changed = self.registry.merge(tools)
+            await self._apply_approvals(new)
+            longer = timeout_s > self._shared_timeout_s
+            if self._shared_registered and not changed and not longer:
+                return
+            self._shared_timeout_s = max(timeout_s, self._shared_timeout_s)
+            if not self._shared_registered or longer:
+                # An earlier adapter left it registered with another URL (its token changed), or a longer timeout is needed.
+                for method in ("mcp.disconnect", "mcp.delete_custom"):
+                    try:
+                        await self.rpc(self.settings.mgmt_url, method, {"name": SERVER_NAME})
+                    except Exception:
+                        pass
+                await self.rpc(self.settings.mgmt_url, "mcp.register_custom", {
+                    "name": SERVER_NAME, "transport": "streamable-http",
+                    "url": f"{self.settings.public_url}/mcp/{self.registry.token}", "timeout_s": self._shared_timeout_s,
+                })
+            await self.rpc(self.settings.mgmt_url, "mcp.connect", {"name": SERVER_NAME})
+            self._shared_registered = True
+
+    async def answer_approval(self, request_id: str, decision: str) -> None:
+        """Resume a run paused on one of JiuwenSwarm's approval questions with the user's decision."""
+        pending = self.pending_approvals.pop(request_id, None)
+        if pending is None:
+            raise KeyError(request_id)
+        run, mapper = pending
+        answer, _ = mapper.decide(request_id, decision)
+        await run.answer(request_id, "permission_interrupt", answer)
+
+    async def _apply_approvals(self, tools: list[dict[str, Any]]) -> None:
+        """JiuwenSwarm's permission engine decides every call (ScienceDiscovery's approval layer allows what it
+        lets through). Switched on once; a tool it has not seen yet gets the level the API asked for."""
+        if not self._permissions_on:
+            await self.rpc(self.settings.mgmt_url, "config.set", {"permissions_enabled": True})
+            self._permissions_on = True
+        for tool in tools:
+            await self.rpc(self.settings.mgmt_url, "permissions.tools.update", {
+                "tool": f"mcp_{SERVER_NAME}_{tool['name']}", "level": tool.get("approval") or "allow",
+            })
 
     async def stream(self, request: AgentRunRequest) -> AsyncIterator[str]:
-        name = "sci" + _SAFE_NAME.sub("", uuid.uuid4().hex)[:10]
+        name = SERVER_NAME
         token = None
         llm_token = None
         model_alias = None
-        registered = False
         jw_session = request.sessionKey or request.sessionId
         mapper = RunEventMapper(session_id=request.sessionId, mcp_prefixes=(f"mcp_{name}_",))
         params: dict[str, Any] = {
@@ -136,6 +263,14 @@ class AgentRunner:
             "supports_user_interaction": True, "agent_ref": {"mode": request.mode, "id": "default"},
         }
         try:
+            if request.tools:
+                if request.bridge is None:
+                    raise ValueError("tools were given without a bridge to run them")
+                # JiuwenSwarm validates strictly; the model still sees the originals (see LlmRoute).
+                token = self.registry.add(Toolset(
+                    tools=[{**t.model_dump(), "inputSchema": relax_schema(t.inputSchema)} for t in request.tools],
+                    call=bridge_caller(request.bridge, self.client()),
+                ))
             if request.model:
                 if request.model.provider != "OpenAI":
                     raise ValueError(f"the {request.model.provider} protocol is not supported by this executor yet")
@@ -145,31 +280,31 @@ class AgentRunner:
                     base_url=request.model.baseUrl.rstrip("/"), api_key=request.model.apiKey, model=request.model.model,
                     tool_prefix=f"mcp_{name}_", tool_names=frozenset(t.name for t in request.tools),
                     tool_specs={t.name: {"description": t.description, "parameters": t.inputSchema} for t in request.tools},
-                    system_prompt=request.systemPrompt, native_tools=frozenset(request.nativeTools),
+                    system_prompt=request.systemPrompt, system_prompt_mode=request.systemPromptMode,
+                    system_prompt_tail=request.systemPromptTail,
+                    native_tools=frozenset(request.nativeTools), all_native_tools=request.jiuwenSwarmTools == "all",
+                    hidden_native_tools=frozenset(request.hiddenJiuwenSwarmTools), run_tag=token,
                 ))
-                model_alias = f"sd-{llm_token[:12]}"
+                # Named after the real model: JiuwenSwarm tells the model its own model's name (runtime state), and
+                # the alias is all it knows. The suffix keeps two runs of one model apart.
+                model_alias = f"{model_alias_base(request.model.model)}-{llm_token[:6]}"
+                await self.ensure_default_model()
                 params["model_name"] = await self.models.ensure(ModelProfile(
-                    model_alias, f"{self.settings.public_url}/llm/{llm_token}/v1", llm_token, "OpenAI",
-                    context_window=request.model.contextWindow))
+                    model_alias, f"{self.settings.public_url}/llm/{llm_token}/v1", llm_token, "OpenAI",))
             if request.tools:
                 if request.bridge is None:
                     raise ValueError("tools were given without a bridge to run them")
-                token = self.registry.add(Toolset(
-                    # JiuwenSwarm validates strictly; the model still sees the originals (see LlmRoute).
-                    tools=[{**t.model_dump(), "inputSchema": relax_schema(t.inputSchema)} for t in request.tools], call=bridge_caller(request.bridge, self.client()),
-                    server_name=name,
-                ))
-                await self.rpc(self.settings.mgmt_url, "mcp.register_custom", {
-                    "name": name, "transport": "streamable-http", "url": f"{self.settings.public_url}/mcp/{token}",
-                    "timeout_s": request.toolTimeoutSeconds or self.settings.tool_timeout_s,
-                })
-                registered = True
-                await self.rpc(self.settings.mgmt_url, "mcp.connect", {"name": name})
+                tools = [{**t.model_dump(), "inputSchema": relax_schema(t.inputSchema)} for t in request.tools]
+                await self.ensure_shared_tools(tools, request.toolTimeoutSeconds or self.settings.tool_timeout_s)
                 params["mcp"] = [name]
             async with self.chat_run(self.settings.gateway_url, params) as run:
                 try:
                     async for frame in run:
                         for event in mapper.feed(frame):
+                            if event["type"] == "permission.required":
+                                self.pending_approvals[event["request"]["id"]] = (run, mapper)
+                                route = self.routes.get(llm_token) if llm_token else None
+                                describe_approval(event["request"], route)
                             if _DEBUG and event["type"].startswith("tool."):
                                 print(f"[adapter-debug] {request.sessionId[:8]} {json.dumps(event, ensure_ascii=False)[:500]}",
                                       file=sys.stderr, flush=True)
@@ -200,13 +335,9 @@ class AgentRunner:
                 except Exception:
                     pass
             if token:
-                self.registry.remove(token)
-            if registered:
-                for method in ("mcp.disconnect", "mcp.delete_custom"):
-                    try:
-                        await self.rpc(self.settings.mgmt_url, method, {"name": name})
-                    except Exception:
-                        pass  # best effort: the toolset is unreachable once removed anyway
+                self.registry.remove(token)  # the shared server stays; calls for this run find nothing now
+            for request_id in [key for key, (_, owner) in self.pending_approvals.items() if owner is mapper]:
+                self.pending_approvals.pop(request_id, None)
 
 
 def agent_router(runner: AgentRunner, settings: Settings) -> APIRouter:
@@ -217,6 +348,80 @@ def agent_router(runner: AgentRunner, settings: Settings) -> APIRouter:
         if settings.agent_token and authorization != f"Bearer {settings.agent_token}":
             raise HTTPException(status_code=401, detail="unauthorized")
         return StreamingResponse(runner.stream(body), media_type="application/x-ndjson")
+
+    @router.post("/agent/jiuwenswarm-config")
+    async def jiuwenswarm_config(body: JiuwenSwarmConfig, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        """Apply the web settings to JiuwenSwarm (`config.set`). Only the keys it has for web search are accepted."""
+        if settings.agent_token and authorization != f"Bearer {settings.agent_token}":
+            raise HTTPException(status_code=401, detail="unauthorized")
+        unknown = sorted(set(body.values) - JIUWENSWARM_WEB_CONFIG_KEYS)
+        if unknown:
+            raise HTTPException(status_code=400, detail=f"not a web search setting: {', '.join(unknown)}")
+        try:
+            result = await runner.rpc(settings.mgmt_url, "config.set", dict(body.values))
+        except Exception as error:
+            raise HTTPException(status_code=502, detail=f"JiuwenSwarm refused the settings: {str(error)[:200]}") from error
+        return {"applied": sorted(body.values), "jiuwenswarm": result}
+
+    @router.post("/agent/skills")
+    async def import_skills(body: SkillImport, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        """Install a run's skills in JiuwenSwarm (see `skills.py`). Answers, by id, the name it has there or an error."""
+        if settings.agent_token and authorization != f"Bearer {settings.agent_token}":
+            raise HTTPException(status_code=401, detail="unauthorized")
+        try:
+            imported = await runner.skills.sync([skill.model_dump() for skill in body.skills])
+        except Exception as error:
+            raise HTTPException(status_code=502, detail=f"JiuwenSwarm could not list its skills: {str(error)[:200]}") from error
+        return {"skills": imported}
+
+    @router.post("/agent/language")
+    async def set_language(body: AgentLanguage, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        """JiuwenSwarm's language (`preferred_language`): its own prompt, rails and tools, and the language it asks
+        the model to answer in. One setting for every session; a session started afterwards uses it. Only the TUI
+        channel's `config.set` has this key, so it goes there, not to the management channel."""
+        if settings.agent_token and authorization != f"Bearer {settings.agent_token}":
+            raise HTTPException(status_code=401, detail="unauthorized")
+        try:
+            result = await runner.rpc(settings.gateway_url, "config.set", {"preferred_language": body.language})
+        except Exception as error:
+            raise HTTPException(status_code=502, detail=f"JiuwenSwarm refused the language: {str(error)[:200]}") from error
+        if "preferred_language" not in (result.get("updated") or []):
+            raise HTTPException(status_code=502, detail=f"JiuwenSwarm did not take the language: {str(result)[:200]}")
+        return {"language": body.language}
+
+    @router.post("/agent/approvals/{request_id}")
+    async def answer_approval(request_id: str, body: PermissionAnswer, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        """The user's decision on one of JiuwenSwarm's approval questions (`permission.required` in a run's stream)."""
+        if settings.agent_token and authorization != f"Bearer {settings.agent_token}":
+            raise HTTPException(status_code=401, detail="unauthorized")
+        try:
+            await runner.answer_approval(request_id, body.decision)
+        except KeyError:
+            raise HTTPException(status_code=404, detail="no run is waiting on that question") from None
+        return {"answered": request_id, "decision": body.decision}
+
+    @router.get("/agent/skills")
+    async def list_skills(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        """The skills JiuwenSwarm has installed, ScienceDiscovery's and its own, and whether each is on."""
+        if settings.agent_token and authorization != f"Bearer {settings.agent_token}":
+            raise HTTPException(status_code=401, detail="unauthorized")
+        try:
+            return {"skills": await runner.skills.listed()}
+        except Exception as error:
+            raise HTTPException(status_code=502, detail=f"JiuwenSwarm could not list its skills: {str(error)[:200]}") from error
+
+    @router.post("/agent/skills/{name}/enabled")
+    async def set_skill_enabled(name: str, body: SkillEnabled, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+        """Switch one of JiuwenSwarm's skills on or off, for every session."""
+        if settings.agent_token and authorization != f"Bearer {settings.agent_token}":
+            raise HTTPException(status_code=401, detail="unauthorized")
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", name):
+            raise HTTPException(status_code=400, detail="not a skill name")
+        try:
+            await runner.skills.set_enabled(name, body.enabled)
+        except Exception as error:
+            raise HTTPException(status_code=502, detail=f"JiuwenSwarm refused: {str(error)[:200]}") from error
+        return {"name": name, "enabled": body.enabled}
 
     @router.get("/agent/info")
     async def info(authorization: str | None = Header(default=None)) -> dict[str, Any]:

@@ -31,8 +31,8 @@ issue 84（复用 JiuwenSwarm 后端）做到哪一步、现在能跑什么、�
 | 91 模型、供应商、设置 | 已完成 | 模型列表、默认值、设置由 legacy 提供（L1 覆盖全部行）；所选模型按次交给 JiuwenSwarm | 三种模型协议都能跑，经 API 里的回环模型网关 |
 | 92 MCP 与数据源 | 已完成 | 21 行都有 L1 用例；5 条 MCP 旅程在此执行器上通过（自定义 MCP、智能体调用自定义 MCP 工具、OAuth、密钥编辑 ×2）；延迟的 MCP 工具启动时一并晋升，并提供 `tool_search` | 没有对真实供应商跑过 MCP OAuth |
 | 93 技能与技能库 | 未开始 | 由 legacy 提供 | L1 0/35；技能在此执行器上的使用未验证 |
-| 94 文件、工作区、轨迹 | 未开始 | 读接口有 L1 用例 | JiuwenSwarm 运行的轨迹视图为空（没有记录 `evidence`） |
-| 95 规划与子代理 | 已完成 | `update_plan`、`task` 经 bridge 运行；L1 覆盖全部行；L2 子代理与两轮对话用例一致；M0 计划、委派旅程通过；恢复的子代理带有此前历史 | 不使用 JiuwenSwarm 自己的 todo/子代理/agent 模板（子代理就是 API 的 `task` 工具） |
+| 94 文件、工作区、轨迹 | 未开始 | 读接口有 L1 用例 | 轨迹已记录（见已知缺口 1） |
+| 95 规划与子代理 | 已完成 | 规划默认用 JiuwenSwarm 自己的 todo 工具（它的 `todo.updated` 清单就是运行的计划；`SCIENCE_AGENT_JIUWENSWARM_PLANNING=update_plan` 可改用我们的）。在启用 JiuwenSwarm 工具（默认）时，委派也默认用它自己的 `subagent_spawn`/`subagent_wait`，不再提供 `task`（`SCIENCE_AGENT_JIUWENSWARM_SUBAGENTS=task` 可改回我们的；`SCIENCE_AGENT_JIUWENSWARM_TOOLS=ours` 本就意味着这一点，模拟旅程用的正是这个，`task` 子代理经 bridge 运行，每个子代理有自己稳定的 JiuwenSwarm 会话，所以被恢复的子代理接着自己的对话）；L1 覆盖全部行；L2 子代理与两轮对话用例一致；计划与委派旅程通过（脚本化的是 `update_plan`/`task`，正是 `TOOLS=ours` 保留下来的那一套） | `subagent_spawn` 子代理拿不到什么，见已知缺口 1a。仍不使用 `task_tool`、`team.*`、`agents.*` 和 agent 模板；每一步的计划快照不注入 |
 | 97 科学工具集 MCP 化 | 已完成 | 等价工具集以 MCP 工具提供，经 bridge 调 legacy 工具，走同一个 ToolRegistry；有测试把提供的工具集与 schema 钉在注册表上；延迟工具启动时一并晋升并提供 `tool_search`；并行调用可运行且一致 | 后续子 issue（idea-tree、evolve、memory、产物审阅）的工具随它们一起到 |
 | 103 用量 | 已完成 | 每次模型调用的 token 数映射成 `model.usage` 并汇总；一次运行后的会话用量、按模型用量与内置循环一致（L2）；每一行都有 L1 用例 | 没有迁到适配器存储；统计仍在 API |
 | 93、94、96、98-102、104-106 | 未开始 | legacy 行为原样在代理之后 | 全部：作为迁移尚未开始。runner/环境/远程主机的读接口有 L1 用例 |
@@ -54,24 +54,37 @@ JiuwenSwarm 自己有一套上下文引擎（占用到模型窗口的 80% 时压
 | | 内置循环 | JiuwenSwarm 执行器 |
 |---|---|---|
 | 对话放在哪 | API 的记录，每一步重新发 | JiuwenSwarm 的会话，每个智能体一个（持久化在它的检查点数据库里）；不随请求发送，适配器里也没有 |
-| 窗口快满时的压缩 | ScienceDiscovery 自己的压缩器 | JiuwenSwarm 的（已把模型真实窗口告诉它；**窗口写满时的表现没有验证**） |
-| 系统提示各段（身份、治理、能力、技能） | 每一步组装 | 文本相同，每次运行组装一次 |
-| 运行契约（受保护） | 每一步都在 | **没有注入** |
+| 窗口快满时的压缩 | ScienceDiscovery 自己的压缩器 | JiuwenSwarm 的，依据**一个全局窗口**（`JIUWENSWARM_CONTEXT_WINDOW_TOKENS`，默认 200000；它忽略模型自己的窗口）。已用 3000 token 的窗口验证：早期几轮被总结压缩（`live.mjs compression`）。它的摘要和标题用它的默认模型，适配器把它指向正在运行的那次运行的模型 |
+| 系统提示词 | 每一步用 ScienceDiscovery 的各段（身份、治理、能力、技能）组装 | 先是 ScienceDiscovery 的产品提示词，再是 JiuwenSwarm 自己的完整提示词（约 1.2 万字符：身份、安全、工具规则、记忆、上下文压缩、已安装 Skill），最后是运行契约。这个模式下它没有放 todo 那一段。`SCIENCE_AGENT_JIUWENSWARM_PROMPT=replace` 恢复旧行为 |
+| 运行契约（受保护） | 每一步都在 | 每一步都在：它是系统提示词的一部分，适配器在每次模型请求里都放上它 |
+| JiuwenSwarm 自己的提示词 | 不适用 | 完整保留；它的每轮包装和动态上下文（运行时状态）也作为用户消息加进去 |
 | 计划快照、持久状态、插件上下文 | 每一步注入 | **没有注入**；JiuwenSwarm 加自己的动态上下文 |
+| 工具 | ScienceDiscovery 的，全部经过它的权限和 Runner | 默认是 JiuwenSwarm 自己的（bash、文件、网页、子代理、todo、记忆、技能），加上它没有的 ScienceDiscovery 工具；JiuwenSwarm 的工具直接在主机上运行，不经过 ScienceDiscovery 的权限、沙箱和溯源（已验证：它的 `bash` 能运行并显示为工具卡片）。`SCIENCE_AGENT_JIUWENSWARM_TOOLS=ours` 恢复原来的工具集 |
 | 工具路由提示 | 有 | **没有注入** |
 | 工具输出守卫和读取 | 有 | 有（同一个 `ToolRegistry`） |
 | 输入过长的恢复 | 压缩后重试 | JiuwenSwarm 自己的处理；**没有验证** |
-| 轨迹与 evidence | 有 | **没有** |
+| 轨迹与 evidence | 有 | 有（在模型网关记录，见已知缺口 1） |
 
 ## 已知缺口
 
-1. **没有 evidence / 轨迹。** JiuwenSwarm 运行不产生 `agent.record`/`evidence`，轨迹视图为空。
-2. **历史与上下文。** JiuwenSwarm 是模型上下文的唯一持有者：每个智能体一个稳定会话，由 JiuwenSwarm 压缩；适配器和 API 都不发送、不重建任何历史。所以在内置循环上开始的会话，JiuwenSwarm 不记得（之前的轮次只在界面上），在 API 里编辑或回退的对话也不会反映过去。JiuwenSwarm 重启后这份上下文仍在（已验证：`live.mjs history-restart`）。运行契约和每一步的动态上下文（计划快照、持久状态）没有注入，见“上下文管理”。
+1. **轨迹：已记录。** JiuwenSwarm 运行的每次模型调用都经过这次运行的模型网关，网关用内置循环同样的 `AgentVersionRecorder` 记录：发出的完整模型输入（含 JiuwenSwarm 的提示词和工具）、模型的回答、工具观测和提交的步骤；运行事件带有关联它们的 evidence（实时检查 `trajectory`）。JiuwenSwarm 自己发出的标题、摘要调用不算轮次，不记录。
+1a. **子代理默认用 JiuwenSwarm 自己的 `subagent_spawn`/`subagent_wait`**（`SCIENCE_AGENT_JIUWENSWARM_SUBAGENTS=task`，或 `TOOLS=ours`，仍改用 ScienceDiscovery 的 `task`）。这是有意的取舍，不是对等替换：`subagent_spawn` 子代理（0.2.6 内置的 `general_agent`）完全跑在 JiuwenSwarm 内部，只带它自己内置的工具（bash、文件、web……）、不带 MCP 服务——拿不到 ScienceDiscovery 的工具、沙箱、审批、工作区交接、溯源或子代理卡片，它的 `subagent_spawn`/`subagent_wait` 调用在运行里也只作为通用的原生工具事件上报，没有 `task` 那种更丰富的摘要。能挂载 ScienceDiscovery MCP 工具的自定义代理（`agents.create`）在 0.2.6 上仍然无法启动（`'str' object has no attribute 'name'`：它的工具列表是名字，而启动路径需要工具对象），这条路仍然堵着。`test/contract/jw-only/live.mjs subagent-probe` 可以完整查看一次 `subagent_spawn` 调用的表现。
+1b. **轨迹：上下文来源归因不可用。** 轨迹查看器给每个块标注的"来源"（`packages/trajectory/src/index.ts` 的 `contextBlocks`）只有在模型调用组装带有结构化 section 数据（内置循环按 section 拼装提示词）时才会标 `"recorded"`。`services/api/src/agent-run/jiuwenswarm-trajectory.ts` 的 `ModelCallInput` 只有一个扁平的 `systemPrompt: string`——JiuwenSwarm 是整段拼自己的提示词，没有 section 边界可上报——所以每个块都落入 `"unavailable"` 分支。mocked E2E 的 `journey-session-trajectory` 因此在这个执行器上失败（它断言 JiuwenSwarm 的系统提示词块*不是*"来源未记录"）；这是这个后端的既定差异，不是要在这里修的 bug——同样的"整段保留"取舍见上面的"上下文管理"。
+2. **历史与上下文。** JiuwenSwarm 是模型上下文的唯一持有者：每个智能体一个稳定会话，由 JiuwenSwarm 压缩；适配器和 API 都不发送、不重建任何历史。所以在内置循环上开始的会话，JiuwenSwarm 不记得（之前的轮次只在界面上），在 API 里编辑或回退的对话也不会反映过去。JiuwenSwarm 重启后这份上下文仍在（已验证：`live.mjs history-restart`）。每一步的动态上下文（计划快照、持久状态）没有注入，见"上下文管理"。
 3. **模型协议：** UI 能配置的三种都可用（API 里的回环网关用原生模型客户端为 JiuwenSwarm 的 chat-completions 请求提供服务）。图片不会发给模型。
 4. **工具集里没有** 工具输出存储。延迟工具启动时一并晋升。同一次模型响应里的工具调用按原生规则调度（没声明并发安全的工具独占、按模型调用的顺序执行；重复调用由批处理策略取代），所以两个执行器的事件与顺序一致。
-5. **唤醒提示。** mocked E2E 的 `issue-77-wake-notice` 在此执行器上失败（脚本化模型靠 JiuwenSwarm 没有那样给出的提示词识别唤醒轮）；`issue-85` 通过。用 `CI_E2E_BACKEND=jiuwenswarm .ci/run-e2e.sh mocked` 运行该组。这些旅程在小机器上对负载敏感：在 2 核服务器上连续运行时有两条失败过一次，单独运行（重复 3 次）都通过，所以有疑问时请逐条运行。
+5. **唤醒提示。** mocked E2E 的 `issue-77-wake-notice` **和** `issue-85-foreground-exec-inbox` 的 `test:206` 用例在这个执行器上都会失败，原因相同：脚本化模型靠用户消息是否以 `[Execution notifications]` 这个字面前缀开头来识别唤醒轮（`services/api/src/notification-dispatch.ts` 的 `notificationPrompt()`），但 JiuwenSwarm 对持续会话是自己重建面向模型的对话内容的（见缺口 2"历史与上下文"），不会原样转发这个前缀，脚本化模型识别不出这一轮，运行就以报错收场而不是正常完成。`issue-85` 的清理步骤也会跟着失败（失败的唤醒会让通知保持未读并不断重试，会话就一直不会 idle，从而卡住 Project 删除）——这是同一个原因的连锁反应，不是第二个 bug。（本行之前写的是"issue-85 通过"，那是过时信息。）用 `CI_E2E_BACKEND=jiuwenswarm .ci/run-e2e.sh mocked` 运行该组。这些旅程在小机器上对负载敏感：在 2 核服务器上连续运行时有两条失败过一次，单独运行（重复 3 次）都通过，所以有疑问时请逐条运行。
 6. **录制中发现的 legacy 缺陷（未修）：** `PUT /api/sessions/:id/settings` 请求体错误返回 500；`PUT /api/web/settings` 用它自己 GET 的响应体返回 500；对未知 run 做技能进化返回 500；读工作区外的文件（`/file?path=../../etc/passwd`）返回 500 而非 4xx。
 7. **#90 的发现：** `POST /api/sessions/:id/permission-epoch` 之后，会话范围的授权仍然生效（epoch 管沙箱，授权管会话）。issue 文字期望旧授权失效；基线记录的是 legacy 的实际行为。
+8. **空闲超时：已实现。** `services/api/src/agent-run/jiuwenswarm-agent.ts` 的 `beginExternalWait()` 以前是空操作（注释写的是"循环在远端，没有本地空闲时钟可暂停"），只有整次运行的超时会被安排，所以一个悄悄卡住的 JiuwenSwarm 运行永远不会产生 `test/timeouts-runtime-status.spec.ts` 期望的空闲超时提示。现在它像内置循环一样跟踪这次运行的回合和空闲期限（`RunDeadlines`），抛出同样文案的 `Agent run stalled: no gateway progress for N ms`（被 `services/api/src/timeouts/index.ts` 匹配识别）；`beginExternalWait` 及其释放函数会在人工审批等待期间暂停这个时钟，避免等待本身被误判为卡住——包括审批等待本身：合并这个缺口的两份独立实现时才发现，原来这里一直没调用它。
+9. **自定义 MCP 工具调用：偶发不可见。** `journey-custom-mcp` 的"Agent uses a selected custom MCP server"用例在一次完整套件运行中失败过一次（运行本身"completed"，但 `/api/sessions/:id/mcp/invocations` 始终是空的），之后（包括单独重跑）没能再复现。`services/adapter/src/sciencediscovery_adapter/mcp_server.py` 的 `tools/call` 处理器此前把每条失败路径（未知 run tag、未知工具名、桥接异常）都吞掉且不打日志，出问题时无从排查；现在都会记日志了。目前最可能的解释：`agent_runs.py` 的 `ensure_shared_tools` 只要运行带来一个此前没见过名字的工具，就会让 JiuwenSwarm 重新连接共享的 `sci` MCP 服务，而每个自定义 MCP 连接器工具的名字（`mcp__<sourceId>__<toolId>`）每次都是新的，因此总会触发这次重连——这就有可能和 JiuwenSwarm 真正把调用路由过去形成竞态。下次复现时留意这些新日志。
+10. **父运行进入终态后，`task` 子代理自己的状态有时仍读到"running"。** `issue-85-foreground-exec-inbox` 的第三个用例在 `waitForRunTerminal` 之后紧跟着的 `expect((await subagents(...)).map(s => s.status)).toEqual(["completed"])` 上稳定失败（不是偶发）——子代理自己的这轮明明已经跑完了（适配器调试日志里 `task` 的 `tool.completed` 和子代理自己的 `run_shell` 都出现在父运行结束之前）。`runs/index.ts` 的 `runSubagent` 会等整个子运行结束、写完 `store.updateSubagent(..., "completed")` 才把结果交回给调用方，TypeScript 这边的调用顺序解释不了这个现象——但 `SCIENCE_AGENT_EXECUTOR=jiuwenswarm` 时，`task` 子代理自己的这一轮*也*是经 `JiuwenSwarmAgent` 驱动的，也就是再向外部适配器发起一次嵌套的 `POST /agent/runs`，而不是内置循环那种进程内调用——这一层内置循环完全没有。还没精确定位到根因（需要更细地追踪这次嵌套往返），父运行终态事件刚触发后立即发起的 `GET /subagents` 仍可能读到写入之前的状态。这里没有修。
+11. **UT 已在真实 JiuwenSwarm 下审计。** `services/api/src/server.test.ts`（host 档 UT 里最大的测试文件）现在通过 `scripts/with-jiuwenswarm.sh` 让智能体轮次跑在真实的 JiuwenSwarm 和适配器上（`pnpm ci:ut:host` 已接好）。审计发现：
+    - **真 bug，已修复：** JiuwenSwarm 审批问题的 resource 用的是这次调用自己的描述文字（如 `"run_shell: rm -rf out"`），运行之外预先建立的授权（预检、"本会话总是允许"）永远匹配不上——运行只能等一个不会有人做出的决定，等到运行放弃等待，补发的答复又收到 404。`describe_approval` 现在单独发送工具原名（`toolName`）；适配器把 `run_shell`/`execute`/`environment_setup`/`execution_cancel` 归类到内置循环自己权限检查用的那个固定 resource（`workspace-code`），这样已有的授权也能应用到 JiuwenSwarm 拦下的调用上。
+    - **第二个真 bug，已修复：** JiuwenSwarm 0.2.6 的网关会在 `chat.ask_user_question` 后面紧接着发出结束运行用的 `chat.processing_status`（`is_complete`），根本不等答复，中间还混着数量不固定的它自己的记账帧（一个空的 `chat.final`、用量/上下文统计）。照字面理解就是"运行结束了"：结果是每一个需要审批的调用都拿不到工具结果、也没有文字回复。这个问题在线上复现过（一次全新部署、真实浏览器会话），审计里也复现了；`gateway.py` 的 `ChatRun` 现在会区分哪些帧是模型或工具真的在做事、哪些是这次暂停自己的记账帧，只有见过前者之后才把结束信号当真。
+    - **真实的、JiuwenSwarm 特有的行为，测试已相应调整，不是 bug：** 会话的技能不是一份选择（所有已安装技能到处可用；子代理的对应情况见上文 1a——子代理也会把所有延迟工具，包括连接器 MCP 工具，提前全部展开）；skill-creator 用 JiuwenSwarm 的 `skill_tool` 加载，不是我们的 `read_skill`；工具结果被重新塞进模型下一轮时，包在 JiuwenSwarm 自己的 Python repr 信封里（`{'result': '...'}`，不是 JSON），不是原样传回；技能删除影响评估没有可报告的内容（每个技能的选择模式都是"all"，没有谁单独依赖某个技能 id）。
+    - **同一轮里第三个无关的 bug，已修复：** 这个测试文件自己那个内联的模型桩，检测后台执行唤醒通知时，没有先解开 JiuwenSwarm 包在用户轮次外面的信封就去匹配 `[Execution notifications]`——和 E2E 旅程里（`test/helpers/journeys.ts`）已经修过的那类 bug一样。
+    - **已知，尚未解决：** 三个在运行过程中切换会话审批模式（切到 `always_allow`，切到 `ask`）的测试失败；尚未定位根因，和上面两个已修复的审批 bug 是两回事。在这个问题解决前，把"运行中途切换审批模式"当作这个执行器上未验证的行为。
 
 ## 开始做某个子 issue
 
@@ -79,7 +92,7 @@ JiuwenSwarm 自己有一套上下文引擎（占用到模型窗口的 80% 时压
 2. 在 `test/contract/routes.json` 里找到你的路由（`node test/contract/run.mjs --coverage` 会列出没有用例的行）。
 3. 在 `test/contract/cases/` 下加用例，在**全新数据目录**上对内置循环录制，再对“适配器 + JiuwenSwarm”栈比对。规则、SSE 步骤写法和归一化见 [`test/contract/README.md`](../../../test/contract/README.md)。基线对智能体只读，改动需要人工评审。
 4. 行为类用 run 事件用例（`l2-runs.json`）；脚本化模型是 `test/contract/stub-model.mjs`。
-5. 浏览器旅程：`CI_E2E_BACKEND=jiuwenswarm .ci/run-e2e.sh mocked`（网关必须已在运行）。
+5. 浏览器旅程：`.ci/run-e2e.sh mocked`（JiuwenSwarm 现在是默认后端，没有实例会自动装一个并启动）。要用内置循环（还没删掉时）就设 `CI_E2E_BACKEND=legacy .ci/run-e2e.sh mocked`。
 
 ## 测试
 
@@ -89,4 +102,8 @@ UV_PROJECT_ENVIRONMENT=/tmp/adapter-venv uv sync --extra test --project services
 cd services/api && pnpm build && node --test dist/agent-run/jiuwenswarm-agent.test.js
 node --test test/contract/*.test.mjs                              # 契约测试工具自身
 E2E_BASE_URL=... E2E_API_TOKEN=... node test/contract/run.mjs --compare test/contract/baselines/legacy-linux.json
+
+# UT 的 host 档（server.test.ts 及其余工作区包）通过 scripts/with-jiuwenswarm.sh 跑在真实的
+# JiuwenSwarm 和适配器上，pnpm ci:ut:host 已经接好了这一层：
+scripts/with-jiuwenswarm.sh pnpm --filter @sciencediscovery/api test
 ```

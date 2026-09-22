@@ -178,6 +178,75 @@ async def test_answer_resumes_the_paused_run_on_the_same_connection():
     }
 
 
+async def test_an_is_complete_status_right_after_an_unanswered_question_does_not_end_the_run():
+    """Measured live against JiuwenSwarm 0.2.6: unlike the well-behaved mock above, the real gateway sends
+    `chat.processing_status` `is_complete` right after `chat.ask_user_question`, without waiting for the
+    answer. Read literally that is "the run is over"; taking it at that word ended every approval-gated run
+    with no text and no tool result (see gateway.py's `_ends_run` docstring and `_question_pending`)."""
+    seen = []
+    answered = False
+
+    async def handler(connection):
+        await connection.send(json.dumps({"type": "event", "event": "connection.ack", "payload": {}}))
+        json.loads(await connection.recv())
+        await connection.send(json.dumps({"type": "event", "event": "chat.ask_user_question",
+                                          "payload": {"request_id": "call_1", "source": "permission_interrupt"}}))
+        await connection.send(json.dumps(DONE))  # the real gateway's premature "is_complete"
+        answer = json.loads(await connection.recv())
+        await connection.send(json.dumps({"type": "event", "event": "tool.completed", "payload": {}}))
+        await connection.send(json.dumps({"type": "event", "event": "chat.final", "payload": {"content": "ok"}}))
+        await connection.send(json.dumps(DONE))
+        return answer
+
+    async with websockets.serve(handler, "127.0.0.1", 0) as server:
+        port = server.sockets[0].getsockname()[1]
+        async with ChatRun(f"ws://127.0.0.1:{port}/tui", {"session_id": "s1", "mode": "m"}) as run:
+            async for frame in run:
+                seen.append(frame.get("event", frame.get("type")))
+                if frame.get("event") == "chat.ask_user_question" and not answered:
+                    answered = True
+                    await run.answer("call_1", "permission_interrupt", {"selected_options": ["once"]})
+    # Both `chat.processing_status` frames are seen (the premature one and the real one), but only the second
+    # ends the iterator: the tool result and the real final text that followed the premature one were not lost.
+    assert seen == ["chat.ask_user_question", "chat.processing_status", "tool.completed", "chat.final",
+                     "chat.processing_status"]
+
+
+async def test_bookkeeping_frames_around_the_premature_status_do_not_confuse_it_for_the_real_one():
+    """Also measured live: the premature `chat.processing_status` is not always the very next frame after
+    the question — a variable number of accounting frames (`chat.usage_summary`, `context.usage`, ...) and
+    the pause's own empty `chat.final` can sit in between. None of that is the model or a tool doing
+    something, so it must not be mistaken for the run having resumed (see `_advances_run`)."""
+    seen = []
+    answered = False
+
+    async def handler(connection):
+        await connection.send(json.dumps({"type": "event", "event": "connection.ack", "payload": {}}))
+        json.loads(await connection.recv())
+        # A synthetic "blocked" tool_result can precede the question too; it carries no real result.
+        await connection.send(json.dumps({"type": "event", "event": "chat.tool_result",
+                                          "payload": {"result": "success=False data=None error=''"}}))
+        await connection.send(json.dumps({"type": "event", "event": "chat.ask_user_question",
+                                          "payload": {"request_id": "call_1", "source": "permission_interrupt"}}))
+        await connection.send(json.dumps({"type": "event", "event": "chat.final", "payload": {"content": ""}}))
+        await connection.send(json.dumps({"type": "event", "event": "chat.usage_summary", "payload": {}}))
+        await connection.send(json.dumps(DONE))  # premature, behind two bookkeeping frames, not one
+        json.loads(await connection.recv())
+        await connection.send(json.dumps({"type": "event", "event": "chat.final", "payload": {"content": "ok"}}))
+        await connection.send(json.dumps(DONE))
+
+    async with websockets.serve(handler, "127.0.0.1", 0) as server:
+        port = server.sockets[0].getsockname()[1]
+        async with ChatRun(f"ws://127.0.0.1:{port}/tui", {"session_id": "s1", "mode": "m"}) as run:
+            async for frame in run:
+                seen.append(frame.get("event", frame.get("type")))
+                if frame.get("event") == "chat.ask_user_question" and not answered:
+                    answered = True
+                    await run.answer("call_1", "permission_interrupt", {"selected_options": ["once"]})
+    assert seen == ["chat.tool_result", "chat.ask_user_question", "chat.final", "chat.usage_summary",
+                     "chat.processing_status", "chat.final", "chat.processing_status"]
+
+
 async def test_cancel_sends_chat_interrupt_with_the_cancel_intent():
     seen = []
 

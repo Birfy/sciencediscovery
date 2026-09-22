@@ -22,11 +22,18 @@ import { TOOL_SEARCH_NAME, TOOL_SEARCH_SPEC, type AgentTool } from "@sciencedisc
 import { DurableContextStore } from "@sciencediscovery/context";
 
 import { startModelGateway } from "./jiuwenswarm-model-gateway.js";
+import { importSkillsToJiuwenSwarm, skillLoadedBy } from "./jiuwenswarm-skills.js";
+import { JiuwenSwarmTrajectory } from "./jiuwenswarm-trajectory.js";
+import { RunDeadlines } from "./run-deadlines.js";
+import { jiuwenSwarmWebResult } from "./jiuwenswarm-web-settings.js";
 
 import { resolveModelClientPolicy, type streamModelTurn } from "@sciencediscovery/model";
 
 import {
   composeSystemPrompt,
+  DEFAULT_AGENT_IDLE_TIMEOUT_MS,
+  DEFAULT_AGENT_TURN_TIMEOUT_MS,
+  formatRunContract,
   createToolRegistry,
   modelEndpointFor,
   startPluginScope,
@@ -55,14 +62,103 @@ export interface JiuwenSwarmAgentConfig {
   /** Replaceable for tests: the native model client the run's model requests are served by. */
   modelStreamer?: typeof streamModelTurn;
   /**
-   * Who keeps the plan. `update_plan` (default): the model calls our tool. `todo`: the model uses
-   * JiuwenSwarm's own todo tools and its todo list becomes the run's plan.
+   * Who keeps the plan. `todo` (default): the model uses JiuwenSwarm's own todo tools and its todo list
+   * becomes the run's plan. `update_plan`: the model calls ScienceDiscovery's own tool instead.
    */
   planning?: "todo" | "update_plan";
+  /**
+   * What becomes of JiuwenSwarm's own system prompt. `prepend` (default): it stays whole (identity, safety,
+   * tool rules, memory, context compression, installed skills); ScienceDiscovery's product prompt goes before
+   * it and the run contract after it. `replace`: ScienceDiscovery's takes its place.
+   */
+  prompt?: "prepend" | "replace";
+  /**
+   * Which tools the model gets. `jiuwenswarm` (default): JiuwenSwarm's own (web, sub-agents, todo, memory,
+   * skills ...) except those that act on the host (`JIUWENSWARM_HOST_TOOLS`: their work goes to ScienceDiscovery's
+   * sandboxed tools), plus all of ScienceDiscovery's; on any other name clash JiuwenSwarm's is used. `ours`:
+   * ScienceDiscovery's only (and JiuwenSwarm's todo tools for planning).
+   */
+  tools?: "jiuwenswarm" | "ours";
+  /**
+   * Whose skill mechanism the model uses. `jiuwenswarm` (default, with the `prepend` prompt and JiuwenSwarm's
+   * tools): the run's skills are installed in JiuwenSwarm, listed by its prompt and loaded with its `skill_tool`;
+   * ScienceDiscovery's skill catalog and `read_skill` are left out. `ours`: ScienceDiscovery's catalog and tools.
+   */
+  skills?: "jiuwenswarm" | "ours";
+  /**
+   * How the model delegates. `jiuwenswarm` (default, with JiuwenSwarm's tools): the model spawns and
+   * collects sub-agents with JiuwenSwarm's own `subagent_spawn`/`subagent_wait`; ScienceDiscovery's `task`
+   * is not offered. Those sub-agents run inside JiuwenSwarm itself, with its own built-in tools only: no
+   * ScienceDiscovery tool, sandbox, workspace handoff or provenance reaches them. `task`: ScienceDiscovery's
+   * own tool, as before (a full nested run, with its tools, sandbox, handoff and provenance).
+   */
+  subagents?: "jiuwenswarm" | "task";
 }
 
-/** JiuwenSwarm's own todo tools, left visible to the model in `todo` planning. */
+/**
+ * What the model is told about JiuwenSwarm's todo tools. The rest of the system prompt says to use only the
+ * registered workspace tools, which these are not, and the plan guidance ScienceDiscovery normally gives
+ * (the `update_plan` description, the plan context added at every step) does not apply to them.
+ */
+export const TODO_PLANNING_SECTION = [
+  "## Planning",
+  "For work with several steps, keep a task list with `todo_create` (creates or replaces the whole list), `todo_modify` (update, insert, cancel or delete items) and `todo_list`. The runtime provides them next to the workspace tools above; they are the way to plan.",
+  "Mark a task in_progress before you start it and completed as soon as it is done; do not finish several at once. Keep the list short, at most 20 items, and change it when new evidence changes the approach.",
+].join("\n");
+
+/**
+ * What the model is told about JiuwenSwarm's own sub-agent tools, in place of ScienceDiscovery's `task`.
+ * Needed only when JiuwenSwarm's own system prompt (which documents them) is not sent.
+ */
+export const SUBAGENT_DELEGATION_SECTION = [
+  "## Delegation",
+  "For an independent, well-scoped task, delegate it with `subagent_spawn` (subagent_type, display_name, role, task_description) rather than doing it yourself. Call it several times in the same turn for tasks that may run concurrently, then a single `subagent_wait` (subagent_ids, timeout_seconds) to collect their results.",
+  "A sub-agent starts with no access to this conversation or its workspace: put everything it needs in task_description.",
+].join("\n");
+
+/** ScienceDiscovery's web tools and the JiuwenSwarm tools that take their place. */
+export const JIUWENSWARM_WEB_TOOLS: Record<string, string> = { web_search: "free_search (or paid_search)", web_fetch: "fetch_webpage" };
+
+/**
+ * JiuwenSwarm's own tools that act on the host: the model never gets them. Commands and file writes go through
+ * ScienceDiscovery's `run_shell`, reads through its file tools, so they run in its sandbox and Runner, with its
+ * provenance. The adapter turns away a call the model makes to one anyway.
+ */
+export const JIUWENSWARM_HOST_TOOLS = ["bash", "read_file", "write_file", "edit_file", "glob", "list_files", "grep", "read_pdf"] as const;
+
+/** What the model is told instead: JiuwenSwarm's own prompt still names those tools. */
+export const HOST_TOOLS_SECTION = "Commands, scripts and file writes run in the sandbox through run_shell; read workspace files with read_file and list_files. JiuwenSwarm's bash, write_file, edit_file, glob, grep and read_pdf are not available here.";
+
+/**
+ * ScienceDiscovery's tools JiuwenSwarm's permission engine asks the user about: those that needed approval before
+ * (they execute, reach a host or a Runner, or download), and every custom MCP connector tool (`mcp__...`). The
+ * others are allowed. JiuwenSwarm is given this per tool; what the user then chooses ("always") is kept there.
+ */
+export const JIUWENSWARM_ASK_TOOLS: ReadonlySet<string> = new Set([
+  "run_shell", "execute", "environment_setup", "run_npu_job", "execution_cancel", "workspace_transfer",
+  "sync_remote_workspace", "artifact_download", "arxiv_prepare_paper_download", "pubmed_prepare_paper_download",
+  "pdb_prepare_structure_download",
+]);
+
+export const approvalFor = (name: string): "allow" | "ask" => JIUWENSWARM_ASK_TOOLS.has(name) || name.startsWith("mcp__") ? "ask" : "allow";
+
+/**
+ * The resource a JiuwenSwarm approval question is checked against, for the tools whose native equivalent
+ * always uses one fixed resource string (`workspace-bindings.ts`'s `requirePrivilege({ action: "code",
+ * resource: "workspace-code", ... })`). A stable resource, not the call's own descriptive text, is what lets a
+ * standing grant made outside a run (or "always allow this session") apply to a call JiuwenSwarm stops here too.
+ * A tool not in this map keeps the call's own descriptive text as its resource, as before.
+ */
+const JIUWENSWARM_APPROVAL_RESOURCE: ReadonlyMap<string, string> = new Map([
+  ["run_shell", "workspace-code"], ["execute", "workspace-code"], ["environment_setup", "workspace-code"],
+  ["execution_cancel", "workspace-code"],
+]);
+
+/** JiuwenSwarm's own todo tools, left visible to the model unless planning is `update_plan`. */
 export const JIUWENSWARM_TODO_TOOLS = ["todo_create", "todo_modify", "todo_list", "todo_get"] as const;
+
+/** JiuwenSwarm's own sub-agent tools, offered in place of `task` unless subagents is `task`. */
+export const JIUWENSWARM_SUBAGENT_TOOLS = ["subagent_spawn", "subagent_wait"] as const;
 
 /** Selected by SCIENCE_AGENT_EXECUTOR=jiuwenswarm; the native agent stays the default. */
 export function jiuwenSwarmConfigFromEnv(env: NodeJS.ProcessEnv = process.env): JiuwenSwarmAgentConfig | undefined {
@@ -72,11 +168,18 @@ export function jiuwenSwarmConfigFromEnv(env: NodeJS.ProcessEnv = process.env): 
   return {
     adapterUrl: adapterUrl.replace(/\/+$/, ""),
     ...(env.SCIENCE_AGENT_ADAPTER_TOKEN?.trim() ? { adapterToken: env.SCIENCE_AGENT_ADAPTER_TOKEN.trim() } : {}),
-    ...(env.SCIENCE_AGENT_JIUWENSWARM_PLANNING?.trim() === "todo" ? { planning: "todo" as const } : {}),
+    ...(env.SCIENCE_AGENT_JIUWENSWARM_PLANNING?.trim() === "update_plan" ? { planning: "update_plan" as const } : {}),
+    ...(env.SCIENCE_AGENT_JIUWENSWARM_PROMPT?.trim() === "replace" ? { prompt: "replace" as const } : {}),
+    ...(env.SCIENCE_AGENT_JIUWENSWARM_TOOLS?.trim() === "ours" ? { tools: "ours" as const } : {}),
+    ...(env.SCIENCE_AGENT_JIUWENSWARM_SKILLS?.trim() === "ours" ? { skills: "ours" as const } : {}),
+    ...(env.SCIENCE_AGENT_JIUWENSWARM_SUBAGENTS?.trim() === "task" ? { subagents: "task" as const } : {}),
   };
 }
 
 type Listener = (event: AgentEvent) => void;
+
+/** One of JiuwenSwarm's approval questions, as the adapter reports it (`permission.required`). */
+interface ApprovalQuestion { id: string; resource?: string; summary?: string; toolCallId?: string; toolName?: string }
 
 /** A line of the adapter's NDJSON stream. */
 type RunLine =
@@ -91,6 +194,17 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
   private readonly listeners = new Set<Listener>();
   private readonly controller = new AbortController();
   private executed = false;
+  /** The run's skills installed in JiuwenSwarm: JiuwenSwarm's name for each, and back. */
+  private readonly skillNames = new Map<string, string>();
+  private readonly skillIds = new Map<string, string>();
+  /** Loads a skill the ScienceDiscovery way, so that what depends on a loaded skill (create_skill) sees it. */
+  private loadSkill?: (id: string) => void;
+  /** The run's trajectory (model inputs, answers, tool observations), recorded as the built-in loop records it. */
+  private trajectory?: JiuwenSwarmTrajectory;
+  /** The run's turn and idle deadlines, as the built-in loop keeps them. */
+  private deadlines?: RunDeadlines;
+  /** Waits begun before the deadlines exist (an approval asked while the run is set up). */
+  private pendingWaits = 0;
 
   constructor(private readonly config: JiuwenSwarmAgentConfig, private readonly options: NativeAgentOptions) {}
 
@@ -103,9 +217,16 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
     this.controller.abort();
   }
 
-  /** The loop is remote, so there is no local idle clock to pause. */
+  /** The run waits on something outside it (an approval): its deadlines stand still meanwhile. */
   beginExternalWait(): () => void {
-    return () => undefined;
+    if (this.deadlines) return this.deadlines.beginWait();
+    this.pendingWaits += 1;
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      this.pendingWaits = Math.max(0, this.pendingWaits - 1);
+    };
   }
 
   async prompt(text: string): Promise<void> {
@@ -113,7 +234,10 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
   }
 
   private emit(event: AgentEvent): void {
-    for (const listener of this.listeners) listener(event);
+    this.deadlines?.progress();
+    const evidence = this.trajectory?.evidence(event as { type: string; responseId?: unknown; turn?: unknown });
+    const tagged = evidence ? { ...event, evidence } as AgentEvent : event;
+    for (const listener of this.listeners) listener(tagged);
   }
 
   async execute(text: string): Promise<{ finalMessages: Awaited<ReturnType<NativeAgentHandle["execute"]>>["finalMessages"] }> {
@@ -124,14 +248,30 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
       ...(this.options.runContract ? { runContract: this.options.runContract } : {}),
     });
     const plugins = await startPluginScope(this.options, durable, this.controller.signal);
+    const trajectory = new JiuwenSwarmTrajectory(this.options);
+    this.trajectory = trajectory;
     // The same registry the native loop dispatches through: output guard, detail sanitisation,
     // neutralised untrusted content, loop protection, the standard error shape.
-    const registry = createToolRegistry(this.options, plugins, durable);
+    const registry = createToolRegistry(this.options, plugins, durable, {
+      ...(trajectory.enabled ? { recordResult: (input) => trajectory.observe(input as never) } : {}),
+    });
     const tools = new Map(registry.values().map((tool) => [tool.name, tool]));
     await offerDeferredTools(registry, tools, this.controller.signal);
     // With JiuwenSwarm's own todo tools the model does not also get ours.
-    const jiuwenSwarmPlans = this.config.planning === "todo" && Boolean(this.options.planStore);
+    const jiuwenSwarmPlans = (this.config.planning ?? "todo") === "todo" && Boolean(this.options.planStore);
     if (jiuwenSwarmPlans) tools.delete("update_plan");
+    // Web search and page fetching are JiuwenSwarm's own when its tools are in use.
+    const allJiuwenSwarmTools = (this.config.tools ?? "jiuwenswarm") === "jiuwenswarm";
+    if (allJiuwenSwarmTools) for (const name of Object.keys(JIUWENSWARM_WEB_TOOLS)) tools.delete(name);
+    // With JiuwenSwarm's own sub-agent tools the model does not also get ours: those sub-agents run inside
+    // JiuwenSwarm, with none of ScienceDiscovery's tools, sandbox, handoff or provenance.
+    const jiuwenSwarmSubagents = allJiuwenSwarmTools && (this.config.subagents ?? "jiuwenswarm") === "jiuwenswarm" && tools.has("task");
+    if (jiuwenSwarmSubagents) tools.delete("task");
+    await this.installSkills(tools, allJiuwenSwarmTools);
+    this.loadSkill = (id) => {
+      void registry.execute({ id: randomUUID(), name: "read_skill", args: { skillId: id } } as never, this.controller.signal)
+        .catch(() => undefined);
+    };
     const bridgeToken = randomUUID();
     const announcements = new ToolAnnouncements();
     const transcript = new Transcript();
@@ -139,10 +279,22 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
       this.config.toolAnnouncementTimeoutMs);
     // JiuwenSwarm only speaks OpenAI chat completions; the model itself may not (see the gateway).
     const policy = resolveModelClientPolicy();
-    const modelGateway = await startModelGateway(modelEndpointFor(this.options), policy, this.controller.signal, this.config.modelStreamer);
-    const timeout = this.options.runTimeoutMs ? setTimeout(() => this.controller.abort(), this.options.runTimeoutMs) : undefined;
+    const endpoint = modelEndpointFor(this.options);
+    await trajectory.start({
+      executor: "jiuwenswarm",
+      model: { model: endpoint.model, apiProtocol: endpoint.apiProtocol, apiVariant: endpoint.apiVariant },
+      tools: [...tools.values()].map((tool) => ({ name: tool.name, description: tool.description, parameters: tool.parameters })),
+      config: { planning: this.config.planning ?? "todo", prompt: this.config.prompt ?? "prepend", tools: this.config.tools ?? "jiuwenswarm", skills: this.config.skills ?? "jiuwenswarm", subagents: this.config.subagents ?? "jiuwenswarm" },
+    }).catch((error: unknown) => console.warn(`[jiuwenswarm-agent] trajectory not recorded: ${error instanceof Error ? error.message : String(error)}`));
+    const modelGateway = await startModelGateway(endpoint, policy, this.controller.signal, this.config.modelStreamer,
+      trajectory.enabled ? { request: (input) => trajectory.modelRequest(input), completed: (turn, history) => trajectory.modelCompleted(turn, history) } : undefined);
+    const deadlines = new RunDeadlines(this.options.runTimeoutMs ?? DEFAULT_AGENT_TURN_TIMEOUT_MS,
+      this.options.runIdleTimeoutMs ?? DEFAULT_AGENT_IDLE_TIMEOUT_MS, () => this.controller.abort());
+    this.deadlines = deadlines;
+    for (let wait = 0; wait < this.pendingWaits; wait += 1) deadlines.beginWait();
+    deadlines.start();
     try {
-      const finalText = await this.stream(text, tools, bridge.url, bridgeToken, announcements, transcript, modelGateway, jiuwenSwarmPlans);
+      const finalText = await this.stream(text, tools, bridge.url, bridgeToken, announcements, transcript, modelGateway, jiuwenSwarmPlans, jiuwenSwarmSubagents);
       // The model was cut at max_tokens and JiuwenSwarm ended the run there. Say so as the native loop does;
       // a turn that produced no visible text (a reasoning model spending its whole budget on thought) would
       // otherwise end the run in the middle of a thought with nothing to show for it.
@@ -157,15 +309,92 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
         finalMessages: [{ role: "user", content: text }, ...transcript.finish(finalText).map((message) => modelGateway.restore(message))] as never,
       };
     } catch (error) {
+      // Keep "timeout" in these errors: classifySubagentFailure matches /timeout/i for a sub-agent's timed_out status.
+      if (deadlines.expired) throw deadlines.error();
       if (this.controller.signal.aborted) throw new Error("Agent run cancelled");
       console.warn(`[jiuwenswarm-agent] run of ${this.options.sessionId} failed: ${error instanceof Error ? error.message : String(error)}`);
       throw error;
     } finally {
-      if (timeout) clearTimeout(timeout);
+      deadlines.stop();
       await bridge.close();
       await modelGateway.close();
+      await trajectory.finish().catch((error: unknown) => console.warn(`[jiuwenswarm-agent] trajectory not committed: ${error instanceof Error ? error.message : String(error)}`));
       await plugins.dispose();
     }
+  }
+
+  /**
+   * With JiuwenSwarm's skill mechanism, the run's skills are installed there and the model loads them with its
+   * `skill_tool`; ScienceDiscovery's skill tools go. A skill that could not be installed stays ours: `read_skill`
+   * and the catalog in the product prompt then offer that one.
+   */
+  private async installSkills(tools: Map<string, AgentTool>, allJiuwenSwarmTools: boolean): Promise<void> {
+    const skills = this.options.skills ?? [];
+    const root = this.options.skillPackagesRoot;
+    const wanted = (this.config.skills ?? "jiuwenswarm") === "jiuwenswarm" && allJiuwenSwarmTools
+      && (this.config.prompt ?? "prepend") === "prepend";
+    if (!wanted || !skills.length || !root || !tools.has("read_skill")) return;
+    const imported = await importSkillsToJiuwenSwarm(this.config, skills, root, this.controller.signal);
+    for (const [id, name] of imported) {
+      this.skillNames.set(id, name);
+      this.skillIds.set(name, id);
+    }
+    if (skills.every((skill) => imported.has(skill.id))) {
+      tools.delete("read_skill");
+      tools.delete("read_skill_resource");
+    }
+  }
+
+  /** A tool's description as JiuwenSwarm's model reads it: skills it loads with skill_tool, under their names there. */
+  private describe(tool: AgentTool): string {
+    const creator = this.skillNames.get("skill-creator");
+    return creator && tool.name === "create_skill"
+      ? tool.description.replace("load skill-creator with read_skill", `load the ${creator} skill with skill_tool`)
+      : tool.description;
+  }
+
+  /** A JiuwenSwarm call that loaded one of the run's skills counts as loading it here. */
+  private recordSkillLoad(call: { args: unknown; name: string; failed: boolean }): void {
+    if (call.failed || !this.loadSkill) return;
+    const id = skillLoadedBy(call, this.skillIds);
+    if (id) this.loadSkill(id);
+  }
+
+  /**
+   * JiuwenSwarm's permission engine stopped a call and asks: put it to the user as a ScienceDiscovery approval and
+   * send the answer back. The run waits in JiuwenSwarm meanwhile. Without a way to ask, the call is denied.
+   */
+  private answerApproval(question: ApprovalQuestion): void {
+    const ask = this.options.requestApproval;
+    // A stable resource for a tool whose native equivalent always checks one fixed resource (run_shell and
+    // the rest of JIUWENSWARM_APPROVAL_RESOURCE), so a standing grant applies here too; the call's own text
+    // otherwise, as before.
+    const resource = (question.toolName && JIUWENSWARM_APPROVAL_RESOURCE.get(question.toolName))
+      ?? question.resource ?? question.summary ?? "tool call";
+    // A human can take arbitrarily long to answer; that wait must not itself look "stalled".
+    const release = this.beginExternalWait();
+    const decided = (ask
+      ? ask({ resource, summary: question.summary ?? question.resource ?? "tool call",
+        ...(question.toolCallId ? { toolCallId: question.toolCallId } : {}) }, this.controller.signal)
+      : Promise.resolve("deny" as const)).finally(release);
+    void decided.catch(() => "deny" as const).then(async (decision) => {
+      const response = await (this.config.fetch ?? fetch)(`${this.config.adapterUrl}/agent/approvals/${encodeURIComponent(question.id)}`, {
+        method: "POST",
+        headers: { "content-type": "application/json", ...(this.config.adapterToken ? { authorization: `Bearer ${this.config.adapterToken}` } : {}) },
+        body: JSON.stringify({ decision }),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    }).catch((error) => {
+      console.warn(`[jiuwenswarm-agent] could not answer JiuwenSwarm's approval question ${question.id}: ${error instanceof Error ? error.message : String(error)}`);
+    });
+  }
+
+  /** JiuwenSwarm's own web search and fetching, recorded in the memory graph as ours are. Fire and forget. */
+  private recordWeb(call: { args: unknown; id: string; name: string; output: string; failed: boolean }): void {
+    const record = this.options.recordWebResult;
+    if (!record || call.failed) return;
+    const result = jiuwenSwarmWebResult(call.name, (call.args ?? {}) as Record<string, unknown>, call.output);
+    if (result) void record(call.id, result).catch(() => undefined);
   }
 
   /** JiuwenSwarm's todo list, as the run's plan: what the plan panel and the API's plan events read. */
@@ -186,12 +415,34 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
   private async stream(
     text: string, tools: Map<string, AgentTool>, bridgeUrl: string, bridgeToken: string,
     announcements: ToolAnnouncements, transcript: Transcript, modelGateway: { token: string; url: string },
-    jiuwenSwarmPlans = false,
+    jiuwenSwarmPlans = false, jiuwenSwarmSubagents = false,
   ): Promise<string> {
     const { config: model } = this.options;
     const toolNames = new Set(tools.keys());
     // The same system prompt the native loop would send: the model is tuned to it.
-    const { systemPrompt } = composeSystemPrompt(this.options, toolNames, toolNames.has("read_skill") ? this.options.skills ?? [] : []);
+    // The run contract changes every turn; it is sent apart and put last, so that what comes before it is the
+    // same on every request (and can be cached by the provider).
+    // Skills installed in JiuwenSwarm are listed by its prompt; the product prompt lists only those that were not.
+    const composed = composeSystemPrompt({ ...this.options, runContract: undefined }, toolNames,
+      toolNames.has("read_skill") ? (this.options.skills ?? []).filter((skill) => !this.skillNames.has(skill.id)) : []).systemPrompt;
+    const runContract = this.options.runContract ? formatRunContract(this.options.runContract) : undefined;
+    // Appended after JiuwenSwarm's own prompt, its todo section already says how to plan; only when its prompt is
+    // replaced does the model need to be told about the todo tools here.
+    const keepJiuwenSwarmPrompt = (this.config.prompt ?? "prepend") === "prepend";
+    const allJiuwenSwarmTools = (this.config.tools ?? "jiuwenswarm") === "jiuwenswarm";
+    // With JiuwenSwarm's tools the model is no longer limited to the ones registered here, and the rules about
+    // web content name JiuwenSwarm's web tools.
+    const ours = allJiuwenSwarmTools
+      ? Object.entries(JIUWENSWARM_WEB_TOOLS).reduce((text, [mine, theirs]) => text.replaceAll(mine, theirs),
+        composed.replace("Use only the registered workspace tools. ", ""))
+      : composed;
+    const withHostRule = allJiuwenSwarmTools ? `${ours}\n\n${HOST_TOOLS_SECTION}` : ours;
+    const replacementSections = keepJiuwenSwarmPrompt ? [] : [
+      ...(jiuwenSwarmPlans ? [TODO_PLANNING_SECTION] : []),
+      ...(jiuwenSwarmSubagents ? [SUBAGENT_DELEGATION_SECTION] : []),
+    ];
+    const systemPrompt = [withHostRule, ...replacementSections].join("\n\n");
+    const nativeToolNames = [...(jiuwenSwarmPlans ? JIUWENSWARM_TODO_TOOLS : []), ...(jiuwenSwarmSubagents ? JIUWENSWARM_SUBAGENT_TOOLS : [])];
     const response = await (this.config.fetch ?? fetch)(`${this.config.adapterUrl}/agent/runs`, {
       method: "POST",
       headers: {
@@ -203,18 +454,18 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
         sessionKey: jiuwenSwarmSessionKey(this.options),
         prompt: text,
         systemPrompt,
+        systemPromptMode: keepJiuwenSwarmPrompt ? "prepend" : "replace",
+        ...(runContract ? { systemPromptTail: runContract } : {}),
         cwd: this.options.workspaceRoot,
         // The adapter's proxy forwards to this loopback gateway, which speaks the model's own protocol.
-        model: {
-          model: model.model, baseUrl: modelGateway.url, apiKey: modelGateway.token, provider: "OpenAI",
-          // JiuwenSwarm compresses a conversation against the model's window; it cannot know a model behind an alias.
-          ...(model.contextWindow ? { contextWindow: model.contextWindow } : {}),
-        },
-        ...(jiuwenSwarmPlans ? { nativeTools: [...JIUWENSWARM_TODO_TOOLS] } : {}),
+        model: { model: model.model, baseUrl: modelGateway.url, apiKey: modelGateway.token, provider: "OpenAI" },
+        ...(nativeToolNames.length ? { nativeTools: nativeToolNames } : {}),
+        jiuwenSwarmTools: allJiuwenSwarmTools ? "all" : "listed",
+        ...(allJiuwenSwarmTools ? { hiddenJiuwenSwarmTools: [...JIUWENSWARM_HOST_TOOLS] } : {}),
         // JiuwenSwarm gives a tool call 30 s unless told otherwise; the run's own timeout is the limit here.
         ...(this.options.runTimeoutMs ? { toolTimeoutSeconds: Math.ceil(this.options.runTimeoutMs / 1000) } : {}),
         tools: [...tools.values()].map((tool) => ({
-          name: tool.name, description: tool.description, inputSchema: tool.parameters,
+          name: tool.name, description: this.describe(tool), inputSchema: tool.parameters, approval: approvalFor(tool.name),
         })),
         bridge: { url: bridgeUrl, token: bridgeToken },
       }),
@@ -225,11 +476,18 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
     }
     const planStore = this.options.planStore;
     const translator = new EventTranslator((event) => this.emit(event), announcements, transcript,
-      new Set(jiuwenSwarmPlans ? JIUWENSWARM_TODO_TOOLS : []),
-      planStore ? (items, toolCallId) => this.recordPlan(planStore, items, toolCallId) : undefined);
+      new Set(nativeToolNames),
+      planStore ? (items, toolCallId) => this.recordPlan(planStore, items, toolCallId) : undefined,
+      (call) => {
+        this.recordWeb(call);
+        this.recordSkillLoad(call);
+        void this.trajectory?.observe({ call: { args: call.args ?? {}, id: call.id, name: call.name }, content: call.output, isError: call.failed }).catch(() => undefined);
+      });
     let finalText = "";
     let failure: string | undefined;
     for await (const line of ndjson(response.body)) {
+      this.deadlines?.progress();
+      if ("event" in line && line.event.type === "permission.required") this.answerApproval(line.event.request as ApprovalQuestion);
       if ("done" in line) finalText = line.done.finalText;
       else if (line.event.type === "run.failed") failure = String(line.event.error);
       else translator.handle(line.event);
@@ -415,6 +673,8 @@ class EventTranslator {
     /** JiuwenSwarm's own tools the model may call; they run there, so their events come from here. */
     private readonly nativeTools: ReadonlySet<string> = new Set(),
     private readonly onPlan?: (items: Array<{ content: string; status: string }>, toolCallId: string) => void,
+    /** Called when one of JiuwenSwarm's own tools has finished (to record its web results). */
+    private readonly onNativeResult?: (call: { args: unknown; id: string; name: string; output: string; failed: boolean }) => void,
   ) {}
 
   private lastNativeCall = "";
@@ -448,11 +708,11 @@ class EventTranslator {
       case "tool.started": {
         // Not translated (the bridge reports the tool from where it runs), but the model's call
         // is recorded and announced so the bridge can run under the model's id, in order.
-        const trace = event.trace as { args?: unknown; id: string; input?: string; name: string };
+        const trace = event.trace as { args?: unknown; id: string; input?: string; name: string; native?: boolean };
         const input = trace.input ?? JSON.stringify(trace.args ?? {});
         // Compact JSON like the model sent it; JiuwenSwarm re-serialises arguments with spaces.
         this.transcript.toolCall(trace.id, trace.name, JSON.stringify(trace.args ?? {}));
-        if (this.nativeTools.has(trace.name)) {
+        if (trace.native === true || this.nativeTools.has(trace.name)) {
           // Runs inside JiuwenSwarm: nothing will claim it at the bridge, so report it from here.
           this.lastNativeCall = trace.id;
           this.nativeCalls.set(trace.id, { args: trace.args ?? {}, name: trace.name });
@@ -471,6 +731,7 @@ class EventTranslator {
           result: { content: [{ type: "text", text }] },
         });
         this.transcript.toolResult(trace.id, trace.name, text);
+        this.onNativeResult?.({ args: this.nativeCalls.get(trace.id)?.args, id: trace.id, name: trace.name, output: text, failed: trace.status === "failed" });
         break;
       }
       case "plan.updated":
@@ -618,12 +879,18 @@ async function startBridge(
     if (process.env.SCIENCE_AGENT_JIUWENSWARM_DEBUG === "1") {
       console.warn(`[jiuwenswarm-bridge] ${tool.name}(${JSON.stringify(args).slice(0, 160)}) -> ${isError ? "ERROR " : ""}${dispatched.content.slice(0, 300)}`);
     }
-    emit({
-      type: "tool_execution_end", toolCallId, toolName: tool.name, isError,
-      result: { content: [{ type: "text", text: dispatched.content }], ...(dispatched.details !== undefined ? { details: dispatched.details } : {}) },
-    });
-    transcript.toolResult(toolCallId, tool.name, dispatched.content);
+    try {
+      emit({
+        type: "tool_execution_end", toolCallId, toolName: tool.name, isError,
+        result: { content: [{ type: "text", text: dispatched.content }], ...(dispatched.details !== undefined ? { details: dispatched.details } : {}) },
+      });
+      transcript.toolResult(toolCallId, tool.name, dispatched.content);
+    } catch (error) {
+      // The model must still get its result: a failure reporting the call must not leave JiuwenSwarm waiting on it.
+      console.error(`[jiuwenswarm-bridge] reporting the end of ${tool.name} failed: ${error instanceof Error ? error.stack : String(error)}`);
+    }
     reply(200, { text: dispatched.content, isError });
+    if (process.env.SCIENCE_AGENT_JIUWENSWARM_DEBUG === "1") console.warn(`[jiuwenswarm-bridge] answered ${tool.name} (${toolCallId})`);
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address() as AddressInfo;

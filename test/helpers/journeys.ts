@@ -166,6 +166,23 @@ function completionChunk(id: string, model: string, delta: Record<string, unknow
 }
 
 /**
+ * What the user said in a model request's user message. JiuwenSwarm, the agent backend, hands the model a user
+ * message inside its own envelope (`你收到一条消息：{"source": ..., "content": "..."}`, or its English form); the
+ * text is its `content`. Anything else is the message itself.
+ */
+function userText(content: unknown): unknown {
+  if (typeof content !== "string") return content;
+  const envelope = content.match(/^[^\n{]{0,40}[:：]\s*(\{[\s\S]*\})\s*$/);
+  if (!envelope) return content;
+  try {
+    const parsed = JSON.parse(envelope[1]!) as { content?: unknown };
+    return typeof parsed.content === "string" ? parsed.content : content;
+  } catch {
+    return content;
+  }
+}
+
+/**
  * Start a deterministic OpenAI-compatible model for a complete user journey.
  * Each nested mainSteps array is one user turn. Within a turn, every tool
  * result advances to the next step. Subagent requests are routed only by the
@@ -213,8 +230,9 @@ export function scriptedModel(
         const route = isSubagent ? "subagent" : "main";
         // Runtime observations are appended as data-only user messages. They
         // must not hide the actual user request or completion notification.
-        const latestUser = [...messages].reverse().find((message) => message.role === "user"
-          && !(typeof message.content === "string" && message.content.startsWith("<runtime_context_data ")))?.content;
+        const latestUser = userText([...messages].reverse().find((message) => message.role === "user"
+          && !(typeof message.content === "string" && (message.content.startsWith("<runtime_context_data ")
+            || message.content.startsWith("<system-reminder>"))))?.content);
         if (typeof latestUser === "string" && latestUser.startsWith("[Execution notifications]")) {
           // Completion is a notification turn, not the next scripted user task.
           // Acknowledge the prior answer without replaying commands or consuming

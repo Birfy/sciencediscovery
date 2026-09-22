@@ -275,3 +275,45 @@ test("renders skill library cards with pinned head version metadata", async () =
   assert.equal(renderer!.root.findAllByProps({ className: "skill-library-create" }).length, 0);
   await act(async () => renderer!.unmount());
 });
+
+test("with the JiuwenSwarm backend a tab lists its skills, ours and its own, each with an on/off switch", async () => {
+  const toggled: Array<[string, boolean]> = [];
+  const client = {
+    listSkillReviewDrafts: async () => [],
+    listJiuwenSwarmSkills: async () => ({ backend: "jiuwenswarm", skills: [
+      { name: "evolve-design", description: "Evolve things.", enabled: true, source: "sciencediscovery", skillId: "evolve-design" },
+      { name: "sciencediscovery-skill-creator", description: "Create skills.", enabled: true, source: "sciencediscovery", skillId: "skill-creator" },
+      { name: "xlsx", description: "Spreadsheets.", enabled: true, source: "builtin" },
+    ] }),
+    setJiuwenSwarmSkillEnabled: async (name: string, enabled: boolean) => { toggled.push([name, enabled]); return { name, enabled }; },
+  } as unknown as ApiClient;
+  let renderer: ReactTestRenderer | undefined;
+  await act(async () => {
+    renderer = create(createElement(SkillManager, { client, onCatalogChange: () => undefined, onError: (message) => assert.fail(message), skills: [skill] }));
+  });
+  const tab = renderer!.root.findAll((node) => node.type === "button" && node.props.role === "tab" && node.children.includes("In JiuwenSwarm"));
+  assert.equal(tab.length, 1);
+  await act(async () => tab[0]!.props.onClick());
+  const text = JSON.stringify(renderer!.toJSON());
+  for (const expected of ["xlsx", "JiuwenSwarm built-in", "sciencediscovery-skill-creator", "renamed because JiuwenSwarm has a skill of that name", "one set for every session"]) {
+    assert.ok(text.includes(expected), `shows ${expected}`);
+  }
+  const xlsx = renderer!.root.findByProps({ "aria-label": "Use xlsx" });
+  await act(async () => xlsx.props.onChange());
+  assert.deepEqual(toggled, [["xlsx", false]]);
+  assert.equal(renderer!.root.findByProps({ "aria-label": "Use xlsx" }).props.checked, false);
+  await act(async () => renderer!.unmount());
+});
+
+test("with the built-in backend there is no JiuwenSwarm tab", async () => {
+  const client = {
+    listSkillReviewDrafts: async () => [],
+    listJiuwenSwarmSkills: async () => ({ backend: "native", skills: [] }),
+  } as unknown as ApiClient;
+  let renderer: ReactTestRenderer | undefined;
+  await act(async () => {
+    renderer = create(createElement(SkillManager, { client, onCatalogChange: () => undefined, onError: (message) => assert.fail(message), skills: [skill] }));
+  });
+  assert.equal(JSON.stringify(renderer!.toJSON()).includes("In JiuwenSwarm"), false);
+  await act(async () => renderer!.unmount());
+});

@@ -163,3 +163,188 @@ def test_jiuwenswarms_own_tools_named_for_the_run_stay_visible_with_their_own_sp
 
 def test_without_native_tools_none_of_them_is_visible():
     assert [t["function"]["name"] for t in rewrite_request({"tools": [tool("todo_create"), tool("mcp_sci_run_shell")], "messages": []}, ROUTE)["tools"]] == ["run_shell"]
+
+
+def _client(routes, handler):
+    upstream = httpx.MockTransport(handler)
+    app = FastAPI()
+    app.include_router(llm_router(routes, lambda: httpx.AsyncClient(transport=upstream)))
+    return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://adapter")
+
+
+async def test_jiuwenswarms_own_model_calls_go_to_the_model_of_the_run_in_progress_untouched():
+    routes = LlmRoutes()
+    routes.add(LlmRoute(**{**ROUTE.__dict__, "base_url": "http://old.test/v1", "api_key": "old", "model": "old-model"}))
+    routes.add(ROUTE)  # the run that started last
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.update(url=str(request.url), auth=request.headers["authorization"], body=json.loads(request.content))
+        return httpx.Response(200, json={"choices": [{"message": {"role": "assistant", "content": "summary", "tool_calls": [
+            {"id": "c", "type": "function", "function": {"name": "run_shell", "arguments": "{}"}}]}}]})
+
+    body = {"model": "sd-default", "messages": [{"role": "system", "content": "Summarise this."}, {"role": "user", "content": "long text"}], "tools": [tool("bash")]}
+    async with _client(routes, handler) as client:
+        response = await client.post("/llm/default/v1/chat/completions", json=body, headers={"authorization": f"Bearer {routes.default_key}"})
+    assert response.status_code == 200
+    assert seen["url"] == "http://llm.test/v1/chat/completions" and seen["auth"] == "Bearer sk-real"
+    assert seen["body"]["model"] == "gpt-real", "the real model id"
+    assert seen["body"]["messages"][0]["content"] == "Summarise this.", "JiuwenSwarm's own system prompt, not the agent's"
+    assert [t["function"]["name"] for t in seen["body"]["tools"]] == ["bash"], "no tool list cut or renamed"
+    assert response.json()["choices"][0]["message"]["tool_calls"][0]["function"]["name"] == "run_shell", "names are not prefixed"
+
+
+async def test_the_default_route_needs_its_own_key_and_a_run_in_progress():
+    routes = LlmRoutes()
+    async with _client(routes, lambda request: httpx.Response(200, json={})) as client:
+        assert (await client.post("/llm/default/v1/chat/completions", json={})).status_code == 401
+        assert (await client.post("/llm/default/v1/chat/completions", json={}, headers={"authorization": "Bearer wrong"})).status_code == 401
+        no_run = await client.post("/llm/default/v1/chat/completions", json={}, headers={"authorization": f"Bearer {routes.default_key}"})
+        assert no_run.status_code == 503 and "no run in progress" in no_run.json()["error"]["message"]
+
+
+async def test_the_default_route_is_not_mistaken_for_a_runs_token():
+    routes = LlmRoutes()
+    async with _client(routes, lambda request: httpx.Response(200, json={})) as client:
+        response = await client.post("/llm/default/v1/chat/completions", json={}, headers={"authorization": "Bearer x"})
+    assert response.status_code == 401  # not "unknown route" (404) from the per-run handler
+
+
+def test_a_jiuwenswarm_tool_spelled_like_one_of_ours_is_not_offered_as_a_second_copy():
+    """JiuwenSwarm has its own read_file and list_files; the run's toolset has tools of those names too."""
+    route = LlmRoute(**{**ROUTE.__dict__, "tool_names": frozenset({"read_file", "list_files", "run_shell"})})
+    body = {"tools": [tool("read_file"), tool("mcp_sci_read_file"), tool("list_files"), tool("mcp_sci_list_files"), tool("mcp_sci_run_shell")],
+            "messages": []}
+    names = [t["function"]["name"] for t in rewrite_request(body, route)["tools"]]
+    assert names == ["read_file", "list_files", "run_shell"], "one of each, and each one is the run's own"
+
+
+def test_a_prefixed_name_that_is_not_in_the_toolset_is_not_offered():
+    assert rewrite_request({"tools": [tool("mcp_sci_bash")], "messages": []}, ROUTE).get("tools") is None
+
+
+def test_append_keeps_jiuwenswarms_own_system_prompt_whole_and_adds_the_callers_after_it():
+    route = LlmRoute(**{**ROUTE.__dict__, "system_prompt_mode": "append"})
+    body = {"messages": [{"role": "system", "content": "# 身份\n你是 JiuwenSwarm 的智能体。"}, {"role": "user", "content": "hi"}]}
+    out = rewrite_request(body, route)["messages"]
+    assert out[0]["content"] == "# 身份\n你是 JiuwenSwarm 的智能体。\n\nYou are the science agent."
+    assert [m["role"] for m in out] == ["system", "user"]
+
+
+def test_append_with_no_system_message_still_gives_the_model_the_callers_prompt():
+    route = LlmRoute(**{**ROUTE.__dict__, "system_prompt_mode": "append"})
+    out = rewrite_request({"messages": [{"role": "user", "content": "hi"}]}, route)["messages"]
+    assert out[0] == {"role": "system", "content": "You are the science agent."}
+
+
+def test_append_leaves_a_second_system_message_out_as_replace_does():
+    route = LlmRoute(**{**ROUTE.__dict__, "system_prompt_mode": "append"})
+    body = {"messages": [{"role": "system", "content": "A"}, {"role": "system", "content": "B"}, {"role": "user", "content": "hi"}]}
+    assert [m["content"] for m in rewrite_request(body, route)["messages"]] == ["A\n\nYou are the science agent.", "hi"]
+
+
+def test_all_native_tools_offers_jiuwenswarms_whole_toolset_and_ours_gives_way_on_a_clash():
+    route = LlmRoute(**{**ROUTE.__dict__, "tool_names": frozenset({"read_file", "run_shell"}), "all_native_tools": True})
+    body = {"tools": [tool("read_file"), tool("bash"), tool("subagent_spawn"), tool("mcp_sci_read_file"), tool("mcp_sci_run_shell")], "messages": []}
+    names = [t["function"]["name"] for t in rewrite_request(body, route)["tools"]]
+    assert names == ["read_file", "bash", "subagent_spawn", "run_shell"]
+    assert route.shadowed == {"read_file"}
+    # A call to read_file is JiuwenSwarm's: it keeps its name; run_shell is ours and gets the prefix back.
+    chunk = {"choices": [{"delta": {"tool_calls": [{"function": {"name": "read_file"}}, {"function": {"name": "run_shell"}}]}}]}
+    calls = rewrite_response(chunk, route)["choices"][0]["delta"]["tool_calls"]
+    assert [c["function"]["name"] for c in calls] == ["read_file", "mcp_sci_run_shell"]
+
+
+def test_without_all_native_tools_only_the_listed_ones_are_offered():
+    route = LlmRoute(**{**ROUTE.__dict__, "native_tools": frozenset({"todo_create"})})
+    body = {"tools": [tool("bash"), tool("todo_create"), tool("mcp_sci_run_shell")], "messages": []}
+    assert [t["function"]["name"] for t in rewrite_request(body, route)["tools"]] == ["todo_create", "run_shell"]
+
+
+def test_prepend_puts_ours_first_jiuwenswarms_whole_in_the_middle_and_the_tail_last():
+    route = LlmRoute(**{**ROUTE.__dict__, "system_prompt_mode": "prepend", "system_prompt_tail": "<run_contract>x</run_contract>"})
+    body = {"messages": [{"role": "system", "content": "# 身份\nJW"}, {"role": "user", "content": "hi"}]}
+    out = rewrite_request(body, route)["messages"]
+    assert out[0]["content"] == "You are the science agent.\n\n# 身份\nJW\n\n<run_contract>x</run_contract>"
+
+
+def test_replace_keeps_the_tail_too():
+    route = LlmRoute(**{**ROUTE.__dict__, "system_prompt_tail": "T"})
+    out = rewrite_request({"messages": [{"role": "system", "content": "JW"}]}, route)["messages"]
+    assert out[0]["content"] == "You are the science agent.\n\nT"
+
+
+def test_a_jiuwenswarm_tool_keeps_its_own_schema_even_when_one_of_ours_has_its_name():
+    ours = {"description": "ours", "parameters": {"type": "object", "properties": {"path": {"type": "string"}}}}
+    theirs = {"name": "read_file", "description": "theirs", "parameters": {"type": "object", "properties": {"file_path": {"type": "string"}}}}
+    route = LlmRoute(**{**ROUTE.__dict__, "tool_names": frozenset({"read_file"}), "tool_specs": {"read_file": ours}, "all_native_tools": True})
+    body = {"tools": [{"type": "function", "function": theirs}, {"type": "function", "function": {"name": "mcp_sci_read_file", "description": "x", "parameters": {}}}], "messages": []}
+    tools = rewrite_request(body, route)["tools"]
+    assert len(tools) == 1 and tools[0]["function"] == theirs
+
+
+def test_an_earlier_runs_tool_names_in_the_history_become_the_plain_names():
+    body = {"messages": [
+        {"role": "assistant", "content": "", "tool_calls": [{"id": "a", "type": "function", "function": {"name": "mcp_sci0096f4fcd7_run_shell", "arguments": "{}"}}]},
+        {"role": "tool", "tool_call_id": "a", "name": "mcp_sci0096f4fcd7_run_shell", "content": "ok"},
+        {"role": "assistant", "content": "", "tool_calls": [{"id": "b", "type": "function", "function": {"name": "mcp_sci0096f4fcd7_not_ours", "arguments": "{}"}}]},
+    ]}
+    out = [m for m in rewrite_request(body, ROUTE)["messages"] if m["role"] != "system"]
+    assert out[0]["tool_calls"][0]["function"]["name"] == "run_shell"
+    assert out[1]["name"] == "run_shell"
+    assert out[2]["tool_calls"][0]["function"]["name"] == "mcp_sci0096f4fcd7_not_ours", "a name that is not one of this run's tools is left alone"
+
+
+def test_a_model_that_calls_an_earlier_runs_name_is_sent_to_this_runs_server():
+    chunk = {"choices": [{"delta": {"tool_calls": [{"function": {"name": "mcp_sci0096f4fcd7_run_shell"}}]}}]}
+    assert rewrite_response(chunk, ROUTE)["choices"][0]["delta"]["tool_calls"][0]["function"]["name"] == "mcp_sci_run_shell"
+
+
+def test_hidden_host_tools_are_not_offered_and_ours_of_the_same_name_take_their_place():
+    route = LlmRoute(**{**ROUTE.__dict__, "tool_names": frozenset({"read_file", "run_shell"}), "all_native_tools": True,
+                        "hidden_native_tools": frozenset({"bash", "read_file", "write_file"}), "shadowed": set()})
+    body = {"tools": [tool("read_file"), tool("bash"), tool("write_file"), tool("subagent_spawn"), tool("mcp_sci_read_file"), tool("mcp_sci_run_shell")],
+            "messages": []}
+    names = [t["function"]["name"] for t in rewrite_request(body, route)["tools"]]
+    assert names == ["subagent_spawn", "read_file", "run_shell"]
+    assert route.shadowed == set()
+    # read_file now reaches ours; bash and write_file, which JiuwenSwarm would run on the host, reach nothing.
+    chunk = {"choices": [{"delta": {"tool_calls": [{"function": {"name": n}} for n in ("read_file", "bash", "write_file", "subagent_spawn")]}}]}
+    calls = rewrite_response(chunk, route)["choices"][0]["delta"]["tool_calls"]
+    assert [c["function"]["name"] for c in calls] == ["mcp_sci_read_file", "unavailable__bash", "unavailable__write_file", "subagent_spawn"]
+
+
+def test_our_calls_get_the_runs_tag_and_the_history_loses_it():
+    route = LlmRoute(**{**ROUTE.__dict__, "run_tag": "run-a", "shadowed": set()})
+    chunk = {"choices": [{"delta": {"tool_calls": [
+        {"function": {"name": "run_shell", "arguments": '{"command": "ls"}'}},
+        {"function": {"name": "run_shell", "arguments": ""}},
+        {"function": {"name": "todo_list", "arguments": "{}"}}]}}]}
+    calls = rewrite_response(chunk, route)["choices"][0]["delta"]["tool_calls"]
+    assert json.loads(calls[0]["function"]["arguments"]) == {"command": "ls", "_sd_run": "run-a"}
+    assert json.loads(calls[1]["function"]["arguments"]) == {"_sd_run": "run-a"}
+    assert calls[2]["function"]["arguments"] == "{}"  # JiuwenSwarm's own tool: untouched
+    history = {"messages": [{"role": "assistant", "tool_calls": [
+        {"id": "c1", "function": {"name": "mcp_sci_run_shell", "arguments": '{"command": "ls", "_sd_run": "run-old"}'}}]}]}
+    [message] = rewrite_request(history, route)["messages"][1:]
+    assert json.loads(message["tool_calls"][0]["function"]["arguments"]) == {"command": "ls"}
+
+
+def test_an_approval_question_is_described_by_the_call_it_stopped():
+    from sciencediscovery_adapter.agent_runs import describe_approval
+
+    route = LlmRoute(**{**ROUTE.__dict__, "tool_names": frozenset({"run_shell", "read_file"}), "run_tag": "r1", "shadowed": set(), "recent_calls": []})
+    chunk = {"choices": [{"delta": {"tool_calls": [
+        {"function": {"name": "read_file", "arguments": '{"path": "a.txt"}'}},
+        {"function": {"name": "run_shell", "arguments": '{"command": "rm -rf out"}'}},
+        {"function": {"name": "run_shell", "arguments": '{"command": "ls"}'}}]}}]}
+    rewrite_response(chunk, route)
+    first = {"id": "q1", "summary": "mcp_sci_run_shell（当前模式默认需确认） > 选择「会话内记住」", "resource": "x"}
+    second = {"id": "q2", "summary": "mcp_sci_run_shell（当前模式默认需确认）", "resource": "x"}
+    unknown = {"id": "q3", "summary": "acp_chat（需确认）", "resource": "acp_chat"}
+    for request in (first, second, unknown):
+        describe_approval(request, route)
+    assert first["summary"] == "run_shell: rm -rf out" and first["toolName"] == "run_shell" and first["resource"] == "x"
+    assert second["summary"] == "run_shell: ls" and second["toolName"] == "run_shell"
+    assert unknown["summary"] == "acp_chat（需确认）"  # no call seen: JiuwenSwarm's own words stay
+    assert "toolName" not in unknown

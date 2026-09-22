@@ -77,8 +77,12 @@ dedicated NPU environment; it fails closed in this generic image. Its catalog
 entry explains the host requirement.
 
 `CI_E2E_BACKEND=jiuwenswarm` runs the E2E group with the adapter in front and
-agent turns on JiuwenSwarm (issue 84); reports go to `e2e[-group]-jiuwenswarm`.
-The gateway must already be running (`scripts/jiuwenswarm.sh`).
+agent turns on JiuwenSwarm; reports go to `e2e[-group]-jiuwenswarm`. The layer
+installs and starts JiuwenSwarm itself (`scripts/jiuwenswarm.sh setup` then
+`start`) before the stack comes up, so nothing needs to be running beforehand;
+cache `.sciencediscovery-data/jiuwenswarm` and `~/.jiuwenswarm-instances` to
+avoid repeating the ~1.5 GB install on every run. This is the backend the
+GitHub Actions `e2e` job runs by default.
 
 ## The two UT tiers
 

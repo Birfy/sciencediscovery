@@ -155,11 +155,14 @@ ScienceDiscovery help                显示帮助
 - Linux 需要 Bubblewrap 0.6+（推荐 0.8+）及可用的无特权用户命名空间；
 - macOS 使用系统内置的 Seatbelt，启动脚本会自动调用 `/usr/bin/sandbox-exec`，不需要安装 Bubblewrap。
 
+智能体循环跑在 [JiuwenSwarm](https://gitcode.com/openJiuwen/jiuwenswarm) 上；先安装一次，再用 `--jiuwenswarm` 启动栈。完整前置条件、每个环境变量与排错见[在 JiuwenSwarm 上运行智能体](run-with-jiuwenswarm.md)。
+
 从仓库根目录执行：
 
 ```bash
-./scripts/start-stack.sh --mode local              # 安装 + 构建 + 启动全部服务
-./scripts/start-stack.sh --mode local --no-build   # 仅启动（需已完成过构建）
+scripts/jiuwenswarm.sh setup                                     # 一次性：克隆固定版本、安装、创建实例
+./scripts/start-stack.sh --mode local --jiuwenswarm               # 在 JiuwenSwarm 上安装 + 构建 + 启动全部服务
+./scripts/start-stack.sh --mode local --jiuwenswarm --no-build    # 仅启动（需已完成过构建）
 ```
 
 SSH 自动部署使用自带 Node runtime 的 Runner SEA 单文件，不要求目标机预装 Node。Linux 本地完整启动、Docker 构建和二进制发布会准备 Linux x64/arm64 两份 Runner；只做分包构建的开发者可在构建 Runner/Executor 后运行 `pnpm runner:binary`。生成文件位于 `services/runner/dist/sea/`，随产品发布，不提交到源码。
@@ -174,7 +177,9 @@ SSH 自动部署使用自带 Node runtime 的 Runner SEA 单文件，不要求�
 |---|---|---|
 | `services/gateway` | 无端口 | 仅为随包 Python MCP server 提供解释器环境 |
 | `services/runner` | 127.0.0.1:4311 | 无 root 的 Bubblewrap（Linux）或 Seatbelt（macOS）执行器（后台） |
-| `services/api` | 127.0.0.1:4310 | 控制 API + Web UI（前台） |
+| JiuwenSwarm | `~/.jiuwenswarm-instances/sciencediscovery` | 运行智能体循环；未运行时由 `scripts/jiuwenswarm.sh` 启动 |
+| 适配器 | 127.0.0.1:4310 | 对外端口；反向代理 API，并桥接 JiuwenSwarm 的模型与工具调用 |
+| `services/api` | 127.0.0.1:4410 | 控制 API + Web UI，位于适配器之后（前台） |
 
 启动成功后，终端会打印 `Open to sign in` 链接与本地服务访问令牌。另开终端执行 `curl -fsS http://127.0.0.1:4310/health`，然后在浏览器打开启动日志中的 `Open to sign in` 链接（浏览器会自动保存本地服务访问令牌并登录）。停止脚本（Ctrl-C）会一并停止其启动的后台服务。原有 `./scripts/run-local.sh [--no-build]` 命令仍受支持，它只是转调本地模式的薄包装；`pnpm start` 与 `pnpm server` 继续使用这一兼容入口。无人值守部署时可把脚本交给进程管理器（如 Linux 的 systemd user unit，或 Linux/macOS 均可用的 tmux），也可以在 Linux 上改用 [Docker 部署](#docker-部署)；runner 设计上始终只监听回环。
 

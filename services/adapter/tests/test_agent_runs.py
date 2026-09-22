@@ -103,18 +103,22 @@ async def test_the_run_is_sent_to_the_gateway_with_the_session_and_prompt(harnes
     assert "mcp" not in params
 
 
-async def test_tools_are_registered_as_an_mcp_server_for_this_run_only(harness):
+async def test_tools_go_to_the_one_shared_mcp_server_which_is_only_given_again_when_they_change(harness):
     app, _, rpcs = harness
     FakeRun.fixture = "jw_chat_mcp_direct.raw"
     tools = [{"name": "run_shell", "description": "d", "inputSchema": {"type": "object"}}]
-    _, lines = await post(app, {"sessionId": "s1", "prompt": "go", "tools": tools,
-                                "bridge": {"url": "http://legacy.test/bridge", "token": "t"}})
-    methods = [m for _, m, _ in rpcs]
-    assert methods == ["mcp.register_custom", "mcp.connect", "mcp.disconnect", "mcp.delete_custom"]
-    name = rpcs[0][2]["name"]
-    assert rpcs[0][2]["url"].startswith("http://adapter.test/mcp/") and rpcs[0][2]["transport"] == "streamable-http"
-    assert FakeRun.instances[0].params["mcp"] == [name]
-    assert all(p["name"] == name for _, _, p in rpcs)
+    bridge = {"url": "http://legacy.test/bridge", "token": "t"}
+    await post(app, {"sessionId": "s1", "prompt": "go", "tools": tools, "bridge": bridge})
+    await post(app, {"sessionId": "s2", "prompt": "go", "tools": tools, "bridge": bridge})
+    wider = [*tools, {"name": "declare_artifact", "description": "d", "inputSchema": {"type": "object"}}]
+    await post(app, {"sessionId": "s3", "prompt": "go", "tools": wider, "bridge": bridge})
+    mcp = [(m, p) for _, m, p in rpcs if m.startswith("mcp.")]
+    # First run: any earlier registration is replaced, then connected. Second: nothing (same tools). Third: reconnect.
+    assert [m for m, _ in mcp] == ["mcp.disconnect", "mcp.delete_custom", "mcp.register_custom", "mcp.connect", "mcp.connect"]
+    assert all(p["name"] == "sci" for _, p in mcp)
+    register = next(p for m, p in mcp if m == "mcp.register_custom")
+    assert register["url"].startswith("http://adapter.test/mcp/") and register["transport"] == "streamable-http"
+    assert all(run.params["mcp"] == ["sci"] for run in FakeRun.instances)
 
 
 async def test_tools_without_a_bridge_fail_the_run_cleanly(harness):
@@ -122,7 +126,7 @@ async def test_tools_without_a_bridge_fail_the_run_cleanly(harness):
     _, lines = await post(app, {"sessionId": "s1", "prompt": "go", "tools": [{"name": "x"}]})
     failed = [line["event"] for line in lines if line.get("event", {}).get("type") == "run.failed"]
     assert failed and "bridge" in failed[0]["error"]
-    assert rpcs == [] and "done" in lines[-1]
+    assert [m for _, m, _ in rpcs if not m.startswith("models.")] == [] and "done" in lines[-1]
 
 
 async def test_a_gateway_that_cannot_register_the_toolset_fails_the_run(harness):
@@ -141,7 +145,7 @@ async def test_a_gateway_that_cannot_register_the_toolset_fails_the_run(harness)
                                 "bridge": {"url": "http://legacy.test/b"}})
     failed = next(line["event"] for line in lines if line.get("event", {}).get("type") == "run.failed")
     assert "mcp.connect refused" in failed["error"]
-    assert rpcs[-2:] == ["mcp.disconnect", "mcp.delete_custom"]  # cleaned up even though connect failed
+    assert "mcp.connect" in rpcs
 
 
 async def test_the_token_is_enforced_when_configured(harness):
@@ -218,12 +222,13 @@ async def test_the_run_talks_to_a_private_alias_that_routes_to_the_real_model(ha
                      "tools": [{"name": "run_shell"}], "bridge": {"url": "http://legacy.test/b"},
                      "model": {"model": "gpt-x", "baseUrl": "http://llm/v1/", "apiKey": "sk"}})
     entry, route = seen["entry"], seen["route"]
-    assert seen["alias"].startswith("sd-") and seen["alias"] != "gpt-x"
+    assert seen["alias"].startswith("gpt-x-") and len(seen["alias"]) == len("gpt-x-") + 6, "named after the real model"
     assert entry["api_base"] == f"http://adapter.test/llm/{entry['api_key']}/v1"
     assert (route.base_url, route.api_key, route.model, route.system_prompt) == ("http://llm/v1", "sk", "gpt-x", "Be a scientist.")
     assert route.tool_names == frozenset({"run_shell"}) and route.tool_prefix.startswith("mcp_sci")
     # after the run: the alias is gone from the list and the route is closed
-    assert listed["models"] == [] and runner.routes.get(entry["api_key"]) is None
+    assert [m["model_name"] for m in listed["models"]] == ["sciencediscovery-default"], "only the default-model entry is left"
+    assert runner.routes.get(entry["api_key"]) is None
 
 
 async def test_a_protocol_other_than_openai_chat_is_refused_clearly(harness):
@@ -246,14 +251,14 @@ async def test_start_up_removes_stale_aliases_left_by_an_earlier_process():
     async def rpc(url, method, params=None, **kwargs):
         calls.append(method)
         if method == "models.list":
-            return {"models": [{"model_name": "sd-old", "is_default": False}, {"model_name": "kept", "is_default": True}]}
+            return {"models": [{"model_name": "old", "api_base": "http://adapter.test/llm/x/v1", "is_default": False}, {"model_name": "kept", "is_default": True}]}
         return {}
 
     app = create_app(SETTINGS)
     app.state.agent_runner.models._rpc = rpc
     async with app.router.lifespan_context(app):
         pass
-    assert calls == ["models.list", "models.replace_all"]
+    assert calls == ["models.list", "models.replace_all", "models.list", "models.replace_all"], "the default model, then prune"
 
 
 async def test_the_per_run_mcp_server_gets_a_tool_timeout_far_beyond_jiuwenswarms_30_seconds(harness):
@@ -280,13 +285,6 @@ async def test_a_request_carries_no_history_field(harness):
     from sciencediscovery_adapter.agent_runs import AgentRunRequest
     assert "history" not in AgentRunRequest.model_fields
 
-
-async def test_the_models_context_window_is_given_to_jiuwenswarm_as_the_entrys_window(harness):
-    _, runner, rpcs = harness
-    FakeRun.fixture = "jw_chat_plain.raw"
-    await post(harness[0], {"sessionId": "s1", "prompt": "hi", "model": {"model": "m", "baseUrl": "http://llm.test/v1", "apiKey": "k", "contextWindow": 131072}})
-    replaced = [p for _, m, p in rpcs if m == "models.replace_all"]
-    assert any(entry.get("context_window_tokens") == 131072 for p in replaced for entry in p["models"])
 
 
 async def get(app, path, headers=None):
@@ -322,3 +320,105 @@ async def test_info_also_opens_with_the_apis_own_access_token():
     app = create_app(Settings(**{**SETTINGS.__dict__, "api_token": "api-token"}))
     assert (await get(app, "/agent/info")).status_code == 401
     assert (await get(app, "/agent/info", {"authorization": "Bearer api-token"})).status_code == 200
+
+
+async def test_the_system_prompt_mode_reaches_the_route(harness):
+    app, runner, _ = harness
+    modes = []
+    original = runner.routes.add
+
+    def spy(route):
+        modes.append((route.system_prompt, route.system_prompt_mode))
+        return original(route)
+
+    runner.routes.add = spy
+    model = {"model": "m", "baseUrl": "http://llm.test/v1", "apiKey": "k"}
+    await post(app, {"sessionId": "s1", "prompt": "hi", "model": model, "systemPrompt": "ours", "systemPromptMode": "append"})
+    await post(app, {"sessionId": "s1", "prompt": "hi", "model": model, "systemPrompt": "ours"})
+    assert modes == [("ours", "append"), ("ours", "replace")]
+
+
+def test_a_model_id_becomes_a_safe_entry_name():
+    from sciencediscovery_adapter.agent_runs import model_alias_base
+    assert model_alias_base("DeepSeek-V4-Flash-0731") == "DeepSeek-V4-Flash-0731"
+    assert model_alias_base("openai/gpt 5:latest") == "openai-gpt-5-latest"
+    assert model_alias_base("///") == "model"
+    assert len(model_alias_base("x" * 100)) == 48
+
+
+async def post_config(app, values, headers=None):
+    async with app.router.lifespan_context(app):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://adapter") as client:
+            return await client.post("/agent/jiuwenswarm-config", json={"values": values}, headers=headers or {})
+
+
+async def test_web_settings_are_applied_to_jiuwenswarm_with_config_set(harness):
+    app, _, rpcs = harness
+    values = {"free_search_ddg_enabled": "true", "bocha_api_key": "k"}
+    response = await post_config(app, values)
+    assert response.status_code == 200
+    assert [(m, p) for _, m, p in rpcs if m == "config.set"] == [("config.set", values)]
+
+
+async def test_only_web_search_settings_are_accepted(harness):
+    app, _, rpcs = harness
+    response = await post_config(app, {"free_search_ddg_enabled": "true", "model_name": "x"})
+    assert response.status_code == 400 and "model_name" in response.json()["detail"]
+    assert not [m for _, m, _ in rpcs if m == "config.set"]
+
+
+async def test_the_config_route_needs_the_agent_token_when_there_is_one():
+    app = create_app(Settings(**{**SETTINGS.__dict__, "agent_token": "secret"}))
+    assert (await post_config(app, {"free_search_ddg_enabled": "true"})).status_code == 401
+
+
+async def test_jiuwenswarms_permission_engine_is_switched_on_and_each_new_tool_gets_its_level_once(harness):
+    app, _, rpcs = harness
+    FakeRun.fixture = "jw_chat_mcp_direct.raw"
+    bridge = {"url": "http://legacy.test/bridge", "token": "t"}
+    tools = [{"name": "run_shell", "description": "d", "approval": "ask"}, {"name": "read_file", "description": "d"}]
+    await post(app, {"sessionId": "s1", "prompt": "go", "tools": tools, "bridge": bridge})
+    await post(app, {"sessionId": "s2", "prompt": "go", "tools": [*tools, {"name": "declare_claim", "description": "d"}], "bridge": bridge})
+    calls = [(m, p) for _, m, p in rpcs if m in ("config.set", "permissions.tools.update")]
+    assert calls == [
+        ("config.set", {"permissions_enabled": True}),
+        ("permissions.tools.update", {"tool": "mcp_sci_run_shell", "level": "ask"}),
+        ("permissions.tools.update", {"tool": "mcp_sci_read_file", "level": "allow"}),
+        ("permissions.tools.update", {"tool": "mcp_sci_declare_claim", "level": "allow"}),
+    ]
+
+
+async def test_an_approval_answer_resumes_the_run_waiting_on_that_question(harness):
+    from sciencediscovery_adapter.events import RunEventMapper
+
+    app, runner, _ = harness
+    answered = []
+
+    class Waiting:
+        async def answer(self, request_id, source, answer):
+            answered.append((request_id, source, answer))
+
+    mapper = RunEventMapper(session_id="s1")
+    mapper._permissions["q1"] = ["本次允许", "本会话允许", "总是允许", "拒绝"]
+    mapper._pending_requests["q1"] = {"id": "q1", "state": "pending"}
+    runner.pending_approvals["q1"] = (Waiting(), mapper)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://adapter") as client:
+        ok = await client.post("/agent/approvals/q1", json={"decision": "allow_matching"})
+        missing = await client.post("/agent/approvals/q1", json={"decision": "deny"})
+    assert ok.status_code == 200 and missing.status_code == 404
+    assert answered == [("q1", "permission_interrupt", {"selected_options": ["本会话允许"], "custom_input": "本会话允许"})]
+
+
+async def test_the_language_is_set_on_the_tui_channel(harness):
+    app, runner, rpcs = harness
+
+    async def tui(url, method, params=None, **kwargs):
+        rpcs.append((url, method, params))
+        return {"updated": ["preferred_language"]} if method == "config.set" else {}
+
+    runner.rpc = tui
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://adapter") as client:
+        ok = await client.post("/agent/language", json={"language": "en"})
+        bad = await client.post("/agent/language", json={"language": "fr"})
+    assert ok.status_code == 200 and bad.status_code == 422
+    assert rpcs[-1] == ("ws://gw/tui", "config.set", {"preferred_language": "en"})

@@ -19,6 +19,9 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { CasStore, VersionStore, withWorkspaceMutation } from "@sciencediscovery/cas";
 import { sessionTrajectory } from "../trajectory.js";
+import { jiuwenSwarmConfigFromEnv } from "../agent-run/jiuwenswarm-agent.js";
+import { listJiuwenSwarmSkills, setJiuwenSwarmLanguage, setJiuwenSwarmSkillEnabled } from "../agent-run/jiuwenswarm-skills.js";
+import { syncWebSettingsToJiuwenSwarm } from "../agent-run/jiuwenswarm-web-settings.js";
 import { dirname, resolve } from "node:path";
 import { listSshKeyFiles } from "../ssh-key-files.js";
 
@@ -619,6 +622,25 @@ export function createApiServer(config = loadServerConfig(), dependencies: ApiSe
     .then(() => reviewerAuditCoordinator.resume())
     .then(() => undefined);
 
+  // With the JiuwenSwarm backend its web search is configured from the web settings: pushed once the store has
+  // loaded (a few tries, the adapter may still be starting) and again on every change.
+  const jiuwenSwarm = jiuwenSwarmConfigFromEnv();
+  const webBackend = jiuwenSwarm ? "jiuwenswarm" as const : "native" as const;
+  if (jiuwenSwarm) store.useEverySkillEverywhere();
+  // The UI's language as JiuwenSwarm's; remembered so that each page load does not rewrite JiuwenSwarm's config.
+  let jiuwenSwarmLanguage: "en" | "zh" | undefined;
+  const syncJiuwenSwarmWeb = async () => jiuwenSwarm
+    ? await syncWebSettingsToJiuwenSwarm(jiuwenSwarm, store.getWebSettings(), (provider) => store.getWebProviderApiKey(provider))
+    : { ok: true };
+  if (jiuwenSwarm) {
+    void ready.then(async () => {
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        if ((await syncJiuwenSwarmWeb()).ok) return;
+        await new Promise((resolve) => setTimeout(resolve, 3_000));
+      }
+    }).catch(() => undefined);
+  }
+
   /**
    * Register or re-probe one execution machine.
    *
@@ -1069,11 +1091,59 @@ export function createApiServer(config = loadServerConfig(), dependencies: ApiSe
         return;
       }
       if (url.pathname === "/api/web/settings" && request.method === "GET") {
-        sendJson(response, 200, store.getWebSettings());
+        sendJson(response, 200, { ...store.getWebSettings(), backend: webBackend });
         return;
       }
       if (url.pathname === "/api/web/settings" && request.method === "PUT") {
-        sendJson(response, 200, await store.updateWebSettings(await readJson<UpdateWebSettingsRequest>(request)));
+        const updated = await store.updateWebSettings(await readJson<UpdateWebSettingsRequest>(request));
+        await syncJiuwenSwarmWeb();
+        sendJson(response, 200, { ...updated, backend: webBackend });
+        return;
+      }
+      if (url.pathname === "/api/jiuwenswarm/language" && request.method === "PUT") {
+        const body = await readJson<{ language?: unknown }>(request);
+        const language = body.language === "zh-CN" || body.language === "zh" ? "zh" : body.language === "en" ? "en" : undefined;
+        if (!language) throw new ApiStatusError(400, "language must be en or zh-CN");
+        if (!jiuwenSwarm) {
+          sendJson(response, 200, { applied: false, backend: "native", language });
+          return;
+        }
+        if (language !== jiuwenSwarmLanguage) {
+          try {
+            await setJiuwenSwarmLanguage(jiuwenSwarm, language);
+          } catch (error) {
+            throw new ApiStatusError(502, error instanceof Error ? error.message : String(error));
+          }
+          jiuwenSwarmLanguage = language;
+        }
+        sendJson(response, 200, { applied: true, backend: "jiuwenswarm", language });
+        return;
+      }
+      // With the JiuwenSwarm backend, skills are JiuwenSwarm's: what it has installed, and one on/off switch per skill.
+      if (url.pathname === "/api/jiuwenswarm/skills" && request.method === "GET") {
+        if (!jiuwenSwarm) {
+          sendJson(response, 200, { backend: "native", skills: [] });
+          return;
+        }
+        try {
+          sendJson(response, 200, { backend: "jiuwenswarm", skills: await listJiuwenSwarmSkills(jiuwenSwarm) });
+        } catch (error) {
+          throw new ApiStatusError(502, error instanceof Error ? error.message : String(error));
+        }
+        return;
+      }
+      const jiuwenSwarmSkillMatch = url.pathname.match(/^\/api\/jiuwenswarm\/skills\/([^/]+)$/);
+      if (jiuwenSwarmSkillMatch && request.method === "PUT") {
+        if (!jiuwenSwarm) throw new ApiStatusError(409, "Skills are switched in JiuwenSwarm only when it is the agent backend");
+        const body = await readJson<{ enabled?: unknown }>(request);
+        if (typeof body.enabled !== "boolean") throw new ApiStatusError(400, "enabled must be true or false");
+        const name = decodeURIComponent(jiuwenSwarmSkillMatch[1]!);
+        try {
+          await setJiuwenSwarmSkillEnabled(jiuwenSwarm, name, body.enabled);
+        } catch (error) {
+          throw new ApiStatusError(502, error instanceof Error ? error.message : String(error));
+        }
+        sendJson(response, 200, { enabled: body.enabled, name });
         return;
       }
       if (url.pathname === "/api/memory/settings" && request.method === "GET") {
