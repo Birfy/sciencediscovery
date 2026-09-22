@@ -344,6 +344,7 @@ def test_an_approval_question_is_described_by_the_call_it_stopped():
     unknown = {"id": "q3", "summary": "acp_chat（需确认）", "resource": "acp_chat"}
     for request in (first, second, unknown):
         describe_approval(request, route)
-    assert first["summary"] == first["resource"] == "run_shell: rm -rf out"
-    assert second["summary"] == "run_shell: ls"
+    assert first["summary"] == "run_shell: rm -rf out" and first["toolName"] == "run_shell" and first["resource"] == "x"
+    assert second["summary"] == "run_shell: ls" and second["toolName"] == "run_shell"
     assert unknown["summary"] == "acp_chat（需确认）"  # no call seen: JiuwenSwarm's own words stay
+    assert "toolName" not in unknown

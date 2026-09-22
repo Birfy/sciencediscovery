@@ -124,6 +124,18 @@ export const JIUWENSWARM_ASK_TOOLS: ReadonlySet<string> = new Set([
 
 export const approvalFor = (name: string): "allow" | "ask" => JIUWENSWARM_ASK_TOOLS.has(name) || name.startsWith("mcp__") ? "ask" : "allow";
 
+/**
+ * The resource a JiuwenSwarm approval question is checked against, for the tools whose native equivalent
+ * always uses one fixed resource string (`workspace-bindings.ts`'s `requirePrivilege({ action: "code",
+ * resource: "workspace-code", ... })`). A stable resource, not the call's own descriptive text, is what lets a
+ * standing grant made outside a run (or "always allow this session") apply to a call JiuwenSwarm stops here too.
+ * A tool not in this map keeps the call's own descriptive text as its resource, as before.
+ */
+const JIUWENSWARM_APPROVAL_RESOURCE: ReadonlyMap<string, string> = new Map([
+  ["run_shell", "workspace-code"], ["execute", "workspace-code"], ["environment_setup", "workspace-code"],
+  ["execution_cancel", "workspace-code"],
+]);
+
 /** JiuwenSwarm's own todo tools, left visible to the model unless planning is `update_plan`. */
 export const JIUWENSWARM_TODO_TOOLS = ["todo_create", "todo_modify", "todo_list", "todo_get"] as const;
 
@@ -145,7 +157,7 @@ export function jiuwenSwarmConfigFromEnv(env: NodeJS.ProcessEnv = process.env): 
 type Listener = (event: AgentEvent) => void;
 
 /** One of JiuwenSwarm's approval questions, as the adapter reports it (`permission.required`). */
-interface ApprovalQuestion { id: string; resource?: string; summary?: string; toolCallId?: string }
+interface ApprovalQuestion { id: string; resource?: string; summary?: string; toolCallId?: string; toolName?: string }
 
 /** A line of the adapter's NDJSON stream. */
 type RunLine =
@@ -328,8 +340,13 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
    */
   private answerApproval(question: ApprovalQuestion): void {
     const ask = this.options.requestApproval;
+    // A stable resource for a tool whose native equivalent always checks one fixed resource (run_shell and
+    // the rest of JIUWENSWARM_APPROVAL_RESOURCE), so a standing grant applies here too; the call's own text
+    // otherwise, as before.
+    const resource = (question.toolName && JIUWENSWARM_APPROVAL_RESOURCE.get(question.toolName))
+      ?? question.resource ?? question.summary ?? "tool call";
     const decided = ask
-      ? ask({ resource: question.resource ?? question.summary ?? "tool call", summary: question.summary ?? question.resource ?? "tool call",
+      ? ask({ resource, summary: question.summary ?? question.resource ?? "tool call",
         ...(question.toolCallId ? { toolCallId: question.toolCallId } : {}) }, this.controller.signal)
       : Promise.resolve("deny" as const);
     void decided.catch(() => "deny" as const).then(async (decision) => {

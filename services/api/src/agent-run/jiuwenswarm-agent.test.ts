@@ -1181,6 +1181,28 @@ test("a JiuwenSwarm approval question is put to the user as ours and the answer 
   }
 });
 
+test("an approval question names run_shell's stable resource, so a standing grant made outside the run still applies to it", async () => {
+  let asked: any;
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    if (body.decision) { response.writeHead(200, { "content-type": "application/json" }); response.end("{}"); return; }
+    response.writeHead(200);
+    response.write(line({ event: { type: "permission.required", request: { id: "q1", resource: "run_shell: rm -rf out", summary: "run_shell: rm -rf out", toolName: "run_shell", toolCallId: "q1" } } }));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    response.end(line({ done: { finalText: "ok" } }));
+  });
+  try {
+    const requestApproval = async (request: unknown) => { asked = request; return "allow_once" as const; };
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ requestApproval } as never)).execute("go");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    // The resource ScienceDiscovery's own run_shell privilege check always uses (workspace-bindings.ts), not
+    // the per-call "run_shell: rm -rf out" text, which a standing/session grant would never match.
+    assert.equal(asked.resource, "workspace-code");
+    assert.equal(asked.summary, "run_shell: rm -rf out");
+  } finally {
+    await adapter.close();
+  }
+});
+
 test("the run's trajectory is recorded from the model calls JiuwenSwarm makes, and the run's events carry its evidence", async () => {
   const { mkdtemp, rm: remove } = await import("node:fs/promises");
   const { tmpdir } = await import("node:os");

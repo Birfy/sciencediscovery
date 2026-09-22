@@ -147,7 +147,11 @@ def describe_approval(request: dict[str, Any], route: LlmRoute | None) -> None:
     """Say what a JiuwenSwarm approval question is about: the tool and the arguments of the call it stopped.
 
     Its question names the tool (`mcp_sci_run_shell（当前模式默认需确认）…`) but not the call; the model proxy saw
-    the call go by. Its own text stays as the resource when no call matches.
+    the call go by. `toolName` is the bare tool name (`run_shell`), stable across calls: the API uses it, not the
+    per-call text, to classify the privileged action the way the rest of ScienceDiscovery does (so a standing
+    grant for that action, made outside a run, still applies to a call JiuwenSwarm stops). `summary` is the
+    descriptive, per-call text for the approval card; unlike before, it is not reused as the resource. Its own
+    text stays as the summary when no call matches.
     """
     call = route.take_call(str(request.get("summary") or "")) if route else None
     if call is None:
@@ -159,7 +163,7 @@ def describe_approval(request: dict[str, Any], route: LlmRoute | None) -> None:
     detail = main if main is not None else json.dumps(arguments, ensure_ascii=False)
     text = f"{shown}: {detail}" if arguments else shown
     request["summary"] = text[:500]
-    request["resource"] = text[:500]
+    request["toolName"] = shown
 
 
 def bridge_caller(bridge: Bridge, client: httpx.AsyncClient):

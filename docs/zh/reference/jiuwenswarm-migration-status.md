@@ -68,11 +68,11 @@ JiuwenSwarm 自己有一套上下文引擎（占用到模型窗口的 80% 时压
 ## 已知缺口
 
 1. **轨迹：已记录。** JiuwenSwarm 运行的每次模型调用都经过这次运行的模型网关，网关用内置循环同样的 `AgentVersionRecorder` 记录：发出的完整模型输入（含 JiuwenSwarm 的提示词和工具）、模型的回答、工具观测和提交的步骤；运行事件带有关联它们的 evidence（实时检查 `trajectory`）。JiuwenSwarm 自己发出的标题、摘要调用不算轮次，不记录。
-1a. **子代理仍用 ScienceDiscovery 的 `task`。** 每个子代理作为独立的 JiuwenSwarm 会话运行，拥有 ScienceDiscovery 的全部工具、沙箱、审批和子代理卡片。JiuwenSwarm 自己的子代理暂时无法使用（0.2.6，`agent` 模式）：内置的 `general-purpose` 子代理只带父代理的内置工具、不带 MCP 服务，拿不到 ScienceDiscovery 的工具；自定义代理（`agents.create`）无法启动（`'str' object has no attribute 'name'`：它的工具列表是名字，而启动路径需要工具对象）。`test/contract/jw-only/live.mjs subagent-probe` 可以查看其表现。
+1a. **子代理仍用 ScienceDiscovery 的 `task`。** 每个子代理作为独立的 JiuwenSwarm 会话运行，拥有 ScienceDiscovery 的全部工具、沙箱、审批和子代理卡片。JiuwenSwarm 自己的子代理暂时无法使用（0.2.6，`agent` 模式）：内置的 `general-purpose` 子代理只带父代理的内置工具、不带 MCP 服务，拿不到 ScienceDiscovery 的工具；自定义代理（`agents.create`）无法启动（`'str' object has no attribute 'name'`：它的工具列表是名字，而启动路径需要工具对象）。`test/contract/jw-only/live.mjs subagent-probe` 可以查看其表现。 需要**第二轮**的子代理——不是在同一次 `task` 调用里同步回答，而是后来由自动唤醒续接——不能可靠地得到这第二轮：`issue-85-foreground-exec-inbox` 的第三个用例（子代理把命令放到后台，随后被自己的结果唤醒）和 `journey-session-trajectory`（运行中途委派子代理，随后导出轨迹）都会让运行卡在 `running` 状态直到终态轮询超时，或者唤醒的 Project 删不掉（`should be gone before the next journey starts`）。已确认与用例批次无关（单独跑同样失败）。尚未定位根因：怀疑是嵌套运行自己的空闲/回合期限（现在和主运行用同一套跟踪方式，见下）相对旅程自身的轮询窗口触发得太晚，或者 JiuwenSwarm 在唤醒触发的续接上没能及时恢复子代理的会话。待解决。
 2. **历史与上下文。** JiuwenSwarm 是模型上下文的唯一持有者：每个智能体一个稳定会话，由 JiuwenSwarm 压缩；适配器和 API 都不发送、不重建任何历史。所以在内置循环上开始的会话，JiuwenSwarm 不记得（之前的轮次只在界面上），在 API 里编辑或回退的对话也不会反映过去。JiuwenSwarm 重启后这份上下文仍在（已验证：`live.mjs history-restart`）。每一步的动态上下文（计划快照、持久状态）没有注入，见“上下文管理”。
 3. **模型协议：** UI 能配置的三种都可用（API 里的回环网关用原生模型客户端为 JiuwenSwarm 的 chat-completions 请求提供服务）。图片不会发给模型。
 4. **工具集里没有** 工具输出存储。延迟工具启动时一并晋升。同一次模型响应里的工具调用按原生规则调度（没声明并发安全的工具独占、按模型调用的顺序执行；重复调用由批处理策略取代），所以两个执行器的事件与顺序一致。
-5. **唤醒提示。** mocked E2E 的 `issue-77-wake-notice` 在此执行器上失败（脚本化模型靠 JiuwenSwarm 没有那样给出的提示词识别唤醒轮）；`issue-85` 通过。用 `CI_E2E_BACKEND=jiuwenswarm .ci/run-e2e.sh mocked` 运行该组。这些旅程在小机器上对负载敏感：在 2 核服务器上连续运行时有两条失败过一次，单独运行（重复 3 次）都通过，所以有疑问时请逐条运行。
+5. **唤醒提示：已修复。** `test/helpers/journeys.ts` 里脚本化模型现在会先从 JiuwenSwarm 自己的信封（`你收到一条消息：{"content": "..."}`）里取出用户轮次内容，再去匹配 `[Execution notifications]`；`issue-77-wake-notice` 和 `issue-85-foreground-exec-inbox` 三个用例中的两个都通过了。第三个（子代理把工作放到后台，随后被自己的结果唤醒）是 1a 里的待解决项。用 `.ci/run-e2e.sh mocked` 运行该组（`CI_E2E_BACKEND=jiuwenswarm` 现在是默认值）。这些旅程在小机器上对负载敏感：在 2 核服务器上连续运行时有两条失败过一次，单独运行（重复 3 次）都通过，所以有疑问时请逐条运行。
 6. **录制中发现的 legacy 缺陷（未修）：** `PUT /api/sessions/:id/settings` 请求体错误返回 500；`PUT /api/web/settings` 用它自己 GET 的响应体返回 500；对未知 run 做技能进化返回 500；读工作区外的文件（`/file?path=../../etc/passwd`）返回 500 而非 4xx。
 7. **#90 的发现：** `POST /api/sessions/:id/permission-epoch` 之后，会话范围的授权仍然生效（epoch 管沙箱，授权管会话）。issue 文字期望旧授权失效；基线记录的是 legacy 的实际行为。
 
@@ -82,7 +82,7 @@ JiuwenSwarm 自己有一套上下文引擎（占用到模型窗口的 80% 时压
 2. 在 `test/contract/routes.json` 里找到你的路由（`node test/contract/run.mjs --coverage` 会列出没有用例的行）。
 3. 在 `test/contract/cases/` 下加用例，在**全新数据目录**上对内置循环录制，再对“适配器 + JiuwenSwarm”栈比对。规则、SSE 步骤写法和归一化见 [`test/contract/README.md`](../../../test/contract/README.md)。基线对智能体只读，改动需要人工评审。
 4. 行为类用 run 事件用例（`l2-runs.json`）；脚本化模型是 `test/contract/stub-model.mjs`。
-5. 浏览器旅程：`CI_E2E_BACKEND=jiuwenswarm .ci/run-e2e.sh mocked`（网关必须已在运行）。
+5. 浏览器旅程：`.ci/run-e2e.sh mocked`（JiuwenSwarm 现在是默认后端，没有实例会自动装一个并启动）。要用内置循环（还没删掉时）就设 `CI_E2E_BACKEND=legacy .ci/run-e2e.sh mocked`。
 
 ## 测试
 
@@ -92,4 +92,8 @@ UV_PROJECT_ENVIRONMENT=/tmp/adapter-venv uv sync --extra test --project services
 cd services/api && pnpm build && node --test dist/agent-run/jiuwenswarm-agent.test.js
 node --test test/contract/*.test.mjs                              # 契约测试工具自身
 E2E_BASE_URL=... E2E_API_TOKEN=... node test/contract/run.mjs --compare test/contract/baselines/legacy-linux.json
+
+# UT 的 host 档（server.test.ts 及其余工作区包）通过 scripts/with-jiuwenswarm.sh 跑在真实的
+# JiuwenSwarm 和适配器上，pnpm ci:ut:host 已经接好了这一层：
+scripts/with-jiuwenswarm.sh pnpm --filter @sciencediscovery/api test
 ```
