@@ -152,7 +152,21 @@ assert_no_build_paths() { # <payload root>
   for needle in "$repository_root" "$shared_dir" "$output" "${HOME:-}" "${USERPROFILE:-}"; do
     if [[ -n "$needle" ]]; then
       pattern="$(printf '%s' "$needle" | sed 's/[][\\.*^$(){}?+|/]/\\&/g')"
-      leaks+="$(grep -rIlE -- "(^|[^[:alnum:]])$pattern([^[:alnum:]]|\$)" "$root" || true)"$'\n'
+      # jiuwenswarm/ and adapter/ hold JiuwenSwarm's own huge, unmodified
+      # PyPI dependency closure (transformers, google-adk, lxml, ...); at the
+      # scale of that tree, a bare $HOME like this build's /root turns up
+      # constantly in upstream source with no relation to this build machine
+      # (an XML `</root>` tag, a `root:` config key, SSH tooling's default
+      # `/root/.ssh`). install_flat_python already strips the one thing a
+      # --target install of a *local* wheel can leak there (direct_url.json),
+      # and $repository_root/$shared_dir/$output stay fully scanned below, so
+      # skipping the generic $HOME/$USERPROFILE needle only in those two
+      # trees drops noise, not coverage.
+      if [[ "$needle" == "${HOME:-__unset__}" || "$needle" == "${USERPROFILE:-__unset__}" ]]; then
+        leaks+="$(grep -rIlE --exclude-dir=jiuwenswarm --exclude-dir=adapter -- "(^|[^[:alnum:]])$pattern([^[:alnum:]]|\$)" "$root" || true)"$'\n'
+      else
+        leaks+="$(grep -rIlE -- "(^|[^[:alnum:]])$pattern([^[:alnum:]]|\$)" "$root" || true)"$'\n'
+      fi
     fi
   done
   leaks+="$(grep -rIlE '\.missioncrew|MissionCrew|\.worktrees' "$root" || true)"
@@ -353,12 +367,16 @@ case "$architecture" in
 esac
 
 # JiuwenSwarm and the adapter, embedded (see the file header for why this is a
-# flat --target install rather than a venv). --python-platform / --python-version
-# resolve and download wheels for this loop's architecture without needing to
-# execute a foreign-architecture interpreter, so this also works building
-# aarch64 on an x86_64 host or vice versa; requires each dependency to publish
-# a wheel for that platform, which is not guaranteed the way a native install
-# would be. install_flat_python <target dir> <requirements file> <wheel glob>...
+# flat --target install rather than a venv). --python-platform picks the wheel
+# platform, so this also works building aarch64 on an x86_64 host or vice
+# versa (requires each dependency to publish a wheel for that platform, which
+# is not guaranteed the way a native install would be); it does not need a
+# foreign-architecture interpreter to run. --python 3.12 (a version, not a
+# path) still has to resolve to *some* local 3.12 interpreter, of the host's
+# own architecture, because uv's Requires-Python gate for a local (non-index)
+# wheel checks the interpreter it ran with rather than --python-version alone
+# — that flag only steers environment-marker evaluation, not this gate.
+# install_flat_python <target dir> <requirements file> <wheel glob>...
 install_flat_python() { # <target dir> <requirements file> <own-wheel glob> [more wheel globs...]
   local target="$1" requirements="$2" wheel_glob wheels=()
   shift 2
@@ -366,8 +384,13 @@ install_flat_python() { # <target dir> <requirements file> <own-wheel glob> [mor
     wheels+=($(ls $wheel_glob))
   done
   mkdir -p "$target"
-  uv pip install --target "$target" --python-platform "$python_platform" --python-version 3.12 \
+  uv pip install --target "$target" --python-platform "$python_platform" --python 3.12 \
     -r "$requirements" "${wheels[@]}"
+  # uv records the exact source it installed a *local* (non-index) wheel
+  # from — here, our own prebuilt wheel's absolute path under $shared_dir —
+  # in that package's dist-info/direct_url.json. Nothing reads it at
+  # runtime; left in, it's a build-machine path shipped to every user.
+  find "$target" -path '*.dist-info/direct_url.json' -type f -delete
   # Not produced by a --target install of these two projects today, but
   # cheap insurance: any console-script wrapper here has this build's path
   # baked into its shebang and would fail (or worse, silently run some other
@@ -385,7 +408,7 @@ install_flat_python "$output/adapter/site-packages" "$shared_dir/requirements-ad
 echo "Installing JiuwenSwarm $jiuwenswarm_tag from PyPI (target: $python_platform)..." >&2
 mkdir -p "$output/jiuwenswarm/site-packages"
 uv pip install --target "$output/jiuwenswarm/site-packages" \
-  --python-platform "$python_platform" --python-version 3.12 \
+  --python-platform "$python_platform" --python 3.12 \
   "workswarm==$jiuwenswarm_pypi_version"
 find "$output/jiuwenswarm/site-packages" -maxdepth 1 -name bin -type d -exec rm -rf -- {} +
 find "$output/jiuwenswarm/site-packages" -name '__pycache__' -type d -exec rm -rf -- {} + 2>/dev/null || true
