@@ -375,9 +375,15 @@ async function readUntilTerminal(response: Response): Promise<string[]> {
   }
 }
 
-/** Give the hung gateway turn time to actually be in flight before stopping it. */
+/**
+ * Give the hung gateway turn time to actually be in flight before stopping it.
+ *
+ * 400 attempts (10s), not 200 (5s): against a real JiuwenSwarm + adapter (SCIENCE_AGENT_EXECUTOR=jiuwenswarm,
+ * scripts/with-jiuwenswarm.sh), a single real turn's round trip was measured at 5.0-5.4s on its own, no other
+ * load involved — the built-in loop's in-process model call this budget was sized for has no such trip.
+ */
 async function waitForGatewayTurn(api: TestApi, expected: number): Promise<void> {
-  for (let attempt = 0; attempt < 200 && api.gatewayRunCount() < expected; attempt += 1) {
+  for (let attempt = 0; attempt < 400 && api.gatewayRunCount() < expected; attempt += 1) {
     await new Promise((wait) => setTimeout(wait, 25));
   }
   assert.equal(api.gatewayRunCount(), expected, "the agent turn reached the gateway and hung there");

@@ -155,7 +155,7 @@ ScienceDiscovery help                显示帮助
 - Linux 需要 Bubblewrap 0.6+（推荐 0.8+）及可用的无特权用户命名空间；
 - macOS 使用系统内置的 Seatbelt，启动脚本会自动调用 `/usr/bin/sandbox-exec`，不需要安装 Bubblewrap。
 
-智能体循环跑在 [JiuwenSwarm](https://gitcode.com/openJiuwen/jiuwenswarm) 上；先安装一次，再用 `--jiuwenswarm` 启动栈。完整前置条件、每个环境变量与排错见[在 JiuwenSwarm 上运行智能体](run-with-jiuwenswarm.md)。
+智能体循环跑在 [JiuwenSwarm](https://gitcode.com/openJiuwen/jiuwenswarm) 上；先安装一次，再用 `--jiuwenswarm` 启动栈。完整前置条件、每个环境变量与排错见[在 JiuwenSwarm 上运行智能体](../how-to/run-with-jiuwenswarm.md)。
 
 从仓库根目录执行：
 

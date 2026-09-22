@@ -22,7 +22,7 @@ const ids = new Map([["evolve-design", "evolve-design"], ["sciencediscovery-skil
 test("skill_tool on a skill's SKILL.md, or read_file of it, loads that skill", () => {
   assert.equal(skillLoadedBy({ name: "skill_tool", args: { skill_name: "evolve-design" } }, ids), "evolve-design");
   assert.equal(skillLoadedBy({ name: "skill_tool", args: { skill_name: "sciencediscovery-skill-creator", relative_file_path: "SKILL.md" } }, ids), "skill-creator");
-  assert.equal(skillLoadedBy({ name: "read_file", args: { file_path: "/root/.jiuwenswarm-instances/x/agent/workspace/skills/evolve-design/SKILL.md" } }, ids), "evolve-design");
+  assert.equal(skillLoadedBy({ name: "read_file", args: { file_path: "/home/jiuwenswarm-user/.jiuwenswarm-instances/x/agent/workspace/skills/evolve-design/SKILL.md" } }, ids), "evolve-design");
 });
 
 test("a supporting file, another skill or another tool is not a load", () => {
@@ -34,7 +34,7 @@ test("a supporting file, another skill or another tool is not a load", () => {
 
 test("an adapter that cannot install skills leaves them all ours", async () => {
   const failing = (async () => new Response("down", { status: 502 })) as unknown as typeof fetch;
-  const imported = await importSkillsToJiuwenSwarm({ adapterUrl: "http://a", fetch: failing }, [{ id: "x", hash: "h" }], "/root");
+  const imported = await importSkillsToJiuwenSwarm({ adapterUrl: "http://a", fetch: failing }, [{ id: "x", hash: "h" }], "/skill-packages");
   assert.equal(imported.size, 0);
 });
 
