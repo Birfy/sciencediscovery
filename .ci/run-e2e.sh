@@ -213,8 +213,6 @@ export E2E_JOURNEY_REPORTS="$results_root/journey-reports"
 export E2E_ALLOW_STACK_RESET=1
 
 if [[ "$backend" == "jiuwenswarm" ]]; then
-  # The gateway is a prerequisite (scripts/jiuwenswarm.sh); say so up front
-  # rather than as a run that fails inside the first agent turn.
   export SCIENCE_AGENT_ADAPTER=1
   export SCIENCE_AGENT_EXECUTOR=jiuwenswarm
   # JiuwenSwarm plans with its own todo tools by default. The mocked journeys script the model's calls
@@ -224,6 +222,20 @@ if [[ "$backend" == "jiuwenswarm" ]]; then
   # Likewise they script ScienceDiscovery's read_file/list_files with its argument shapes; JiuwenSwarm's own
   # tools are covered by test/contract/jw-only/live.mjs native-tools.
   export SCIENCE_AGENT_JIUWENSWARM_TOOLS=ours
+  # This layer owns JiuwenSwarm's lifecycle the same way it owns the stack's: install it once (a cache
+  # step upstream can keep JIUWENSWARM_ROOT / ~/.jiuwenswarm-instances warm across runs so this is a
+  # no-op most of the time) and start it before start-stack.sh gets to the executor check below, so a
+  # missing install fails here with a clear message instead of inside the first agent turn.
+  printf 'Installing JiuwenSwarm (scripts/jiuwenswarm.sh setup)...\n' | tee -a "$stack_log"
+  ./scripts/jiuwenswarm.sh setup >>"$stack_log" 2>&1 || {
+    printf 'BLOCKED: JiuwenSwarm setup failed; see stack.log.\n' | tee -a "$test_log" >&2
+    exit 2
+  }
+  printf 'Starting JiuwenSwarm (scripts/jiuwenswarm.sh start)...\n' | tee -a "$stack_log"
+  ./scripts/jiuwenswarm.sh start >>"$stack_log" 2>&1 || {
+    printf 'BLOCKED: JiuwenSwarm did not start; see stack.log.\n' | tee -a "$test_log" >&2
+    exit 2
+  }
 fi
 
 stack_arguments=(--mode local)
