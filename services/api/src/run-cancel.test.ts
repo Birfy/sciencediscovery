@@ -379,12 +379,17 @@ async function readUntilTerminal(response: Response): Promise<string[]> {
 /**
  * Give the hung gateway turn time to actually be in flight before stopping it.
  *
- * 400 attempts (10s), not 200 (5s): against a real JiuwenSwarm + adapter (SCIENCE_AGENT_EXECUTOR=jiuwenswarm,
- * scripts/with-jiuwenswarm.sh), a single real turn's round trip was measured at 5.0-5.4s on its own, no other
- * load involved — the built-in loop's in-process model call this budget was sized for has no such trip.
+ * The built-in loop's in-process model call is what the 400-attempt (10s) default budget was sized
+ * for. Under a real JiuwenSwarm + adapter (SCIENCE_AGENT_EXECUTOR=jiuwenswarm, scripts/with-jiuwenswarm.sh)
+ * a single turn's round trip was measured at 5.0-5.4s in isolation, but CI's `ut:host` workload runs
+ * `pnpm --recursive test` for the whole workspace against that one shared instance and adapter
+ * (scripts/with-jiuwenswarm.sh's own doc comment: "a test runner's parallel files share them"), so real
+ * runs contend for it — a 10s-bound wait was observed to miss by ~460ms under that load. 2400 attempts
+ * (60s) gives real headroom without weakening what the assertion checks.
  */
 async function waitForGatewayTurn(api: TestApi, expected: number): Promise<void> {
-  for (let attempt = 0; attempt < 400 && api.gatewayRunCount() < expected; attempt += 1) {
+  const attempts = onJiuwenSwarm ? 2_400 : 400;
+  for (let attempt = 0; attempt < attempts && api.gatewayRunCount() < expected; attempt += 1) {
     await new Promise((wait) => setTimeout(wait, 25));
   }
   assert.equal(api.gatewayRunCount(), expected, "the agent turn reached the gateway and hung there");
