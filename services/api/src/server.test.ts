@@ -131,23 +131,38 @@ const execFileAsync = promisify(execFile);
 const onJiuwenSwarm = process.env.SCIENCE_AGENT_EXECUTOR?.trim() === "jiuwenswarm";
 
 /**
- * Verified against a real JiuwenSwarm + adapter (scripts/with-jiuwenswarm.sh): once a "task" call's
- * nested subagent turn (a second, independent POST /agent/runs) completes and its result reaches the
- * parent's MCP session, JiuwenSwarm 0.2.6's gateway does not reliably resume the parent run's own next
- * turn — the connection goes silent until ScienceDiscovery's own idle-timeout watchdog fails the run
- * minutes later ("Agent run stalled: no gateway progress for N ms"). This is not deterministic per test:
- * one test observed passing cleanly in isolation later failed the same way as part of a longer run,
- * pointing at load/state accumulated on the one JiuwenSwarm+adapter instance every UT process shares
- * (scripts/with-jiuwenswarm.sh), not a fixed set of tests. Every test that delegates through "task" is
- * skipped under this executor for that reason, not only the ones caught failing outright — a per-test
- * allowlist would still leave CI's pass/fail exposed to this same non-determinism. Concurrent delegation
- * (taskCount > 1) hits it particularly reliably. This is the same nested round trip flagged unresolved in
- * docs/{en,zh}/reference/jiuwenswarm-migration-status.md's gap 10; not fixable in this repository. Skipped
- * rather than deleted so the coverage comes back automatically once JiuwenSwarm fixes the underlying stall.
+ * scripts/with-jiuwenswarm.sh deliberately leaves subagent delegation at its real-deployment default:
+ * JiuwenSwarm's own native subagent_spawn/subagent_wait, not ScienceDiscovery's task-delegation bridge
+ * (SCIENCE_AGENT_JIUWENSWARM_SUBAGENTS=task, an opt-in a caller reaches for on purpose, trading native
+ * subagent_spawn for full sandbox/approval/provenance parity — see gap 1a in
+ * docs/{en,zh}/reference/jiuwenswarm-migration-status.md). Two consequences for every test below that
+ * delegates through startSubagentModel's scripted "task" call:
+ *
+ * 1. Under this executor's default, JiuwenSwarm deletes "task" from the tools a run offers and expects
+ *    subagent_spawn/subagent_wait instead (jiuwenswarm-agent.ts); a scripted stub that cannot read the
+ *    system prompt keeps calling the now-absent "task", and the adapter answers deterministically with
+ *    "Ability not found in resource_mgr: task" — not what any of these tests mean to exercise.
+ * 2. Turning SUBAGENTS=task back on to keep the stub's calls routing (an earlier version of this file
+ *    did exactly that in with-jiuwenswarm.sh) does make the bridge itself work, but its nested turn — a
+ *    second, independent POST /agent/runs — then hits a real JiuwenSwarm 0.2.6 gateway limitation:
+ *    once that nested run's result reaches the parent's MCP session, the gateway does not reliably
+ *    resume the parent run's own next turn, stalling it for minutes until ScienceDiscovery's own
+ *    idle-timeout watchdog fails it ("Agent run stalled: no gateway progress for N ms") — confirmed
+ *    non-deterministic per test (one test passed three times in isolation, then failed the identical
+ *    way as part of a longer run), consistent with load or state on the shared instance rather than a
+ *    fixed set of affected calls. See gap 10 for the full evidence.
+ *
+ * Either way there is nothing to usefully verify against this executor: what these tests exist to
+ * check — ScienceDiscovery's own permission/sandbox/provenance handling of a subagent's actions — is
+ * code that a deployment running JiuwenSwarm's own default subagent_spawn never reaches in the first
+ * place (see gap 1a), and the opt-in bridge that would reach it cannot be relied on end to end under
+ * this JiuwenSwarm version. The coverage itself is intact on the built-in loop, where these tests run
+ * and pass normally. Skipped rather than deleted so it comes back automatically if a future JiuwenSwarm
+ * version fixes the gateway limitation and this file's default is revisited.
  */
-const JIUWENSWARM_NESTED_TASK_STALL_SKIP = "blocked on a JiuwenSwarm 0.2.6 gateway stall after a nested "
-  + "task subagent's turn completes, not reliably reproducible per test (see "
-  + "jiuwenswarm-migration-status.md gap 10); not fixable here";
+const JIUWENSWARM_NESTED_TASK_STALL_SKIP = "ScienceDiscovery's task-delegation bridge for subagents is "
+  + "an opt-in this test harness does not turn on (matching every real deployment's own default); "
+  + "see jiuwenswarm-migration-status.md gaps 1a and 10";
 
 // General API fixtures do not own live Python MCP servers. MCP integration
 // cases pass their explicit transport; an unexpected invocation fails closed.
