@@ -27,8 +27,11 @@ scripts/jiuwenswarm.sh setup                            # once: clone the pinned
 
 The same thing by variables: `SCIENCE_AGENT_ADAPTER=1 SCIENCE_AGENT_EXECUTOR=jiuwenswarm`. Browser journeys:
 `CI_E2E_BACKEND=jiuwenswarm .ci/run-e2e.sh mocked` (JiuwenSwarm must already be running). Public port: the adapter on
-4310, with the API behind it on 4410. Local (source) mode only — the binary and Docker images do not yet include the
-adapter or JiuwenSwarm.
+4310, with the API behind it on 4410.
+
+The single-file binary carries the same JiuwenSwarm and adapter, installed at build time
+(`scripts/binary-release/build-payload.sh`), so there is nothing to clone or install at run time: `./ScienceDiscovery
+serve --jiuwenswarm`. The Docker image does not include them yet.
 
 Data (sessions, projects, models, settings, messages on screen) lives in the usual data directory either way, but the
 **model's conversation context is JiuwenSwarm's own**: it keeps and compresses it itself, and a fresh instance starts
@@ -47,11 +50,21 @@ A stack on the built-in loop, or one that was never started with the adapter, ha
 
 ## Requirements
 
-- Source mode (see [Deployment](../getting-started/deployment.md#local-mode-host-processes)); the binary and Docker images do not include the adapter or JiuwenSwarm.
+Two paths carry JiuwenSwarm; the Docker image does not yet.
+
+**Single-file binary**: `./ScienceDiscovery serve --jiuwenswarm`. JiuwenSwarm and the adapter are already inside the
+executable (see [Deployment → what the binary contains](../getting-started/deployment.md#what-the-binary-contains)); the only host
+requirement beyond the usual [bubblewrap](../getting-started/deployment.md#host-dependency-bubblewrap) is disk for the
+extracted payload, which this adds roughly 1.5 GB to. Nothing is cloned or installed at run time, so this path needs no
+access to `gitcode.com` or a PyPI index.
+
+**Source mode** (see [Deployment](../getting-started/deployment.md#local-mode-host-processes)):
+
 - `git` and `uv` on the host. JiuwenSwarm installs into its own directory and virtualenv, never into ScienceDiscovery's environments.
 - Access to `gitcode.com` (to clone the pinned tag) and to a PyPI index. On a slow link or in mainland China, set `SCIENCE_AGENT_PYPI_INDEX` to a mirror and, if downloads time out, `UV_HTTP_TIMEOUT` (the script defaults to 300 seconds).
 - About 1.5 GB of disk for the JiuwenSwarm install.
-- Any model the UI can configure: OpenAI chat completions, OpenAI Responses or Anthropic Messages, with their provider variants. You configure the model in ScienceDiscovery as usual; JiuwenSwarm needs no model setup of its own.
+
+Either path: any model the UI can configure: OpenAI chat completions, OpenAI Responses or Anthropic Messages, with their provider variants. You configure the model in ScienceDiscovery as usual; JiuwenSwarm needs no model setup of its own.
 
 ## Install and start
 

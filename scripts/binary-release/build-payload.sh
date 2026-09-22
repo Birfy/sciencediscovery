@@ -22,6 +22,22 @@
 # package index (Huawei Cloud mirror by default), pinned here to exact
 # versions: a hash-locked requirements export of services/gateway/uv.lock and
 # a sha256-pinned uv wheel.
+#
+# JiuwenSwarm and its adapter ARE embedded (unlike the gateway): both are
+# installed at build time into flat, PYTHONPATH-addressable directories rather
+# than a venv, because a venv's shebangs and pyvenv.cfg hardcode the build
+# machine's absolute path and stop working once the payload is extracted
+# somewhere else. The launcher invokes each by importing its entry-point
+# module directly (see serve.ts) instead of running the (broken, if it even
+# shipped) console-script wrapper. JiuwenSwarm is installed straight from its
+# PyPI release ("workswarm"), not cloned: the pinned tag's PyPI publish
+# resolves its own git-pinned transitive dependency (openjiuwen) as a plain
+# PyPI version, so no cloning or wheel-building is needed for it or its
+# dependencies. JiuwenSwarm's own dependency closure is large (some 1GB+:
+# transformers, onnxruntime, playwright, ...), so this is the single biggest
+# contributor to release size; see docs/en/how-to/run-with-jiuwenswarm.md for
+# the trade-off this was chosen over (first-launch install, like the
+# gateway's deps get).
 # Docker is never involved: every architecture-specific piece is downloaded
 # from a pinned manifest, so both architectures build on any x86_64 or
 # aarch64 host.
@@ -29,6 +45,15 @@ set -euo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 repository_root="$(cd -- "$script_dir/../.." && pwd)"
+
+# Keep in step with scripts/jiuwenswarm.sh, which installs the same pinned tag
+# for source-mode development (there, by cloning; the git tag and the PyPI
+# release below are the same publish, just reached two different ways).
+jiuwenswarm_tag="${JIUWENSWARM_TAG:-workswarm0.2.6}"
+case "$jiuwenswarm_tag" in
+  workswarm*) jiuwenswarm_pypi_version="${jiuwenswarm_tag#workswarm}" ;;
+  *) echo "JIUWENSWARM_TAG must look like workswarm<version> (its PyPI package+version) to embed from PyPI; got: $jiuwenswarm_tag" >&2; exit 1 ;;
+esac
 
 architecture=""
 output=""
@@ -219,6 +244,23 @@ prepare_shared() {
   (cd services/gateway && uv export --frozen --no-dev --no-emit-project --no-header \
     --format requirements.txt -o "$shared_dir/requirements-gateway.txt")
 
+  # The adapter is our own code too, same treatment as the gateway: a prebuilt
+  # wheel plus a locked third-party requirements export, installed per
+  # architecture below (its deps include compiled extensions, e.g. uvloop,
+  # httptools, pydantic-core).
+  echo "Building the adapter wheel..." >&2
+  uv build --wheel --out-dir "$shared_dir/wheels" services/adapter
+  (cd services/adapter && uv export --frozen --no-dev --no-emit-project --no-header \
+    --format requirements.txt -o "$shared_dir/requirements-adapter.txt")
+
+  # JiuwenSwarm itself is installed straight from its PyPI release below, per
+  # architecture (its dependency closure includes compiled extensions —
+  # onnxruntime, faiss-cpu and friends — so it cannot be resolved once here
+  # the way the gateway/adapter wheels are; there is also nothing of our own
+  # to build a wheel from). No clone, no export: the pinned tag's PyPI publish
+  # resolves cleanly with plain version pins, including its own transitive
+  # dependency that upstream's lockfile pins from git.
+
   touch "$shared_dir/.complete"
 }
 
@@ -256,6 +298,7 @@ verify_extension_architecture() { # <python prefix> <expected `file` fragment>
 
 prepare_shared
 assert_requirements_clean "$shared_dir/requirements-gateway.txt"
+assert_requirements_clean "$shared_dir/requirements-adapter.txt"
 
 echo "Assembling the $architecture payload in $output" >&2
 rm -rf -- "$output"
@@ -309,6 +352,44 @@ case "$architecture" in
   aarch64) verify_extension_architecture "$output/python" "ARM aarch64" ;;
 esac
 
+# JiuwenSwarm and the adapter, embedded (see the file header for why this is a
+# flat --target install rather than a venv). --python-platform / --python-version
+# resolve and download wheels for this loop's architecture without needing to
+# execute a foreign-architecture interpreter, so this also works building
+# aarch64 on an x86_64 host or vice versa; requires each dependency to publish
+# a wheel for that platform, which is not guaranteed the way a native install
+# would be. install_flat_python <target dir> <requirements file> <wheel glob>...
+install_flat_python() { # <target dir> <requirements file> <own-wheel glob> [more wheel globs...]
+  local target="$1" requirements="$2" wheel_glob wheels=()
+  shift 2
+  for wheel_glob in "$@"; do
+    wheels+=($(ls $wheel_glob))
+  done
+  mkdir -p "$target"
+  uv pip install --target "$target" --python-platform "$python_platform" --python-version 3.12 \
+    -r "$requirements" "${wheels[@]}"
+  # Not produced by a --target install of these two projects today, but
+  # cheap insurance: any console-script wrapper here has this build's path
+  # baked into its shebang and would fail (or worse, silently run some other
+  # interpreter) once the payload is extracted somewhere else. The launcher
+  # never runs one — it imports each entry point's module directly — so any
+  # that did appear are dead weight at best.
+  find "$target" -maxdepth 1 -name bin -type d -exec rm -rf -- {} +
+  find "$target" -name '__pycache__' -type d -exec rm -rf -- {} + 2>/dev/null || true
+}
+
+echo "Installing the adapter (target: $python_platform)..." >&2
+install_flat_python "$output/adapter/site-packages" "$shared_dir/requirements-adapter.txt" \
+  "$shared_dir"'/wheels/sciencediscovery_adapter-*.whl'
+
+echo "Installing JiuwenSwarm $jiuwenswarm_tag from PyPI (target: $python_platform)..." >&2
+mkdir -p "$output/jiuwenswarm/site-packages"
+uv pip install --target "$output/jiuwenswarm/site-packages" \
+  --python-platform "$python_platform" --python-version 3.12 \
+  "workswarm==$jiuwenswarm_pypi_version"
+find "$output/jiuwenswarm/site-packages" -maxdepth 1 -name bin -type d -exec rm -rf -- {} +
+find "$output/jiuwenswarm/site-packages" -name '__pycache__' -type d -exec rm -rf -- {} + 2>/dev/null || true
+
 micromamba_version="$(node "$repository_root/scripts/fetch-managed-micromamba.mjs" \
   --arch "$architecture" --print-tsv | cut -f1)"
 read_version() { # <runtime>
@@ -355,6 +436,11 @@ cat >"$output/manifest.json" <<EOF
     },
     "requirementsPath": "bootstrap/requirements-gateway.txt",
     "gatewayWheelPath": "bootstrap/wheels/$gateway_wheel_name"
+  },
+  "jiuwenswarm": {
+    "tag": "$jiuwenswarm_tag",
+    "sitePackages": "jiuwenswarm/site-packages",
+    "adapterSitePackages": "adapter/site-packages"
   }
 }
 EOF

@@ -77,6 +77,9 @@ serve options:
   --sandbox-provider <p>   auto, bubblewrap, or seatbelt (default: auto)
   --skip-sandbox-check     Start when the platform sandbox probe fails
   --no-scientific-envs     Do not provision the managed scientific environments
+  --jiuwenswarm            Run agent turns on the embedded JiuwenSwarm instead
+                           of the native loop (needs a release built with it
+                           embedded; see docs/en/how-to/run-with-jiuwenswarm.md)
 
 run options:
   input (positional)       Problem text, or a JSON object for full input
@@ -156,6 +159,7 @@ export function defaultSettings(
     runnerPort: parsePort("SCIENCE_AGENT_RUNNER_PORT", env.SCIENCE_AGENT_RUNNER_PORT?.trim() || "4311"),
     scientificEnvironments: truthy(env.SCIENTIFIC_ENVS),
     skipSandboxCheck: false,
+    jiuwenswarm: env.SCIENCE_AGENT_EXECUTOR?.trim() === "jiuwenswarm",
   };
 }
 
@@ -221,6 +225,7 @@ export function parseInvocation(
       case "--port": invocation.settings.port = parsePort(argument, next()); break;
       case "--runner-port": invocation.settings.runnerPort = parsePort(argument, next()); break;
       case "--skip-sandbox-check": invocation.settings.skipSandboxCheck = true; break;
+      case "--jiuwenswarm": invocation.settings.jiuwenswarm = true; break;
       case "--to": invocation.extractTo = resolve(cwd, next()); break;
       case "-h": case "--help": invocation.command = "help"; break;
       // run 选项

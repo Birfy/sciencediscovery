@@ -201,6 +201,44 @@ describe("serve topology", () => {
   });
 });
 
+describe("jiuwenswarm mode", () => {
+  test("native mode plans no executor override and the API keeps the public port", () => {
+    const [, api] = planServices(contextFor());
+    assert.equal(api?.env.SCIENCE_AGENT_PORT, "4310");
+    assert.equal(api?.env.SCIENCE_AGENT_EXECUTOR, undefined);
+    assert.equal(api?.env.SCIENCE_AGENT_ADAPTER_URL, undefined);
+    assert.equal(api?.healthUrl, "http://127.0.0.1:4310/health");
+  });
+
+  test("moves the API to port + 100 and points it at the adapter on the public port", () => {
+    const context = contextFor();
+    context.settings.jiuwenswarm = true;
+    const [, api] = planServices(context);
+    assert.equal(api?.env.SCIENCE_AGENT_PORT, "4410");
+    assert.equal(api?.env.SCIENCE_AGENT_EXECUTOR, "jiuwenswarm");
+    assert.equal(api?.env.SCIENCE_AGENT_ADAPTER_URL, "http://127.0.0.1:4310");
+    assert.equal(api?.healthUrl, "http://127.0.0.1:4410/health");
+  });
+
+  test("only planServices' two services are the API and runner; the adapter and JiuwenSwarm are started separately by serve() once ports are known", () => {
+    const context = contextFor();
+    context.settings.jiuwenswarm = true;
+    assert.deepEqual(planServices(context).map((service) => service.name), [
+      "sandbox runner",
+      "control API and Web UI",
+    ]);
+  });
+
+  test("respects a custom port for the shift", () => {
+    const context = contextFor();
+    context.settings.jiuwenswarm = true;
+    context.settings.port = 8080;
+    const [, api] = planServices(context);
+    assert.equal(api?.env.SCIENCE_AGENT_PORT, "8180");
+    assert.equal(api?.env.SCIENCE_AGENT_ADAPTER_URL, "http://127.0.0.1:8080");
+  });
+});
+
 describe("micromamba seeding", () => {
   let workspace = "";
 

@@ -96,6 +96,7 @@ ScienceDiscovery help                  Show help
 | `--bwrap <path>` | `bwrap` on `PATH` | Bubblewrap executable |
 | `--skip-sandbox-check` | off | Start without Bubblewrap; sandbox execution is unavailable |
 | `--no-scientific-envs` | off | Do not initialize managed scientific environments |
+| `--jiuwenswarm` | off | Run agent turns on the embedded [JiuwenSwarm](../how-to/run-with-jiuwenswarm.md) instead of the native loop |
 
 The variables in [Configuration reference](../reference/configuration.md#environment-variables-local-mode) also apply and can be exported or placed in `--env-file`. The API and the runner bind to loopback by default. To expose the API, first replace `SCIENCE_AGENT_AUTH_TOKEN`, then explicitly use `--host 0.0.0.0` only on a trusted, protected network.
 
@@ -123,6 +124,7 @@ It connects to `http://127.0.0.1:4310` by default and reads the token `serve` ge
 | CPython 3.12 | Relocatable distribution; no host Python needed, and it is the base interpreter for the first-launch gateway venv |
 | Web assets | Prebuilt `apps/web/dist` |
 | Gateway wheel and bootstrap pins | The `sciencediscovery-gateway` wheel (our own code), the hash-locked dependency export, and the uv wheel pin |
+| JiuwenSwarm and adapter | The pinned [JiuwenSwarm](../how-to/run-with-jiuwenswarm.md) tag and the `sciencediscovery-adapter` wheel (our own code), each with its full third-party dependency tree already installed — unlike the gateway's, not deferred to first launch, since JiuwenSwarm's own footprint (roughly 1.5 GB) makes this the largest single contributor to release size |
 | micromamba | Fixed version, seeded to `<data-dir>/scientific-envs/bin/micromamba` on first `serve`, then checked by the runner against the same release manifest |
 
 It does not contain uv or the gateway's third-party Python dependencies (see [Dependencies installed on first launch](#dependencies-installed-on-first-launch)), nor Neo4j, starter Python/R scientific environments, or a conda package cache. Creating a starter environment for the first time still needs access to permitted package channels.
