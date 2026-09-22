@@ -33,8 +33,12 @@ repository_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 
 export JIUWENSWARM_INSTANCE="${JIUWENSWARM_INSTANCE:-sd-test}"
 state_dir="${CI_RUNTIME_DIR:-$repository_root/.sciencediscovery-data}/with-jiuwenswarm"
-log="$state_dir/jiuwenswarm-test.log"
 mkdir -p "$state_dir"
+# Canonicalize: a relative CI_RUNTIME_DIR (CONTRIBUTING.md's own local-repro example passes one)
+# would otherwise be re-resolved against services/adapter's cwd by the uv sync below, putting the
+# adapter's venv somewhere this script never looks for it again.
+state_dir="$(cd -- "$state_dir" && pwd)"
+log="$state_dir/jiuwenswarm-test.log"
 : > "$log"
 
 adapter_pid=""

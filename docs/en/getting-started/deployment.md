@@ -150,7 +150,7 @@ Source mode supports Linux x86_64/aarch64 and macOS x64/arm64. Both platforms us
 - macOS uses the built-in Seatbelt sandbox through `/usr/bin/sandbox-exec`; Bubblewrap is not required.
 
 The agent loop runs on [JiuwenSwarm](https://gitcode.com/openJiuwen/jiuwenswarm); install it once, then start the
-stack with `--jiuwenswarm`. See [Run agent turns on JiuwenSwarm](run-with-jiuwenswarm.md) for the full requirements,
+stack with `--jiuwenswarm`. See [Run agent turns on JiuwenSwarm](../how-to/run-with-jiuwenswarm.md) for the full requirements,
 every environment variable, and troubleshooting.
 
 From the repository root, run:
