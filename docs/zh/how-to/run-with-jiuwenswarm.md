@@ -8,7 +8,6 @@ ScienceDiscovery 的智能体循环跑在 [JiuwenSwarm](https://gitcode.com/open
 
 **语言：** JiuwenSwarm 的语言跟随界面语言（设置里的 English / 中文）：它自己的提示词、规则和工具，以及它要求模型使用的回答语言。这是所有会话共用的一个设置（JiuwenSwarm 配置里的 `preferred_language`）；切换后，会话在下一次运行时生效。
 
-
 ```text
 浏览器 ─▶ 适配器（公共端口）─▶ API（端口 + 100）
               │                     │

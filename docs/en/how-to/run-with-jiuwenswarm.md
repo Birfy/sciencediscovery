@@ -8,7 +8,6 @@ What stays the same: the web UI, sessions, messages, run events, artifacts and p
 
 **Language:** JiuwenSwarm's language follows the UI's (Settings, English / 中文): its own prompt, rails and tools, and the language it asks the model to answer in. It is one setting for every session (`preferred_language` in JiuwenSwarm's config); a session picks up a switch at its next run.
 
-
 ```text
 browser ─▶ adapter (public port) ─▶ API (port + 100)
               │                        │
