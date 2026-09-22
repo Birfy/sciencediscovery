@@ -11,9 +11,9 @@
 [![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20macOS-6e7781?style=flat-square)](#环境要求)
 [![Docs](https://img.shields.io/badge/Docs-EN%20%7C%20ZH-6e7781?style=flat-square)](docs/README.md)
 
-[下载](#安装) · [快速开始](docs/zh/tutorial/01-quick-start.md) · [文档](docs/README.md) · [贡献指南](CONTRIBUTING.md) · [English](README.md)
+[下载](#安装) · [快速开始](docs/zh/getting-started/quick-start.md) · [文档](docs/README.md) · [贡献指南](CONTRIBUTING.md) · [English](README.md)
 
-<img src="docs/images/task.png" width="920" alt="ScienceDiscovery 工作区：项目与会话导航、输入框，以及产物、审阅与溯源面板" />
+<img src="docs/images/task_zh.gif" width="920" alt="ScienceDiscovery 工作区：项目与会话导航、输入框，以及产物、审阅与溯源面板" />
 
 </div>
 
@@ -33,7 +33,7 @@ chmod +x ScienceDiscovery-0.2.0-linux-x86_64
 
 打开 `serve` 输出的 **`Open to sign in`** 链接，浏览器将自动保存本地服务访问令牌，无需手动复制。该令牌不同于模型 API Key；此链接可访问本机工作区，请勿外传。Web 界面位于 <http://127.0.0.1:4310>，终端窗口仅运行服务进程。
 
-arm64 请使用 [`ScienceDiscovery-0.2.0-linux-aarch64`](https://github.com/openJiuwen-ai/sciencediscovery/releases/download/0.2.0/ScienceDiscovery-0.2.0-linux-aarch64)。宿主唯一依赖是 Bubblewrap。本地源码模式（Linux 与 macOS）和 Docker 参见[部署指南](docs/zh/how-to/deployment.md)；智能体后端 [JiuwenSwarm](docs/zh/how-to/run-with-jiuwenswarm.md) 也是在本地源码模式下运行。
+arm64 请使用 [`ScienceDiscovery-0.2.0-linux-aarch64`](https://github.com/openJiuwen-ai/sciencediscovery/releases/download/0.2.0/ScienceDiscovery-0.2.0-linux-aarch64)。宿主唯一依赖是 Bubblewrap。本地源码模式（Linux 与 macOS）和 Docker 参见[部署指南](docs/zh/getting-started/deployment.md)；智能体后端 [JiuwenSwarm](docs/zh/how-to/run-with-jiuwenswarm.md) 也是在本地源码模式下运行。
 
 ## 配置模型
 
@@ -46,16 +46,16 @@ ScienceDiscovery 不内置模型，需接入你自己的 API。打开左侧栏�
 
 ## 第一个任务
 
-新建 Project 与 Session，将 CSV 或 PDF 拖入工作区，并描述分析目标。首次执行代码前会出现权限卡片，批准后即可在时间线中查看工具调用与产物。完整步骤参见[快速开始](docs/zh/tutorial/01-quick-start.md)。
+新建 Project 与 Session，将 CSV 或 PDF 拖入工作区，并描述分析目标。首次执行代码前会出现权限卡片，批准后即可在时间线中查看工具调用与产物。完整步骤参见[快速开始](docs/zh/getting-started/quick-start.md)。
 
 ## 核心能力
 
 | 能力 | 说明 | 参考 |
 |---|---|---|
-| **文献与数据接入** | 内置连接器直达文献库与数据库；PDF 被解析为可引用的证据 | [文献调研案例](docs/zh/how-to/literature-research-case-guide.md) · [自定义 MCP](docs/zh/how-to/configure-custom-mcp.md) |
-| **沙箱内代码执行** | 智能体在 fail-closed 沙箱中编写、调试并运行 Python、R 与 Shell | [沙箱执行](docs/zh/explanation/sandbox-execution.md) |
-| **复杂任务拆解** | 任务规划与多智能体协同将任务分发给子智能体和跨领域 Skill 库 | [子智能体编排](docs/zh/explanation/subagent-orchestration.md) · [Skill](docs/zh/explanation/skill-progressive-disclosure.md) |
-| **全链路溯源** | 代码、环境、日志与引用证据按产物记录；开启记忆图谱后整条链路可点击追溯 | [审阅与溯源](docs/zh/explanation/review-provenance.md) · [ScienceMemory](docs/zh/how-to/science-memory-setup.md) |
+| **文献与数据接入** | 内置连接器直达文献库与数据库；PDF 被解析为可引用的证据 | [文献调研](docs/zh/domains/literature-research.md) · [自定义 MCP](docs/zh/how-to/configure-custom-mcp.md) |
+| **沙箱内代码执行** | 智能体在 fail-closed 沙箱中编写、调试并运行 Python、R 与 Shell | [沙箱执行](docs/zh/developer-docs/sandbox-execution.md) |
+| **复杂任务拆解** | 任务规划与多智能体协同将任务分发给子智能体和跨领域 Skill 库 | [子智能体编排](docs/zh/developer-docs/subagent-orchestration.md) · [Skill](docs/zh/developer-docs/skill-progressive-disclosure.md) |
+| **全链路溯源** | 代码、环境、日志与引用证据按产物记录；开启记忆图谱后整条链路可点击追溯 | [审阅与溯源](docs/zh/developer-docs/review-provenance.md) · [ScienceMemory](docs/zh/how-to/science-memory-setup.md) |
 
 ## 命令行
 
@@ -89,10 +89,10 @@ cat prompt.txt | ./ScienceDiscovery run --stdin --auto-approve | jq .
 
 | 分类 | 文档 |
 |---|---|
-| **教程** | [快速开始](docs/zh/tutorial/01-quick-start.md) |
-| **How-to** | [部署](docs/zh/how-to/deployment.md) · [在 JiuwenSwarm 上运行](docs/zh/how-to/run-with-jiuwenswarm.md) · [自定义 MCP](docs/zh/how-to/configure-custom-mcp.md) · [网络代理](docs/zh/how-to/configure-network-proxy.md) · [ScienceMemory](docs/zh/how-to/science-memory-setup.md) |
+| **快速开始** | [快速开始](docs/zh/getting-started/quick-start.md) · [部署](docs/zh/getting-started/deployment.md) |
+| **How-to** | [在 JiuwenSwarm 上运行](docs/zh/how-to/run-with-jiuwenswarm.md) · [自定义 MCP](docs/zh/how-to/configure-custom-mcp.md) · [网络代理](docs/zh/how-to/configure-network-proxy.md) · [ScienceMemory](docs/zh/how-to/science-memory-setup.md) |
 | **参考** | [配置](docs/zh/reference/configuration.md) · [REST API](docs/zh/reference/rest-api.md) · [内置工具](docs/zh/reference/builtin-tools.md) · [运行时行为](docs/zh/reference/runtime-behavior.md) |
-| **解释** | [整体架构](docs/zh/explanation/architecture.md) 及[完整索引](docs/zh/explanation/README.md) |
+| **开发者文档** | [整体架构](docs/zh/developer-docs/architecture.md) 及[开发者文档导航](docs/zh/developer-docs/README.md) |
 
 完整中英文导航参见 [docs/README.md](docs/README.md)；开发环境与测试命令参见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 

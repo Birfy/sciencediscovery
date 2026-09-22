@@ -1,6 +1,6 @@
 # 运行一次演进搜索
 
-在会话里驱动 `/evolve-design`：提出搜索、定规模、看过程、读结果。搜索是什么、什么时候根本不适用，见[程序演进](../explanation/evolve.md)；要一次能完整跑完的第一次运行，见[教程](../tutorial/02-evolve-a-solution.md)。
+在会话里驱动 `/evolve-design`：提出搜索、定规模、看过程、读结果。搜索是什么、什么时候根本不适用，见[程序演进](../core/evolve.md)；要一次能完整跑完的第一次运行，见[教程](../domains/evolve-a-solution.md)。
 
 ## 开始之前
 
@@ -81,7 +81,7 @@ OpenEvolve 运行多一个**网格**视图展示归档 —— 每岛一列，★
 
 **看留出 `test` 分，不要看最好的 `gate` 分。** gate 那个数引导过搜索，按构造就是偏乐观的；test 分片全程没参与。两者差距大意味着搜索拟合了它能看见的分片。
 
-开启[科学记忆](../explanation/science-memory.md)后运行也在图谱里：搜索节点通过 `input` 边关联起点、`produces` 边关联结果，节点详情带基线分与留出测试分。
+开启[科学记忆](../developer-docs/science-memory.md)后运行也在图谱里：搜索节点通过 `input` 边关联起点、`produces` 边关联结果，节点详情带基线分与留出测试分。
 
 ## 不顺利的时候
 
@@ -95,6 +95,6 @@ OpenEvolve 运行多一个**网格**视图展示归档 —— 每岛一列，★
 
 ## 相关文档
 
-- [程序演进](../explanation/evolve.md) —— 搜索是什么、三分数据、探针、冻结。
-- [演进出一个更优解](../tutorial/02-evolve-a-solution.md) —— 走一遍第一次运行。
-- [沙箱执行](../explanation/sandbox-execution.md) —— 候选在哪里评测。
+- [程序演进](../core/evolve.md) —— 搜索是什么、三分数据、探针、冻结。
+- [演进出一个更优解](../domains/evolve-a-solution.md) —— 走一遍第一次运行。
+- [沙箱执行](../developer-docs/sandbox-execution.md) —— 候选在哪里评测。

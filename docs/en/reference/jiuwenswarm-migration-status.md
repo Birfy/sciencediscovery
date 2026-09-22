@@ -10,7 +10,7 @@ A **transitional architecture**, chosen deliberately: the existing TypeScript AP
 executor** is replaced: the model loop runs on JiuwenSwarm 0.2.6, reached through a Python **adapter**
 that also sits in front of the API as a reverse proxy.
 
-```
+```text
 browser ─▶ adapter :4310 ──proxy──▶ legacy API :4410 ──createAgent──┐
               │  ▲                                                   │ POST /agent/runs
               │  └────── tool calls (loopback bridge, per run) ◀─────┤

@@ -9,7 +9,7 @@ ScienceDiscovery 的智能体循环跑在 [JiuwenSwarm](https://gitcode.com/open
 **语言：** JiuwenSwarm 的语言跟随界面语言（设置里的 English / 中文）：它自己的提示词、规则和工具，以及它要求模型使用的回答语言。这是所有会话共用的一个设置（JiuwenSwarm 配置里的 `preferred_language`）；切换后，会话在下一次运行时生效。
 
 
-```
+```text
 浏览器 ─▶ 适配器（公共端口）─▶ API（端口 + 100）
               │                     │
               └─▶ JiuwenSwarm ◀─────┘   工具在 API 里执行，经每次运行一个的桥回调
@@ -41,7 +41,7 @@ curl -s -H "Authorization: Bearer $SCIENCE_AGENT_AUTH_TOKEN" http://127.0.0.1:43
 
 ## 前置条件
 
-- 源码模式（见[部署](deployment.md#local-mode-host-processes)）；二进制包和 Docker 镜像不含适配器和 JiuwenSwarm。
+- 源码模式（见[部署](../getting-started/deployment.md#本地模式宿主进程)）；二进制包和 Docker 镜像不含适配器和 JiuwenSwarm。
 - 主机上有 `git` 和 `uv`。JiuwenSwarm 装在它自己的目录和虚拟环境里，不会装进 ScienceDiscovery 的环境。
 - 能访问 `gitcode.com`（克隆固定版本）和 PyPI 源。网络慢或在中国大陆时，把 `SCIENCE_AGENT_PYPI_INDEX` 设为镜像；下载超时再设 `UV_HTTP_TIMEOUT`（脚本默认 300 秒）。
 - JiuwenSwarm 的安装大约占 1.5 GB 磁盘。

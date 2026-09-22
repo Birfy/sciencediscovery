@@ -9,7 +9,7 @@ What stays the same: the web UI, sessions, messages, run events, artifacts and p
 **Language:** JiuwenSwarm's language follows the UI's (Settings, English / 中文): its own prompt, rails and tools, and the language it asks the model to answer in. It is one setting for every session (`preferred_language` in JiuwenSwarm's config); a session picks up a switch at its next run.
 
 
-```
+```text
 browser ─▶ adapter (public port) ─▶ API (port + 100)
               │                        │
               └─▶ JiuwenSwarm ◀────────┘   tools run in the API, called back over a per-run bridge
@@ -48,7 +48,7 @@ A stack on the built-in loop, or one that was never started with the adapter, ha
 
 ## Requirements
 
-- Source mode (see [Deployment](deployment.md#local-mode-host-processes)); the binary and Docker images do not include the adapter or JiuwenSwarm.
+- Source mode (see [Deployment](../getting-started/deployment.md#local-mode-host-processes)); the binary and Docker images do not include the adapter or JiuwenSwarm.
 - `git` and `uv` on the host. JiuwenSwarm installs into its own directory and virtualenv, never into ScienceDiscovery's environments.
 - Access to `gitcode.com` (to clone the pinned tag) and to a PyPI index. On a slow link or in mainland China, set `SCIENCE_AGENT_PYPI_INDEX` to a mirror and, if downloads time out, `UV_HTTP_TIMEOUT` (the script defaults to 300 seconds).
 - About 1.5 GB of disk for the JiuwenSwarm install.

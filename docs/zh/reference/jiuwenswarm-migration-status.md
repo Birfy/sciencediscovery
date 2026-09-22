@@ -6,7 +6,7 @@ issue 84（复用 JiuwenSwarm 后端）做到哪一步、现在能跑什么、�
 
 一个**过渡架构**，是有意选择的：现有 TypeScript API 继续持有存储（会话、消息、运行事件、权限记录）以及 UI 调用的全部路由。只替换**智能体执行器**：模型循环跑在 JiuwenSwarm 0.2.6 上，通过一个 Python **适配器**接入；适配器同时作为反向代理挡在 API 前面。
 
-```
+```text
 浏览器 ─▶ 适配器 :4310 ──代理──▶ legacy API :4410 ──createAgent──┐
               │  ▲                                                 │ POST /agent/runs
               │  └────── 工具调用（每次运行一个回环 bridge）◀──────┤

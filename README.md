@@ -11,9 +11,9 @@ Literature review, hypothesis, code, experiments and tuning — in one environme
 [![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20macOS-6e7781?style=flat-square)](#requirements)
 [![Docs](https://img.shields.io/badge/Docs-EN%20%7C%20ZH-6e7781?style=flat-square)](docs/README.md)
 
-[Download](#installation) · [Quick start](docs/en/tutorial/01-quick-start.md) · [Documentation](docs/README.md) · [Contributing](CONTRIBUTING.md) · [中文](README_zh.md)
+[Download](#installation) · [Quick start](docs/en/getting-started/quick-start.md) · [Documentation](docs/README.md) · [Contributing](CONTRIBUTING.md) · [中文](README_zh.md)
 
-<img src="docs/images/task.png" width="920" alt="The ScienceDiscovery workspace: project and session navigation, the composer, and the artifact, reviewer and provenance panels" />
+<img src="docs/images/task.gif" width="920" alt="The ScienceDiscovery workspace: project and session navigation, the composer, and the artifact, reviewer and provenance panels" />
 
 </div>
 
@@ -33,7 +33,7 @@ chmod +x ScienceDiscovery-0.2.0-linux-x86_64
 
 Open the **`Open to sign in`** URL that `serve` prints. The browser stores the local service access token automatically, so there is nothing to copy. That token is distinct from a model API key, and the URL grants access to this machine's workspace — keep it private. The web interface is served at <http://127.0.0.1:4310>; the terminal window only runs the service.
 
-For arm64, use [`ScienceDiscovery-0.2.0-linux-aarch64`](https://github.com/openJiuwen-ai/sciencediscovery/releases/download/0.2.0/ScienceDiscovery-0.2.0-linux-aarch64). Bubblewrap is the only host dependency. Source mode (Linux and macOS) and Docker are covered in the [deployment guide](docs/en/how-to/deployment.md); source mode is also how you run the agent loop on [JiuwenSwarm](docs/en/how-to/run-with-jiuwenswarm.md), this project's agent backend.
+For arm64, use [`ScienceDiscovery-0.2.0-linux-aarch64`](https://github.com/openJiuwen-ai/sciencediscovery/releases/download/0.2.0/ScienceDiscovery-0.2.0-linux-aarch64). Bubblewrap is the only host dependency. Source mode (Linux and macOS) and Docker are covered in the [deployment guide](docs/en/getting-started/deployment.md); source mode is also how you run the agent loop on [JiuwenSwarm](docs/en/how-to/run-with-jiuwenswarm.md), this project's agent backend.
 
 ## Configure a model
 
@@ -46,16 +46,16 @@ Field definitions, and which of them an environment variable can set instead, ar
 
 ## First task
 
-Create a Project and a Session, drop a CSV or a PDF into the workspace, and describe the analysis you want. A permission card appears before the first code execution; once approved, tool calls and artifacts are shown in the timeline. For a step-by-step walkthrough, see the [Quick Start tutorial](docs/en/tutorial/01-quick-start.md).
+Create a Project and a Session, drop a CSV or a PDF into the workspace, and describe the analysis you want. A permission card appears before the first code execution; once approved, tool calls and artifacts are shown in the timeline. For a step-by-step walkthrough, see the [Quick Start](docs/en/getting-started/quick-start.md).
 
 ## Capabilities
 
 | Capability | Description | Reference |
 |---|---|---|
-| **Literature and data access** | Built-in connectors reach paper and data repositories; PDFs are parsed into citable evidence | [Literature research case](docs/en/how-to/literature-research-case-guide.md) · [Custom MCP servers](docs/en/how-to/configure-custom-mcp.md) |
-| **Sandboxed code execution** | The agent writes, debugs and runs Python, R and shell inside a fail-closed sandbox | [Sandbox execution](docs/en/explanation/sandbox-execution.md) |
-| **Task decomposition** | Planning and multi-agent orchestration distribute a task across sub-agents and a cross-domain skill library | [Subagent orchestration](docs/en/explanation/subagent-orchestration.md) · [Skills](docs/en/explanation/skill-progressive-disclosure.md) |
-| **End-to-end provenance** | Code, environment, logs and cited evidence are recorded per deliverable; the optional memory graph makes the chain navigable | [Review and provenance](docs/en/explanation/review-provenance.md) · [ScienceMemory](docs/en/how-to/science-memory-setup.md) |
+| **Literature and data access** | Built-in connectors reach paper and data repositories; PDFs are parsed into citable evidence | [Literature research](docs/en/domains/literature-research.md) · [Custom MCP servers](docs/en/how-to/configure-custom-mcp.md) |
+| **Sandboxed code execution** | The agent writes, debugs and runs Python, R and shell inside a fail-closed sandbox | [Sandbox execution](docs/en/developer-docs/sandbox-execution.md) |
+| **Task decomposition** | Planning and multi-agent orchestration distribute a task across sub-agents and a cross-domain skill library | [Subagent orchestration](docs/en/developer-docs/subagent-orchestration.md) · [Skills](docs/en/developer-docs/skill-progressive-disclosure.md) |
+| **End-to-end provenance** | Code, environment, logs and cited evidence are recorded per deliverable; the optional memory graph makes the chain navigable | [Review and provenance](docs/en/developer-docs/review-provenance.md) · [ScienceMemory](docs/en/how-to/science-memory-setup.md) |
 
 ## Command line
 
@@ -89,10 +89,10 @@ A browser UI talks to an adapter that puts the agent loop on [JiuwenSwarm](https
 
 | Section | Guides |
 |---|---|
-| **Tutorial** | [Quick start](docs/en/tutorial/01-quick-start.md) |
-| **How-to** | [Deployment](docs/en/how-to/deployment.md) · [Run on JiuwenSwarm](docs/en/how-to/run-with-jiuwenswarm.md) · [Custom MCP](docs/en/how-to/configure-custom-mcp.md) · [Network proxy](docs/en/how-to/configure-network-proxy.md) · [ScienceMemory](docs/en/how-to/science-memory-setup.md) |
+| **Getting started** | [Quick start](docs/en/getting-started/quick-start.md) · [Deployment](docs/en/getting-started/deployment.md) |
+| **How-to** | [Run on JiuwenSwarm](docs/en/how-to/run-with-jiuwenswarm.md) · [Custom MCP](docs/en/how-to/configure-custom-mcp.md) · [Network proxy](docs/en/how-to/configure-network-proxy.md) · [ScienceMemory](docs/en/how-to/science-memory-setup.md) |
 | **Reference** | [Configuration](docs/en/reference/configuration.md) · [REST API](docs/en/reference/rest-api.md) · [Built-in tools](docs/en/reference/builtin-tools.md) · [Runtime behavior](docs/en/reference/runtime-behavior.md) |
-| **Explanation** | [Architecture](docs/en/explanation/architecture.md) and the [full index](docs/en/explanation/README.md) |
+| **Developer documentation** | [Architecture](docs/en/developer-docs/architecture.md) and the [developer index](docs/en/developer-docs/README.md) |
 
 The complete English and Chinese indexes are in [docs/README.md](docs/README.md); development setup and test commands are in [CONTRIBUTING.md](CONTRIBUTING.md).
 

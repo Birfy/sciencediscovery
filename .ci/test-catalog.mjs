@@ -114,6 +114,7 @@ export const jiuwenSwarmWrapper = ["bash", "scripts/with-jiuwenswarm.sh"];
 /** Every UT workload, each carrying exactly one tier. */
 export const utWorkloads = [
   { command: ["pnpm", "architecture:check"], id: "architecture", tier: "host" },
+  { command: ["pnpm", "docs:check"], id: "documentation", tier: "host" },
   { command: ["pnpm", "typecheck"], id: "typecheck", tier: "host" },
   { command: ["pnpm", "ci:selftest"], id: "ci-contract", tier: "host" },
   { command: ["pnpm", "binary:test"], id: "binary-scripts", tier: "host" },

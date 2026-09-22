@@ -47,7 +47,7 @@ Update timing ultimately depends on the selected model's instruction-following a
 
 ## Scientific environment tools
 
-Python and R execute through `run_shell`; separate `run_python` / `run_r` tools are removed. Managed updates occur in place without cloning each revision. See [execution and Workspace lifecycle](../explanation/execution-workspaces.md).
+Python and R execute through `run_shell`; separate `run_python` / `run_r` tools are removed. Managed updates occur in place without cloning each revision. See [execution and Workspace lifecycle](../core/execution-workspaces.md).
 
 These appear after managed scientific-environment setup and capability injection.
 
@@ -92,7 +92,7 @@ Download and extraction require different model turns because same-turn calls ar
 | `read_skill_resource` | a selected skill has text resources | Reads bounded UTF-8 supporting content after the skill; never executes or installs it |
 | `create_skill` | the main Agent selected and loaded `skill-creator` with `read_skill` | Creates an inactive, persistent Skill draft from an explicit user description, with optional version and bounded UTF-8 resources. Revisions to the same pending name update one review item and diff against the previous Agent proposal; the conversation provides a review shortcut, and user confirmation publishes the reviewed package as a new immutable Skill Library version |
 
-Skill loading is described in [skill-progressive-disclosure.md](../explanation/skill-progressive-disclosure.md). The complete frozen package of every selected skill is already staged read-only at `$SCIENCEDISCOVERY_SKILLS_DIR/<skillId>` before the sandbox starts, and the prompt lists each package path and package hash. Address a package through that variable rather than its expanded value, which is `/skills` only under bubblewrap. `read_file` and `list_files` page through those package files directly and accept `$SCIENCEDISCOVERY_SKILLS_DIR/...`, `${SCIENCEDISCOVERY_SKILLS_DIR}/...`, or the bare bind path; `run_shell` accepts a `scriptPath` inside a package with explicit `arguments`, without copying anything into the workspace first. `$SCIENCEDISCOVERY_SKILL_EXTENSIONS_DIR` is a writable area reserved for later self-evolution and is empty by default. Staging a package is not the same as auto-executing or installing its `scripts/`; execution requires an explicit Agent call. `read_skill` and `read_skill_resource` remain as compatibility channels.
+Skill loading is described in [skill-progressive-disclosure.md](../developer-docs/skill-progressive-disclosure.md). The complete frozen package of every selected skill is already staged read-only at `$SCIENCEDISCOVERY_SKILLS_DIR/<skillId>` before the sandbox starts, and the prompt lists each package path and package hash. Address a package through that variable rather than its expanded value, which is `/skills` only under bubblewrap. `read_file` and `list_files` page through those package files directly and accept `$SCIENCEDISCOVERY_SKILLS_DIR/...`, `${SCIENCEDISCOVERY_SKILLS_DIR}/...`, or the bare bind path; `run_shell` accepts a `scriptPath` inside a package with explicit `arguments`, without copying anything into the workspace first. `$SCIENCEDISCOVERY_SKILL_EXTENSIONS_DIR` is a writable area reserved for later self-evolution and is empty by default. Staging a package is not the same as auto-executing or installing its `scripts/`; execution requires an explicit Agent call. `read_skill` and `read_skill_resource` remain as compatibility channels.
 
 `run_npu_job` is a separate, opt-in Host NPU Broker, not a general host Shell. The Broker starts fixed allowlisted entry points and checks Session ownership. The Agent selects `environment_id`; the API resolves its latest Revision for the Broker's internal audit field. An old Revision ID is not an environment selector, and submit rejects `environment_revision_id`. Use `environment_list` and managed package tools to prepare dependencies, then pass the environment ID. NPU hardware availability and workload-specific validation remain separate from ordinary sandboxed Shell execution.
 
@@ -104,7 +104,7 @@ Skill loading is described in [skill-progressive-disclosure.md](../explanation/s
 
 ## Related documentation
 
-- [Agent backend](../explanation/agent-backend.md)
-- [Control plane](../explanation/control-plane.md)
-- [Sandbox execution](../explanation/sandbox-execution.md)
-- [Ascend NPU Host Broker](../explanation/ascend-npu-runner.md)
+- [Agent backend](../developer-docs/agent-backend.md)
+- [Control plane](../developer-docs/control-plane.md)
+- [Sandbox execution](../developer-docs/sandbox-execution.md)
+- [Ascend NPU Host Broker](../developer-docs/ascend-npu-runner.md)
