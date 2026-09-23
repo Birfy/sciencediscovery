@@ -1,6 +1,6 @@
 # Design an antibody on Ascend NPU
 
-**Allow about 15 minutes to configure and submit the task. First-time resource preparation and model runtime are additional.**
+**Allow about 30 minutes to configure and run the task. First-time resource preparation and model runtime are additional.**
 
 This tutorial shows you how to use the `antibody-design` Skill to run an
 RFdiffusion → ProteinMPNN → Protenix → screening antibody-design workflow on a local or remote
@@ -8,12 +8,22 @@ Ascend NPU Runner. At the end, you will have candidate structures, Protenix conf
 and Markdown/CSV reports that explain whether each candidate passed screening.
 
 Before you begin, complete the [Quick start](../getting-started/quick-start.md), configure a task
-model, and run ScienceDiscovery with sandbox execution available (not with
+model, and confirm that sandbox execution is available (ScienceDiscovery must not be started with
 `--skip-sandbox-check`). You also need a Linux machine with compatible Ascend drivers and the CANN
 runtime, at least one Ascend NPU, and the SSH address and credentials for that machine. You will add
 and connect the Runner in this tutorial; it does not need to be configured in advance.
 
-## 1. Prepare the three scientific inputs
+## 1. Create a Project and Session
+
+Create a Project such as `antibody-design-demo`, then create a Session in it. The Runner setup,
+input upload, and task submission in the rest of this tutorial all use this Session, so keep it
+open. Enable the `antibody-design` Skill in the Session settings before continuing.
+
+When using a remote Runner, files uploaded to the local Session must also be synchronized to that
+Runner's Workspace. Model code and weights can remain in the remote Workspace and do not need to be
+copied back and forth.
+
+## 2. Prepare the three scientific inputs
 
 The pipeline does not provide a default antigen or antibody framework, and it will not guess a
 binding site for you. Prepare these inputs first:
@@ -24,12 +34,13 @@ binding site for you. Prepare these inputs first:
 | Antibody-framework PDB | Used as the framework input for RFdiffusion |
 | Hotspot list | Use residue numbers with chain names, for example `[B45,B46,B49]` |
 
+Upload the target-antigen PDB and antibody-framework PDB to the Session you created in step 1.
+
 Every hotspot must map to a CA atom in the target-antigen PDB. Do not enter only `45,46,49`, and do
 not use numbering from the antibody framework as antigen hotspots. The Agent validates chain names
-and residues before starting the models. If any input is missing, it should stop and ask you instead
-of inferring an epitope.
+and residues before starting the models. If any input is missing, it should stop and ask you.
 
-## 2. Add and connect a Runner
+## 3. Add and connect a Runner
 
 If the NPU is installed in the same Linux machine as ScienceDiscovery, use the **local Runner** and
 skip to “Select NPUs.” If the NPU is on another machine, add a remote Runner:
@@ -57,7 +68,7 @@ connection fails, open **Connection process** to inspect each step. After the co
 use **Check connection** and **Refresh resources** to verify that the Runner version, disk, CPU,
 memory, and NPU inventory are available.
 
-### 2.1 Select NPUs
+### 3.1 Select NPUs
 
 In the Runner's **NPU cards** section, review the detected devices. Select only devices marked as
 usable inside the sandbox, then click **Save selection**. If no NPU is reported, check the remote
@@ -74,23 +85,34 @@ hard-code the host device number in the pipeline configuration.
 *This machine has eight detected devices, two of which can currently be opened inside the sandbox.
 Only NPU 5 is selected in the screenshot, so it is renumbered from device 0 inside the sandbox.*
 
-### 2.2 Allow the current Session to use the Runner
+### 3.2 Allow the current Session to use the Runner
 
-The machine catalog in system configuration only records that the Runner exists. You must also set
-it as the default Runner for new Sessions in the Project's **Runner** settings, or select
-**Override** in the current Session's settings and enable that Runner. The selection is saved
-immediately. Preparation, validation, execution, and file transfer should all continue to use the
-same Runner ID.
+The machine catalog in system configuration only records that the Runner exists. Return to the
+Session created in step 1, open **More actions → Settings** at the end of its row, and find the
+**Runners** section. Under **Allowed Runners**, select **Override** and enable this Runner. You can
+also set it as the default for new Sessions in the Project's **Runner** settings. After saving,
+preparation, validation, execution, and file transfer should all continue to use the same Runner ID.
 
-## 3. Allow network access for first-time resource preparation
+![Allow a Runner in the current Session settings](../../images/antibody-design/session-runner-en.jpg)
+
+*In Session settings, Runners appears below Skill libraries. Select Override to enable the Runner
+for this task.*
+
+## 4. Allow network access for first-time resource preparation
 
 On the first run, the Skill prepares pinned model code and weights in the current Session's Runner
-Workspace. Set the sandbox network mode to **Domain allowlist** and allow:
+Workspace. Open **System configuration → Sandbox network**, set the mode to **Domain allowlist**,
+and enter one domain per line under **Allowed domains**:
 
 - `gitcode.com`
 - `gitee.com`
 - `tools.mindspore.cn`
 - `af3-dev.tos-cn-beijing.volces.com`
+
+![Configure the sandbox network domain allowlist](../../images/antibody-design/sandbox-network-en.jpg)
+
+*The Domains field on the Sandbox network page is the allowlist entry point. Confirm that the mode
+is Domain allowlist, then save the settings.*
 
 The last domain provides the Protenix CCD cache. Do not switch to unrestricted networking for
 convenience. Preparation verifies pinned source revisions, file sizes, and SHA-256 hashes, and uses
@@ -98,28 +120,18 @@ temporary `.part` files for atomic downloads. Later runs in the same Session reu
 resources. A new Session has an independent Workspace, so it must prepare the resources again; the
 current flow does not share the model cache across Sessions.
 
-## 4. Create a Project and Session
-
-Create a Project such as `antibody-design-demo`, then create a Session in it. Upload the target-
-antigen PDB and antibody-framework PDB to the current Session. In the Session settings, enable the
-`antibody-design` Skill and the Runner you added in step 2.
-
-When using a remote Runner, files uploaded to the local Session must also be synchronized to that
-Runner's Workspace. Model code and weights can remain in the remote Workspace and do not need to be
-copied back and forth.
-
 ## 5. Submit the task
 
 In the input box, state the input files, hotspots, design count, and Runner clearly. For example:
 
 ```text
-Use the antibody-design Skill to run one antibody design on the Ascend NPU Runner authorized for
+Use the antibody-design Skill to run an antibody-design job on the Ascend NPU Runner authorized for
 the current Session.
 
 Target antigen: target_antigen.pdb
 Antibody framework: antibody_framework.pdb
 Hotspots: [B45,B46,B49]
-Number of designs: 1
+Number of designs: 2
 Run name: antibody-demo-01
 
 Use the verified full-run parameters diffuser_t=200 and final_step=160. First check the Runner,
@@ -129,11 +141,6 @@ on first use, and run preflight validation. Submit the background pipeline exact
 same Execution ID while monitoring it, and return the screening report, summary CSV, and candidate
 structure when it finishes.
 ```
-
-Start with one candidate. This validates the complete flow while limiting runtime and storage. Do
-not shorten a run by changing only `diffuser_t` to 15: `final_step` must also satisfy
-`1 <= final_step <= diffuser_t`. For a real design run, prefer the verified `200/160` combination
-shown above.
 
 ## 6. Checkpoint 1 — verify that the inputs match
 

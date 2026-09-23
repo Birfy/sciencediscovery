@@ -1,17 +1,26 @@
 # 在 Ascend NPU 上设计抗体
 
-**大约需要你 15 分钟完成配置与下发，首次资源准备和模型运行时间另计。**
+**大约需要你 30 分钟完成配置与执行，首次资源准备和模型运行时间另计。**
 
 本教程带你使用 `antibody-design` Skill，在本地或远程 Ascend NPU Runner 上完成一次
 RFdiffusion → ProteinMPNN → Protenix → screening 抗体设计。结束时你会得到候选结构、
 Protenix 置信度结果，以及一份说明候选是否通过筛选的 Markdown/CSV 报告。
 
-开始之前：先完成[快速开始](../getting-started/quick-start.md)，配置任务模型，并使用沙箱执行可用的服务
+开始之前：先完成[快速开始](../getting-started/quick-start.md)，配置任务模型，并确认沙箱执行可用的服务
 （不是以 `--skip-sandbox-check` 启动的服务）。你还需要一台装有兼容 Ascend 驱动和 CANN 运行时的 Linux
 机器、至少一张 Ascend NPU，以及登录这台机器的 SSH 地址与凭据。Runner 会在下面的教程步骤中添加和连接，
 不要求事先配置好。
 
-## 1. 准备三个科学输入
+## 1. 创建 Project 与 Session
+
+新建一个 Project，例如 `antibody-design-demo`，再在其中创建一个 Session。本教程后续的 Runner 配置、
+输入文件上传和任务下发都以这个 Session 为准。先在 Session 设置中启用 `antibody-design` Skill，之后保持
+当前 Session 打开。
+
+如果使用远程 Runner，上传到本地 Session 的文件还需要同步到该 Runner 的 Workspace。模型代码和权重
+留在远程 Workspace 中即可，不需要来回复制。
+
+## 2. 准备三个科学输入
 
 这条流水线没有默认抗原、默认抗体骨架，也不会替你猜结合位点。请先准备：
 
@@ -21,13 +30,14 @@ Protenix 置信度结果，以及一份说明候选是否通过筛选的 Markdow
 | 抗体骨架 PDB | 用作 RFdiffusion 的骨架输入 |
 | hotspot 列表 | 使用带链名的残基编号，例如 `[B45,B46,B49]` |
 
+把目标抗原 PDB 和抗体骨架 PDB 上传到第 1 步创建的 Session。
+
 hotspot 必须能在目标抗原 PDB 中找到对应的 CA 原子。不要只写 `45,46,49`，也不要把抗体骨架上的编号
-当成抗原 hotspot。Agent 会在模型启动前校验链名与残基；如果缺少任一输入，它应当停下来向你询问，
-而不是自行推断表位。
+当成抗原 hotspot。Agent 会在模型启动前校验链名与残基；如果缺少任一输入，它应当停下来向你询问。
 
-## 2. 添加并连接 Runner
+## 3. 添加并连接 Runner
 
-如果 NPU 就在 ScienceDiscovery 所在的 Linux 机器上，可以直接使用**本地 Runner**，跳到“选择 NPU”这一步。
+如果 NPU 就在 ScienceDiscovery 所在的 Linux 机器上，可以直接使用**本地 Runner**，跳到“选择 NPU”。
 如果 NPU 在另一台机器上，按下面的步骤添加远程 Runner：
 
 1. 打开 **系统设置 → Runner**，点击 **添加 Runner**。
@@ -48,7 +58,7 @@ hotspot 必须能在目标抗原 PDB 中找到对应的 CA 原子。不要只写
 机器级依赖，不会由 Skill 安装。连接失败时打开**连接过程**查看具体步骤；连接成功后可点击**检查连接**和
 **刷新资源**确认 Runner 版本、磁盘、CPU、内存和 NPU 清单均已返回。
 
-### 2.1 选择 NPU
+### 3.1 选择 NPU
 
 在这个 Runner 的 **NPU 卡**区域查看探测结果，只勾选标为“沙箱内可用”的卡，然后点击**保存勾选**。
 如果没有报告 NPU，先检查远端驱动和 `npu-smi`；如果卡存在但显示无法在沙箱中打开，先释放被占用的卡或
@@ -62,33 +72,34 @@ Skill 使用的是从 0 开始的沙箱逻辑编号。让 Agent 沿用系统选�
 *这台实机探测到 8 张卡，其中当前有 2 张可在沙箱中打开；图中只勾选了 NPU 5，它会在沙箱内从 device 0
 开始重新编号。*
 
-### 2.2 允许当前 Session 使用 Runner
+### 3.2 允许当前 Session 使用 Runner
 
-系统设置中的机器目录只说明“这台 Runner 存在”。还要在 Project 设置的 **Runner** 区域把它设为新
-Session 的默认 Runner，或者在当前 Session 设置中选择**覆盖**并勾选它。该选择会立即保存；后续所有准备、
-校验、运行和文件传输都应保持使用同一个 Runner ID。
+系统设置中的机器目录只说明“这台 Runner 存在”。回到第 1 步创建的 Session，在 Session 行末打开
+**更多操作 → 设置**，找到 **Runners** 区域，在 **Allowed Runners** 中选择**覆盖**并勾选这台 Runner。
+也可以先在 Project 设置的 **Runner** 区域把它设为新 Session 的默认 Runner。保存后，后续所有准备、校验、
+运行和文件传输都应保持使用同一个 Runner ID。
 
-## 3. 允许首次资源准备所需的网络
+![在当前 Session 设置中允许使用 Runner](../../images/antibody-design/session-runner.jpg)
+
+*Session 设置中的 Runners 位于 Skill libraries 下方；选择 Override 后即可勾选当前任务要使用的 Runner。*
+
+## 4. 允许首次资源准备所需的网络
 
 第一次运行会在当前 Session 的 Runner Workspace 中准备固定版本的模型代码和权重。将沙箱网络模式设为
-**域名白名单**，并允许：
+**域名白名单**。具体位置是 **系统设置 → 沙箱网络**；在 **允许的域名** 输入框中每行填写一个域名：
 
 - `gitcode.com`
 - `gitee.com`
 - `tools.mindspore.cn`
 - `af3-dev.tos-cn-beijing.volces.com`
 
+![在系统设置中配置沙箱网络域名白名单](../../images/antibody-design/sandbox-network.jpg)
+
+*Sandbox network 页面中的 Domains 输入框就是白名单入口；确认模式为 Domain allowlist 后保存。*
+
 最后一个域名用于 Protenix 的 CCD 缓存。不要为了省事改成开放网络。准备过程会校验固定源码版本、文件大小
 和 SHA-256，并通过临时 `.part` 文件完成原子下载；同一 Session 内后续运行会复用已经验证的资源。
 新的 Session 有独立 Workspace，因此需要重新准备，当前流程不会跨 Session 共享模型缓存。
-
-## 4. 创建 Project 与 Session
-
-新建一个 Project，例如 `antibody-design-demo`，再在其中创建 Session。把目标抗原 PDB 和抗体骨架 PDB
-上传到当前 Session，并在会话设置中启用 `antibody-design` Skill 和第 2 步添加的 Runner。
-
-如果使用远程 Runner，上传到本地 Session 的文件还需要同步到该 Runner 的 Workspace。模型代码和权重
-留在远程 Workspace 中即可，不需要来回复制。
 
 ## 5. 下发任务
 
@@ -100,7 +111,7 @@ Session 的默认 Runner，或者在当前 Session 设置中选择**覆盖**并�
 目标抗原：target_antigen.pdb
 抗体骨架：antibody_framework.pdb
 hotspots：[B45,B46,B49]
-设计数量：1
+设计数量：2
 运行名称：antibody-demo-01
 
 使用已经验证过的完整参数 diffuser_t=200、final_step=160。先检查 Runner、NPU 和三个输入；
@@ -108,10 +119,6 @@ hotspots：[B45,B46,B49]
 首次使用时完成资源准备，再做运行前校验。只提交一次后台流水线，保留同一个 Execution ID
 持续监控，完成后返回筛选报告、汇总 CSV 和候选结构。
 ```
-
-第一次跑建议只生成一个候选。这样既能验证完整链路，也能控制运行时间和存储占用。不要为了缩短运行而只把
-`diffuser_t` 改成 15；`final_step` 必须同时满足 `1 <= final_step <= diffuser_t`。正式体验优先使用上面已经
-跑通过的 `200/160` 组合。
 
 ## 6. 检查点 1 —— 输入是否真的匹配
 
