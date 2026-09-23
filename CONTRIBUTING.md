@@ -380,7 +380,7 @@ selector string, in
 `pnpm test:policy` prints them, each as the command that would ask the same
 question by hand:
 
-```
+```text
 pr:
   pnpm test:list --category ut --category st --category e2e --os linux --arch amd64 \
     --npu none --model none --model mock --judge none --status reviewed
