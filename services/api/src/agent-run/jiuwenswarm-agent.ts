@@ -23,7 +23,7 @@ import { DurableContextStore } from "@sciencediscovery/context";
 
 import { startModelGateway } from "./jiuwenswarm-model-gateway.js";
 import { importSkillsToJiuwenSwarm, skillLoadedBy } from "./jiuwenswarm-skills.js";
-import { JiuwenSwarmTrajectory } from "./jiuwenswarm-trajectory.js";
+import { JiuwenSwarmTrajectory, stateProvider } from "./jiuwenswarm-trajectory.js";
 import { RunDeadlines } from "./run-deadlines.js";
 import { jiuwenSwarmWebResult } from "./jiuwenswarm-web-settings.js";
 
@@ -257,6 +257,17 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
     });
     const tools = new Map(registry.values().map((tool) => [tool.name, tool]));
     await offerDeferredTools(registry, tools, this.controller.signal);
+    // The components a turn's state snapshot is checkpointed against. They exist only once the
+    // registry and the plugin scope do, which is why this is wired here rather than at construction.
+    trajectory.useStateProviders({
+      providers: [
+        stateProvider("context.durable", () => durable.snapshot()),
+        stateProvider("tools", () => ({ snapshot: registry.snapshot(), promptSections: registry.promptSections(), specs: registry.visibleSpecs() })),
+        ...plugins.contributions.flatMap((item) => item.stateProviders),
+      ],
+      scope: this.options.sessionId,
+      signal: this.controller.signal,
+    });
     // With JiuwenSwarm's own todo tools the model does not also get ours.
     const jiuwenSwarmPlans = (this.config.planning ?? "todo") === "todo" && Boolean(this.options.planStore);
     if (jiuwenSwarmPlans) tools.delete("update_plan");

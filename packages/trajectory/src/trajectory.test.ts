@@ -23,6 +23,19 @@ test("exact admitted system sections preserve order and separators, not rejected
   assert.equal(blocks[2]!.attribution, "unavailable");
   assert.equal(contextBlocks({ ...input, systemPrompt: "fallback" }, assembly)[0]!.attribution, "unavailable");
 });
+test("an external executor's whole prompt is one recorded section, still checked against what was sent", () => {
+  // JiuwenSwarm assembles the prompt itself and reports it as the single section it is.
+  const input = { systemPrompt: "assembled elsewhere", history: [{ role: "user", content: "question" }], tools: [] };
+  const assembly = { trace: { selectedPath: "external", admitted: { sections: [
+    { id: "jiuwenswarm-system", content: "assembled elsewhere", contributorId: "jiuwenswarm", slot: "system" },
+  ] }, renderedContext: { sectionIds: ["jiuwenswarm-system"] } } };
+  const [system] = contextBlocks(input, assembly);
+  assert.equal(system!.attribution, "recorded");
+  assert.equal(system!.source, "jiuwenswarm");
+  assert.equal(system!.content, input.systemPrompt);
+  // The equality is what earns "recorded": a section that is not what was sent falls back.
+  assert.equal(contextBlocks({ ...input, systemPrompt: "something else" }, assembly)[0]!.attribution, "unavailable");
+});
 test("classification and structured credential redaction", () => {
   assert.equal(eventKind({ type: "model_delta", kind: "thinking" }), "thinking");
   assert.equal(eventKind({ type: "subagent.step", step: { kind: "tool" } }), "tool");
