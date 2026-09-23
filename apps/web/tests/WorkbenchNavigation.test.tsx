@@ -22,6 +22,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   ComposerCommandChips,
   ComposerReferenceMenu,
+  composerInsertionCaret,
+  composerReferenceToken,
   composerSkillSuggestions,
   GLOBAL_SEARCH_DEBOUNCE_MS,
   getComposerTrigger,
@@ -48,6 +50,17 @@ test("detects Composer context triggers and inserts a stable reference token", (
   assert.equal(insertComposerReference("Compare @plo", trigger!, artifactReference), "Compare @[plots/result.png] ");
   assert.deepEqual(getComposerTrigger("Use /dock"), { query: "dock", start: 4, symbol: "/" });
   assert.equal(getComposerTrigger("email@example.org"), undefined);
+});
+
+test("the caret lands behind an inserted reference, even with text after the trigger", () => {
+  const text = "Compare @plo with the baseline";
+  const trigger = getComposerTrigger(text, "Compare @plo".length)!;
+  const inserted = insertComposerReference(text, trigger, artifactReference, "Compare @plo".length);
+  const caret = composerInsertionCaret(trigger, composerReferenceToken(artifactReference));
+  assert.equal(inserted.slice(0, caret), "Compare @[plots/result.png] ");
+  assert.equal(inserted.slice(caret), " with the baseline");
+  const command = getComposerTrigger("/dist")!;
+  assert.equal(insertComposerCommand("/dist", command, "/distill-session").slice(0, composerInsertionCaret(command, "/distill-session")), "/distill-session ");
 });
 
 test("inserts Skill authoring commands without attaching a catalog reference", () => {

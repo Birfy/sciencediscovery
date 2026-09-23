@@ -95,6 +95,11 @@ export function insertComposerReference(
   return `${text.slice(0, trigger.start)}${composerReferenceToken(reference)} ${text.slice(cursor)}`;
 }
 
+/** Where the caret belongs after `inserted` replaced the trigger: behind it and its trailing space. */
+export function composerInsertionCaret(trigger: ComposerTrigger, inserted: string): number {
+  return trigger.start + inserted.length + 1;
+}
+
 export const GLOBAL_SEARCH_DEBOUNCE_MS = 250;
 
 export function insertComposerCommand(

@@ -256,6 +256,7 @@ import {
   ComposerCommandChips,
   ComposerReferenceChips,
   ComposerReferenceMenu,
+  composerInsertionCaret,
   composerReferenceToken,
   composerSkillSuggestions,
   GLOBAL_SEARCH_DEBOUNCE_MS,
@@ -3803,9 +3804,16 @@ export function App({ initialToken }: { initialToken?: string } = {}) {
     const cursor = composerTextarea.current?.selectionStart ?? message.length;
     const trigger = getComposerTrigger(message, cursor);
     if (!trigger) return;
+    // Typing goes on behind what was inserted, not at the start of the box.
+    const placeCaret = (position: number) => requestAnimationFrame(() => {
+      const textarea = composerTextarea.current;
+      if (!textarea) return;
+      textarea.focus();
+      textarea.setSelectionRange(position, position);
+    });
     if (suggestion.command) {
       setMessage(insertComposerCommand(message, trigger, suggestion.command, cursor));
-      requestAnimationFrame(() => composerTextarea.current?.focus());
+      placeCaret(composerInsertionCaret(trigger, suggestion.command));
       return;
     }
     setMessage(insertComposerReference(message, trigger, suggestion.reference, cursor));
@@ -3813,7 +3821,7 @@ export function App({ initialToken }: { initialToken?: string } = {}) {
       reference.kind === suggestion.reference.kind && reference.id === suggestion.reference.id)
       ? current
       : [...current, suggestion.reference]);
-    requestAnimationFrame(() => composerTextarea.current?.focus());
+    placeCaret(composerInsertionCaret(trigger, composerReferenceToken(suggestion.reference)));
   }
 
   function removeComposerReference(reference: ComposerReference): void {
