@@ -2358,7 +2358,7 @@ export function App({ initialToken }: { initialToken?: string } = {}) {
       isInFlight: () => sessionCreationInFlight.current,
       onCreated: (created) => {
         if (activeProjectIdRef.current !== projectId) {
-          pushToast("success", t("app.sessionCreated"), created.title);
+          pushToast("success", t("app.sessionCreated"), sessionTitle(created.title));
           return;
         }
         setSessions((current) => sessionListState === "archived" ? [created] : [created, ...current]);
@@ -2371,7 +2371,7 @@ export function App({ initialToken }: { initialToken?: string } = {}) {
           setMessage(initialMessage);
           setComposerReferences([]);
         }
-        pushToast("success", t("app.sessionCreated"), created.title);
+        pushToast("success", t("app.sessionCreated"), sessionTitle(created.title));
       },
       onError: setError,
       setInFlight: (value) => { sessionCreationInFlight.current = value; },
