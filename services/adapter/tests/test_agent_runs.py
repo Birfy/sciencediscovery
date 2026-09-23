@@ -18,9 +18,10 @@ from pathlib import Path
 import httpx
 import pytest
 
-from sciencediscovery_adapter.agent_runs import AgentRunner
+from sciencediscovery_adapter.agent_runs import JIUWENSWARM_HOST_TOOLS, AgentRunner
 from sciencediscovery_adapter.app import create_app
 from sciencediscovery_adapter.config import Settings
+from sciencediscovery_adapter.llm_proxy import rewrite_response
 
 FIXTURES = Path(__file__).parent / "fixtures"
 SETTINGS = Settings(host="127.0.0.1", port=4310, legacy_url="http://legacy.test",
@@ -231,6 +232,10 @@ async def test_the_run_talks_to_a_private_alias_that_routes_to_the_real_model(ha
     assert entry["api_base"] == f"http://adapter.test/llm/{entry['api_key']}/v1"
     assert (route.base_url, route.api_key, route.model, route.system_prompt) == ("http://llm/v1", "sk", "gpt-x", "Be a scientist.")
     assert route.tool_names == frozenset({"run_shell"}) and route.tool_prefix.startswith("mcp_sci")
+    # Listed tools and no hidden ones asked for: a bash call the model makes anyway still reaches nothing on the host.
+    assert JIUWENSWARM_HOST_TOOLS <= route.hidden_native_tools
+    chunk = {"choices": [{"delta": {"tool_calls": [{"function": {"name": "bash", "arguments": '{"command": "touch /tmp/x"}'}}]}}]}
+    assert rewrite_response(chunk, route)["choices"][0]["delta"]["tool_calls"][0]["function"]["name"] == "unavailable__bash"
     # after the run: the alias is gone from the list and the route is closed
     assert [m["model_name"] for m in listed["models"]] == ["sciencediscovery-default"], "only the default-model entry is left"
     assert runner.routes.get(entry["api_key"]) is None

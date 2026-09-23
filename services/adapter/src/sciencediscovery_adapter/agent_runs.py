@@ -100,10 +100,16 @@ class AgentRunRequest(BaseModel):
     nativeTools: list[str] = Field(default_factory=list)
     # "all": every one of JiuwenSwarm's own tools is offered too, and one of ours with the same name gives way.
     jiuwenSwarmTools: Literal["all", "listed"] = "listed"
-    # JiuwenSwarm's own tools the model must not get (they act on the host; see LlmRoute.hidden_native_tools).
+    # More of JiuwenSwarm's own tools the model must not get, besides JIUWENSWARM_HOST_TOOLS, which it never gets
+    # (they act on the host; see LlmRoute.hidden_native_tools).
     hiddenJiuwenSwarmTools: list[str] = Field(default_factory=list, max_length=100)
     # Longest a single tool call may take, in seconds; the run's own timeout, when the caller has one.
     toolTimeoutSeconds: int | None = None
+
+
+# JiuwenSwarm's own tools that act on the host, outside ScienceDiscovery's sandbox and Runner (the API's
+# JIUWENSWARM_HOST_TOOLS): no run's model may call them, in any tool mode.
+JIUWENSWARM_HOST_TOOLS = frozenset({"bash", "read_file", "write_file", "edit_file", "glob", "list_files", "grep", "read_pdf"})
 
 
 # JiuwenSwarm's configuration for web search (`config.set` keys): its two free engines and its paid-search keys.
@@ -302,14 +308,17 @@ class AgentRunner:
                     raise ValueError(f"the {request.model.provider} protocol is not supported by this executor yet")
                 # JiuwenSwarm talks to a private alias that points at this run's proxy route, which
                 # forwards to the real endpoint with the real id, tool names and system prompt.
+                # Its host tools are turned away whatever the caller asked: leaving one unlisted only keeps it out
+                # of the model's tool list, and a call the model makes to it anyway would run on the host.
+                hidden = frozenset(request.hiddenJiuwenSwarmTools) | JIUWENSWARM_HOST_TOOLS
                 llm_token = self.routes.add(LlmRoute(
                     base_url=request.model.baseUrl.rstrip("/"), api_key=request.model.apiKey, model=request.model.model,
                     tool_prefix=f"mcp_{name}_", tool_names=frozenset(t.name for t in request.tools),
                     tool_specs={t.name: {"description": t.description, "parameters": t.inputSchema} for t in request.tools},
                     system_prompt=request.systemPrompt, system_prompt_mode=request.systemPromptMode,
                     system_prompt_tail=request.systemPromptTail,
-                    native_tools=frozenset(request.nativeTools), all_native_tools=request.jiuwenSwarmTools == "all",
-                    hidden_native_tools=frozenset(request.hiddenJiuwenSwarmTools), run_tag=token,
+                    native_tools=frozenset(request.nativeTools) - hidden, all_native_tools=request.jiuwenSwarmTools == "all",
+                    hidden_native_tools=hidden, run_tag=token,
                 ))
                 # Named after the real model: JiuwenSwarm tells the model its own model's name (runtime state), and
                 # the alias is all it knows. The suffix keeps two runs of one model apart.
