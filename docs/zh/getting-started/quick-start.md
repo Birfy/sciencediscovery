@@ -82,3 +82,4 @@ curl -fsS http://127.0.0.1:4310/health
 - 日常运行时行为：[运行时行为参考](../reference/runtime-behavior.md)
 - 工具参数：[内置工具参考](../reference/builtin-tools.md)
 - 系统原理：[整体运行时架构](../developer-docs/architecture.md)
+- 可选的端到端实践：[演进出一个更优解](../domains/evolve-a-solution.md)

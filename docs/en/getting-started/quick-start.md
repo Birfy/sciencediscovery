@@ -89,3 +89,4 @@ connectors, and supplied material; they are not fixed-output promises.
 - Day-to-day runtime behavior: [Runtime behavior reference](../reference/runtime-behavior.md)
 - Tool parameters: [Built-in tools reference](../reference/builtin-tools.md)
 - System principles: [Overall runtime architecture](../developer-docs/architecture.md)
+- Optional end-to-end practice: [Evolve a solution](../domains/evolve-a-solution.md)
