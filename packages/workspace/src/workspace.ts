@@ -304,8 +304,10 @@ export interface WorkspaceToolOptions {
     job: NpuJob,
     artifacts: Array<{ artifact_id: string; path: string; version: number }>,
   ) => void;
+  /** Exactly one of a completed download's artifactJobId or a workspace PDF path. */
   paperExtractPdf?: (input: {
-    artifactJobId: string;
+    artifactJobId?: string;
+    path?: string;
   }, signal?: AbortSignal) => Promise<unknown>;
   webFetch?: (toolCallId: string, url: string, signal?: AbortSignal) => Promise<unknown>;
   webSearch?: (toolCallId: string, query: string, signal?: AbortSignal) => Promise<unknown>;
@@ -1589,11 +1591,15 @@ export function createWorkspaceTools(workspaceRoot: string, options: WorkspaceTo
   }
   if (options.paperExtractPdf) {
     const extractPdfParameters = Type.Object({
-      artifactJobId: Type.String({ minLength: 1 }),
+      artifactJobId: Type.Optional(Type.String({ minLength: 1, description: "A completed artifact_download job" })),
+      path: Type.Optional(Type.String({ minLength: 1, description: "A PDF already in the workspace, such as one the user uploaded" })),
     });
     const extractPdf: AgentTool<typeof extractPdfParameters> = {
-      description: "Extract text, tables, and page metadata from a completed PDF artifact download. Call this only after artifact_download has returned a completed artifactJobId.",
+      description: "Extract text, tables, and page metadata from a PDF. Pass artifactJobId for a paper fetched with artifact_download (only after it has returned a completed artifactJobId), or path for a PDF already in the workspace, such as one the user uploaded. Read the returned textPath instead of decoding the PDF yourself.",
       execute: async (_toolCallId, params, signal) => {
+        if (Boolean(params.artifactJobId) === Boolean(params.path)) {
+          throw new Error("paper_extract_pdf takes exactly one of artifactJobId or path");
+        }
         const result = await options.paperExtractPdf!(params, signal);
         return {
           content: [{ type: "text", text: JSON.stringify(result) }],

@@ -827,6 +827,11 @@ test("artifact download and PDF extraction are separate tools", async () => {
   assert.deepEqual(calls, ["download"]);
   await extract.execute("extract-call", { artifactJobId: "job" });
   assert.deepEqual(calls, ["download", "extract"]);
+  await extract.execute("extract-upload", { path: "enzyme_paper.pdf" });
+  assert.deepEqual(calls, ["download", "extract", "extract"]);
+  await assert.rejects(extract.execute("extract-none", {}), /exactly one/);
+  await assert.rejects(extract.execute("extract-both", { artifactJobId: "job", path: "a.pdf" }), /exactly one/);
+  assert.equal(calls.length, 3);
 });
 
 test("project artifact tools declare, list, and read catalog entries", async () => {
