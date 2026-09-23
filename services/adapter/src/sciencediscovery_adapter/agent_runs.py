@@ -216,7 +216,14 @@ class AgentRunner:
 
     async def ensure_shared_tools(self, tools: list[dict[str, Any]], timeout_s: int) -> None:
         """Give JiuwenSwarm the one MCP server for every run's tools (see mcp_server), and its list again when a run
-        brought a tool (or an argument) it did not have. A reconnect makes JiuwenSwarm read the list afresh."""
+        brought a tool (or an argument) it did not have.
+
+        A bare `mcp.connect` on an already-connected server does *not* make JiuwenSwarm re-read the tool
+        list (confirmed live: a run whose only new tools arrived through that path never saw JiuwenSwarm
+        issue `tools/list` again, so those tools were never callable) -- only the full
+        disconnect/delete_custom/register_custom cycle does. So `changed` forces that full cycle too, not
+        just the first-ever registration or a larger timeout.
+        """
         async with self._shared_lock:
             new = [tool for tool in tools if tool["name"] not in self.registry.shared]
             changed = self.registry.merge(tools)
@@ -225,8 +232,10 @@ class AgentRunner:
             if self._shared_registered and not changed and not longer:
                 return
             self._shared_timeout_s = max(timeout_s, self._shared_timeout_s)
-            if not self._shared_registered or longer:
-                # An earlier adapter left it registered with another URL (its token changed), or a longer timeout is needed.
+            if not self._shared_registered or changed or longer:
+                # An earlier adapter left it registered with another URL (its token changed), new tools
+                # arrived, or a longer timeout is needed -- any of these needs JiuwenSwarm to actually
+                # re-read the tool list, which only a fresh connection cycle reliably does.
                 for method in ("mcp.disconnect", "mcp.delete_custom"):
                     try:
                         await self.rpc(self.settings.mgmt_url, method, {"name": SERVER_NAME})
