@@ -204,6 +204,24 @@ class ResearchTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.state['status'], 'interrupted')
         self.assertEqual(len(self.store.read('p', 's', 'research-test')['nodes']), 1)
 
+    async def test_a_parent_outside_the_selection_gets_one_correction(self):
+        # Observed with Kimi: round 2 proposed under a direction that was not selected, and the
+        # research stopped without the model being told, as a malformed answer would have been.
+        self.state['settings']['maxRounds'] = 1
+        asked = []
+
+        async def model(role, payload):
+            if role == 'ideate':
+                asked.append(payload)
+                parent = 'NOT-SELECTED' if len(asked) == 1 else payload['selectedParentIds'][0]
+                return json.dumps(dict(candidates=[dict(parentId=parent, direction='D', hypothesis='H', rationale='R')], reason='r')), 10
+            return await self.model(role, payload)
+        self.state['nodes'].append({**node('NOT-SELECTED', 'ROOT', 'Other', 'direction', 1), 'searchStatus': 'pruned'})
+        await IdeaTreeEngine(self.state, self.store, {}, model).run()
+        self.assertEqual(len(asked), 2)
+        self.assertIn('not selected', asked[1]['correction'])
+        self.assertNotEqual(self.state['status'], 'interrupted')
+
     async def test_propagation_resume_skips_saved_parent(self):
         self.state['settings']['maxRounds'] = 1
         fail = True
@@ -234,7 +252,7 @@ class ResearchTests(unittest.IsolatedAsyncioTestCase):
         from sciencediscovery_evolve.vendor.idea_tree import research_service as service
         from fastapi import HTTPException
         entered, release = asyncio.Event(), asyncio.Event()
-        async def ask(engine, role, payload):
+        async def ask(engine, role, payload, check=None):
             entered.set()
             await release.wait()
             engine.check_stop()
