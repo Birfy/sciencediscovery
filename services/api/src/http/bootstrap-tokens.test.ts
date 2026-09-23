@@ -159,6 +159,13 @@ test("startup output offers sign-in links for generated and operator-supplied to
   assert.match(explicit, /SCIENCE_AGENT_AUTH_TOKEN/);
 });
 
+test("the memory graph counts as available unless the deployment says it runs no sidecar", async (context) => {
+  const dataDir = await temporaryDataDir(context, "memory-graph-available");
+  assert.equal(loadServerConfig({ SCIENCE_AGENT_DATA_DIR: dataDir }).memoryGraph.available, true);
+  assert.equal(loadServerConfig({ SCIENCE_AGENT_DATA_DIR: dataDir, SCIENCE_AGENT_MEMORY_GRAPH_AVAILABLE: "0" }).memoryGraph.available, false);
+  assert.equal(loadServerConfig({ SCIENCE_AGENT_DATA_DIR: dataDir, SCIENCE_AGENT_MEMORY_GRAPH_AVAILABLE: "1" }).memoryGraph.available, true);
+});
+
 test("behind the JiuwenSwarm adapter the sign-in link names the public port, not the API's own", async (context) => {
   const dataDir = await temporaryDataDir(context, "bootstrap-public-port");
   const config = loadServerConfig({ SCIENCE_AGENT_DATA_DIR: dataDir, SCIENCE_AGENT_PORT: "4410", SCIENCE_AGENT_PUBLIC_PORT: "4310" });

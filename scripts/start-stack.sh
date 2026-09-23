@@ -523,6 +523,9 @@ prepare_docker() {
   # default scripts/jiuwenswarm.sh otherwise assumes.
   export JIUWENSWARM_ROOT="${JIUWENSWARM_ROOT:-$data_dir/jiuwenswarm}"
 
+  # The image runs no memory-graph sidecar: a new data directory starts with the graph off, not on and degraded.
+  export SCIENCE_AGENT_MEMORY_GRAPH_AVAILABLE="${SCIENCE_AGENT_MEMORY_GRAPH_AVAILABLE:-0}"
+
   # A uid/gid mismatch on the host bind mount is the most common first-run
   # failure. Report it before any service starts.
   mkdir -p "$data_dir" 2>/dev/null || true

@@ -93,6 +93,10 @@ export interface ServerConfig {
     url: string;
     internalToken: string;
     neo4jPassword?: string;
+    /** False where this deployment runs no memory-graph sidecar (the Docker image): a new data directory then
+     *  starts with the graph off instead of on and degraded. Only seeds a new directory, like the defaults.
+     *  Absent means available. */
+    available?: boolean;
   };
   /** Evolve search sidecar (services/evolve, Python FastAPI, loopback). It
    *  holds no business state and never receives a model key, so there is
@@ -244,6 +248,7 @@ export function loadServerConfig(env: NodeJS.ProcessEnv = process.env): ServerCo
       url: env.SCIENCE_AGENT_MEMORY_GRAPH_URL?.trim().replace(/\/$/, "") || "http://127.0.0.1:17674",
       internalToken: env.SCIENCE_AGENT_MEMORY_GRAPH_INTERNAL_TOKEN?.trim() || "sciencediscovery-memory-graph-local",
       neo4jPassword: env.SCIENCE_AGENT_MEMORY_GRAPH_NEO4J_PASSWORD?.trim() || undefined,
+      available: env.SCIENCE_AGENT_MEMORY_GRAPH_AVAILABLE?.trim() !== "0",
     },
     evolve: {
       url: env.SCIENCE_AGENT_EVOLVE_URL?.trim().replace(/\/$/, "") || "http://127.0.0.1:4313",
