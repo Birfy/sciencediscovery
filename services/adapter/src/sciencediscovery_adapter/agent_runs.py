@@ -31,6 +31,7 @@ import asyncio
 import json
 import os
 import re
+import shlex
 import sys
 import uuid
 from collections.abc import AsyncIterator, Callable
@@ -180,6 +181,10 @@ def describe_approval(request: dict[str, Any], route: LlmRoute | None) -> None:
     main = next((arguments[key] for key in ("command", "scriptPath", "code", "file_path", "path", "url", "query")
                  if isinstance(arguments.get(key), str) and arguments[key].strip()), None)
     detail = main if main is not None else json.dumps(arguments, ensure_ascii=False)
+    extra = arguments.get("arguments")
+    if main is not None and isinstance(extra, list) and extra and all(isinstance(item, str) for item in extra):
+        # run_shell's arguments run with the command; the card shows what the user is approving.
+        detail = f"{detail} {shlex.join(extra)}"
     text = f"{shown}: {detail}" if arguments else shown
     request["summary"] = text[:500]
     request["toolName"] = shown

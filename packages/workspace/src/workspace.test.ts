@@ -351,9 +351,12 @@ test("run_shell executes an existing workspace script without rewriting or path 
     scriptPath: "root script.sh",
   });
   await tool.execute("shell-child", { scriptPath: "scripts/child script.sh" });
+  // Arguments run with a command too: a model that splits `python -c code` is not left running bare `python`.
+  await tool.execute("shell-command", { arguments: ["-c", "print('hi')"], command: "python" });
   assert.deepEqual(executedCodes, [
     "/usr/bin/bash '/workspace/root script.sh' 'value with spaces' 'quote'\"'\"'value' '$HOME; touch never'",
     "/usr/bin/bash '/workspace/scripts/child script.sh'",
+    "python '-c' 'print('\"'\"'hi'\"'\"')'",
   ]);
   await assert.rejects(
     tool.execute("shell-missing", { scriptPath: "missing.sh" }),

@@ -1302,7 +1302,7 @@ export function createWorkspaceTools(workspaceRoot: string, options: WorkspaceTo
     const shellParameters = Type.Object({
       background: Type.Optional(Type.Boolean({ description: "Return after acceptance without waiting for completion." })),
       wait_ms: Type.Optional(Type.Integer({ minimum: 0, maximum: 30_000, description: "Foreground wait budget (default 10000 ms), not a process timeout." })),
-      arguments: Type.Optional(Type.Array(Type.String({ maxLength: 512 }), { maxItems: 32 })),
+      arguments: Type.Optional(Type.Array(Type.String({ maxLength: 512 }), { maxItems: 32, description: "Arguments passed to command or scriptPath, each quoted as one word." })),
       command: Type.Optional(Type.String({ maxLength: 20_000, minLength: 1 })),
       environment_id: Type.Optional(Type.String({ minLength: 1 })),
       cwd: Type.Optional(Type.String({ maxLength: 1_000 })),
@@ -1316,7 +1316,7 @@ export function createWorkspaceTools(workspaceRoot: string, options: WorkspaceTo
         if (Boolean(params.command) === Boolean(params.scriptPath)) {
           throw new Error("Provide exactly one of command or scriptPath");
         }
-        let code = params.command?.trim() ?? "";
+        let code = [params.command?.trim() ?? "", ...(params.command ? params.arguments ?? [] : []).map(shellQuote)].join(" ").trim();
         if (params.scriptPath) {
           const script = await resolveSandboxScriptPath(
             workspaceRoot,
