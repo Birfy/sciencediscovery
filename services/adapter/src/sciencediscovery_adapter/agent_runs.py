@@ -50,7 +50,7 @@ from .llm_proxy import DEFAULT_ALIAS, LlmRoute, LlmRoutes
 from .mcp_server import SERVER_NAME, Toolset, ToolsetRegistry
 from .models import ModelProfile, ModelSync
 from .schema import relax_schema
-from .skills import SkillSync
+from .skills import SkillSync, sandbox_skill_paths
 
 # SCIENCE_AGENT_ADAPTER_DEBUG=1 prints every tool event of every run to stderr.
 _DEBUG = os.environ.get("SCIENCE_AGENT_ADAPTER_DEBUG") == "1"
@@ -190,8 +190,10 @@ def describe_approval(request: dict[str, Any], route: LlmRoute | None) -> None:
     request["toolName"] = shown
 
 
-def bridge_caller(bridge: Bridge, client: httpx.AsyncClient):
+def bridge_caller(bridge: Bridge, client: httpx.AsyncClient, skill_directories: dict[str, str] | None = None):
     async def call(name: str, arguments: dict[str, Any]) -> tuple[str, bool]:
+        if skill_directories and name == "run_shell" and isinstance(arguments.get("command"), str):
+            arguments = {**arguments, "command": sandbox_skill_paths(arguments["command"], skill_directories)}
         response = await client.post(
             bridge.url, json={"name": name, "arguments": arguments},
             headers={"authorization": f"Bearer {bridge.token}"} if bridge.token else {},
@@ -354,7 +356,7 @@ class AgentRunner:
                 # JiuwenSwarm validates strictly; the model still sees the originals (see LlmRoute).
                 token = self.registry.add(Toolset(
                     tools=[{**t.model_dump(), "inputSchema": relax_schema(t.inputSchema)} for t in request.tools],
-                    call=bridge_caller(request.bridge, self.client()),
+                    call=bridge_caller(request.bridge, self.client(), self.skills.directories),
                 ))
                 # Before the model route: the server's name is in every tool name the model and JiuwenSwarm use.
                 tools = [{**t.model_dump(), "inputSchema": relax_schema(t.inputSchema)} for t in request.tools]
