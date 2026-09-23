@@ -35,6 +35,16 @@ def text(value: Any, name: str, limit: int = 24000) -> str:
     return value.strip()
 
 
+def parse_json(raw: str) -> Any:
+    """The model's JSON, also when it is wrapped in one Markdown code fence as many models do."""
+    body = raw.strip() if isinstance(raw, str) else raw
+    if isinstance(body, str) and body.startswith('```'):
+        first, _, rest = body.partition('\n')
+        if rest.rstrip().endswith('```') and first.strip('`').strip().lower() in ('', 'json'):
+            body = rest.rstrip()[:-3].strip()
+    return json.loads(body)
+
+
 def validate_result(role: str, value: Any, assessor_roles: set[str]) -> dict:
     if not isinstance(value, dict):
         raise ValueError("Expected a JSON object")
@@ -228,7 +238,7 @@ class IdeaTreeEngine:
             if missing_usage:
                 raise RuntimeError('Model did not report token usage; cannot enforce the configured token budget')
             try:
-                result = validate_result(role, json.loads(raw), {item['id'] for item in self.assessors()})
+                result = validate_result(role, parse_json(raw), {item['id'] for item in self.assessors()})
                 return result
             except (ValueError, TypeError) as error:
                 if attempt:

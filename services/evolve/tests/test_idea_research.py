@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from sciencediscovery_evolve.vendor.idea_tree.research import IdeaTreeEngine, ResearchStore, node, now
+from sciencediscovery_evolve.vendor.idea_tree.research import IdeaTreeEngine, ResearchStore, node, now, parse_json
 from sciencediscovery_evolve.vendor.idea_tree.research_service import Settings
 from sciencediscovery_evolve.vendor.idea_tree.templates import snapshot
 
@@ -353,3 +353,14 @@ def test_transport_leaves_temperature_to_the_provider(monkeypatch):
         assert engine.transport('system', dict(a=1), 100) == ('{}', 7)
     assert 'temperature' not in sent[0]
     assert sent[0]['max_tokens'] == 100
+
+
+def test_a_fenced_json_answer_is_read_as_json():
+    # Kimi answers the ideation prompt with ```json ... ```.
+    assert parse_json('```json\n{"candidates": []}\n```') == {'candidates': []}
+    assert parse_json('  ```\n{"a": 1}\n```  ') == {'a': 1}
+    assert parse_json('{"a": 1}') == {'a': 1}
+    with pytest.raises(ValueError):
+        parse_json('```python\n{"a": 1}\n```')
+    with pytest.raises(ValueError):
+        parse_json('Here it is: {"a": 1}')
