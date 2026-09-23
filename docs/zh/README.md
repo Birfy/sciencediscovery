@@ -34,12 +34,13 @@
 - [运行时行为](reference/runtime-behavior.md) — 模型、设置继承、技能、权限、超时和执行限制。
 - [内置工具](reference/builtin-tools.md) — 模型可见工具的参数、边界和暴露条件。
 - [Web 工具](reference/web-tools.md) — Web Search/Fetch provider、配置、权限、缓存与审计。
-- [JiuwenSwarm 运行时行为](reference/jiuwenswarm-runtime.md) — 默认后端的行为边界、原生循环回退与兼容性详情入口。
-- [JiuwenSwarm 迁移状态](reference/jiuwenswarm-migration-status.md) — 已实现范围、已知缺口与后续交接方式。
 
 ## 开发者文档
 
 见[开发者文档导航](developer-docs/README.md)，其中包括架构、模块边界、协议和当前有效的特性设计。
+
+- [JiuwenSwarm 迁移状态](reference/jiuwenswarm-migration-status.md) — 面向维护者的已实现范围、
+  已知缺口与后续交接方式。
 
 ## 其他资料
 

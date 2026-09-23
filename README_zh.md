@@ -19,7 +19,9 @@
 
 ## 简介
 
-ScienceDiscovery 是一个本地运行的科研工作台：智能体阅读文献、在沙箱中编写并运行代码，并记录每一项结果的来源。全部过程在你自己的机器上执行，处理你自己的文件，使用你自己的模型密钥。
+ScienceDiscovery 是一个基于 [JiuwenSwarm](https://gitcode.com/openJiuwen/jiuwenswarm)
+构建、在本地运行的科研工作台：智能体阅读文献、在沙箱中编写并运行代码，并记录每一项结果的
+来源。全部过程在你自己的机器上执行，处理你自己的文件，使用你自己的模型密钥。
 
 ## 安装
 
@@ -35,11 +37,10 @@ chmod +x ScienceDiscovery-<version>-linux-<architecture>
 
 打开 `serve` 输出的 **`Open to sign in`** 链接，浏览器将自动保存本地服务访问令牌，无需手动复制。该令牌不同于模型 API Key；此链接可访问本机工作区，请勿外传。Web 界面位于 <http://127.0.0.1:4310>，终端窗口仅运行服务进程。
 
-宿主唯一依赖是 Bubblewrap。[部署指南](docs/zh/getting-started/deployment.md)
+运行预打包二进制时，唯一需要自行安装的依赖是 Bubblewrap。[部署指南](docs/zh/getting-started/deployment.md)
 说明如何从源码构建便携二进制、以本地源码模式进行开发，以及使用 Docker 完成高级容器运维。
 其中的[二进制与本地模式首次启动排障](docs/zh/getting-started/deployment.md#二进制与本地模式的首次启动排障)
-可处理常见问题。预打包二进制与 Docker 镜像默认运行内置的 JiuwenSwarm 后端；高级模式与
-原生循环回退见部署指南。
+可处理常见问题。所有部署方式默认使用 JiuwenSwarm 后端；部署指南说明各方式的具体操作。
 
 ## 配置模型
 
@@ -76,7 +77,7 @@ cat prompt.txt | ./ScienceDiscovery run --stdin --auto-approve | jq .
 
 ## 环境要求
 
-| 路径 | 宿主要求 |
+| 路径 | 运行环境要求 |
 |---|---|
 | **预打包二进制** | Linux x86_64/aarch64、Bubblewrap |
 | **本地源码模式** | Linux x86_64/aarch64 或 macOS x64/arm64；Node.js 22.19+、pnpm 11.1.2、Python 3、uv 0.9+、Git；Linux 用 Bubblewrap，macOS 用系统内置 Seatbelt |
@@ -86,7 +87,11 @@ cat prompt.txt | ./ScienceDiscovery run --stdin --auto-approve | jq .
 
 ## 架构概览
 
-预打包二进制与 Docker 部署中，浏览器 UI 连接的是一个适配器，由它把智能体循环放到 [JiuwenSwarm](https://gitcode.com/openJiuwen/jiuwenswarm) 上运行：适配器占据对外端口，把 Node 控制 API 反向代理在它身后，JiuwenSwarm 负责模型循环并通过回调进入 API 执行每一次工具调用；工作区工具、沙箱执行、科研连接器、PDF 抽取、权限、溯源与审阅校验仍由 Node 控制面统一管控。本地源码模式默认使用原生循环，显式选择后才使用 JiuwenSwarm。[部署指南](docs/zh/getting-started/deployment.md)说明两种模式。
+ScienceDiscovery 基于 [JiuwenSwarm](https://gitcode.com/openJiuwen/jiuwenswarm) 构建。所有部署
+方式中，浏览器 UI 都通过对外适配器访问服务，适配器将 Node 控制 API 反向代理在其后。JiuwenSwarm
+负责模型循环，并通过回调进入 API 执行 ScienceDiscovery 工具调用；工作区工具、沙箱执行、科研
+连接器、PDF 抽取、权限、溯源与审阅校验仍由 Node 控制面统一管控。[部署指南](docs/zh/getting-started/deployment.md)
+说明各部署方式的具体拓扑。
 
 > [!WARNING]
 > ScienceDiscovery 不是多用户生产服务。适配器与 API 默认只监听回环；访问使用一个 bearer token，且不终止 TLS。监听其他网卡必须是可信、受保护网络中的显式部署选择。Python、R 和 shell 命令在 fail-closed 的平台沙箱中运行（Linux 使用 Bubblewrap，macOS 源码模式使用 Seatbelt）；控制 API、适配器、JiuwenSwarm、PDF worker 以及发往已配置模型/数据提供方的请求在沙箱外作为受信任控制面操作执行。

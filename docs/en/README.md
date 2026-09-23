@@ -33,9 +33,10 @@ This is the complete English documentation set.
 - [Runtime behavior and limits](reference/runtime-behavior.md) — models, settings inheritance, skills, permissions, timeouts, and execution limits.
 - [Built-in tools](reference/builtin-tools.md) — parameters, boundaries, and exposure conditions for model-visible tools.
 - [Web tools](reference/web-tools.md) — web search/fetch providers, configuration, permissions, caching, and audit.
-- [JiuwenSwarm runtime behavior](reference/jiuwenswarm-runtime.md) — default-backend boundaries, native-loop fallback, and where to check compatibility details.
-- [JiuwenSwarm migration status](reference/jiuwenswarm-migration-status.md) — implemented scope, known gaps, and hand-over guidance.
 
 ## Developer documentation
 
 See the [developer documentation index](developer-docs/README.md) for architecture, module boundaries, protocols, and current feature designs.
+
+- [JiuwenSwarm migration status](reference/jiuwenswarm-migration-status.md) — implementation scope,
+  known gaps, and hand-over guidance for maintainers.

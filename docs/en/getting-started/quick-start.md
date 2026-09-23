@@ -8,10 +8,11 @@ This tutorial starts with a ready-to-run ScienceDiscovery executable, then confi
 
 - Linux on `x86_64` or `aarch64`.
 - `bwrap` (Bubblewrap) for sandboxed command execution.
-- A ScienceDiscovery executable matching the host architecture.
+- A ScienceDiscovery executable for your Linux architecture, available from the
+  [Releases page](https://github.com/openJiuwen-ai/sciencediscovery/releases).
 - At least one external model API Key.
 
-Bubblewrap must be provided by the host:
+Bubblewrap must be available on your system:
 
 ```bash
 sudo apt-get install -y bubblewrap   # Debian / Ubuntu
