@@ -14,7 +14,8 @@
 
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
-import test from "node:test";
+import { createTest } from "../support/tagged/compat.mjs";
+const { test } = createTest(import.meta.url, { tags: ["category:ut", "os:linux", "arch:amd64", "arch:arm64"] });
 
 import { compareRecordings, coverage, lookup, profileRunEvents, runCase } from "./lib.mjs";
 

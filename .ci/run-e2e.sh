@@ -231,13 +231,15 @@ if [[ "$backend" == "jiuwenswarm" ]]; then
   # A JiuwenSwarm instance of this layer's own, so a run never shares skills, config or sessions with the
   # instance a developer uses (the install itself, JIUWENSWARM_ROOT, is shared).
   export JIUWENSWARM_INSTANCE="${JIUWENSWARM_INSTANCE:-sd-e2e}"
-  # A host without JiuwenSwarm gets the pinned release installed; a prepared workspace brought its own.
-  if [[ "$prepared" -eq 0 ]]; then
-    "$repository_root/scripts/jiuwenswarm.sh" setup >> "$test_log" 2>&1 || {
-      printf 'BLOCKED: JiuwenSwarm could not be installed (scripts/jiuwenswarm.sh setup); see %s.\n' "$test_log" | tee -a "$test_log" >&2
-      exit 2
-    }
-  fi
+  # Install the pinned release when missing and create this layer's instance. A
+  # prepared workspace is one whose host installed the Node dependencies and the
+  # pinned Chromium — the shared runner does that before it freezes the plan —
+  # not JiuwenSwarm or its instance, so this runs either way; with the install
+  # already present it only makes sure the instance exists.
+  "$repository_root/scripts/jiuwenswarm.sh" setup >> "$test_log" 2>&1 || {
+    printf 'BLOCKED: JiuwenSwarm could not be installed (scripts/jiuwenswarm.sh setup); see %s.\n' "$test_log" | tee -a "$test_log" >&2
+    exit 2
+  }
   eval "$("$repository_root/scripts/jiuwenswarm.sh" env)" || {
     printf 'BLOCKED: the JiuwenSwarm instance %s is not set up.\n' "$JIUWENSWARM_INSTANCE" | tee -a "$test_log" >&2
     exit 2

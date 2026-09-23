@@ -1,20 +1,39 @@
 # 部署 ScienceDiscovery
 
-根目录 [README_zh.md](../../../README_zh.md) 给出最短启动路径。本文只描述部署操作；环境变量、默认端口、配额和存储布局见[配置参考](../reference/configuration.md)。
+根目录 [README_zh.md](../../../README_zh.md) 给出最短启动路径。本文说明其他安装和运行方式：
+从源码构建便携二进制、用于高级容器运维的 Docker，以及面向开发和调试的本地源码模式。
+环境变量、默认端口、配额和存储布局见[配置参考](../reference/configuration.md)。
 
 ## 三种部署方式
 
-| 方式 | 用户拿到的东西 | 宿主依赖 | 适用场景 |
-|---|---|---|---|
-| [源码构建单文件二进制](#单文件二进制部署) | 每个架构**一个**可执行文件 | 构建时需源码工具链；运行时需 bubblewrap | 制作可搬运的内部发布产物 |
-| [Docker 镜像](#docker-部署) | 容器镜像 + Compose 文件 | Docker Engine 24+、Compose v2 | 已有容器平台，希望按容器方式运维 |
-| [本地模式](#本地模式宿主进程) | 源码仓库 | Node、pnpm、uv、Python；Linux 使用 Bubblewrap，macOS 使用系统内置 Seatbelt | 开发与调试 |
+| 方式 | 支持的操作系统 | 用户拿到的东西 | 宿主依赖 | 适用场景 |
+|---|---|---|---|---|
+| [单文件二进制](#单文件二进制部署) | Linux x86_64/aarch64 | 预打包可执行文件，或从源码构建的产物 | 运行时需 Bubblewrap，仅自行构建时需源码工具链 | 新用户的最短路径，或可搬运的内部发布产物 |
+| [Docker 镜像](#docker-部署) | Linux x86_64/aarch64 | 容器镜像 + Compose 文件 | Docker Engine 24+、Compose v2 | 高级容器运维 |
+| [本地模式](#本地模式宿主进程) | Linux x86_64/aarch64、macOS x64/arm64 | 源码仓库 | Node、pnpm、uv、Python；Linux 使用 Bubblewrap，macOS 使用系统内置 Seatbelt | 开发与调试 |
 
 **这三条路径互相独立，请选定一条，不要混用。** 二进制部署从构建到运行全程不涉及 Docker：可执行文件自带 Node、CPython、gateway 依赖、Web 静态资源与 micromamba。需要容器化部署时走镜像路径，不要把二进制包塞进镜像。
 
 三者都不打包 Neo4j。ScienceMemory 需要外部 Neo4j 服务器，未配置时该功能保持关闭，Web 与对话主路径不受影响。
 
 ## 单文件二进制部署
+
+### 下载并运行已发布的二进制
+
+预打包二进制是新用户的最短路径。请在
+[Releases 页面](https://github.com/openJiuwen-ai/sciencediscovery/releases)下载与宿主架构匹配的产物：
+
+```text
+ScienceDiscovery-<version>-linux-x86_64
+ScienceDiscovery-<version>-linux-aarch64
+```
+
+再将下列命令中的文件名替换为已下载的文件：
+
+```bash
+chmod +x ScienceDiscovery-<version>-linux-<architecture>
+./ScienceDiscovery-<version>-linux-<architecture> serve
+```
 
 ### Runner 构建版本
 
@@ -47,6 +66,25 @@ artifact="dist/binary-release-local/ScienceDiscovery-local-linux-$arch"
 ```
 
 `serve` 依次启动 bubblewrap runner 和带 Web UI 的控制 API，顺序与健康检查同[本地模式](#本地模式宿主进程)一致，然后打印 `Open to sign in` 链接与本地服务访问令牌。常驻的就是这两个进程：agent 循环、模型调用与 web provider 都在 API 进程内，随包的 Python MCP server 由 API 按需拉起，不受 supervisor 托管。默认监听 <http://127.0.0.1:4310>。打开启动日志中的 `Open to sign in` 链接，浏览器会自动保存本地服务访问令牌并登录；若直接打开 <http://127.0.0.1:4310>，也可在连接引导中粘贴日志里的本地服务访问令牌并保存。请勿分享该登录链接。设置了 `SCIENCE_AGENT_AUTH_TOKEN` 时使用该指定令牌。Ctrl-C 会按启动的反序停止全部服务。
+
+## 二进制与本地模式的首次启动排障
+
+本节适用于已发布的二进制和本地源码模式。容器专属问题请看 [Docker 常见问题](#常见问题)。
+
+**浏览器拒绝本地服务访问令牌。** 打开 `serve` 输出的 `Open to sign in` 链接。若直接打开了本地地址，
+或令牌被拒绝，Web UI 会打开连接设置（Connection）。请在其中粘贴启动输出里的本地服务访问令牌，
+而不是模型 API Key，并确认令牌与浏览器对应同一个数据目录。
+
+**`/health` 报告 `"status":"degraded"`。** 这表示 runner 不可用。先查看终端中的第一条启动错误，
+再检查下述日志。正常启动后，执行 `curl -fsS http://127.0.0.1:4310/health`，顶层 `status` 应为 `ok`。
+
+**Linux 上缺少 `bwrap`，或沙箱检查失败。** 按[宿主依赖：bubblewrap](#宿主依赖bubblewrap)
+中的命令安装 Bubblewrap。若已安装但用户命名空间不可用，请按[沙箱与宿主要求](#沙箱与宿主要求)
+排查。macOS 的本地源码模式使用 Seatbelt，不使用 Bubblewrap。
+
+**日志在哪里。** 二进制和本地模式默认将滚动服务日志写入 `<data-dir>/logs`。除非传入
+`--data-dir` 或设置 `SCIENCE_DISCOVERY_DATA_DIR`，否则 `<data-dir>` 为
+`./.sciencediscovery-data`。日志名称和覆盖方式见[存储布局](../reference/configuration.md#存储布局)。
 
 首次 `serve` 会把内嵌运行时解包到 `~/.cache/science-discovery/payload/<payload-id>`（可用 `XDG_CACHE_HOME` 或 `SCIENCE_DISCOVERY_PAYLOAD_CACHE_DIR` 改位置），之后启动直接复用。目录名带 payload 摘要，因此升级到新版本不会覆盖旧解包结果。如果仅存在旧的 `~/.cache/science-agent` 缓存，launcher 会把它一次性改名导入新位置并打印兼容提示；如果新位置已经存在，则保留新位置且打印跳过导入的原因。
 

@@ -14,6 +14,9 @@
 
 from sciencediscovery_adapter.llm_proxy import LlmRoute, rewrite_request
 from sciencediscovery_adapter.schema import relax_schema, restore_dropped_empties
+import pytest
+
+pytestmark = pytest.mark.science_tags(category='ut', os='linux', arch=('amd64', 'arm64'))
 
 TASK = {
     "type": "object", "additionalProperties": False, "required": ["prompt"],

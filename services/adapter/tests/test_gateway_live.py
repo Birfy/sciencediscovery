@@ -49,7 +49,23 @@ from sciencediscovery_adapter.mcp_server import Toolset, ToolsetRegistry, mcp_ro
 
 URL = os.environ.get("JIUWENSWARM_GATEWAY_URL")
 SCENARIO = os.environ.get("JIUWENSWARM_LIVE_SCENARIO", "plain")
-pytestmark = pytest.mark.skipif(not URL, reason="JIUWENSWARM_GATEWAY_URL not set")
+# Out of the shared plan: it needs a live gateway and a stub scripted for one
+# scenario, so it runs only when somebody selects it on purpose.
+pytestmark = pytest.mark.science_tags(category='ut', os='linux', arch=('amd64', 'arm64'), status='external')
+
+
+def live(*scenarios: str) -> None:
+    """Fail — never skip — when the gateway or the stub's scenario is not this test's.
+
+    A selected case has to run, so a missing gateway or a stub loaded for another
+    scenario is a failure that says what to set. Run one scenario at a time, e.g.
+    ``JIUWENSWARM_LIVE_SCENARIO=bash pytest tests/test_gateway_live.py -k tool_round``.
+    """
+    if not URL:
+        pytest.fail("needs a live JiuwenSwarm gateway: set JIUWENSWARM_GATEWAY_URL", pytrace=False)
+    if SCENARIO not in scenarios:
+        pytest.fail(f"needs the stub scripted for {' or '.join(scenarios)}, "
+                    f"but JIUWENSWARM_LIVE_SCENARIO={SCENARIO}; select one scenario with -k", pytrace=False)
 
 
 def params(session_id: str, text: str) -> dict:
@@ -60,8 +76,8 @@ def params(session_id: str, text: str) -> dict:
     }
 
 
-@pytest.mark.skipif(SCENARIO != "plain", reason="scenario is not plain")
 async def test_real_gateway_reply_maps_to_a_completed_run():
+    live("plain")
     mapper = RunEventMapper()
     events = []
     async for frame in chat(URL, params(f"live-{uuid.uuid4().hex[:8]}", "say hi"), idle_timeout=60):
@@ -72,8 +88,8 @@ async def test_real_gateway_reply_maps_to_a_completed_run():
     assert mapper.unmapped == []
 
 
-@pytest.mark.skipif(SCENARIO != "bash", reason="scenario is not bash")
 async def test_real_gateway_tool_round_maps_to_tool_events():
+    live("bash")
     mapper = RunEventMapper()
     events = []
     async for frame in chat(URL, params(f"live-{uuid.uuid4().hex[:8]}", "run it"), idle_timeout=60):
@@ -87,8 +103,8 @@ async def test_real_gateway_tool_round_maps_to_tool_events():
     assert mapper.unmapped == []
 
 
-@pytest.mark.skipif(SCENARIO not in ("approval", "deny"), reason="scenario is not approval or deny")
 async def test_real_gateway_approval_round_trip():
+    live("approval", "deny")
     decision = "deny" if SCENARIO == "deny" else "allow_once"
     session = f"live-{uuid.uuid4().hex[:8]}"
     mapper = RunEventMapper(session_id=session)
@@ -110,8 +126,8 @@ async def test_real_gateway_approval_round_trip():
     assert mapper.finished and mapper.unmapped == []
 
 
-@pytest.mark.skipif(SCENARIO != "cancel", reason="scenario is not cancel")
 async def test_real_gateway_cancel_ends_the_run_as_cancelled():
+    live("cancel")
     session = f"live-{uuid.uuid4().hex[:8]}"
     mapper = RunEventMapper(session_id=session)
     events = []
@@ -126,8 +142,8 @@ async def test_real_gateway_cancel_ends_the_run_as_cancelled():
     assert mapper.finished and mapper.unmapped == []
 
 
-@pytest.mark.skipif(SCENARIO != "mcp", reason="scenario is not mcp")
 async def test_real_gateway_calls_a_tool_hosted_by_the_adapter():
+    live("mcp")
     import socket
 
     import uvicorn
@@ -180,8 +196,8 @@ async def test_real_gateway_calls_a_tool_hosted_by_the_adapter():
     assert mapper.final_text == "live mcp done" and mapper.finished
 
 
-@pytest.mark.skipif(SCENARIO != "agent_run", reason="scenario is not agent_run")
 async def test_agent_runs_endpoint_drives_a_real_run_through_its_own_toolset():
+    live("agent_run")
     import socket
 
     import httpx

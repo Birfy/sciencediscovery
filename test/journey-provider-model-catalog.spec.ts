@@ -30,6 +30,9 @@ import {
   type JourneyFixture,
 } from "./helpers/journeys.ts";
 
+// Static suite metadata is inherited by each framework-expanded journey.
+test.describe("journey-provider-model-catalog.spec", { tag: ["@category:e2e", "@os:linux", "@arch:amd64", "@model:mock", "@sandbox:bubblewrap"] }, () => {
+
 // The catalog status line renders its instant with `new Date(...).toLocaleString()`, i.e. in the
 // viewer's own time zone, so a run pins one rather than reading the host's: without this the
 // assertions below only hold on a UTC machine and read 8 hours off on any box set to China time.
@@ -1196,4 +1199,6 @@ test("J7 Provider 模型目录、失败降级与对话思考选择", { tag: "@mo
     }
     await stub.stop();
   }
+});
+
 });

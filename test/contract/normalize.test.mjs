@@ -13,7 +13,8 @@
 // See the License for the specific language governing permissions and
 
 import assert from "node:assert/strict";
-import test from "node:test";
+import { createTest } from "../support/tagged/compat.mjs";
+const { test } = createTest(import.meta.url, { tags: ["category:ut", "os:linux", "arch:amd64", "arch:arm64"] });
 
 import { createNormalizer, diff, scrubValue } from "./normalize.mjs";
 

@@ -13,38 +13,130 @@ The image contains Node.js 22.19, pnpm 11.1.2, Python 3.12, uv, bubblewrap,
 build tools, and Playwright's Chromium system libraries. Product source and
 test dependencies are supplied only by the checkout mounted at `/src`.
 
-## Existing tests and CI mapping
+## One plan, three layers
 
-| CI layer | Repository commands used | Scope |
+The three hermetic layers are three slices of one plan, not three suites. Each
+runs `test/support/tagged/shared.mjs` against the single selector in
+[test/support/tagged/profiles.mjs](../test/support/tagged/profiles.mjs),
+narrowed only by the group that layer schedules:
+
+| CI layer | Entry point | Slice of the shared selector |
 |---|---|---|
-| UT | `pnpm check`, then `pnpm memory-graph:test` | TypeScript type checks/builds and package tests, binary script tests, paper/gateway Python tests, and memory-graph pytest |
-| ST | `test/api/run_m1_smoke.sh` after `pnpm build` | Hermetic Node-native agent loop through a local scripted OpenAI-compatible endpoint and a real workspace tool round trip |
-| E2E | `.e2e` `npm run test:mocked` | Tagged `@mocked` Playwright journeys against an isolated API/Runner/Gateway stack |
+| UT | `pnpm ci:ut` | `category:ut` |
+| ST | `pnpm ci:st` | `category:st` |
+| E2E | `pnpm ci:e2e` | `category:e2e`, driving `.ci/run-e2e.sh` for the stack lifecycle |
 
-The repository has no test layer literally named `ST`. This mapping uses the
-current hermetic integration/smoke entry point as ST. In particular,
-`test/gateway/run_m0_smoke.sh` does not exist on this revision and is not an
-invented CI dependency. Live-model smoke tests and `@real` E2E are excluded
-from every default command.
+`category` is single-valued and required, so those three slices partition the
+plan: together they are exactly `pnpm test:shared`, the command a developer
+runs. Which cases are selected comes from the tags in each test's own source —
+never from the machine, its credentials, its devices or its installed
+services. A missing capability fails the plan's preflight, and a skip is a
+failed run, so a layer cannot go green by running less.
+[test/support/tagged/MIGRATION.md](../test/support/tagged/MIGRATION.md) records
+what the plan covers and why live-model, NPU, legacy and macOS work is outside
+it; those keep their own opt-in entry points (`ci:st:real`, `ci:e2e:real`,
+`ci:st:npu`, `ci:e2e:legacy`).
+
+`node .ci/tagged-summary.mjs` reads each slice's frozen plan back and fails
+unless `planned == executed == passed` with nothing skipped — including when a
+layer stopped before it produced a plan at all.
+
+## Coverage reporting
+
+Coverage is recorded by the runs that gate, not by a second one. The `UT` and
+`ST` jobs run their layer with `--coverage` — `pnpm ci:ut -- --profile <profile>
+--coverage`, and the same for `ci:st` — which measures exactly that execution
+and changes nothing about which cases are selected. Each job uploads what its
+run wrote, `<CI_RESULTS_DIR>/<layer>/tagged/coverage/`, as `ut-coverage` or
+`st-coverage`, including when the run failed.
+
+What a run records:
+
+- **Node.** Each worker keeps its one-file-per-process isolation and adds V8
+  coverage, which the Node processes a test starts inherit — a Runner a test
+  launches from `services/runner/dist/server.js` is measured too. Much of what
+  a test executes arrives through built output, so a coverage run re-emits the
+  build with source maps and records built code against the TypeScript it came
+  from. Each test file leaves one lcov whose records name that test file and a
+  repository-relative source.
+- **Python.** Every interpreter the run starts imports
+  `test/support/tagged/python/coverage-hook` and measures itself: the pytest
+  worker, and any Python a test launches — `services/api`'s paper tests start
+  `services/paper/paper_worker.py`, which is product code no pytest run
+  reaches. The data is combined into one coverage.py report over the product
+  roots (`services/*/src`, the paper worker, Runner workloads, bundled
+  skills), so a product file nothing imported counts as 0% rather than
+  disappearing. Every start is logged with whether it could be measured; an
+  interpreter without `coverage`, or a sandbox that cannot write the data
+  directory, is reported rather than silently missing. Today the only
+  unmeasured starts are the Runner asking the system `python3` where its
+  standard library lives, which runs no product code. Python the Runner
+  executes inside bubblewrap starts from `--clearenv` and so never loads the
+  hook — by design, since what runs there is a test's snippet, not the
+  product.
+- **`manifest.json`** records the plan digest, the run's planned, executed and
+  passed counts, how many Node test files owed coverage, and the Python
+  process census.
+
+The `Coverage` job `needs` UT and ST, downloads both artifacts and runs
+`node scripts/coverage-report.mjs` (`pnpm coverage:report`), which only reads
+and merges files: it executes no test and starts no process. It credits a
+source file with everything any layer executed in it — a unit test of its own
+package, another package's test reaching it through a dependency, the system
+test driving it end to end — and merges records for one file line by line.
+Built output, installed dependencies, the test harness and the tests
+themselves are not attributed. The run page shows the merged figure for Node.js
+and Python, then what each layer contributed on its own, its job result and
+counts, and any Python process that could not be measured. There is no
+diff-based selection: pull requests, pushes and the nightly run all report on
+the whole plan the gate ran. The mocked browser E2E is not measured. Release
+calls skip both the recording and the job.
+
+A case the plan leaves out is missing from coverage for one reason, the
+selector: a `status:external` case — `services/memory-graph` has 77, all
+needing a live Neo4j — is absent from coverage because it is absent from the
+gate's run.
+
+Reproduce CI locally with:
+
+```bash
+export CI_RESULTS_DIR=$PWD/.ci-results CI_RUNTIME_DIR=$PWD/.ci-runtime
+pnpm ci:ut -- --profile pr --coverage
+pnpm ci:st -- --profile pr --coverage
+pnpm coverage:report -- --layer ut=.ci-results/ut/tagged/coverage \
+  --layer st=.ci-results/st/tagged/coverage
+```
+
+If a layer's job passed, every test file it ran must have left coverage and
+its measured Python must have a report; the merge step fails when one did not,
+because that is a pipeline defect, not a partial result. If a layer's job
+failed, its upload is summarised as far as it goes and labelled partial, and
+the step succeeds: nothing is re-run to fill the gap, and the job's own
+failure stays the signal. Coverage percentages are informational — there is no
+threshold. CI uploads separate SHA-qualified Node.js and Python artifacts
+containing the merged and per-group `summary.json` files.
 
 ## Test tags and CI selection
 
 `.ci/test-catalog.mjs` classifies every repository CI test family as a stable
-case. It is metadata over the existing commands above, not a second test
-suite. Tests inherit the environment envelope of their case; when one child
-needs a stricter capability, split it into a separate case instead of weakening
-the tag. Each case has tags for all required environment dimensions:
+case, for the CI scheduler and the merge-request result table. It is metadata
+over the layer entry points above, not a second test suite and not the list of
+cases a layer runs — that list is the plan. Cases inherit the environment
+envelope of their layer; when one child needs a stricter capability, split it
+into a separate case instead of weakening the tag. Each case has tags for all
+required environment dimensions:
 
 - `arch:amd64|arm64`
 - `llm:none|stub|real|unreviewed`
 - `npu:none|required|unreviewed`
 - `sandbox:none|bubblewrap|seatbelt|host|unreviewed`
-- `ut:host|guest` on every `layer:ut` case and on no other case
 - `layer:ut|st|e2e`, `container:*`, and runtime `network:*`
 
 No case carries `sandbox:seatbelt` today: the macOS Seatbelt tests live in
-`services/runner/src/macos-seatbelt.test.ts`, inside the guest tier's package
-command, and skip themselves off macOS.
+`services/runner/src/macos-seatbelt.test.ts` and carry `os:macos`, so the
+Linux/amd64 target this repository's CI plans against never selects them. They
+no longer skip themselves off macOS — a Linux run simply does not contain them,
+and a macOS plan would.
 
 List the vocabulary or cases without executing tests:
 
@@ -76,76 +168,45 @@ requires `CI_ALLOW_NPU=1` and an explicit `SCIENCE_AGENT_NPU_PYTHON` from the
 dedicated NPU environment; it fails closed in this generic image. Its catalog
 entry explains the host requirement.
 
-`CI_E2E_BACKEND=jiuwenswarm` runs the E2E group with the adapter in front and
-agent turns on JiuwenSwarm; reports go to `e2e[-group]-jiuwenswarm`. The layer
-installs and starts JiuwenSwarm itself (`scripts/jiuwenswarm.sh setup` then
-`start`) before the stack comes up, so nothing needs to be running beforehand;
-cache `.sciencediscovery-data/jiuwenswarm` and `~/.jiuwenswarm-instances` to
-avoid repeating the ~1.5 GB install on every run. This is the backend the
-GitHub Actions `e2e` job runs by default.
+E2E agent turns run on JiuwenSwarm behind the adapter, `run-e2e.sh`'s
+default and the backend the product ships; after the journeys the layer runs
+the JiuwenSwarm checks (`test/contract/jw-only/live.mjs`) against the same
+stack, and their outcome is part of the layer's exit code.
+`CI_E2E_BACKEND=legacy` runs the same journeys on the built-in loop while it
+still exists, with reports under `e2e[-group]-legacy`. The layer installs and
+starts JiuwenSwarm itself (`scripts/jiuwenswarm.sh setup` then `start`) before
+the stack comes up, so nothing needs to be running beforehand; cache
+`.sciencediscovery-data/jiuwenswarm` to avoid repeating the ~1.5 GB install on
+every run. UT's agent turns run on JiuwenSwarm too: `pnpm ci:ut` wraps the
+shared runner in `scripts/with-jiuwenswarm.sh`, which starts one instance and
+one adapter for the whole run.
 
-## The two UT tiers
+## The sandbox capability
 
-UT has exactly two tiers and no third bucket. Every UT case belongs to one of
-them, and their union is all of UT:
+UT is one layer. A test that drives a real bubblewrap sandbox says so with
+`sandbox:bubblewrap`, and that is the whole mechanism: the plan turns the tag
+into a preflight, and a host that cannot create the user namespaces bubblewrap
+needs fails the entire run rather than quietly running the rest.
 
-| Tier | Tag | Entry point | Where it runs |
-|---|---|---|---|
-| Host | `ut:host` | `pnpm ci:ut:host` | any ordinary CI host; no bubblewrap, no user namespaces |
-| Guest | `ut:guest` | `pnpm ci:ut:guest` | a Linux guest whose kernel grants the user namespaces bubblewrap needs |
+```bash
+bwrap --ro-bind / / --dev /dev true && echo sandbox ok
+```
 
-`pnpm ci:ut` is the aggregate for a worker that can run both. It is not a third
-definition: `.ci/test-catalog.mjs` derives it as the host tier's steps followed
-by the guest tier's, from one list of workloads that each declare their tier.
-The guest tier is the sandbox packages listed in `utGuestPackages`; the host
-tier is `--recursive` over everything else, so a new package joins the host
-tier automatically and a package that needs the sandbox has to be named.
+On Ubuntu 24.04 a failure here is usually the AppArmor restriction on
+unprivileged user namespaces, which every job that needs the sandbox clears
+with `sudo sysctl --write kernel.apparmor_restrict_unprivileged_userns=0`.
 
 When adding a UT test, put it in the package or suite that already matches its
-requirements. A host-tier test may not depend on a guest capability, and a
-guest-tier assertion may not be weakened so the test can move to the host tier;
-see [.agents/skills/ci/SKILL.md](../.agents/skills/ci/SKILL.md).
+requirements, and never weaken an isolation assertion so a test can run without
+the sandbox; see [.agents/skills/ci/SKILL.md](../.agents/skills/ci/SKILL.md).
 
-A host that cannot create user namespaces runs the guest tier in a VM:
-
-```bash
-pnpm install --frozen-lockfile && pnpm build   # on the host, native CPU
-bash .ci/run-qemu-layer.sh ut-guest
-```
-
-`.ci/pack-workspace.sh` packs `git archive HEAD` together with the dependency
-tree and every `dist/` the host just produced, and `.ci/run-qemu-layer.sh`
-serves that payload to the guest, which streams it into place and runs
-`pnpm ci:ut:guest`. Nothing is installed or compiled inside the guest: both
-`run-qemu-layer.sh` and the `ut-guest` layer fail closed when the host did not
-prepare the workspace.
-
-A host without QEMU downloads the portable emulator the
-`ci/codearts-resources` branch publishes, pinned by `.ci/qemu-emulator.sha256`,
-instead of assembling one from Alpine packages per run.
-
-The mocked E2E group reuses that guest through the same split, without a
-second E2E definition:
-
-```bash
-CI_E2E_PREPARE_ONLY=1 CI_E2E_BROWSERS_DIR=.e2e/browsers pnpm ci:e2e
-bash .ci/run-qemu-layer.sh e2e
-```
-
-The first command installs `.e2e` and the pinned Chromium into the checkout
-and stops before starting the stack, so the payload can carry them; the guest
-then runs `pnpm ci:e2e` with `CI_E2E_PREPARED=1` and owns the stack and the
-journeys. `CI_E2E_STACK_TIMEOUT_SECONDS` raises the 180-second health wait,
-which emulated services routinely exceed.
-
-`pnpm ci:catalog:check` is the guard. It fails when a case has an unknown tag
-or the wrong number of values for a dimension, when a UT case has no tier or
-two, when a `layer:ut` case's tier disagrees with its `sandbox:*` tag, when a
-workspace package with tests is claimed by both tiers or by neither, when
-`ci:ut` stops being exactly the two tiers, when the guest tier grows an install
-or build step, or when a `ci:ut:*` entry point appears outside the two tiers.
-`pnpm ci:selftest` runs the regression tests for that guard, and the host tier
-runs it.
+`pnpm ci:catalog:check` is the guard. It fails when a scheduler case has an
+unknown tag or the wrong number of values for a dimension, when a workspace
+package's test file sits outside the shared runner's collection patterns and so
+would be run by no layer at all, when a package has a test script but no test
+file, when a layer runs something that is not a slice of the shared plan, or
+when an entry point drifts off that slice. `pnpm ci:selftest` runs the
+regression tests for that guard, and the UT layer runs it.
 
 ## Build
 
@@ -325,12 +386,17 @@ outside the generic default command.
 The host directory mounted at `/ci-results` receives:
 
 ```text
-ut/                               # the aggregate; ut-host/ and ut-guest/ for the tiers
-  run.log
-  summary.json
+ut/
+  run.log                          # the layer entry point's own log
+  summary.json                     # the layer's exit code and per-step timings
+  tagged/                          # the frozen plan and its accounting
+    plan.json
+    preflight.json
+    summary.json                   # planned / executed / passed / failed / skipped
 st/
   run.log
   summary.json
+  tagged/
 e2e/
   run.log
   stack.log
@@ -377,9 +443,7 @@ container cannot safely or reliably provide.
 | Real NPU workloads such as `services/runner/workloads/npu-smoke-test.py` | Vendor device nodes, drivers, runtime libraries, model/data assets, and usually a native aarch64/NPU host | Hardware-specific runner with explicit device mounts and its own acceptance record |
 | Full bubblewrap execution when the host denies unprivileged user namespaces | Docker flags cannot override a host kernel/AppArmor policy that rejects user namespace creation | Run on a Linux worker with user namespaces enabled; record UT/E2E as BLOCKED if the bwrap preflight fails |
 | Host-only sandbox fallback/full-profile validation | A container cannot reproduce every host `/proc/sys`, AppArmor, LXC, and distribution-specific bwrap combination | Keep the existing stubbed capability/unit tests in UT; run real preflight/fallback checks on representative native hosts |
-| Playwright or sandbox runs for the other CPU architecture under QEMU | Browser sandboxing and timing under emulation are not representative and may not be supported by the downloaded browser | Build the two-platform manifest with buildx, but execute amd64 and arm64 jobs on native workers |
 | Docker Desktop on macOS/Windows | The product runner requires Linux user/mount namespaces and bubblewrap | Use a native Linux CI worker or VM |
-| J3 in the default mocked job | J3 intentionally does not install the base or access conda channels; the generic E2E command sets `SCIENTIFIC_ENVS=0` so startup cannot turn a user journey into environment provisioning | In a separate, explicitly network-enabled job, set `E2E_SCIENTIFIC_ENVS=1` and reuse a pre-seeded `CI_RUNTIME_DIR`; keep that opt-in out of the default command |
 
 The tag catalog keeps unsupported generic-container capabilities discoverable
 instead of silently dropping them. For example,

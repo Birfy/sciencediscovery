@@ -18,6 +18,9 @@ import httpx
 from fastapi import FastAPI
 
 from sciencediscovery_adapter.llm_proxy import LlmRoute, LlmRoutes, llm_router, rewrite_request, rewrite_response
+import pytest
+
+pytestmark = pytest.mark.science_tags(category='ut', os='linux', arch=('amd64', 'arm64'))
 
 ROUTE = LlmRoute(base_url="http://llm.test/v1", api_key="sk-real", model="gpt-real", tool_prefix="mcp_sci_",
                  tool_names=frozenset({"run_shell", "declare_artifact"}), system_prompt="You are the science agent.")

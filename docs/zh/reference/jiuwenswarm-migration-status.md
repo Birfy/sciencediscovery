@@ -120,7 +120,7 @@ cd services/api && pnpm build && node --test dist/agent-run/jiuwenswarm-agent.te
 node --test test/contract/*.test.mjs                              # 契约测试工具自身
 E2E_BASE_URL=... E2E_API_TOKEN=... node test/contract/run.mjs --compare test/contract/baselines/legacy-linux.json
 
-# UT 的 host 档（server.test.ts 及其余工作区包）通过 scripts/with-jiuwenswarm.sh 跑在真实的
-# JiuwenSwarm 和适配器上，pnpm ci:ut:host 已经接好了这一层：
+# UT（server.test.ts 及共享计划里的其余用例）通过 scripts/with-jiuwenswarm.sh 跑在真实的
+# JiuwenSwarm 和适配器上，pnpm ci:ut 把共享 runner 包在这一层里：
 scripts/with-jiuwenswarm.sh pnpm --filter @sciencediscovery/api test
 ```

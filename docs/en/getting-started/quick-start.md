@@ -37,7 +37,10 @@ curl --fail http://127.0.0.1:4310/api/health
 
 The top-level `status` is `ok` after a normal startup and `degraded` when the Runner is unavailable. See [REST API reference](../reference/rest-api.md#health) for field details.
 
-Binary packaging, source mode, and Docker are separate deployment paths; their prerequisites and complete commands are in the [deployment guide](deployment.md).
+Binary packaging, source mode, and Docker are separate deployment paths. Their
+prerequisites and complete commands are in the [deployment guide](deployment.md). For a
+rejected local service access token, a `degraded` health status, Bubblewrap, or logs in
+binary and local mode, use its [first-run troubleshooting](deployment.md#first-run-troubleshooting-for-binary-and-local-mode).
 
 ## 3. Configure a task model
 
