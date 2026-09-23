@@ -14,6 +14,7 @@ This is the complete English documentation set.
 
 - [Program evolution](core/evolve.md) — understand searches, scoring modes, engines, data splits, and result trustworthiness.
 - [Shell, environments, and workspaces](core/execution-workspaces.md) — understand execution, files, environments, completion, and stopping.
+- [Idea Tree](core/idea-tree.md) — understand the autonomous-research engine, its use, state, and boundaries.
 
 ## Domain guides
 
