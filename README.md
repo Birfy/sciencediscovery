@@ -59,10 +59,10 @@ Create a Project and a Session, drop a CSV or a PDF into the workspace, and desc
 
 | Capability | Description | Reference |
 |---|---|---|
-| **Literature and data access** | Built-in connectors reach paper and data repositories; PDFs are parsed into citable evidence | [Literature research](docs/en/domains/literature-research.md) · [Custom MCP servers](docs/en/how-to/configure-custom-mcp.md) |
+| **Literature and data access** | Built-in connectors reach paper and data repositories; PDFs are parsed into citable evidence | [Literature research](docs/en/domains/literature-research.md) · [Custom MCP servers](docs/en/advanced-setup/configure-custom-mcp.md) |
 | **Sandboxed code execution** | The agent writes, debugs and runs Python, R and shell inside a fail-closed sandbox | [Sandbox execution](docs/en/developer-docs/sandbox-execution.md) |
 | **Task decomposition** | Planning and multi-agent orchestration distribute a task across sub-agents and a cross-domain skill library | [Subagent orchestration](docs/en/developer-docs/subagent-orchestration.md) · [Skills](docs/en/developer-docs/skill-progressive-disclosure.md) |
-| **End-to-end provenance** | Code, environment, logs and cited evidence are recorded per deliverable; the optional memory graph makes the chain navigable | [Review and provenance](docs/en/developer-docs/review-provenance.md) · [ScienceMemory](docs/en/how-to/science-memory-setup.md) |
+| **End-to-end provenance** | Code, environment, logs and cited evidence are recorded per deliverable; the optional memory graph makes the chain navigable | [Review and provenance](docs/en/developer-docs/review-provenance.md) · [ScienceMemory](docs/en/advanced-setup/science-memory-setup.md) |
 
 ## Command line
 
@@ -97,7 +97,8 @@ A browser UI talks to an adapter that puts the agent loop on [JiuwenSwarm](https
 | Section | Guides |
 |---|---|
 | **Getting started** | [Quick start](docs/en/getting-started/quick-start.md) · [Deployment](docs/en/getting-started/deployment.md) |
-| **How-to** | [Run on JiuwenSwarm](docs/en/how-to/run-with-jiuwenswarm.md) · [Custom MCP](docs/en/how-to/configure-custom-mcp.md) · [Network proxy](docs/en/how-to/configure-network-proxy.md) · [ScienceMemory](docs/en/how-to/science-memory-setup.md) |
+| **Advanced setup** | [Custom MCP](docs/en/advanced-setup/configure-custom-mcp.md) · [Network proxy](docs/en/advanced-setup/configure-network-proxy.md) · [ScienceMemory](docs/en/advanced-setup/science-memory-setup.md) |
+| **Run and operate** | [Run on JiuwenSwarm](docs/en/how-to/run-with-jiuwenswarm.md) |
 | **Reference** | [Configuration](docs/en/reference/configuration.md) · [REST API](docs/en/reference/rest-api.md) · [Built-in tools](docs/en/reference/builtin-tools.md) · [Runtime behavior](docs/en/reference/runtime-behavior.md) |
 | **Developer documentation** | [Architecture](docs/en/developer-docs/architecture.md) and the [developer index](docs/en/developer-docs/README.md) |
 

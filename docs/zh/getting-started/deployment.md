@@ -480,7 +480,7 @@ services:
 
 **runner 启动日志说回退为绑定容器的 `/proc`。** Compose 里缺了 `systempaths=unconfined`（常见于自己改写的 `docker run` 或 K8s 清单）。执行仍能进行，但沙箱能看到容器的进程列表；加回该项即可恢复独立 procfs。
 
-**模型连不上：超时、`ECONNREFUSED`，或必须经代理。** 三种做法：在 **系统设置 → 网络代理** 添加一条 `custom_url` 代理并设为全局默认，不用重启容器；或者用上面的 `docker-compose.override.yml` 给容器注入 `HTTPS_PROXY` 等变量，`up -d` 后在代理设置里选 `environment` 类型（详见[配置网络代理](../how-to/configure-network-proxy.md)）。模型服务跑在宿主机本身（例如本机的 Ollama）时，容器里的 `127.0.0.1` 指向容器自己：在 override 文件里给服务加 `extra_hosts: ["host.docker.internal:host-gateway"]`，模型地址填 `http://host.docker.internal:<端口>`，或者直接填宿主的局域网 IP。
+**模型连不上：超时、`ECONNREFUSED`，或必须经代理。** 三种做法：在 **系统设置 → 网络代理** 添加一条 `custom_url` 代理并设为全局默认，不用重启容器；或者用上面的 `docker-compose.override.yml` 给容器注入 `HTTPS_PROXY` 等变量，`up -d` 后在代理设置里选 `environment` 类型（详见[配置网络代理](../advanced-setup/configure-network-proxy.md)）。模型服务跑在宿主机本身（例如本机的 Ollama）时，容器里的 `127.0.0.1` 指向容器自己：在 override 文件里给服务加 `extra_hosts: ["host.docker.internal:host-gateway"]`，模型地址填 `http://host.docker.internal:<端口>`，或者直接填宿主的局域网 IP。
 
 **首次启动后 CPU 一直很高，`./data` 涨到约 2 GB，进程里有 `micromamba`。** 正常：starter Python 科学环境正在后台创建，完成后 `/health` 的 `runner.scientificEnvs.startersReady` 变为 `true`。conda-forge 访问慢时把 `SCIENCE_AGENT_SCIENTIFIC_CHANNELS` 指向镜像站（内置的清华、中科大镜像地址 Runner 始终接受）；离线环境预先填充 `SCIENCE_AGENT_PACKAGE_CACHE_DIR`；完全不需要托管环境就设 `SCIENTIFIC_ENVS=0`。
 

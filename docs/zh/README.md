@@ -20,15 +20,13 @@
 - [演进出一个更优解](domains/evolve-a-solution.md) — 完整跑一次程序演进搜索，并判断改进是不是真的。
 - [文献调研](domains/literature-research.md) — 以跨数据库文献调研为例，演示从启动服务、配置系统到审批与查看结果的全流程。
 
-## How-to（操作指南）
+## 进阶设置
 
-### 连接与配置
+- [配置自定义 MCP](advanced-setup/configure-custom-mcp.md) — 本地/远程连接、秘密值编辑、OAuth、Inspector 与会话工具选择。
+- [配置网络代理](advanced-setup/configure-network-proxy.md) — 在设置页添加代理并为 LLM、Web 和 MCP 选择策略。
+- [安装 Neo4j 与配置科学记忆](advanced-setup/science-memory-setup.md) — 安装外部 Neo4j、在系统设置里开启科学记忆，并在前端图谱里查看链路。
 
-- [配置自定义 MCP](how-to/configure-custom-mcp.md) — 本地/远程连接、秘密值编辑、OAuth、Inspector 与会话工具选择。
-- [配置网络代理](how-to/configure-network-proxy.md) — 在设置页添加代理并为 LLM、Web 和 MCP 选择策略。
-- [安装 Neo4j 与配置科学记忆](how-to/science-memory-setup.md) — 安装外部 Neo4j、在系统设置里开启科学记忆，并在前端图谱里查看链路。
-
-### 运行与运维
+## 运行与运维
 
 - [运行一次演进搜索](how-to/run-an-evolution-search.md) — 提出 `/evolve-design` 搜索、定分片规模、看过程，并读留出结果。
 - [在 JiuwenSwarm 上运行 agent](how-to/run-with-jiuwenswarm.md) — 可选的实验性执行器：安装固定版本的 JiuwenSwarm、带 adapter 启动服务，并了解预期行为。

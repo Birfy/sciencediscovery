@@ -58,10 +58,10 @@ ScienceDiscovery 不内置模型，需接入你自己的 API。打开左侧栏�
 
 | 能力 | 说明 | 参考 |
 |---|---|---|
-| **文献与数据接入** | 内置连接器直达文献库与数据库；PDF 被解析为可引用的证据 | [文献调研](docs/zh/domains/literature-research.md) · [自定义 MCP](docs/zh/how-to/configure-custom-mcp.md) |
+| **文献与数据接入** | 内置连接器直达文献库与数据库；PDF 被解析为可引用的证据 | [文献调研](docs/zh/domains/literature-research.md) · [自定义 MCP](docs/zh/advanced-setup/configure-custom-mcp.md) |
 | **沙箱内代码执行** | 智能体在 fail-closed 沙箱中编写、调试并运行 Python、R 与 Shell | [沙箱执行](docs/zh/developer-docs/sandbox-execution.md) |
 | **复杂任务拆解** | 任务规划与多智能体协同将任务分发给子智能体和跨领域 Skill 库 | [子智能体编排](docs/zh/developer-docs/subagent-orchestration.md) · [Skill](docs/zh/developer-docs/skill-progressive-disclosure.md) |
-| **全链路溯源** | 代码、环境、日志与引用证据按产物记录；开启记忆图谱后整条链路可点击追溯 | [审阅与溯源](docs/zh/developer-docs/review-provenance.md) · [ScienceMemory](docs/zh/how-to/science-memory-setup.md) |
+| **全链路溯源** | 代码、环境、日志与引用证据按产物记录；开启记忆图谱后整条链路可点击追溯 | [审阅与溯源](docs/zh/developer-docs/review-provenance.md) · [ScienceMemory](docs/zh/advanced-setup/science-memory-setup.md) |
 
 ## 命令行
 
@@ -96,7 +96,8 @@ cat prompt.txt | ./ScienceDiscovery run --stdin --auto-approve | jq .
 | 分类 | 文档 |
 |---|---|
 | **快速开始** | [快速开始](docs/zh/getting-started/quick-start.md) · [部署](docs/zh/getting-started/deployment.md) |
-| **How-to** | [在 JiuwenSwarm 上运行](docs/zh/how-to/run-with-jiuwenswarm.md) · [自定义 MCP](docs/zh/how-to/configure-custom-mcp.md) · [网络代理](docs/zh/how-to/configure-network-proxy.md) · [ScienceMemory](docs/zh/how-to/science-memory-setup.md) |
+| **进阶设置** | [自定义 MCP](docs/zh/advanced-setup/configure-custom-mcp.md) · [网络代理](docs/zh/advanced-setup/configure-network-proxy.md) · [ScienceMemory](docs/zh/advanced-setup/science-memory-setup.md) |
+| **运行与运维** | [在 JiuwenSwarm 上运行](docs/zh/how-to/run-with-jiuwenswarm.md) |
 | **参考** | [配置](docs/zh/reference/configuration.md) · [REST API](docs/zh/reference/rest-api.md) · [内置工具](docs/zh/reference/builtin-tools.md) · [运行时行为](docs/zh/reference/runtime-behavior.md) |
 | **开发者文档** | [整体架构](docs/zh/developer-docs/architecture.md) 及[开发者文档导航](docs/zh/developer-docs/README.md) |
 

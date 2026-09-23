@@ -19,15 +19,13 @@ This is the complete English documentation set.
 - [Evolve a solution](domains/evolve-a-solution.md) — run a program-evolution search end to end and judge whether the improvement is real.
 - [Literature research](domains/literature-research.md) — run an end-to-end cross-database literature survey, from service startup to approvals and results.
 
-## How-to guides
+## Advanced setup
 
-### Connect and configure
+- [Configure custom MCP servers](advanced-setup/configure-custom-mcp.md) — local/remote connections, secret editing, OAuth, Inspector and Session tool selection.
+- [Configure the network proxy](advanced-setup/configure-network-proxy.md) — add a proxy on the settings page and choose a policy for LLM, web, and MCP traffic.
+- [Install Neo4j and configure ScienceMemory](advanced-setup/science-memory-setup.md) — install an external Neo4j, enable ScienceMemory in system settings, and explore chains in the frontend graph.
 
-- [Configure custom MCP servers](how-to/configure-custom-mcp.md) — local/remote connections, secret editing, OAuth, Inspector and Session tool selection.
-- [Configure the network proxy](how-to/configure-network-proxy.md) — add a proxy on the settings page and choose a policy for LLM, web, and MCP traffic.
-- [Install Neo4j and configure ScienceMemory](how-to/science-memory-setup.md) — install an external Neo4j, enable ScienceMemory in system settings, and explore chains in the frontend graph.
-
-### Run and operate
+## Run and operate
 
 - [Run an evolution search](how-to/run-an-evolution-search.md) — propose a `/evolve-design` search, size its shards, watch it run, and read the held-out result.
 - [Run agent turns on JiuwenSwarm](how-to/run-with-jiuwenswarm.md) — optional, experimental executor: install a pinned JiuwenSwarm, start the stack with the adapter, and understand the expected behavior.
