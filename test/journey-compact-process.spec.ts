@@ -101,7 +101,13 @@ test("完成的过程去框，运行卡片和文件操作保留", { tag: "@mocke
         const run = await sendUserMessage(page, fixture!.session.id, "生成本地 Markdown 报告并注册为产物。");
         runId = run.id;
         const thinking = page.locator(".timeline-disclosure.thinking.running");
-        await expect(thinking).toContainText("先生成一个可核对的本地报告");
+        // The stub deliberately waits 7 s before it answers at all, so for most of the default
+        // 10 s this card legitimately shows its "waiting for the model" placeholder and only the
+        // last seconds are the assertion's own. Setting up the first turn against a stack that has
+        // just started costs more than that margin, and the failure then reads as missing thinking
+        // text rather than as the clock it actually is. The card keeps `running` through the tool's
+        // own sleep, so waiting longer still observes the state this step is about.
+        await expect(thinking).toContainText("先生成一个可核对的本地报告", { timeout: 30_000 });
         await expect(thinking).not.toHaveClass(/process-record/);
         expect(await thinking.evaluate((el) => getComputedStyle(el).borderTopWidth)).not.toBe("0px");
         const identity = page.locator(".run-timeline > .run-identity");
@@ -320,9 +326,14 @@ test("Skill 入口按自己的任务与草稿状态去框", { tag: "@mocked" }, 
     [{ text: "普通分析已完成。" }],
     [{ delayMs: 6500, text: "这次分析没有足够可复用知识，不创建提案。" }],
     [
-      // Skills are JiuwenSwarm's: it loads ScienceDiscovery's skill-creator, installed there under this name
-      // (JiuwenSwarm has a skill-creator of its own), with its skill_tool.
-      { tool: "skill_tool", arguments: { skill_name: "sciencediscovery-skill-creator" } },
+      // create_skill refuses until skill-creator has been loaded, and which tool loads it depends on
+      // the run's tool mode. The E2E layer pins SCIENCE_AGENT_JIUWENSWARM_TOOLS=ours (see
+      // .ci/run-e2e.sh: the mocked journeys script ScienceDiscovery's own tools and argument
+      // shapes), so the skills stay ours and read_skill is the loader. A run left on JiuwenSwarm's
+      // own tools installs the skills there and loads them with skill_tool instead, which the agent
+      // replays through read_skill for this very guard — that path is covered by the jw-only live
+      // checks, not here, and scripting skill_tool in this layer calls a tool the run does not have.
+      { tool: "read_skill", arguments: { skillId: "skill-creator" } },
       { tool: "create_skill", arguments: { name: skillName, description: "Validate a small local table.",
         instructions: "# Table validation\n\nRead the input table and report its row count without changing its values." } },
       { text: "草稿已生成，等待用户审核。" },

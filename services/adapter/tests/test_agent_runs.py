@@ -18,9 +18,10 @@ from pathlib import Path
 import httpx
 import pytest
 
-from sciencediscovery_adapter.agent_runs import AgentRunner
+from sciencediscovery_adapter.agent_runs import JIUWENSWARM_HOST_TOOLS, AgentRunner
 from sciencediscovery_adapter.app import create_app
 from sciencediscovery_adapter.config import Settings
+from sciencediscovery_adapter.llm_proxy import rewrite_response
 
 pytestmark = pytest.mark.science_tags(category='ut', os='linux', arch=('amd64', 'arm64'))
 
@@ -115,8 +116,13 @@ async def test_tools_go_to_the_one_shared_mcp_server_which_is_only_given_again_w
     wider = [*tools, {"name": "declare_artifact", "description": "d", "inputSchema": {"type": "object"}}]
     await post(app, {"sessionId": "s3", "prompt": "go", "tools": wider, "bridge": bridge})
     mcp = [(m, p) for _, m, p in rpcs if m.startswith("mcp.")]
-    # First run: any earlier registration is replaced, then connected. Second: nothing (same tools). Third: reconnect.
-    assert [m for m, _ in mcp] == ["mcp.disconnect", "mcp.delete_custom", "mcp.register_custom", "mcp.connect", "mcp.connect"]
+    # First run: any earlier registration is replaced, then connected. Second: nothing (same tools). Third: a new
+    # tool arrived, so it gets the same full cycle as the first (a bare reconnect does not make JiuwenSwarm
+    # re-read the tool list).
+    assert [m for m, _ in mcp] == [
+        "mcp.disconnect", "mcp.delete_custom", "mcp.register_custom", "mcp.connect",
+        "mcp.disconnect", "mcp.delete_custom", "mcp.register_custom", "mcp.connect",
+    ]
     assert all(p["name"] == "sci" for _, p in mcp)
     register = next(p for m, p in mcp if m == "mcp.register_custom")
     assert register["url"].startswith("http://adapter.test/mcp/") and register["transport"] == "streamable-http"
@@ -228,6 +234,10 @@ async def test_the_run_talks_to_a_private_alias_that_routes_to_the_real_model(ha
     assert entry["api_base"] == f"http://adapter.test/llm/{entry['api_key']}/v1"
     assert (route.base_url, route.api_key, route.model, route.system_prompt) == ("http://llm/v1", "sk", "gpt-x", "Be a scientist.")
     assert route.tool_names == frozenset({"run_shell"}) and route.tool_prefix.startswith("mcp_sci")
+    # Listed tools and no hidden ones asked for: a bash call the model makes anyway still reaches nothing on the host.
+    assert JIUWENSWARM_HOST_TOOLS <= route.hidden_native_tools
+    chunk = {"choices": [{"delta": {"tool_calls": [{"function": {"name": "bash", "arguments": '{"command": "touch /tmp/x"}'}}]}}]}
+    assert rewrite_response(chunk, route)["choices"][0]["delta"]["tool_calls"][0]["function"]["name"] == "unavailable__bash"
     # after the run: the alias is gone from the list and the route is closed
     assert [m["model_name"] for m in listed["models"]] == ["sciencediscovery-default"], "only the default-model entry is left"
     assert runner.routes.get(entry["api_key"]) is None

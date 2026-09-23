@@ -73,6 +73,7 @@ deleted, and each still has a way to run.
 | `test/literature-review.spec.ts` (connector failure journey) | 1 | `status:unreviewed` | A permanent `test.fixme`: the manual paper-search form it drives was removed from the product. It needs a redesign around the MCP flow, not a skip inside a green run. |
 | `services/adapter/tests/test_gateway_live.py` | 6 | `status:external` | Talks to a live JiuwenSwarm gateway whose model is the scripted stub, one scenario per stub start. Previously `skipif(not JIUWENSWARM_GATEWAY_URL)` and a `skipif` per scenario; a selected case now fails with what to set, and scenarios are chosen with `-k`. |
 | `services/adapter/tests/test_real_llm.py` | 2 | `model:real`, `status:external` | A real model behind `/agent/runs` and a real gateway. Previously `skipif` on `REAL_LLM_*` and `JIUWENSWARM_*`. |
+| `services/api/src/server.test.ts` (the subagent cases that delegate through the scripted `task` call) | 17 | `status:unreviewed` | On JiuwenSwarm, ScienceDiscovery's task-delegation bridge is off by default, and with it on, the nested run stalls the parent in the 0.2.6 gateway (gaps 1a and 10 of the JiuwenSwarm migration status). Previously `{ skip: onJiuwenSwarm && … }`, which the collector rejects as environment-dependent. They pass on the built-in loop (`SCIENCE_AGENT_EXECUTOR` unset), which no gated run on this branch uses, and return with the `executor` dimension. |
 
 Deselection happens before execution, not at run time. A pytest item the
 selector did not take is deselected by the plugin; a Playwright journey in the

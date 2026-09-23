@@ -667,11 +667,12 @@ def _stages_rows(mode: str) -> bool:
 
 
 def _default_completion(spec: RunSpec, _usage: Any, should_stop: Callable[[], bool]) -> Callable[[str], str]:
+    temperature = spec.options.get("temperature")
     return completion_for(
         spec.llm_url,
         spec.llm_token,
         max_tokens=spec.max_tokens_per_call,
-        temperature=float(spec.options.get("temperature", 0.7)),
+        temperature=float(temperature) if temperature is not None else None,
         thinking=spec.thinking or None,
         should_stop=should_stop,
     )

@@ -4462,6 +4462,15 @@ export class SessionStore {
   /**
    * The JiuwenSwarm backend: its permission engine already decided about the tool call (and asked the user when its
    * policy says so), so the privileged action is allowed here and recorded as JiuwenSwarm's decision.
+   *
+   * JiuwenSwarm's own ask (`chat.ask_user_question`, mapped by `requestApproval` in runs/index.ts through the usual
+   * `requestPermission`/mode-switch/decide machinery) already recorded an authorization for this same tool call
+   * before the call was ever allowed to reach this bridge-side check — this function used to always mint a second
+   * one regardless, so every JiuwenSwarm-gated call double-booked one decision as two authorization rows (caught by
+   * server.test.ts's exact-count assertions once a run made more than one gated call). Reuse that first record by
+   * `toolCallId` instead of creating a redundant one; a call whose tool was never asked about (not in
+   * `JIUWENSWARM_ASK_TOOLS`, so JiuwenSwarm allowed it without a question) has no such record and still gets one
+   * created here, as before.
    */
   async authorizeByJiuwenSwarm(
     sessionId: string,
@@ -4470,6 +4479,11 @@ export class SessionStore {
     context: { executionId?: string; toolCallId?: string } = {},
   ): Promise<{ allowed: true; authorization: PermissionAuthorization }> {
     const session = this.assertSessionWritable(sessionId);
+    if (context.toolCallId) {
+      const already = this.listPermissionAuthorizations(sessionId)
+        .find((candidate) => candidate.toolCallId === context.toolCallId);
+      if (already) return { allowed: true, authorization: already };
+    }
     const authorization = this.createPermissionAuthorization({
       action,
       ...context,
@@ -4750,6 +4764,7 @@ export class SessionStore {
         resource: request.resource,
         session,
         source: "always_allow",
+        ...(request.toolCallId ? { toolCallId: request.toolCallId } : {}),
       });
       request.permissionAuthorizationId = authorization.id;
       return authorization;
