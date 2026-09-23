@@ -15,6 +15,9 @@
 import asyncio
 
 from sciencediscovery_adapter.models import ModelProfile, ModelSync
+import pytest
+
+pytestmark = pytest.mark.science_tags(category='ut', os='linux', arch=('amd64', 'arm64'))
 
 URL = "ws://gw/ws"
 

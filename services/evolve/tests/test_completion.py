@@ -33,6 +33,8 @@ from typing import Any, Dict, Iterator, List
 
 import pytest
 
+pytestmark = pytest.mark.science_tags(category='ut', os='linux', arch=('amd64', 'arm64'))
+
 from sciencediscovery_evolve.completion import completion_for
 
 

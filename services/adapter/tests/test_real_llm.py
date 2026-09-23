@@ -35,10 +35,20 @@ from fastapi import FastAPI
 from sciencediscovery_adapter.app import create_app
 from sciencediscovery_adapter.config import Settings
 
-BASE, MODEL, KEY = (os.environ.get(name) for name in ("REAL_LLM_BASE_URL", "REAL_LLM_MODEL", "REAL_LLM_KEY"))
-GATEWAY, MGMT = os.environ.get("JIUWENSWARM_GATEWAY_URL"), os.environ.get("JIUWENSWARM_MGMT_URL")
-pytestmark = pytest.mark.skipif(
-    not all((BASE, MODEL, KEY, GATEWAY, MGMT)), reason="REAL_LLM_* and JIUWENSWARM_* not all set")
+BASE = os.environ.get("REAL_LLM_BASE_URL")
+MODEL = os.environ.get("REAL_LLM_MODEL")
+KEY = os.environ.get("REAL_LLM_KEY")
+GATEWAY = os.environ.get("JIUWENSWARM_GATEWAY_URL")
+MGMT = os.environ.get("JIUWENSWARM_MGMT_URL")
+# Out of the shared plan: a live model and a live gateway, selected on purpose.
+pytestmark = pytest.mark.science_tags(category='ut', os='linux', arch=('amd64', 'arm64'), model='real', status='external')
+
+
+def live() -> None:
+    """Fail — never skip — when the model or the gateway this test drives is not configured."""
+    if not all((BASE, MODEL, KEY, GATEWAY, MGMT)):
+        pytest.fail("needs REAL_LLM_BASE_URL, REAL_LLM_MODEL, REAL_LLM_KEY, JIUWENSWARM_GATEWAY_URL and "
+                    "JIUWENSWARM_MGMT_URL", pytrace=False)
 
 TOOLS = [{
     "name": "run_shell", "description": "Run a shell command in the session workspace and return its output.",
@@ -99,6 +109,7 @@ def summarize(lines):
 
 
 async def test_a_real_model_uses_the_tool_and_answers_from_its_output():
+    live()
     calls = []
     lines = await run_agent(
         "Run the shell command `cat marker.txt` and tell me exactly what it printed.", f"real-{uuid.uuid4().hex[:8]}", calls)
@@ -115,6 +126,7 @@ async def test_a_real_model_uses_the_tool_and_answers_from_its_output():
 
 
 async def test_a_real_model_keeps_the_conversation_across_turns():
+    live()
     session = f"real-{uuid.uuid4().hex[:8]}"
     await run_agent("Remember this codeword for later: PELICAN-77. Just acknowledge it.", session, [])
     lines = await run_agent("What was the codeword I asked you to remember?", session, [])

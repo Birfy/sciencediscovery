@@ -23,17 +23,23 @@ ScienceDiscovery 是一个本地运行的科研工作台：智能体阅读文献
 
 ## 安装
 
-从 [release 0.2.0](https://github.com/openJiuwen-ai/sciencediscovery/releases/tag/0.2.0) 下载与宿主架构匹配的构建：
+预打包二进制是完成首次运行的最短路径。请在
+[Releases 页面](https://github.com/openJiuwen-ai/sciencediscovery/releases)下载与架构匹配的
+`ScienceDiscovery-<version>-linux-x86_64`（x86_64）或
+`ScienceDiscovery-<version>-linux-aarch64`（arm64），再执行：
 
 ```bash
-curl -LO https://github.com/openJiuwen-ai/sciencediscovery/releases/download/0.2.0/ScienceDiscovery-0.2.0-linux-x86_64
-chmod +x ScienceDiscovery-0.2.0-linux-x86_64
-./ScienceDiscovery-0.2.0-linux-x86_64 serve
+chmod +x ScienceDiscovery-<version>-linux-<architecture>
+./ScienceDiscovery-<version>-linux-<architecture> serve
 ```
 
 打开 `serve` 输出的 **`Open to sign in`** 链接，浏览器将自动保存本地服务访问令牌，无需手动复制。该令牌不同于模型 API Key；此链接可访问本机工作区，请勿外传。Web 界面位于 <http://127.0.0.1:4310>，终端窗口仅运行服务进程。
 
-arm64 请使用 [`ScienceDiscovery-0.2.0-linux-aarch64`](https://github.com/openJiuwen-ai/sciencediscovery/releases/download/0.2.0/ScienceDiscovery-0.2.0-linux-aarch64)。宿主唯一依赖是 Bubblewrap。本地源码模式（Linux 与 macOS）和 Docker 参见[部署指南](docs/zh/getting-started/deployment.md)；智能体后端 [JiuwenSwarm](docs/zh/how-to/run-with-jiuwenswarm.md) 也是在本地源码模式下运行。
+宿主唯一依赖是 Bubblewrap。[部署指南](docs/zh/getting-started/deployment.md)
+说明如何从源码构建便携二进制、以本地源码模式进行开发，以及使用 Docker 完成高级容器运维。
+其中的[二进制与本地模式首次启动排障](docs/zh/getting-started/deployment.md#二进制与本地模式的首次启动排障)
+可处理常见问题。智能体后端 [JiuwenSwarm](docs/zh/how-to/run-with-jiuwenswarm.md)
+也是在本地源码模式下运行。
 
 ## 配置模型
 

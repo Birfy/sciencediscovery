@@ -1,3 +1,7 @@
+
+import pytest
+
+pytestmark = pytest.mark.science_tags(category='ut', os='linux', arch=('amd64', 'arm64'))
 import asyncio
 import json
 import tempfile
