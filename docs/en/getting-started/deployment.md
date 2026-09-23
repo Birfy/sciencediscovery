@@ -329,7 +329,14 @@ ssh -N -L 4310:127.0.0.1:4310 <user>@<remote-host>   # then open http://127.0.0.
 
 ### Step 5: configure a model and start the first task
 
-The image ships no model. The "Configure a model" entry on the home page leads to **System configuration → Model registry**: create a model connection, enter the provider's API key, save it, and select it as the task model under **Global defaults**. Then create a project and start the first session; see the [Quick Start tutorial](quick-start.md). The container reaches the model provider directly; see [Frequently asked questions](#frequently-asked-questions) when it must go through a proxy or when the model server runs on the host itself.
+The image ships no model. The "Configure a model" entry on the home page leads to
+**System configuration → Model registry**: create a model connection, enter the provider's API key,
+then select **Save & connect**. It registers the provider's models and tests the first one. When this
+is the first model in the system, it becomes the default task model. Otherwise, select one from
+**Global default task model** at the top of Model registry. Then create a project and start the first
+session; see the [Quick Start tutorial](quick-start.md). The container reaches the model provider
+directly; see [Frequently asked questions](#frequently-asked-questions) when it must go through a
+proxy or when the model server runs on the host itself.
 
 ### Run agent turns on JiuwenSwarm
 
