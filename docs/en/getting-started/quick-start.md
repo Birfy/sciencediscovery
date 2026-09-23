@@ -1,8 +1,9 @@
 # Quick Start
 
 This tutorial uses a prepackaged Linux executable, then configures a model and submits a first task.
-If you use macOS, prefer a source-built binary, or need Docker, follow the [deployment guide](deployment.md)
-first and return here at [Configure a task model](#3-configure-a-task-model) once the service is running.
+If you use macOS (local source mode), need Docker, or want to build a Linux binary from source, follow
+the [deployment guide](deployment.md) first and return here at
+[Configure a task model](#3-configure-a-task-model) once the service is running.
 
 > See the root [README](../../../README.md) for product scope and risk boundaries, the [deployment guide](deployment.md) for complete deployment procedures, and the [configuration reference](../reference/configuration.md) for parameters and quotas.
 
@@ -22,6 +23,9 @@ Bubblewrap must be available on your system:
 sudo apt-get install -y bubblewrap   # Debian / Ubuntu
 # Or: sudo dnf install -y bubblewrap # Fedora / RHEL / openEuler
 ```
+
+By default, the first `serve` also needs network access to install gateway dependencies. For air-gapped
+preparation, see [Dependencies installed on first launch](deployment.md#dependencies-installed-on-first-launch).
 
 For another operating system or deployment method, use the [deployment guide](deployment.md) instead.
 After its service is running, continue with [Configure a task model](#3-configure-a-task-model).

@@ -8,7 +8,7 @@ Literature review, hypothesis, code, experiments and tuning — in one environme
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-1f6feb?style=flat-square)](LICENSE)
 [![Release](https://img.shields.io/badge/Release-0.2.0-1f6feb?style=flat-square)](https://github.com/openJiuwen-ai/sciencediscovery/releases/tag/0.2.0)
-[![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20macOS-6e7781?style=flat-square)](#requirements)
+[![Platform](https://img.shields.io/badge/Platform-Linux%20binary%20%7C%20macOS%20source-6e7781?style=flat-square)](#requirements)
 [![Docs](https://img.shields.io/badge/Docs-EN%20%7C%20ZH-6e7781?style=flat-square)](docs/README.md)
 
 [Download](#installation) · [Quick start](docs/en/getting-started/quick-start.md) · [Documentation](docs/README.md) · [Contributing](CONTRIBUTING.md) · [中文](README_zh.md)

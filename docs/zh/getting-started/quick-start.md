@@ -1,8 +1,8 @@
 # 01 快速开始
 
 本教程使用预编译 Linux 可执行文件，说明如何启动服务、配置模型并创建第一次 Agent 任务。
-若你使用 macOS、想从源码构建二进制，或需要 Docker，请先按[部署指南](deployment.md)启动服务，
-再回到[配置任务模型](#3-配置任务模型)。
+若你使用 macOS（本地源码模式）、需要 Docker，或想为 Linux 从源码构建二进制，请先按
+[部署指南](deployment.md)启动服务，再回到[配置任务模型](#3-配置任务模型)。
 
 > 系统定位与风险边界见 [README_zh.md](../../../README_zh.md)；部署的完整操作步骤见[部署指南](deployment.md)；参数和配额见[配置参考](../reference/configuration.md)。
 
@@ -22,6 +22,9 @@ bubblewrap 需已安装在本机：
 sudo apt-get install -y bubblewrap   # Debian / Ubuntu
 # 或：sudo dnf install -y bubblewrap # Fedora / RHEL / openEuler
 ```
+
+默认情况下，首次执行 `serve` 还需要联网安装 gateway 依赖。离线环境的准备方式见
+[首次启动安装的依赖](deployment.md#首次启动安装的依赖)。
 
 使用其他操作系统或部署方式时，请改看[部署指南](deployment.md)。服务启动后，继续[配置任务模型](#3-配置任务模型)。
 

@@ -8,7 +8,7 @@
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-1f6feb?style=flat-square)](LICENSE)
 [![Release](https://img.shields.io/badge/Release-0.2.0-1f6feb?style=flat-square)](https://github.com/openJiuwen-ai/sciencediscovery/releases/tag/0.2.0)
-[![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20macOS-6e7781?style=flat-square)](#环境要求)
+[![Platform](https://img.shields.io/badge/Platform-Linux%20binary%20%7C%20macOS%20source-6e7781?style=flat-square)](#环境要求)
 [![Docs](https://img.shields.io/badge/Docs-EN%20%7C%20ZH-6e7781?style=flat-square)](docs/README.md)
 
 [下载](#安装) · [快速开始](docs/zh/getting-started/quick-start.md) · [文档](docs/README.md) · [贡献指南](CONTRIBUTING.md) · [English](README.md)
