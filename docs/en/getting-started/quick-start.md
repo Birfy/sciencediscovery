@@ -52,17 +52,31 @@ binary and local mode, use its [first-run troubleshooting](deployment.md#first-r
 
 ## 3. Configure a task model
 
-Under **System configuration → Global defaults**, configure the provider base URL, model ID, and external model API Key for the task model. This is separate from the local service access token. See [Configuration reference](../reference/configuration.md) for supported environment variables and files.
+Open **System configuration → Model registry**. Select a preset provider or add one manually, enter
+its details and API key, then select **Save & connect**. It registers the provider's models and tests
+the first one. When this is the first model in the system, it also becomes the default task model. If
+you already have models, select one from **Global default task model** at the top of Model registry.
+
+This configuration uses the external model API key, not the local service access token. If the
+connection test fails, correct the API key, provider URL or model ID, or network and proxy settings
+before trying again. See [Configuration reference](../reference/configuration.md) for supported
+environment variables and files.
 
 ## 4. Run a first scientific task
 
 1. Create a Project and Session.
-2. Enter a focused scientific question, such as “Summarize the current research objective and propose the next analysis steps.”
-3. To analyze local material, upload a CSV or PDF that you are authorized to use and describe the analysis objective.
+2. Enter a focused scientific question, such as “I am planning an experiment on how temperature
+   affects yield. Propose the data to collect, two quality checks, and a first analysis plan.”
+3. To analyze local material, upload a CSV or PDF that you are authorized to use and describe the
+   analysis objective.
 4. Review and approve the permission card shown for the first code execution or external-data access.
-5. Inspect tool calls and execution results in the message timeline, and inspect generated files in the Artifact area.
+5. After handling any requested approval, a first task is complete when the assistant reply finishes
+   and the task no longer appears as running. An unfinished streaming reply or pending permission card
+   is not a completed task. When it uses a tool, inspect that tool's result in the timeline; inspect
+   generated files under **Artifacts** in the workspace when the task declares them as artifacts.
 
-Responses, tool calls, and generated artifacts depend on the configured model, enabled connectors, and supplied material; they are not fixed-output promises.
+The response wording, tool calls, and generated artifacts depend on the configured model, enabled
+connectors, and supplied material; they are not fixed-output promises.
 
 ## 5. Next steps
 

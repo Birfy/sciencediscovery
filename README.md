@@ -47,16 +47,21 @@ guide covers the deployment-specific operations.
 
 ## Configure a model
 
-ScienceDiscovery does not bundle a model; you connect your own API. Open **System configuration** at the bottom of the left sidebar and complete two sections:
-
-1. **Model registry** — select a preset provider or enter a **Base URL** manually, provide the **API key**, then add the model you intend to use.
-2. **Global defaults** — set the model added in the previous step as the **task model**.
+ScienceDiscovery does not bundle a model; you connect your own API. Open **System configuration** at
+the bottom of the left sidebar, then open **Model registry**. Select a preset provider or add one
+manually, enter its details and API key, then select **Save & connect**. This registers the provider's
+models and tests the first one. When it is the first model in the system, it also becomes the default
+task model. If you already have models, select one from **Global default task model** at the top of
+Model registry.
 
 Field definitions, and which of them an environment variable can set instead, are in the [configuration reference](docs/en/reference/configuration.md).
 
 ## First task
 
-Create a Project and a Session, drop a CSV or a PDF into the workspace, and describe the analysis you want. A permission card appears before the first code execution; once approved, tool calls and artifacts are shown in the timeline. For a step-by-step walkthrough, see the [Quick Start](docs/en/getting-started/quick-start.md).
+Create a Project and a Session, drop a CSV or a PDF into the workspace, and describe the analysis
+you want. A permission card appears before the first code execution; once approved, inspect tool calls
+and their results in the timeline. Generated files that the task declares as **Artifacts** appear in the
+workspace. For a step-by-step walkthrough, see the [Quick Start](docs/en/getting-started/quick-start.md).
 
 ## Capabilities
 
