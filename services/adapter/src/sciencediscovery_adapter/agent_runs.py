@@ -100,10 +100,16 @@ class AgentRunRequest(BaseModel):
     nativeTools: list[str] = Field(default_factory=list)
     # "all": every one of JiuwenSwarm's own tools is offered too, and one of ours with the same name gives way.
     jiuwenSwarmTools: Literal["all", "listed"] = "listed"
-    # JiuwenSwarm's own tools the model must not get (they act on the host; see LlmRoute.hidden_native_tools).
+    # More of JiuwenSwarm's own tools the model must not get, besides JIUWENSWARM_HOST_TOOLS, which it never gets
+    # (they act on the host; see LlmRoute.hidden_native_tools).
     hiddenJiuwenSwarmTools: list[str] = Field(default_factory=list, max_length=100)
     # Longest a single tool call may take, in seconds; the run's own timeout, when the caller has one.
     toolTimeoutSeconds: int | None = None
+
+
+# JiuwenSwarm's own tools that act on the host, outside ScienceDiscovery's sandbox and Runner (the API's
+# JIUWENSWARM_HOST_TOOLS): no run's model may call them, in any tool mode.
+JIUWENSWARM_HOST_TOOLS = frozenset({"bash", "read_file", "write_file", "edit_file", "glob", "list_files", "grep", "read_pdf"})
 
 
 # JiuwenSwarm's configuration for web search (`config.set` keys): its two free engines and its paid-search keys.
@@ -196,7 +202,15 @@ class AgentRunner:
         self.skills = SkillSync(lambda *a, **k: self.rpc(*a, **k), settings.mgmt_url)
         self._shared_lock = asyncio.Lock()
         self._shared_registered = False
-        self._shared_timeout_s = 0
+        # Starts at the configured ceiling, not 0: a run that omits toolTimeoutSeconds already falls back to
+        # this same value (see ensure_shared_tools's caller), so starting low only matters for a run that
+        # asks for less than it (a short-lived test, for one). Concurrent runs' start order is a race, and
+        # whichever reaches ensure_shared_tools first sets this value for everyone; starting it low let an
+        # early short-timeout run set a low bar that every normal-timeout run after it then had to bump back
+        # up, each bump re-running the whole disconnect/register/connect dance under _shared_lock while every
+        # other concurrent run waits on it. Starting at the ceiling means only a run that genuinely asks for
+        # more than the configured default ever triggers that dance for this reason.
+        self._shared_timeout_s = settings.tool_timeout_s
         self._permissions_on = False
         # Runs paused on one of JiuwenSwarm's approval questions, by the question's id.
         self.pending_approvals: dict[str, tuple[Any, RunEventMapper]] = {}
@@ -208,7 +222,14 @@ class AgentRunner:
 
     async def ensure_shared_tools(self, tools: list[dict[str, Any]], timeout_s: int) -> None:
         """Give JiuwenSwarm the one MCP server for every run's tools (see mcp_server), and its list again when a run
-        brought a tool (or an argument) it did not have. A reconnect makes JiuwenSwarm read the list afresh."""
+        brought a tool (or an argument) it did not have.
+
+        A bare `mcp.connect` on an already-connected server does *not* make JiuwenSwarm re-read the tool
+        list (confirmed live: a run whose only new tools arrived through that path never saw JiuwenSwarm
+        issue `tools/list` again, so those tools were never callable) -- only the full
+        disconnect/delete_custom/register_custom cycle does. So `changed` forces that full cycle too, not
+        just the first-ever registration or a larger timeout.
+        """
         async with self._shared_lock:
             new = [tool for tool in tools if tool["name"] not in self.registry.shared]
             changed = self.registry.merge(tools)
@@ -218,21 +239,25 @@ class AgentRunner:
                 return
             self._shared_timeout_s = max(timeout_s, self._shared_timeout_s)
             was_registered = self._shared_registered
-            self._shared_registered = False  # retry the registration if the refresh below fails
-            if not was_registered or longer:
-                # An earlier adapter left it registered with another URL (its token changed), or a longer timeout is needed.
+            self._shared_registered = False  # a failed refresh must be retried on the next run
+            if not was_registered or changed or longer:
+                # An earlier adapter left it registered with another URL (its token changed), new tools
+                # arrived, or a longer timeout is needed -- any of these needs JiuwenSwarm to actually
+                # re-read the tool list, which only a fresh connection cycle reliably does.
                 for method in ("mcp.disconnect", "mcp.delete_custom"):
                     try:
-                        await self.rpc(self.settings.mgmt_url, method, {"name": SERVER_NAME})
+                        result = await self.rpc(self.settings.mgmt_url, method, {"name": SERVER_NAME})
                     except Exception:
-                        pass
+                        pass  # there may be no earlier registration to remove
+                    else:
+                        if result.get("applied") is False:
+                            raise gateway.GatewayError(
+                                f"{method} did not apply: {result.get('error') or 'MCP unregister incomplete'}"
+                            )
                 await self.rpc(self.settings.mgmt_url, "mcp.register_custom", {
                     "name": SERVER_NAME, "transport": "streamable-http",
                     "url": f"{self.settings.public_url}/mcp/{self.registry.token}", "timeout_s": self._shared_timeout_s,
                 })
-            elif changed:
-                # JiuwenSwarm caches tools on connect; connect alone does not refresh an open server.
-                await self.rpc(self.settings.mgmt_url, "mcp.disconnect", {"name": SERVER_NAME})
             await self.rpc(self.settings.mgmt_url, "mcp.connect", {"name": SERVER_NAME})
             self._shared_registered = True
 
@@ -290,14 +315,17 @@ class AgentRunner:
                     raise ValueError(f"the {request.model.provider} protocol is not supported by this executor yet")
                 # JiuwenSwarm talks to a private alias that points at this run's proxy route, which
                 # forwards to the real endpoint with the real id, tool names and system prompt.
+                # Its host tools are turned away whatever the caller asked: leaving one unlisted only keeps it out
+                # of the model's tool list, and a call the model makes to it anyway would run on the host.
+                hidden = frozenset(request.hiddenJiuwenSwarmTools) | JIUWENSWARM_HOST_TOOLS
                 llm_token = self.routes.add(LlmRoute(
                     base_url=request.model.baseUrl.rstrip("/"), api_key=request.model.apiKey, model=request.model.model,
                     tool_prefix=f"mcp_{name}_", tool_names=frozenset(t.name for t in request.tools),
                     tool_specs={t.name: {"description": t.description, "parameters": t.inputSchema} for t in request.tools},
                     system_prompt=request.systemPrompt, system_prompt_mode=request.systemPromptMode,
                     system_prompt_tail=request.systemPromptTail,
-                    native_tools=frozenset(request.nativeTools), all_native_tools=request.jiuwenSwarmTools == "all",
-                    hidden_native_tools=frozenset(request.hiddenJiuwenSwarmTools), run_tag=token,
+                    native_tools=frozenset(request.nativeTools) - hidden, all_native_tools=request.jiuwenSwarmTools == "all",
+                    hidden_native_tools=hidden, run_tag=token,
                 ))
                 # Named after the real model: JiuwenSwarm tells the model its own model's name (runtime state), and
                 # the alias is all it knows. The suffix keeps two runs of one model apart.

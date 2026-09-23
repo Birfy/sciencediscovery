@@ -212,7 +212,9 @@ export async function utContractProblems(catalog = defaultCatalog, repositoryRoo
   const expected = {
     "sandbox-packages": ["pnpm", ...[...guestNames].flatMap((name) => ["--filter", name]), "test"],
     // The host packages' agent turns run on JiuwenSwarm, which the wrapper starts for the whole command.
-    "workspace-packages": [...(catalog.jiuwenSwarmWrapper ?? []), "pnpm", "--recursive", ...[...guestNames].flatMap((name) => ["--filter", `!${name}`]), "test"],
+    // --workspace-concurrency=2 (default 4) limits how many packages' agent turns can contend for that one
+    // shared instance's approval/registration state at once; see the workload's own comment in test-catalog.mjs.
+    "workspace-packages": [...(catalog.jiuwenSwarmWrapper ?? []), "pnpm", "--recursive", "--workspace-concurrency=2", ...[...guestNames].flatMap((name) => ["--filter", `!${name}`]), "test"],
   };
   for (const [id, command] of Object.entries(expected)) {
     const workload = utWorkloads.find((candidate) => candidate.id === id);

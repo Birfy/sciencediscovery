@@ -119,8 +119,14 @@ export const utWorkloads = [
   { command: ["pnpm", "ci:selftest"], id: "ci-contract", tier: "host" },
   { command: ["pnpm", "binary:test"], id: "binary-scripts", tier: "host" },
   // Agent turns in these tests run on a real JiuwenSwarm behind a real adapter: the wrapper installs and starts
-  // one of each for the whole run, and the packages' tests reach it through SCIENCE_AGENT_ADAPTER_URL.
-  { command: [...jiuwenSwarmWrapper, "pnpm", "--recursive", ...hostPackageFilters, "test"], id: "workspace-packages", tier: "host" },
+  // one of each for the whole run, and the packages' tests reach it through SCIENCE_AGENT_ADAPTER_URL. pnpm's
+  // own default concurrency (4, one per package running at once) piles that many packages' agent turns onto
+  // the one shared instance simultaneously; live JiuwenSwarm testing under that load reproduced real
+  // approval/registration failures in its resource_mgr and gateway ("Ability not found in resource_mgr: ...",
+  // "could not answer JiuwenSwarm's approval question ...: HTTP 404", idle-timeout gateway stalls) — see
+  // docs/{en,zh}/reference/jiuwenswarm-migration-status.md gap 9. Halving it to 2 cuts how many packages can
+  // contend for the shared instance's approval/registration state at once.
+  { command: [...jiuwenSwarmWrapper, "pnpm", "--recursive", "--workspace-concurrency=2", ...hostPackageFilters, "test"], id: "workspace-packages", tier: "host" },
   { command: ["pnpm", "paper:test"], id: "paper", tier: "host" },
   { command: ["pnpm", "gateway:test"], id: "gateway", tier: "host" },
   { command: ["pnpm", "memory-graph:test"], id: "memory-graph", tier: "host" },

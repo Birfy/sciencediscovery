@@ -13,6 +13,7 @@
 // limitations under the License.
 
 import { randomUUID } from "node:crypto";
+import { setTimeout as delay } from "node:timers/promises";
 import { filterEnabledMcpSources } from "@sciencediscovery/mcp-sources";
 import { handlePluginRequest } from "../plugins/http.js";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
@@ -632,11 +633,17 @@ export function createApiServer(config = loadServerConfig(), dependencies: ApiSe
   const syncJiuwenSwarmWeb = async () => jiuwenSwarm
     ? await syncWebSettingsToJiuwenSwarm(jiuwenSwarm, store.getWebSettings(), (provider) => store.getWebProviderApiKey(provider))
     : { ok: true };
+  // Up to 5 retries, 3s apart: with one JiuwenSwarm+adapter shared by every process that starts an API
+  // server (scripts/with-jiuwenswarm.sh), a server that is closed well inside that 15s window — as a
+  // short-lived test server is — would otherwise leave this loop running against a server that no longer
+  // exists, one more concurrent caller hammering the shared adapter for no reason. Tied to the server's
+  // own close event below, not a bare setTimeout chain.
+  const jiuwenSwarmWebSyncAbort = new AbortController();
   if (jiuwenSwarm) {
     void ready.then(async () => {
-      for (let attempt = 0; attempt < 5; attempt += 1) {
+      for (let attempt = 0; attempt < 5 && !jiuwenSwarmWebSyncAbort.signal.aborted; attempt += 1) {
         if ((await syncJiuwenSwarmWeb()).ok) return;
-        await new Promise((resolve) => setTimeout(resolve, 3_000));
+        await delay(3_000, undefined, { signal: jiuwenSwarmWebSyncAbort.signal }).catch(() => undefined);
       }
     }).catch(() => undefined);
   }
@@ -3601,6 +3608,7 @@ export function createApiServer(config = loadServerConfig(), dependencies: ApiSe
   let resolveClosed!: () => void;
   const closed = new Promise<void>((resolveClose) => { resolveClosed = resolveClose; });
   const cleanup = () => cleanupPromise ??= (async () => {
+    jiuwenSwarmWebSyncAbort.abort();
     ideaResearch.close();
     await (await platform.connectorPlugins).dispose();
     remoteCompute.close();

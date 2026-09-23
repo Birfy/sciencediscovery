@@ -30,7 +30,12 @@ import {
   type JourneyFixture,
 } from "./helpers/journeys.ts";
 
-test.use({ locale: "zh-CN" });
+// The catalog status line renders its instant with `new Date(...).toLocaleString()`, i.e. in the
+// viewer's own time zone, so a run pins one rather than reading the host's: without this the
+// assertions below only hold on a UTC machine and read 8 hours off on any box set to China time.
+// The zone is deliberately not UTC — under UTC the expected text equals the raw instant, and the
+// assertion could no longer tell a localised rendering apart from one that never converted.
+test.use({ locale: "zh-CN", timezoneId: "Asia/Shanghai" });
 
 interface ProviderStub {
   anthropicBodies: Array<Record<string, unknown>>;
@@ -494,7 +499,7 @@ test("J7 Provider 模型目录、失败降级与对话思考选择", { tag: "@mo
           "/api/model-catalog",
         );
         expect(current.snapshot?.origin).toBe("bundled");
-        const refreshedAt = "2026-08-26T02:00:00.000Z";
+        const refreshedAt = "2026-08-26T02:00:00.000Z"; // 10:00:00 in the pinned Asia/Shanghai zone.
         let simulatedRefresh: { body: unknown; status: number } | undefined;
         const refreshRoute = async (route: Route) => {
           if (!simulatedRefresh) {
@@ -519,7 +524,7 @@ test("J7 Provider 模型目录、失败降级与对话思考选择", { tag: "@mo
           };
           await status.getByRole("button", { name: "刷新目录" }).click();
           await expect(page.getByText("模型目录已更新")).toBeVisible();
-          await expect(status).toContainText("最近更新于 2026/8/26 02:00:00");
+          await expect(status).toContainText("最近更新于 2026/8/26 10:00:00");
           await expect(status).not.toContainText("随本次构建发布");
 
           // 刷新失败：上游 502，保留上一次快照且草稿不丢。
@@ -535,7 +540,7 @@ test("J7 Provider 模型目录、失败降级与对话思考选择", { tag: "@mo
           };
           await status.getByRole("button", { name: "刷新目录" }).click();
           await expect(page.getByText("刷新模型目录失败")).toBeVisible();
-          await expect(status).toContainText("最近更新于 2026/8/26 02:00:00");
+          await expect(status).toContainText("最近更新于 2026/8/26 10:00:00");
           await expect(editor.getByLabel("服务商名称")).toHaveValue(draftName);
           await expect(editor.getByLabel("外部模型 API Key")).toHaveValue("j7-catalog-draft-token");
           await expect(editor.getByLabel("基础 URL")).toHaveValue(stub.baseUrl);
