@@ -13,7 +13,8 @@
 // limitations under the License.
 
 import assert from "node:assert/strict";
-import { describe, test } from "node:test";
+import { createTest } from "../../../test/support/tagged/compat.mjs";
+const { describe, test } = createTest(import.meta.url, { tags: ["category:ut", "os:linux", "arch:amd64", "arch:arm64"] });
 
 import { adapterServiceDefinition, jiuwenswarmPaths, jiuwenswarmServiceDefinition } from "./jiuwenswarm.js";
 import type { PayloadManifest } from "./payload-manifest.js";

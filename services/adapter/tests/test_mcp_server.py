@@ -18,6 +18,8 @@ from fastapi import FastAPI
 
 from sciencediscovery_adapter.mcp_server import RUN_ARG, Toolset, ToolsetRegistry, mcp_router
 
+pytestmark = pytest.mark.science_tags(category='ut', os='linux', arch=('amd64', 'arm64'))
+
 TOOLS = [{"name": "run_shell", "description": "Run a command.",
           "inputSchema": {"type": "object", "properties": {"command": {"type": "string"}}, "required": ["command"]}}]
 

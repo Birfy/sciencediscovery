@@ -19,6 +19,8 @@ import websockets
 
 from sciencediscovery_adapter.gateway import ChatRun, GatewayError, chat, rpc
 
+pytestmark = pytest.mark.science_tags(category='ut', os='linux', arch=('amd64', 'arm64'))
+
 
 DONE = {"type": "event", "event": "chat.processing_status", "payload": {"is_processing": False, "is_complete": True}}
 
