@@ -84,6 +84,13 @@ test("shell variables and prices are text, not math", () => {
   assert.match(render("Both $a$ and $b^2$ render."), /class="katex"/);
 });
 
+test("LaTeX \\( \\) and \\[ \\] math renders like dollar math", () => {
+  const html = render("误差随样本量 \\(N\\) 增大按 \\(1/\\sqrt{N}\\) 下降。\n\n\\[\nE = mc^2\n\\]");
+  assert.equal((html.match(/class="katex"/g) ?? []).length, 3);
+  assert.match(html, /class="katex-display"/);
+  assert.doesNotMatch(html, /\\sqrt\{N\}\)/);
+});
+
 test("does not render raw HTML or unsafe links", () => {
   const html = render(`<script>alert("unsafe")</script>
 
