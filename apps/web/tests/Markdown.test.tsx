@@ -76,6 +76,14 @@ test("renders GFM structure and math", () => {
   assert.doesNotMatch(html, /node="\[object Object\]"/);
 });
 
+test("shell variables and prices are text, not math", () => {
+  const shell = render("运行 shell 命令：for i in $(seq 1 120); do echo tick $i; sleep 1; done");
+  assert.doesNotMatch(shell, /class="katex"/);
+  assert.match(shell, /\$\(seq 1 120\); do echo tick \$i; sleep 1; done/);
+  assert.doesNotMatch(render("It costs $5 and $10."), /class="katex"/);
+  assert.match(render("Both $a$ and $b^2$ render."), /class="katex"/);
+});
+
 test("does not render raw HTML or unsafe links", () => {
   const html = render(`<script>alert("unsafe")</script>
 
