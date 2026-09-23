@@ -253,6 +253,7 @@ import { PermissionCards, PermissionGrantManager } from "./Permissions.js";
 import { translateActive, useLocale, type MessageKey } from "./i18n/index.js";
 import { formatRunFailure } from "./run-failure.js";
 import {
+  artifactOriginLabel,
   ComposerCommandChips,
   ComposerReferenceChips,
   ComposerReferenceMenu,
@@ -4045,7 +4046,7 @@ export function App({ initialToken }: { initialToken?: string } = {}) {
   const selectedComposerCommands = selectedSkillAuthoringCommands(message);
   const composerSuggestions: ComposerSuggestion[] = !composerTrigger ? [] : composerTrigger.symbol === "@"
     ? artifacts.map((artifact) => ({
-      detail: `${artifact.kind} · ${artifact.origin} · v${artifact.currentVersion}`,
+      detail: `${artifact.kind} · ${artifactOriginLabel(artifact.origin, t)} · v${artifact.currentVersion}`,
       reference: {
         createdInSessionTitle: artifact.createdInSessionTitle,
         id: artifact.id,

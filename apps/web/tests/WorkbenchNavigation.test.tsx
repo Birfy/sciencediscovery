@@ -34,6 +34,7 @@ import {
   selectedSkillAuthoringCommands,
   SKILL_AUTHORING_COMMANDS,
 } from "../src/WorkbenchNavigation.js";
+import { LocaleProvider } from "../src/i18n/LocaleProvider.js";
 
 const artifactReference: ComposerReference = {
   id: "session-1:plots/result.png",
@@ -175,4 +176,30 @@ test("global search renders limited mixed-catalog pages and authoritative server
   }));
   assert.match(targetedHtml, /target-after-250\.csv/);
   assert.ok(GLOBAL_SEARCH_DEBOUNCE_MS >= 200 && GLOBAL_SEARCH_DEBOUNCE_MS <= 500);
+});
+
+test("search results read in the UI's language when the API sends their parts", () => {
+  const zh = renderToStaticMarkup(createElement(LocaleProvider, { initialLocale: "zh-CN" }, createElement(GlobalSearchDialog, {
+    hasMore: false,
+    loading: false,
+    onClose: () => undefined,
+    onQueryChange: () => undefined,
+    onSelect: () => undefined,
+    query: "growth",
+    results: [
+      { detail: "Mixed · Archived", id: "session:s1", kind: "session", label: "Untitled session", projectId: "p1", projectName: "Mixed", sessionId: "s1", archived: true },
+      { detail: "Mixed / Fit · llm_declared", id: "artifact:a1", kind: "artifact", label: "fit.png", origin: "llm_declared", projectId: "p1", projectName: "Mixed", sessionTitle: "Fit" },
+      { detail: "Mixed / Deleted Session · user_upload", id: "artifact:a2", kind: "artifact", label: "growth.csv", origin: "user_upload", projectId: "p1", projectName: "Mixed" },
+      { detail: "An older API's line", id: "artifact:a3", kind: "artifact", label: "old.csv", projectId: "p1" },
+    ],
+    total: 4,
+  })));
+  assert.match(zh, /未命名会话/);
+  assert.match(zh, /Mixed · 已归档/);
+  assert.match(zh, /Mixed \/ Fit · 智能体登记/);
+  assert.match(zh, /Mixed \/ 已删除会话 · 用户上传/);
+  assert.match(zh, /An older API&#x27;s line|An older API's line/);
+  assert.match(zh, /<em>会话<\/em>/);
+  assert.match(zh, /<em>产物<\/em>/);
+  assert.doesNotMatch(zh, /llm_declared|user_upload|<em>session<\/em>/);
 });
