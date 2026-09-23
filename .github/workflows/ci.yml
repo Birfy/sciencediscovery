@@ -190,9 +190,9 @@ jobs:
       - name: Summarize the E2E outcome
         if: always()
         run: |
-          # .ci/run-e2e.sh suffixes the results directory with the backend when it is not
-          # "legacy" (results_suffix="e2e-$backend"), so the JiuwenSwarm run lands here.
-          results=.ci-results/e2e-jiuwenswarm/test-results/results.json
+          # .ci/run-e2e.sh suffixes the results directory with the backend only when it is
+          # not the default jiuwenswarm (results_suffix="e2e-legacy"), so this run lands in e2e.
+          results=.ci-results/e2e/test-results/results.json
           if [[ ! -f "$results" ]]; then
             echo "### E2E (mocked, JiuwenSwarm)" >> "$GITHUB_STEP_SUMMARY"
             echo "No Playwright results.json; the layer stopped before test execution." >> "$GITHUB_STEP_SUMMARY"
@@ -242,7 +242,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: e2e-results
-          path: .ci-results/e2e-jiuwenswarm
+          path: .ci-results/e2e
           if-no-files-found: warn
           retention-days: 14
 
