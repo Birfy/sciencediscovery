@@ -27,9 +27,6 @@
 - [配置网络代理](advanced-setup/configure-network-proxy.md) — 在设置页添加代理并为 LLM、Web 和 MCP 选择策略。
 - [安装 Neo4j 与配置科学记忆](advanced-setup/science-memory-setup.md) — 安装外部 Neo4j、在系统设置里开启科学记忆，并在前端图谱里查看链路。
 
-## 运行与运维
-- [在 JiuwenSwarm 上运行 agent](how-to/run-with-jiuwenswarm.md) — 可选的实验性执行器：安装固定版本的 JiuwenSwarm、带 adapter 启动服务，并了解预期行为。
-
 ## Reference（参考）
 
 - [配置、端口与存储](reference/configuration.md) — 环境变量、默认端口、上传/工作区/输出配额和数据布局。
@@ -37,6 +34,7 @@
 - [运行时行为](reference/runtime-behavior.md) — 模型、设置继承、技能、权限、超时和执行限制。
 - [内置工具](reference/builtin-tools.md) — 模型可见工具的参数、边界和暴露条件。
 - [Web 工具](reference/web-tools.md) — Web Search/Fetch provider、配置、权限、缓存与审计。
+- [JiuwenSwarm 运行时行为](reference/jiuwenswarm-runtime.md) — 默认后端的行为边界、原生循环回退与兼容性详情入口。
 - [JiuwenSwarm 迁移状态](reference/jiuwenswarm-migration-status.md) — 已实现范围、已知缺口与后续交接方式。
 
 ## 开发者文档

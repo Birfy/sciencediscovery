@@ -140,7 +140,7 @@ ScienceDiscovery help                显示帮助
 | `--bwrap <路径>` | `PATH` 中的 `bwrap` | bubblewrap 可执行文件 |
 | `--skip-sandbox-check` | 关 | 缺少 bubblewrap 时仍启动；沙箱执行不可用 |
 | `--no-scientific-envs` | 关 | 不初始化托管科学环境 |
-| `--jiuwenswarm` | **开** | 智能体轮次跑在内置的 [JiuwenSwarm](../how-to/run-with-jiuwenswarm.md) 上而非原生循环；为兼容保留此参数，这已经是默认行为 |
+| `--jiuwenswarm` | **开** | 智能体轮次跑在内置的 JiuwenSwarm 上而非原生循环；为兼容保留此参数，这已经是默认行为 |
 | `--no-jiuwenswarm` | 关 | 改为跑原生循环；等价于 `SCIENCE_AGENT_EXECUTOR=native` |
 
 [配置参考](../reference/configuration.md#环境变量本地模式)中的变量同样生效，可直接导出或写进 `--env-file`。API 与 runner 默认都只监听回环。确需对外提供 API 时，应先更换 `SCIENCE_AGENT_AUTH_TOKEN`，在可信且受保护的网络中显式使用 `--host 0.0.0.0`。
@@ -169,7 +169,7 @@ ScienceDiscovery help                显示帮助
 | CPython 3.12 | 可重定位发行版，无需宿主 Python；同时作为首启 gateway venv 的基础解释器 |
 | Web 静态资源 | 预构建的 `apps/web/dist` |
 | gateway wheel 与首启清单 | 自有代码的 `sciencediscovery-gateway` wheel、带哈希的锁定依赖清单、uv wheel 的版本 pin |
-| JiuwenSwarm 与适配器 | 固定版本的 [JiuwenSwarm](../how-to/run-with-jiuwenswarm.md) 与自有代码的 `sciencediscovery-adapter` wheel，连同各自完整的第三方依赖树一起在构建时装好——跟 gateway 不同，不推迟到首次启动，因为 JiuwenSwarm 自身体量（约 1.5 GB）是发布包体积最大的单一来源 |
+| JiuwenSwarm 与适配器 | 固定版本的 JiuwenSwarm 与自有代码的 `sciencediscovery-adapter` wheel，连同各自完整的第三方依赖树一起在构建时装好——跟 gateway 不同，不推迟到首次启动，因为 JiuwenSwarm 自身体量（约 1.5 GB）是发布包体积最大的单一来源 |
 | micromamba | 固定版本，首次 `serve` 播种到 `<数据目录>/scientific-envs/bin/micromamba`，之后 Runner 按同一发布清单校验 |
 
 不含 uv 与 gateway 的第三方 Python 依赖（见[首次启动安装的依赖](#首次启动安装的依赖)），不含 Neo4j，也不含 starter Python/R 科学环境与 conda 包缓存：首次创建 starter 环境仍需访问允许的软件包渠道。
@@ -196,7 +196,8 @@ ScienceDiscovery help                显示帮助
 - Linux 需要 Bubblewrap 0.6+（推荐 0.8+）及可用的无特权用户命名空间；
 - macOS 使用系统内置的 Seatbelt，启动脚本会自动调用 `/usr/bin/sandbox-exec`，不需要安装 Bubblewrap。
 
-智能体循环跑在 [JiuwenSwarm](https://gitcode.com/openJiuwen/jiuwenswarm) 上；先安装一次，再用 `--jiuwenswarm` 启动栈。完整前置条件、每个环境变量与排错见[在 JiuwenSwarm 上运行智能体](../how-to/run-with-jiuwenswarm.md)。
+本地源码模式默认使用原生循环。只有在开发或验证发布二进制与 Docker 镜像默认使用的
+JiuwenSwarm 后端时，才需要显式选择它：先安装固定版本，再用 `--jiuwenswarm` 启动栈。
 
 从仓库根目录执行：
 
@@ -212,12 +213,19 @@ SSH 自动部署使用自带 Node runtime 的 Runner SEA 单文件，不要求�
 
 每份二进制按自身 SHA-256 命名，所以主程序升级后重连是新增一个文件而不是覆盖旧文件。新二进制启动并通过健康检查之后，控制面会删除同目录下其余以 SHA-256 命名、且没有任何进程正在执行的 Runner 二进制——单个约 120 MB，长期迭代会累积到数 GB。正在被执行的二进制一律保留，包括别的控制面连接正在使用的；目录里不符合该命名的文件不受影响。这一步是尽力而为，失败只记入连接日志，不影响已经建立的连接。
 
-共用入口在本地模式下会读取仓库根目录 `.env`、校验[环境要求](../../../README_zh.md#环境要求)中列出的依赖、按需安装与构建，然后以宿主机普通进程启动各服务。脚本在 Linux 自动选择 Bubblewrap，在 macOS 自动选择 Seatbelt，无需手动设置 `SCIENCE_AGENT_SANDBOX_PROVIDER`：
+共用入口在本地模式下会读取仓库根目录 `.env`、校验[环境要求](../../../README_zh.md#环境要求)中列出的依赖、按需安装与构建，然后以宿主机普通进程启动各服务。脚本在 Linux 自动选择 Bubblewrap，在 macOS 自动选择 Seatbelt，无需手动设置 `SCIENCE_AGENT_SANDBOX_PROVIDER`。默认原生循环的服务如下：
 
 | 服务 | 地址 | 作用 |
 |---|---|---|
 | `services/gateway` | 无端口 | 仅为随包 Python MCP server 提供解释器环境 |
 | `services/runner` | 127.0.0.1:4311 | 无 root 的 Bubblewrap（Linux）或 Seatbelt（macOS）执行器（后台） |
+| `services/api` | 127.0.0.1:4310 | 控制 API + Web UI（前台） |
+
+加上 `--jiuwenswarm` 后，JiuwenSwarm 与适配器会替代原生循环。适配器仍占用 4310 公共端口，
+并把 API 移到其后：
+
+| 服务 | 地址 | 作用 |
+|---|---|---|
 | JiuwenSwarm | `~/.jiuwenswarm-instances/sciencediscovery` | 运行智能体循环；未运行时由 `scripts/jiuwenswarm.sh` 启动 |
 | 适配器 | 127.0.0.1:4310 | 对外端口；反向代理 API，并桥接 JiuwenSwarm 的模型与工具调用 |
 | `services/api` | 127.0.0.1:4410 | 控制 API + Web UI，位于适配器之后（前台） |
@@ -232,7 +240,7 @@ SSH 自动部署使用自带 Node runtime 的 Runner SEA 单文件，不要求�
 
 ## Docker 部署
 
-单个镜像承载完整技术栈：容器入口 `docker-entrypoint.sh` 转调 `scripts/start-stack.sh --mode docker`，在一个容器内按与本地模式相同的顺序启动 bubblewrap runner 和带 Web UI 的控制 API，随包的 Python MCP server 由 API 按需拉起；Docker 专属预检只在该模式执行。builder 阶段使用 pnpm 与 uv；运行镜像携带 Node、预构建的服务 Python 环境、bubblewrap，以及按 `TARGETARCH` 下载并校验的固定版本 micromamba。镜像同样内置了 [JiuwenSwarm](../how-to/run-with-jiuwenswarm.md) 与其适配器，做法与单文件二进制包相同，且**默认**就跑在它上面；`start-stack.sh --mode docker` 加上 `--no-jiuwenswarm` 才会改回原生循环（见[在 JiuwenSwarm 上运行智能体](../how-to/run-with-jiuwenswarm.md)）。宿主机只需要 Docker。
+单个镜像承载完整技术栈：容器入口 `docker-entrypoint.sh` 转调 `scripts/start-stack.sh --mode docker`，在一个容器内按与本地模式相同的顺序启动 bubblewrap runner 和带 Web UI 的控制 API，随包的 Python MCP server 由 API 按需拉起；Docker 专属预检只在该模式执行。builder 阶段使用 pnpm 与 uv；运行镜像携带 Node、预构建的服务 Python 环境、bubblewrap，以及按 `TARGETARCH` 下载并校验的固定版本 micromamba。镜像同样内置了 JiuwenSwarm 与其适配器，做法与单文件二进制包相同，且**默认**就跑在它上面；`start-stack.sh --mode docker` 加上 `--no-jiuwenswarm` 才会改回原生循环。宿主机只需要 Docker。
 
 本节按「准备 → 构建 → 启动 → 浏览器连接 → 配置模型」给出完整步骤，之后是日常管理、数据目录、多实例、环境变量、沙箱要求与常见问题。命令都在仓库根目录执行。
 
@@ -259,7 +267,7 @@ mkdir -p data                 # 承载全部运行时状态的宿主目录，必
 docker compose build
 ```
 
-产物是 `sciencediscovery:local`（可用 `SCIENCE_AGENT_IMAGE` 改 tag）。首次构建会安装 workspace 依赖、编译 Web UI、解析 paper、gateway 和适配器三个 Python 环境、从 PyPI 安装 [JiuwenSwarm](../how-to/run-with-jiuwenswarm.md)、下载 micromamba 与模型目录快照，全程需要外网；缓存全空时在一台普通 x86_64 机器上约需两三分钟，网络慢时更长。之后只改源码的重建会复用依赖层缓存，JiuwenSwarm 也在内——除非 `JIUWENSWARM_TAG` 变了，否则不会重新下载。
+产物是 `sciencediscovery:local`（可用 `SCIENCE_AGENT_IMAGE` 改 tag）。首次构建会安装 workspace 依赖、编译 Web UI、解析 paper、gateway 和适配器三个 Python 环境、从 PyPI 安装 JiuwenSwarm、下载 micromamba 与模型目录快照，全程需要外网；缓存全空时在一台普通 x86_64 机器上约需两三分钟，网络慢时更长。之后只改源码的重建会复用依赖层缓存，JiuwenSwarm 也在内——除非 `JIUWENSWARM_TAG` 变了，否则不会重新下载。
 
 Docker 构建会根据 BuildKit 的 `TARGETARCH` 选择 `linux/amd64` 或 `linux/arm64` 对应的 micromamba，并用 Runner 共用的发布清单校验 SHA256。二进制保存在镜像的 `/opt/sciencediscovery/provisioner/micromamba`；容器首次面对空的 `/app/data` bind mount 时把它复制到默认托管路径，Runner 随后再次按同一清单校验。这个流程不需要在**运行时**访问 GitHub。
 
@@ -319,7 +327,7 @@ ssh -N -L 4310:127.0.0.1:4310 <用户>@<远程主机>   # 然后在本地浏览�
 
 ### 在 JiuwenSwarm 上运行智能体
 
-镜像已经内置了 [JiuwenSwarm](../how-to/run-with-jiuwenswarm.md) 与适配器，且**默认**就跑在它上面，无需任何配置。首次启动会在 `./data` 下创建实例，和其他数据一样能挺过 `docker compose down` 和镜像重建。公共端口由适配器提供服务，未迁移的路由会代理到其后的 API（默认端口 +100）；浏览器地址和令牌流程不变。公共端口上的 `GET /agent/info` 会说明当前跑的是哪个后端。
+镜像已经内置了 JiuwenSwarm 与适配器，且**默认**就跑在它上面，无需任何配置。首次启动会在 `./data` 下创建实例，和其他数据一样能挺过 `docker compose down` 和镜像重建。公共端口由适配器提供服务，未迁移的路由会代理到其后的 API（默认端口 +100）；浏览器地址和令牌流程不变。公共端口上的 `GET /agent/info` 会说明当前跑的是哪个后端。
 
 想改回原生循环，给容器命令加上 `--no-jiuwenswarm`：
 

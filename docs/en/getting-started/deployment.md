@@ -144,7 +144,7 @@ ScienceDiscovery help                  Show help
 | `--bwrap <path>` | `bwrap` on `PATH` | Bubblewrap executable |
 | `--skip-sandbox-check` | off | Start without Bubblewrap; sandbox execution is unavailable |
 | `--no-scientific-envs` | off | Do not initialize managed scientific environments |
-| `--jiuwenswarm` | **on** | Run agent turns on the embedded [JiuwenSwarm](../how-to/run-with-jiuwenswarm.md) instead of the native loop; accepted for compatibility, this is already the default |
+| `--jiuwenswarm` | **on** | Run agent turns on the embedded JiuwenSwarm instead of the native loop; accepted for compatibility, this is already the default |
 | `--no-jiuwenswarm` | off | Run agent turns on the native loop instead; also `SCIENCE_AGENT_EXECUTOR=native` |
 
 The variables in [Configuration reference](../reference/configuration.md#environment-variables-local-mode) also apply and can be exported or placed in `--env-file`. The API and the runner bind to loopback by default. To expose the API, first replace `SCIENCE_AGENT_AUTH_TOKEN`, then explicitly use `--host 0.0.0.0` only on a trusted, protected network.
@@ -173,7 +173,7 @@ It connects to `http://127.0.0.1:4310` by default and reads the token `serve` ge
 | CPython 3.12 | Relocatable distribution; no host Python needed, and it is the base interpreter for the first-launch gateway venv |
 | Web assets | Prebuilt `apps/web/dist` |
 | Gateway wheel and bootstrap pins | The `sciencediscovery-gateway` wheel (our own code), the hash-locked dependency export, and the uv wheel pin |
-| JiuwenSwarm and adapter | The pinned [JiuwenSwarm](../how-to/run-with-jiuwenswarm.md) tag and the `sciencediscovery-adapter` wheel (our own code), each with its full third-party dependency tree already installed — unlike the gateway's, not deferred to first launch, since JiuwenSwarm's own footprint (roughly 1.5 GB) makes this the largest single contributor to release size |
+| JiuwenSwarm and adapter | The pinned JiuwenSwarm tag and the `sciencediscovery-adapter` wheel (our own code), each with its full third-party dependency tree already installed — unlike the gateway's, not deferred to first launch, since JiuwenSwarm's own footprint (roughly 1.5 GB) makes this the largest single contributor to release size |
 | micromamba | Fixed version, seeded to `<data-dir>/scientific-envs/bin/micromamba` on first `serve`, then checked by the runner against the same release manifest |
 
 It does not contain uv or the gateway's third-party Python dependencies (see [Dependencies installed on first launch](#dependencies-installed-on-first-launch)), nor Neo4j, starter Python/R scientific environments, or a conda package cache. Creating a starter environment for the first time still needs access to permitted package channels.
@@ -200,9 +200,9 @@ Source mode supports Linux x86_64/aarch64 and macOS x64/arm64. Both platforms us
 - Linux needs Bubblewrap 0.6+ (0.8+ recommended) and usable unprivileged user namespaces.
 - macOS uses the built-in Seatbelt sandbox through `/usr/bin/sandbox-exec`; Bubblewrap is not required.
 
-The agent loop runs on [JiuwenSwarm](https://gitcode.com/openJiuwen/jiuwenswarm); install it once, then start the
-stack with `--jiuwenswarm`. See [Run agent turns on JiuwenSwarm](../how-to/run-with-jiuwenswarm.md) for the full requirements,
-every environment variable, and troubleshooting.
+Local source mode uses the native loop unless you explicitly opt into JiuwenSwarm. Use that mode when
+developing or verifying the backend that the packaged binary and Docker image use by default. Install the
+pinned version once, then start the stack with `--jiuwenswarm`:
 
 From the repository root, run:
 
@@ -218,12 +218,19 @@ On connect the product picks the file matching the remote `uname -m`, streams it
 
 Each binary is named after its own SHA-256, so upgrading the control plane and reconnecting adds a file rather than overwriting one. Once the new binary has started and passed its health check, the control plane deletes the other SHA-256-named Runner binaries in that directory that no process is executing — each is about 120 MB, and a long run of iterations accumulates several GB. A binary a process is still executing is always kept, including one another control plane's connection is using, and files in that directory that do not carry such a name are left alone. The step is best effort: a failure is recorded in the connection log and does not affect the connection.
 
-In local mode the shared entry point reads the root `.env`, checks the dependencies from [Requirements](../../../README.md#requirements), installs and builds when needed, and starts ordinary host processes. It automatically selects Bubblewrap on Linux and Seatbelt on macOS, so `SCIENCE_AGENT_SANDBOX_PROVIDER` does not need to be set manually:
+In local mode the shared entry point reads the root `.env`, checks the dependencies from [Requirements](../../../README.md#requirements), installs and builds when needed, and starts ordinary host processes. It automatically selects Bubblewrap on Linux and Seatbelt on macOS, so `SCIENCE_AGENT_SANDBOX_PROVIDER` does not need to be set manually. The default native-loop stack has these services:
 
 | Service | Address | Purpose |
 |---|---|---|
 | `services/gateway` | no port | Interpreter environment for the bundled Python MCP servers |
 | `services/runner` | 127.0.0.1:4311 | Rootless Bubblewrap (Linux) or Seatbelt (macOS) executor (background) |
+| `services/api` | 127.0.0.1:4310 | Control API and Web UI (foreground) |
+
+With `--jiuwenswarm`, JiuwenSwarm and its adapter replace the native loop. The adapter keeps the public
+port at 4310 and moves the API behind it:
+
+| Service | Address | Purpose |
+|---|---|---|
 | JiuwenSwarm | `~/.jiuwenswarm-instances/sciencediscovery` | Runs the agent loop; started by `scripts/jiuwenswarm.sh` if not already running |
 | adapter | 127.0.0.1:4310 | Public port; reverse-proxies the API and bridges JiuwenSwarm's model and tool calls |
 | `services/api` | 127.0.0.1:4410 | Control API and Web UI, behind the adapter (foreground) |
@@ -238,7 +245,7 @@ Ascend host NPU workloads use the same local-mode entry point. The Runner expose
 
 ## Docker deployment
 
-One image contains the complete stack. The container entry point `docker-entrypoint.sh` wraps `scripts/start-stack.sh --mode docker`, which starts the Bubblewrap runner and the control API with the Web UI in one container in the same order as local mode; the bundled Python MCP servers are launched by the API on demand, and Docker-specific checks run only in this mode. The builder uses pnpm and uv. The runtime image contains Node, prebuilt service Python environments, Bubblewrap, and a fixed micromamba selected and verified for `TARGETARCH`. The image also bakes in [JiuwenSwarm](../how-to/run-with-jiuwenswarm.md) and its adapter, the same way the single-file binary does, and runs agent turns on it **by default**; `--no-jiuwenswarm` on `start-stack.sh --mode docker` switches back to the native loop (see [Run agent turns on JiuwenSwarm](../how-to/run-with-jiuwenswarm.md)). The host needs only Docker.
+One image contains the complete stack. The container entry point `docker-entrypoint.sh` wraps `scripts/start-stack.sh --mode docker`, which starts the Bubblewrap runner and the control API with the Web UI in one container in the same order as local mode; the bundled Python MCP servers are launched by the API on demand, and Docker-specific checks run only in this mode. The builder uses pnpm and uv. The runtime image contains Node, prebuilt service Python environments, Bubblewrap, and a fixed micromamba selected and verified for `TARGETARCH`. The image also bakes in JiuwenSwarm and its adapter, the same way the single-file binary does, and runs agent turns on it **by default**; `--no-jiuwenswarm` on `start-stack.sh --mode docker` switches back to the native loop. The host needs only Docker.
 
 This section walks through prepare → build → start → connect in the browser → configure a model, followed by day-to-day management, the data directory, several instances, environment variables, sandbox requirements, and frequently asked questions. Run every command from the repository root.
 
@@ -265,7 +272,7 @@ mkdir -p data                 # host directory for all runtime state; create it 
 docker compose build
 ```
 
-The result is `sciencediscovery:local` (`SCIENCE_AGENT_IMAGE` changes the tag). The first build installs the workspace dependencies, compiles the Web UI, resolves the paper, gateway and adapter Python environments, installs [JiuwenSwarm](../how-to/run-with-jiuwenswarm.md) from its PyPI release, and downloads micromamba and the model catalog snapshot, so it needs network access throughout; with an empty cache it takes a few minutes on an ordinary x86_64 machine, longer on a slow connection. Later rebuilds that only change application source reuse the dependency layers, JiuwenSwarm's included — it is not re-downloaded unless `JIUWENSWARM_TAG` changes.
+The result is `sciencediscovery:local` (`SCIENCE_AGENT_IMAGE` changes the tag). The first build installs the workspace dependencies, compiles the Web UI, resolves the paper, gateway and adapter Python environments, installs JiuwenSwarm from its PyPI release, and downloads micromamba and the model catalog snapshot, so it needs network access throughout; with an empty cache it takes a few minutes on an ordinary x86_64 machine, longer on a slow connection. Later rebuilds that only change application source reuse the dependency layers, JiuwenSwarm's included — it is not re-downloaded unless `JIUWENSWARM_TAG` changes.
 
 BuildKit selects the `linux/amd64` or `linux/arm64` micromamba for `TARGETARCH` and verifies it against the runner's shared release manifest. The binary is stored at `/opt/sciencediscovery/provisioner/micromamba`; when `/app/data` is an empty bind mount, the first start copies it to the managed default path and the runner verifies it again. This does not access GitHub at **run time**.
 
@@ -325,7 +332,7 @@ The image ships no model. The "Configure a model" entry on the home page leads t
 
 ### Run agent turns on JiuwenSwarm
 
-The image already has [JiuwenSwarm](../how-to/run-with-jiuwenswarm.md) and its adapter baked in, and **runs on it by default** — nothing to install or configure. First start creates the instance under `./data`, so it survives `docker compose down` and image rebuilds the same way as everything else there. The public port serves the adapter, which proxies routes it has not migrated to the API behind it (`+ 100` by default); the browser URL and token flow are unchanged. `GET /agent/info` on the public port says which backend is running.
+The image already has JiuwenSwarm and its adapter baked in, and **runs on it by default** — nothing to install or configure. First start creates the instance under `./data`, so it survives `docker compose down` and image rebuilds the same way as everything else there. The public port serves the adapter, which proxies routes it has not migrated to the API behind it (`+ 100` by default); the browser URL and token flow are unchanged. `GET /agent/info` on the public port says which backend is running.
 
 For the native loop instead, add `--no-jiuwenswarm` to the container's command:
 

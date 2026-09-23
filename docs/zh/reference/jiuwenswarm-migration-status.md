@@ -1,6 +1,6 @@
 # JiuwenSwarm 迁移：现状与交接
 
-issue 84（复用 JiuwenSwarm 后端）做到哪一步、现在能跑什么、什么还没做，以及如何开始做某个子 issue。启动方法见[在 JiuwenSwarm 上运行智能体](../how-to/run-with-jiuwenswarm.md)。
+issue 84（复用 JiuwenSwarm 后端）做到哪一步、现在能跑什么、什么还没做，以及如何开始做某个子 issue。源码启动方法见[本地模式](../getting-started/deployment.md#本地模式宿主进程)。
 
 ## 这个基线是什么
 
@@ -59,7 +59,7 @@ JiuwenSwarm 自己有一套上下文引擎（占用到模型窗口的 80% 时压
 | 运行契约（受保护） | 每一步都在 | 每一步都在：它是系统提示词的一部分，适配器在每次模型请求里都放上它 |
 | JiuwenSwarm 自己的提示词 | 不适用 | 完整保留；它的每轮包装和动态上下文（运行时状态）也作为用户消息加进去 |
 | 计划快照、持久状态、插件上下文 | 每一步注入 | **没有注入**；JiuwenSwarm 加自己的动态上下文 |
-| 工具 | ScienceDiscovery 的，全部经过它的权限和 Runner | 默认是 JiuwenSwarm 自己的（bash、文件、网页、子代理、todo、记忆、技能），加上它没有的 ScienceDiscovery 工具；JiuwenSwarm 的工具直接在主机上运行，不经过 ScienceDiscovery 的权限、沙箱和溯源（已验证：它的 `bash` 能运行并显示为工具卡片）。`SCIENCE_AGENT_JIUWENSWARM_TOOLS=ours` 恢复原来的工具集 |
+| 工具 | ScienceDiscovery 的，全部经过它的权限和 Runner | 默认是 JiuwenSwarm 自己的网页、子代理、todo、记忆和技能工具，加上它没有的 ScienceDiscovery 工具。直接操作宿主机的 `bash`、文件工具及相关读取工具实现会在所有工具模式下被拦截。适配器会拒绝原生调用；若本次运行提供同名的 ScienceDiscovery 工具，该工具仍可用，命令应使用 `run_shell`。`SCIENCE_AGENT_JIUWENSWARM_TOOLS=ours` 会选择 ScienceDiscovery 的工具集，同时保留 JiuwenSwarm 的 todo 工具用于计划 |
 | 工具路由提示 | 有 | **没有注入** |
 | 工具输出守卫和读取 | 有 | 有（同一个 `ToolRegistry`） |
 | 输入过长的恢复 | 压缩后重试 | JiuwenSwarm 自己的处理；**没有验证** |
@@ -68,7 +68,7 @@ JiuwenSwarm 自己有一套上下文引擎（占用到模型窗口的 80% 时压
 ## 已知缺口
 
 1. **轨迹：已记录。** JiuwenSwarm 运行的每次模型调用都经过这次运行的模型网关，网关用内置循环同样的 `AgentVersionRecorder` 记录：发出的完整模型输入（含 JiuwenSwarm 的提示词和工具）、模型的回答、工具观测和提交的步骤；运行事件带有关联它们的 evidence（实时检查 `trajectory`）。JiuwenSwarm 自己发出的标题、摘要调用不算轮次，不记录。
-1a. **子代理默认用 JiuwenSwarm 自己的 `subagent_spawn`/`subagent_wait`**（`SCIENCE_AGENT_JIUWENSWARM_SUBAGENTS=task`，或 `TOOLS=ours`，仍改用 ScienceDiscovery 的 `task`）。这是有意的取舍，不是对等替换：`subagent_spawn` 子代理（0.2.6 内置的 `general_agent`）完全跑在 JiuwenSwarm 内部，只带它自己内置的工具（bash、文件、web……）、不带 MCP 服务——拿不到 ScienceDiscovery 的工具、沙箱、审批、工作区交接、溯源或子代理卡片，它的 `subagent_spawn`/`subagent_wait` 调用在运行里也只作为通用的原生工具事件上报，没有 `task` 那种更丰富的摘要。能挂载 ScienceDiscovery MCP 工具的自定义代理（`agents.create`）在 0.2.6 上仍然无法启动（`'str' object has no attribute 'name'`：它的工具列表是名字，而启动路径需要工具对象），这条路仍然堵着。`test/contract/jw-only/live.mjs subagent-probe` 可以完整查看一次 `subagent_spawn` 调用的表现。
+1a. **子代理默认用 JiuwenSwarm 自己的 `subagent_spawn`/`subagent_wait`**（`SCIENCE_AGENT_JIUWENSWARM_SUBAGENTS=task`，或 `TOOLS=ours`，仍改用 ScienceDiscovery 的 `task`）。这是有意的取舍，不是对等替换：`subagent_spawn` 子代理（0.2.6 内置的 `general_agent`）完全跑在 JiuwenSwarm 内部，只带未被禁用的内置工具，不带 MCP 服务——拿不到 ScienceDiscovery 的工具、沙箱、审批、工作区交接、溯源或子代理卡片，它的 `subagent_spawn`/`subagent_wait` 调用在运行里也只作为通用的原生工具事件上报，没有 `task` 那种更丰富的摘要。适配器会在所有工具模式下拦截 JiuwenSwarm 直接操作宿主机的工具实现。能挂载 ScienceDiscovery MCP 工具的自定义代理（`agents.create`）在 0.2.6 上仍然无法启动（`'str' object has no attribute 'name'`：它的工具列表是名字，而启动路径需要工具对象），这条路仍然堵着。`test/contract/jw-only/live.mjs subagent-probe` 可以完整查看一次 `subagent_spawn` 调用的表现。
 1b. **轨迹：上下文来源归因不可用。** 轨迹查看器给每个块标注的"来源"（`packages/trajectory/src/index.ts` 的 `contextBlocks`）只有在模型调用组装带有结构化 section 数据（内置循环按 section 拼装提示词）时才会标 `"recorded"`。`services/api/src/agent-run/jiuwenswarm-trajectory.ts` 的 `ModelCallInput` 只有一个扁平的 `systemPrompt: string`——JiuwenSwarm 是整段拼自己的提示词，没有 section 边界可上报——所以每个块都落入 `"unavailable"` 分支。mocked E2E 的 `journey-session-trajectory` 因此在这个执行器上失败（它断言 JiuwenSwarm 的系统提示词块*不是*"来源未记录"）；这是这个后端的既定差异，不是要在这里修的 bug——同样的"整段保留"取舍见上面的"上下文管理"。
 2. **历史与上下文。** JiuwenSwarm 是模型上下文的唯一持有者：每个智能体一个稳定会话，由 JiuwenSwarm 压缩；适配器和 API 都不发送、不重建任何历史。所以在内置循环上开始的会话，JiuwenSwarm 不记得（之前的轮次只在界面上），在 API 里编辑或回退的对话也不会反映过去。JiuwenSwarm 重启后这份上下文仍在（已验证：`live.mjs history-restart`）。每一步的动态上下文（计划快照、持久状态）没有注入，见"上下文管理"。
 3. **模型协议：** UI 能配置的三种都可用（API 里的回环网关用原生模型客户端为 JiuwenSwarm 的 chat-completions 请求提供服务）。图片不会发给模型。
@@ -105,7 +105,7 @@ JiuwenSwarm 自己有一套上下文引擎（占用到模型窗口的 80% 时压
 
 ## 开始做某个子 issue
 
-1. 选择后端并启动整套栈：先执行一次 `scripts/jiuwenswarm.sh setup`，再 `./scripts/start-stack.sh --mode local --jiuwenswarm`（用 `GET /agent/info` 确认）；见[操作指南](../how-to/run-with-jiuwenswarm.md)。
+1. 选择后端并启动整套栈：先执行一次 `scripts/jiuwenswarm.sh setup`，再 `./scripts/start-stack.sh --mode local --jiuwenswarm`（用 `GET /agent/info` 确认）；见[本地模式](../getting-started/deployment.md#本地模式宿主进程)。
 2. 在 `test/contract/routes.json` 里找到你的路由（`node test/contract/run.mjs --coverage` 会列出没有用例的行）。
 3. 在 `test/contract/cases/` 下加用例，在**全新数据目录**上对内置循环录制，再对“适配器 + JiuwenSwarm”栈比对。规则、SSE 步骤写法和归一化见 [`test/contract/README.md`](../../../test/contract/README.md)。基线对智能体只读，改动需要人工评审。
 4. 行为类用 run 事件用例（`l2-runs.json`）；脚本化模型是 `test/contract/stub-model.mjs`。

@@ -26,9 +26,6 @@ This is the complete English documentation set.
 - [Configure the network proxy](advanced-setup/configure-network-proxy.md) — add a proxy on the settings page and choose a policy for LLM, web, and MCP traffic.
 - [Install Neo4j and configure ScienceMemory](advanced-setup/science-memory-setup.md) — install an external Neo4j, enable ScienceMemory in system settings, and explore chains in the frontend graph.
 
-## Run and operate
-- [Run agent turns on JiuwenSwarm](how-to/run-with-jiuwenswarm.md) — optional, experimental executor: install a pinned JiuwenSwarm, start the stack with the adapter, and understand the expected behavior.
-
 ## Reference
 
 - [Configuration](reference/configuration.md) — environment variables, default ports, upload/workspace/output quotas, and data layout.
@@ -36,6 +33,7 @@ This is the complete English documentation set.
 - [Runtime behavior and limits](reference/runtime-behavior.md) — models, settings inheritance, skills, permissions, timeouts, and execution limits.
 - [Built-in tools](reference/builtin-tools.md) — parameters, boundaries, and exposure conditions for model-visible tools.
 - [Web tools](reference/web-tools.md) — web search/fetch providers, configuration, permissions, caching, and audit.
+- [JiuwenSwarm runtime behavior](reference/jiuwenswarm-runtime.md) — default-backend boundaries, native-loop fallback, and where to check compatibility details.
 - [JiuwenSwarm migration status](reference/jiuwenswarm-migration-status.md) — implemented scope, known gaps, and hand-over guidance.
 
 ## Developer documentation
