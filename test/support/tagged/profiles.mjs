@@ -115,3 +115,11 @@ export const nodeExtraSources = Object.freeze(['test/api/agent_loop_smoke.ts']);
 export const pythonProjects = Object.freeze(['paper', 'gateway', 'memory-graph', 'evolve', 'adapter']);
 export const pythonSources = project => `services/${project}/tests/test_*.py`;
 
+/**
+ * Third-party pytest plugins a project's suite needs. The runner disables
+ * plugin autoload — an installed plugin must not be able to retry, reorder or
+ * skip a case — so each one a suite relies on is named here and loaded
+ * explicitly. The adapter writes its tests as `async def` for pytest-asyncio.
+ */
+export const pythonPlugins = Object.freeze({ adapter: Object.freeze(['pytest_asyncio.plugin']) });
+

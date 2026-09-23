@@ -20,7 +20,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { collect, execute } from './coordinator.mjs';
 import { createPlan, verifyResults, fileDigest, subplan } from './plan.mjs';
 import { schema } from './tags.mjs';
-import { profiles, slices, nodeSources, nodeExtraSources, pythonProjects, pythonSources } from './profiles.mjs';
+import { profiles, slices, nodeSources, nodeExtraSources, pythonProjects, pythonSources, pythonPlugins } from './profiles.mjs';
 import { preflight } from './environment.mjs';
 import { checks } from './checks.mjs';
 
@@ -200,7 +200,7 @@ export async function main(args=process.argv.slice(2)) {
   if(needUT)for(const project of pythonProjects){
     const dir=join(outputDir,`collect-${project}`);mkdirSync(dir,{recursive:true});
     const sources=[...globSync(pythonSources(project),{cwd:root})].sort();
-    catalog.push(...collect({root,files:sources,outputDir:dir,python:python(project),env:projectEnv(env,project)}));
+    catalog.push(...collect({root,files:sources,outputDir:dir,python:python(project),pytestPlugins:pythonPlugins[project]??[],env:projectEnv(env,project)}));
   }
   if(needPW){
     const destination=join(outputDir,'playwright-catalog.json');rmSync(destination,{force:true});
@@ -257,7 +257,7 @@ export async function main(args=process.argv.slice(2)) {
       if(coverage&&!project)owed.node++;
       const base=project?projectEnv(env,project):env;
       const summary=await execute({root,cwd,plan:subplan(plan,entries),outputDir:directory,
-        python:project?python(project):undefined,coverageDir:!project&&coverage?join(coverageDir,'node'):undefined,
+        python:project?python(project):undefined,pytestPlugins:project?pythonPlugins[project]??[]:[],coverageDir:!project&&coverage?join(coverageDir,'node'):undefined,
         nodeImports:['tsx'],env:recording?recording.env(base):base,timeoutMs:600_000});
       results.push(...summary.results);errors.push(...summary.problems);
     }

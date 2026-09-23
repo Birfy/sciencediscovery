@@ -63,10 +63,19 @@ function invoke(command, args, { root, env, outputDir, name, timeoutMs = 120_000
   writeFileSync(join(outputDir, `${name}.log`), `${completed.stdout ?? ''}\n${completed.stderr ?? ''}`);
   return completed;
 }
+// Plugin autoload stays off, so nothing installed in a project's environment
+// can reorder, retry or skip a case. A plugin a suite genuinely needs is named
+// by the project (`pythonPlugins` in profiles.mjs) and loaded by name, for
+// collection and execution alike.
+const plugins = names => names.flatMap(name => ['-p', name]);
+// The plugin's own options go as `--name=value`. pytest finds a project's
+// config file before any `-p` plugin has registered its options, and an
+// unknown option's separate value would be taken for a path: the search would
+// start at the repository root and miss the project's own pytest settings.
 const childEnv = env => ({ ...env, PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1', PYTEST_ADDOPTS: '', PYTEST_PLUGINS: '',
   PYTHONPATH: [join(here, 'python'), env.PYTHONPATH].filter(Boolean).join(delimiter) });
 
-export function collect({ root, files, outputDir, python = 'python3', nodeImports = [], env = process.env }) {
+export function collect({ root, files, outputDir, python = 'python3', pytestPlugins = [], nodeImports = [], env = process.env }) {
   mkdirSync(outputDir, { recursive: true });
   const catalog = [];
   const groups = { node: files.filter(f => !f.endsWith('.py')), python: files.filter(f => f.endsWith('.py')) };
@@ -83,8 +92,8 @@ export function collect({ root, files, outputDir, python = 'python3', nodeImport
   if (groups.python.length) {
     const output = join(outputDir, 'python-catalog.json');
     rmSync(output, { force: true });
-    const result = invoke(python, ['-m', 'pytest', '-p', 'science_tags', '--strict-markers', '--rootdir', root, '--collect-only', '-q',
-      '--science-root', root, '--science-catalog', output, ...groups.python],
+    const result = invoke(python, ['-m', 'pytest', '-p', 'science_tags', ...plugins(pytestPlugins), '--strict-markers', '--rootdir', root, '--collect-only', '-q',
+      `--science-root=${root}`, `--science-catalog=${output}`, ...groups.python],
     { root, env: childEnv(env), outputDir, name: 'python-collect' });
     if (result.status !== 0 || !existsSync(output)) throw new Error('PYTHON_COLLECTION_FAILED; inspect python-collect.log');
     const pythonCatalog = readJSON(output).catalog;
@@ -136,7 +145,7 @@ export function relocateLcov(text, { root, cwd, source }) {
   }).join('\n');
 }
 
-export async function execute({ root, cwd = root, plan, outputDir, python = 'python3', nodeImports = [], coverageDir, env = process.env, timeoutMs = 300_000 }) {
+export async function execute({ root, cwd = root, plan, outputDir, python = 'python3', pytestPlugins = [], nodeImports = [], coverageDir, env = process.env, timeoutMs = 300_000 }) {
   validatePlan(plan);
   for (const entry of plan.entries) inside(root, entry.source);
   mkdirSync(outputDir, { recursive: true });
@@ -185,8 +194,8 @@ export async function execute({ root, cwd = root, plan, outputDir, python = 'pyt
         results.push(...reported.results); errors.push(...reported.errors);
       } else {
         writeJSON(request, part);
-        const completed = invoke(python, ['-m', 'pytest', '-p', 'science_tags', '--strict-markers', '--rootdir', root, '-q',
-          '--science-root', root, '--science-plan', request, '--science-report', resultPath, ...files.map(f => resolve(root, f))],
+        const completed = invoke(python, ['-m', 'pytest', '-p', 'science_tags', ...plugins(pytestPlugins), '--strict-markers', '--rootdir', root, '-q',
+          `--science-root=${root}`, `--science-plan=${request}`, `--science-report=${resultPath}`, ...files.map(f => resolve(root, f))],
         { root: cwd, env: childEnv(env), outputDir, name, timeoutMs });
         if (completed.status !== 0) errors.push(`PYTHON_WORKER_FAILED: ${name}`);
         if (existsSync(resultPath)) results.push(...readJSON(resultPath).results);
