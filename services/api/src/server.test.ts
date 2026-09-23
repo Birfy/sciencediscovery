@@ -2699,6 +2699,13 @@ test("native MCP literature flow produces an audited cited summary", async (cont
   assert.match(stream, /"status":"completed"/);
   assert.match(stream, /PMID:12524540/);
   assert.doesNotMatch(stream, /"type":"run.failed"/);
+  // The mock model's final text (above) is a hardcoded literal, not derived from the tool's actual
+  // result — toolResultCount only counts role:"tool" messages, not whether they carried an error. So
+  // a failed tool call can still let the run "complete" with the expected PMID text. Check explicitly
+  // for a failed tool.completed too, with the stream attached, so a future failure here is diagnosable
+  // without another CI round trip.
+  assert.doesNotMatch(stream, /"type":"tool\.completed".*"status":"failed"/,
+    `a tool call failed even though the run completed; stream:\n${stream}`);
 
   // Same lag as execution-runs elsewhere in this file: under JiuwenSwarm the invocation record can
   // land a beat after the stream's own run.completed, especially under CI's concurrent workspace-packages
@@ -2711,7 +2718,7 @@ test("native MCP literature flow produces an audited cited summary", async (cont
       { headers: authorization },
     );
   }
-  assert.equal(invocations.body.length, 1);
+  assert.equal(invocations.body.length, 1, `expected one recorded MCP invocation; stream:\n${stream}`);
   assert.equal(invocations.body[0]?.status, "succeeded");
   assert.ok(invocations.body[0]?.normalizedResult);
   const normalized = await jsonRequest<McpToolResult>(
