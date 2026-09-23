@@ -159,6 +159,15 @@ test("startup output offers sign-in links for generated and operator-supplied to
   assert.match(explicit, /SCIENCE_AGENT_AUTH_TOKEN/);
 });
 
+test("behind the JiuwenSwarm adapter the sign-in link names the public port, not the API's own", async (context) => {
+  const dataDir = await temporaryDataDir(context, "bootstrap-public-port");
+  const config = loadServerConfig({ SCIENCE_AGENT_DATA_DIR: dataDir, SCIENCE_AGENT_PORT: "4410", SCIENCE_AGENT_PUBLIC_PORT: "4310" });
+  assert.equal(config.port, 4410);
+  assert.equal(config.publicPort, 4310);
+  assert.equal(loadServerConfig({ SCIENCE_AGENT_DATA_DIR: dataDir }).publicPort, undefined);
+  assert.throws(() => loadServerConfig({ SCIENCE_AGENT_DATA_DIR: dataDir, SCIENCE_AGENT_PUBLIC_PORT: "http" }), /SCIENCE_AGENT_PUBLIC_PORT/);
+});
+
 for (const [host, expectedHost] of [["0.0.0.0", "127.0.0.1"], ["::", "127.0.0.1"], ["::1", "[::1]"]]) {
   test(`startup link formats the bind address ${host}`, () => {
     const token = "local+token/with?reserved=&字符";

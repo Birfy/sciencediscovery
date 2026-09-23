@@ -679,7 +679,8 @@ start_stack() {
     # The legacy API binds the legacy port; the adapter owns the public one. The
     # API reaches the adapter here when SCIENCE_AGENT_EXECUTOR=jiuwenswarm.
     export SCIENCE_AGENT_ADAPTER_URL="${SCIENCE_AGENT_ADAPTER_URL:-http://127.0.0.1:$public_port}"
-    api_command=(env "SCIENCE_AGENT_PORT=$legacy_port" "${api_command[@]}")
+    # The sign-in link names the port users open: the adapter's.
+    api_command=(env "SCIENCE_AGENT_PORT=$legacy_port" "SCIENCE_AGENT_PUBLIC_PORT=$public_port" "${api_command[@]}")
   fi
 
   echo "Starting the control API..." >&2
