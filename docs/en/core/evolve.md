@@ -8,7 +8,7 @@ scores higher, and hands back the best version alongside the one it started from
 > see [Run an evolution search](../domains/run-an-evolution-search.md); for a first search you can
 > complete end to end, see the [tutorial](../domains/evolve-a-solution.md). Engine internals
 > and standalone deployment of the sidecar are in
-> [the evolution sidecar note](../../zh/developer-docs/evolve-standalone.md) (Chinese).
+> [the evolution sidecar note](../developer-docs/evolve-standalone.md).
 
 ## What a search actually is
 
