@@ -35,6 +35,7 @@ def _ends_run(frame: dict[str, Any]) -> bool:
     `chat.final`, then carries on after the answer. The gateway closes every run
     with `chat.processing_status` `is_complete`, and a refused request or a
     `chat.error` (which is followed by that status too) needs no answer.
+    A pause for approval also ends with that status (see `ChatRun._frames`).
     """
     if frame.get("type") == "res":
         return frame.get("ok") is False
@@ -65,6 +66,8 @@ class ChatRun:
         self.resumed = 0
         # Reconnects in a row that brought no frame; a frame from the run starts the count again.
         self._misses = 0
+        # Approval questions asked and not answered yet, by request id.
+        self._open_questions: set[str] = set()
 
     async def _connect(self) -> None:
         try:
@@ -116,6 +119,7 @@ class ChatRun:
 
     async def answer(self, request_id: str, source: str, answer: dict[str, Any]) -> None:
         """Resume a run paused on `chat.ask_user_question`."""
+        self._open_questions.discard(request_id)
         await self._send("answer", "chat.send", {
             "session_id": self._params["session_id"], "query": "", "request_id": request_id,
             "answers": [answer], "source": source, "mode": self._params.get("mode"),
@@ -125,6 +129,7 @@ class ChatRun:
     async def cancel(self) -> None:
         """Ask the gateway to stop the run. It answers with a `res` and then ends
         the run with the usual completion status."""
+        self._open_questions.clear()  # a question left unanswered no longer keeps the run open
         await self._connection.send(json.dumps({
             "type": "req", "id": f"interrupt-{uuid.uuid4().hex[:12]}", "method": "chat.interrupt",
             "is_stream": False,
@@ -150,9 +155,29 @@ class ChatRun:
                 if _resume_answer(frame):
                     continue
             self._misses = 0
+            question = _approval_question(frame)
+            if question:
+                self._open_questions.add(question)
+            # Measured on JiuwenSwarm 0.2.6: a run that stops for approval ends its stream (`is_complete`) a
+            # moment after the question; the question stays open in the session, and the answer (`answer()`,
+            # on this connection) starts the rest of the run. So the run is not over while a question is open.
+            # Decided before the frame is handed out: the answer may be given while it is being handled.
+            paused = bool(self._open_questions) and _is_status(frame)
             yield frame
-            if _ends_run(frame):
+            if _ends_run(frame) and not paused:
                 return
+
+
+def _approval_question(frame: dict[str, Any]) -> str:
+    """The request id of a `chat.ask_user_question` from the permission engine ("" for any other frame)."""
+    payload = frame.get("payload") or {}
+    if frame.get("event") != "chat.ask_user_question" or payload.get("source") != "permission_interrupt":
+        return ""
+    return str(payload.get("request_id") or "")
+
+
+def _is_status(frame: dict[str, Any]) -> bool:
+    return frame.get("event") == "chat.processing_status"
 
 
 def _notice(frame: dict[str, Any]) -> str:

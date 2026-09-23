@@ -164,7 +164,7 @@ def test_an_empty_final_does_not_erase_the_reply():
 
 
 def test_approval_pause_becomes_one_permission_request_and_no_failed_tool():
-    mapper, events = run("jw_chat_approval.raw")
+    mapper, events = decide_in_recording("jw_chat_approval.raw", "allow_once")
     kinds = [e["type"] for e in events]
     assert kinds.count("permission.required") == 1
     required = next(e for e in events if e["type"] == "permission.required")["request"]
@@ -177,6 +177,18 @@ def test_approval_pause_becomes_one_permission_request_and_no_failed_tool():
     assert kinds.count("tool.started") == 1 and kinds.count("tool.completed") == 1
     assert mapper.final_text == "approved and done"
     assert mapper.finished and mapper.unmapped == []
+
+
+def test_the_completion_status_after_an_open_question_does_not_finish_the_run():
+    """JiuwenSwarm 0.2.6 ends the stream a moment after the question, before a person has answered."""
+    done = {"type": "event", "event": "chat.processing_status", "payload": {"is_processing": False, "is_complete": True}}
+    mapper = RunEventMapper()
+    mapper.feed({"type": "event", "event": "chat.ask_user_question", "payload": {
+        "request_id": "c", "source": "permission_interrupt", "questions": [{"question": "q", "options": [{"label": "A"}, {"label": "D"}]}]}})
+    assert mapper.feed(done) == [] and not mapper.finished
+    mapper.decide("c", "allow_once")
+    mapper.feed(done)
+    assert mapper.finished
 
 
 def test_decide_picks_the_gateway_option_by_position():

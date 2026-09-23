@@ -179,6 +179,9 @@ class RunEventMapper:
         # The gateway's real end of a run. `chat.final` is not: a run that paused
         # for approval emits an empty one, then continues.
         if payload.get("is_complete") and not payload.get("is_processing"):
+            if self._pending_requests and not self._cancel_requested:
+                # A pause for approval ends the gateway's stream too; the answer starts the rest of the run.
+                return self._settle_response()
             self.finished = True
             events = self._settle_response()
             if self._cancel_requested:

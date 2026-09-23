@@ -178,6 +178,54 @@ async def test_answer_resumes_the_paused_run_on_the_same_connection():
     }
 
 
+async def test_a_question_answered_after_the_pause_ended_its_stream_still_resumes_the_run():
+    """JiuwenSwarm 0.2.6 ends the stream (`is_complete`) a moment after an approval question; a person answers
+    later. The run is not over until the question is answered and the rest of the run has ended."""
+    answers = []
+
+    async def handler(connection):
+        await connection.send(json.dumps({"type": "event", "event": "connection.ack", "payload": {}}))
+        json.loads(await connection.recv())
+        await connection.send(json.dumps({"type": "event", "event": "chat.ask_user_question",
+                                          "payload": {"request_id": "call_1", "source": "permission_interrupt"}}))
+        await connection.send(json.dumps({"type": "event", "event": "chat.final", "payload": {"content": ""}}))
+        await connection.send(json.dumps(DONE))
+        answers.append(json.loads(await connection.recv()))
+        await connection.send(json.dumps({"type": "event", "event": "chat.final", "payload": {"content": "ok"}}))
+        await connection.send(json.dumps(DONE))
+
+    async with websockets.serve(handler, "127.0.0.1", 0) as server:
+        port = server.sockets[0].getsockname()[1]
+        seen = []
+        async with ChatRun(f"ws://127.0.0.1:{port}/tui", {"session_id": "s1", "mode": "agent.work.normal"}) as run:
+            async for frame in run:
+                seen.append(frame["event"])
+                if frame["event"] == "chat.processing_status" and len(seen) == 3:
+                    await run.answer("call_1", "permission_interrupt", {"selected_options": ["once"], "custom_input": "once"})
+    assert seen == ["chat.ask_user_question", "chat.final", "chat.processing_status", "chat.final", "chat.processing_status"]
+    assert answers[0]["params"]["request_id"] == "call_1"
+
+
+async def test_cancelling_a_run_that_waits_on_a_question_ends_it():
+    async def handler(connection):
+        await connection.send(json.dumps({"type": "event", "event": "connection.ack", "payload": {}}))
+        json.loads(await connection.recv())
+        await connection.send(json.dumps({"type": "event", "event": "chat.ask_user_question",
+                                          "payload": {"request_id": "call_1", "source": "permission_interrupt"}}))
+        json.loads(await connection.recv())  # the interrupt
+        await connection.send(json.dumps(DONE))
+
+    async with websockets.serve(handler, "127.0.0.1", 0) as server:
+        port = server.sockets[0].getsockname()[1]
+        seen = []
+        async with ChatRun(f"ws://127.0.0.1:{port}/tui", {"session_id": "s1"}) as run:
+            async for frame in run:
+                seen.append(frame["event"])
+                if frame["event"] == "chat.ask_user_question":
+                    await run.cancel()
+    assert seen == ["chat.ask_user_question", "chat.processing_status"]
+
+
 async def test_cancel_sends_chat_interrupt_with_the_cancel_intent():
     seen = []
 
