@@ -472,7 +472,14 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
         model: { model: model.model, baseUrl: modelGateway.url, apiKey: modelGateway.token, provider: "OpenAI" },
         ...(nativeToolNames.length ? { nativeTools: nativeToolNames } : {}),
         jiuwenSwarmTools: allJiuwenSwarmTools ? "all" : "listed",
-        ...(allJiuwenSwarmTools ? { hiddenJiuwenSwarmTools: [...JIUWENSWARM_HOST_TOOLS] } : {}),
+        // Offering all of JiuwenSwarm's tools still leaves out its planning and delegation when they are not this
+        // run's: a Plan plugin switched off, planning or sub-agents kept on ours. Otherwise the model plans and
+        // delegates around what the project's composition and the run's settings say.
+        ...(allJiuwenSwarmTools ? { hiddenJiuwenSwarmTools: [
+          ...JIUWENSWARM_HOST_TOOLS,
+          ...(jiuwenSwarmPlans ? [] : JIUWENSWARM_TODO_TOOLS),
+          ...(jiuwenSwarmSubagents ? [] : JIUWENSWARM_SUBAGENT_TOOLS),
+        ] } : {}),
         // JiuwenSwarm gives a tool call 30 s unless told otherwise; the run's own timeout is the limit here.
         ...(this.options.runTimeoutMs ? { toolTimeoutSeconds: Math.ceil(this.options.runTimeoutMs / 1000) } : {}),
         tools: [...tools.values()].map((tool) => ({
