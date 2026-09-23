@@ -119,7 +119,9 @@ RUN pnpm install --frozen-lockfile --ignore-scripts
 RUN mkdir -p \
       services/paper \
       services/gateway \
-      services/adapter
+      services/adapter \
+      services/memory-graph \
+      services/evolve
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv python install "${PYTHON_VERSION}"
@@ -147,6 +149,21 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=services/adapter/uv.lock,target=/app/services/adapter/uv.lock \
     UV_PROJECT_ENVIRONMENT=/opt/sciencediscovery/envs/adapter \
       uv sync --project services/adapter --frozen --no-install-project \
+        --python "${PYTHON_VERSION}"
+
+# UI-accessible sidecars must be present in the one-image deployment too.
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=services/memory-graph/pyproject.toml,target=/app/services/memory-graph/pyproject.toml \
+    --mount=type=bind,source=services/memory-graph/uv.lock,target=/app/services/memory-graph/uv.lock \
+    UV_PROJECT_ENVIRONMENT=/opt/sciencediscovery/envs/memory-graph \
+      uv sync --project services/memory-graph --frozen --no-install-project \
+        --python "${PYTHON_VERSION}"
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=services/evolve/pyproject.toml,target=/app/services/evolve/pyproject.toml \
+    --mount=type=bind,source=services/evolve/uv.lock,target=/app/services/evolve/uv.lock \
+    UV_PROJECT_ENVIRONMENT=/opt/sciencediscovery/envs/evolve \
+      uv sync --project services/evolve --frozen --no-install-project --extra candidates \
         --python "${PYTHON_VERSION}"
 
 # JiuwenSwarm itself: not our code and not a workspace project, so it has no
@@ -178,7 +195,11 @@ RUN --mount=type=cache,target=/root/.cache/uv \
  && UV_PROJECT_ENVIRONMENT=/opt/sciencediscovery/envs/gateway \
       uv sync --project services/gateway --locked --python "${PYTHON_VERSION}" \
  && UV_PROJECT_ENVIRONMENT=/opt/sciencediscovery/envs/adapter \
-      uv sync --project services/adapter --locked --python "${PYTHON_VERSION}"
+      uv sync --project services/adapter --locked --python "${PYTHON_VERSION}" \
+ && UV_PROJECT_ENVIRONMENT=/opt/sciencediscovery/envs/memory-graph \
+      uv sync --project services/memory-graph --locked --python "${PYTHON_VERSION}" \
+ && UV_PROJECT_ENVIRONMENT=/opt/sciencediscovery/envs/evolve \
+      uv sync --project services/evolve --locked --extra candidates --python "${PYTHON_VERSION}"
 
 # ---------------------------------------------------------------- runtime ---
 FROM ${NODE_RUNTIME_IMAGE} AS runtime
@@ -216,6 +237,8 @@ ENV NODE_ENV=production \
     SCIENCE_AGENT_PAPER_PYTHON_PATH=/opt/sciencediscovery/envs/paper/bin/python \
     SCIENCE_AGENT_GATEWAY_PYTHON_PATH=/opt/sciencediscovery/envs/gateway/bin/python \
     SCIENCE_AGENT_ADAPTER_PYTHON_PATH=/opt/sciencediscovery/envs/adapter/bin/python \
+    SCIENCE_AGENT_MEMORY_GRAPH_PYTHON_PATH=/opt/sciencediscovery/envs/memory-graph/bin/python \
+    SCIENCE_AGENT_EVOLVE_PYTHON_PATH=/opt/sciencediscovery/envs/evolve/bin/python \
     JIUWENSWARM_SRC=/opt/sciencediscovery/jiuwenswarm/src
 
 COPY --from=builder /opt/sciencediscovery /opt/sciencediscovery
