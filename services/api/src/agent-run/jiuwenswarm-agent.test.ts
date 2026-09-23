@@ -243,6 +243,54 @@ test("a tool call from the adapter runs the real tool here and is reported as to
   }
 });
 
+test("a call JiuwenSwarm turned away before it reached the bridge (denied) is still reported, as a failed tool", async () => {
+  const adapter = await fakeAdapter((_request, response) => {
+    response.writeHead(200);
+    response.write(line({ event: { type: "tool.started", trace: { id: "call-denied", name: "echo", args: { word: "no" }, status: "running" } } }));
+    response.write(line({ event: { type: "tool.output", toolCallId: "call-denied", chunk: "Denied by the user." } }));
+    response.write(line({ event: { type: "tool.completed", trace: { id: "call-denied", name: "echo", status: "failed", output: "Denied by the user." } } }));
+    response.end(line({ done: { finalText: "not done" } }));
+  });
+  try {
+    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options());
+    const events = collect(agent);
+    const result = await agent.execute("go");
+    const start = events.find((event) => event.type === "tool_execution_start") as any;
+    const end = events.find((event) => event.type === "tool_execution_end") as any;
+    assert.ok(start && end, `events: ${events.map((event) => event.type).join(", ")}`);
+    assert.equal(start.toolCallId, "call-denied");
+    assert.deepEqual(start.args, { word: "no" });
+    assert.equal(end.isError, true);
+    assert.equal(end.result.content[0].text, "Denied by the user.");
+    assert.ok(result.finalMessages.some((message: any) => message.role === "tool" && message.tool_call_id === "call-denied"),
+      "the model-facing transcript keeps the denied call's result");
+  } finally {
+    await adapter.close();
+  }
+});
+
+test("a call the bridge ran is reported once: the adapter's own completion of it adds nothing", async () => {
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    response.writeHead(200);
+    response.write(line({ event: { type: "tool.started", trace: { id: "call-echo-2", name: "echo", args: { word: "ping" }, status: "running" } } }));
+    await fetch(body.bridge.url, {
+      method: "POST", headers: { authorization: `Bearer ${body.bridge.token}` },
+      body: JSON.stringify({ name: "echo", arguments: { word: "ping" } }),
+    });
+    response.write(line({ event: { type: "tool.completed", trace: { id: "call-echo-2", name: "echo", status: "completed", output: "echo:ping" } } }));
+    response.end(line({ done: { finalText: "ok" } }));
+  });
+  try {
+    const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options());
+    const events = collect(agent);
+    await agent.execute("go");
+    assert.equal(events.filter((event) => event.type === "tool_execution_start").length, 1);
+    assert.equal(events.filter((event) => event.type === "tool_execution_end").length, 1);
+  } finally {
+    await adapter.close();
+  }
+});
+
 test("a throwing tool is a tool error, not a failed run", async () => {
   const failing = {
     label: "Boom", name: "boom", description: "Always fails.", parameters: Type.Object({}),

@@ -541,6 +541,12 @@ class ToolAnnouncements {
     for (const wake of [...this.waiters]) wake();
   }
 
+  /** Take back an announced call the bridge never claimed (it ended in JiuwenSwarm, e.g. denied there). */
+  withdraw(id: string): { args: unknown; id: string; input: string; name: string } | undefined {
+    const index = this.pending.findIndex((call) => call.id === id);
+    return index >= 0 ? this.pending.splice(index, 1)[0] : undefined;
+  }
+
   /**
    * Take the first announced call with this name whose arguments are the ones JiuwenSwarm passed on.
    * JiuwenSwarm fills schema defaults into the arguments and drops empty arrays and objects, so
@@ -742,7 +748,20 @@ class EventTranslator {
       }
       case "tool.completed": {
         const trace = event.trace as { id: string; name: string; output?: string; status?: string };
-        if (!this.nativeCalls.has(trace.id)) break;
+        if (!this.nativeCalls.has(trace.id)) {
+          // One of ours that ended without reaching the bridge (JiuwenSwarm's permission engine turned it
+          // away): nothing else will report it, so the timeline would show no trace of the call.
+          const call = this.announcements.withdraw(trace.id);
+          if (!call) break;
+          const text = trace.output ?? "";
+          this.emit({ type: "tool_execution_start", toolCallId: call.id, toolName: call.name, args: (call.args ?? {}) as Record<string, unknown> });
+          this.emit({
+            type: "tool_execution_end", toolCallId: call.id, toolName: call.name, isError: trace.status === "failed",
+            result: { content: [{ type: "text", text }] },
+          });
+          this.transcript.toolResult(call.id, call.name, text);
+          break;
+        }
         const text = trace.output ?? "";
         this.emit({
           type: "tool_execution_end", toolCallId: trace.id, toolName: trace.name, isError: trace.status === "failed",
