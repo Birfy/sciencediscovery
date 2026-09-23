@@ -6,7 +6,8 @@ This is the complete English documentation set.
 
 ## Getting started
 
-- [Quick start](getting-started/quick-start.md) — after you install ScienceDiscovery from the [repository README](../../README.md#installation), start the service, configure a model, and complete a first task.
+- [Quick start](getting-started/quick-start.md) — install a prepackaged binary, start the service, configure
+  a model, and complete a first task.
 - [Deployment](getting-started/deployment.md) — other ways to install and run ScienceDiscovery when the prebuilt binary does not suit your host or workflow: a source-built single-file binary, local source mode, or Docker.
 
 ## Core capabilities
@@ -37,6 +38,3 @@ This is the complete English documentation set.
 ## Developer documentation
 
 See the [developer documentation index](developer-docs/README.md) for architecture, module boundaries, protocols, and current feature designs.
-
-- [JiuwenSwarm migration status](reference/jiuwenswarm-migration-status.md) — implementation scope,
-  known gaps, and hand-over guidance for maintainers.

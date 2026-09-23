@@ -6,7 +6,8 @@
 
 ## 快速开始
 
-- [快速开始](getting-started/quick-start.md) — 按[仓库 README](../../README_zh.md#安装)完成安装后，启动服务、配置模型并完成第一次任务。
+- [快速开始](getting-started/quick-start.md) — 安装预编译二进制、启动服务、配置模型，并完成第一次
+  Agent 任务。
 - [部署](getting-started/deployment.md) — 预编译二进制不适合你的主机或工作流时，用其他方式安装与运行：源码构建的单文件二进制、本地源码模式，或 Docker。
 
 ## 核心能力
@@ -38,9 +39,6 @@
 ## 开发者文档
 
 见[开发者文档导航](developer-docs/README.md)，其中包括架构、模块边界、协议和当前有效的特性设计。
-
-- [JiuwenSwarm 迁移状态](reference/jiuwenswarm-migration-status.md) — 面向维护者的已实现范围、
-  已知缺口与后续交接方式。
 
 ## 其他资料
 
