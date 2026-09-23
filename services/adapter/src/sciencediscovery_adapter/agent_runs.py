@@ -217,7 +217,9 @@ class AgentRunner:
             if self._shared_registered and not changed and not longer:
                 return
             self._shared_timeout_s = max(timeout_s, self._shared_timeout_s)
-            if not self._shared_registered or longer:
+            was_registered = self._shared_registered
+            self._shared_registered = False  # retry the registration if the refresh below fails
+            if not was_registered or longer:
                 # An earlier adapter left it registered with another URL (its token changed), or a longer timeout is needed.
                 for method in ("mcp.disconnect", "mcp.delete_custom"):
                     try:
@@ -228,6 +230,9 @@ class AgentRunner:
                     "name": SERVER_NAME, "transport": "streamable-http",
                     "url": f"{self.settings.public_url}/mcp/{self.registry.token}", "timeout_s": self._shared_timeout_s,
                 })
+            elif changed:
+                # JiuwenSwarm caches tools on connect; connect alone does not refresh an open server.
+                await self.rpc(self.settings.mgmt_url, "mcp.disconnect", {"name": SERVER_NAME})
             await self.rpc(self.settings.mgmt_url, "mcp.connect", {"name": SERVER_NAME})
             self._shared_registered = True
 

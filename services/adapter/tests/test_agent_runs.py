@@ -113,8 +113,10 @@ async def test_tools_go_to_the_one_shared_mcp_server_which_is_only_given_again_w
     wider = [*tools, {"name": "declare_artifact", "description": "d", "inputSchema": {"type": "object"}}]
     await post(app, {"sessionId": "s3", "prompt": "go", "tools": wider, "bridge": bridge})
     mcp = [(m, p) for _, m, p in rpcs if m.startswith("mcp.")]
-    # First run: any earlier registration is replaced, then connected. Second: nothing (same tools). Third: reconnect.
-    assert [m for m, _ in mcp] == ["mcp.disconnect", "mcp.delete_custom", "mcp.register_custom", "mcp.connect", "mcp.connect"]
+    # First run replaces any earlier registration. The second run keeps the connection.
+    # The third run adds a tool, so disconnect before reconnecting to refresh JiuwenSwarm's cached list.
+    assert [m for m, _ in mcp] == ["mcp.disconnect", "mcp.delete_custom", "mcp.register_custom", "mcp.connect",
+                                   "mcp.disconnect", "mcp.connect"]
     assert all(p["name"] == "sci" for _, p in mcp)
     register = next(p for m, p in mcp if m == "mcp.register_custom")
     assert register["url"].startswith("http://adapter.test/mcp/") and register["transport"] == "streamable-http"
