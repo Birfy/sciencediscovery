@@ -1380,6 +1380,29 @@ test("an approval question names run_shell's stable resource, so a standing gran
   }
 });
 
+test("an approval question for another tool is named by the tool, not by JiuwenSwarm's own question text", async () => {
+  let asked: any;
+  const question = "mcp_sci_mcp__custom-1__to_kelvin（当前模式默认需确认） > 选择「会话内记住」可在本会话内自动放行 ``mcp_sci_mcp__custom-1__to_kelvin`` 类工具的调用";
+  const adapter = await fakeAdapter(async ({ body }, response) => {
+    if (body.decision) { response.writeHead(200, { "content-type": "application/json" }); response.end("{}"); return; }
+    response.writeHead(200);
+    response.write(line({ event: { type: "permission.required", request: {
+      id: "q1", resource: question, summary: 'mcp__custom-1__to_kelvin: {"celsius": -40}', toolName: "mcp__custom-1__to_kelvin", toolCallId: "q1",
+    } } }));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    response.end(line({ done: { finalText: "ok" } }));
+  });
+  try {
+    const requestApproval = async (request: unknown) => { asked = request; return "allow_once" as const; };
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(options({ requestApproval } as never)).execute("go");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(asked.resource, "mcp__custom-1__to_kelvin");
+    assert.equal(asked.summary, 'mcp__custom-1__to_kelvin: {"celsius": -40}');
+  } finally {
+    await adapter.close();
+  }
+});
+
 test("the run's trajectory is recorded from the model calls JiuwenSwarm makes, and the run's events carry its evidence", async () => {
   const { mkdtemp, rm: remove } = await import("node:fs/promises");
   const { tmpdir } = await import("node:os");
