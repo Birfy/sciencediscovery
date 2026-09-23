@@ -20,6 +20,8 @@ import pytest
 from sciencediscovery_adapter.app import create_app
 from sciencediscovery_adapter.config import Settings
 
+pytestmark = pytest.mark.science_tags(category='ut', os='linux', arch=('amd64', 'arm64'))
+
 SETTINGS = Settings(host="127.0.0.1", port=4310, legacy_url="http://legacy.test")
 
 

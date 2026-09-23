@@ -128,7 +128,7 @@ cd services/api && pnpm build && node --test dist/agent-run/jiuwenswarm-agent.te
 node --test test/contract/*.test.mjs                              # tooling of the contract tests
 E2E_BASE_URL=... E2E_API_TOKEN=... node test/contract/run.mjs --compare test/contract/baselines/legacy-linux.json
 
-# UT's host tier (server.test.ts and the rest of the workspace packages) runs against a real
-# JiuwenSwarm and adapter through scripts/with-jiuwenswarm.sh, which pnpm ci:ut:host wires in:
+# UT (server.test.ts and the rest of the shared plan) runs against a real JiuwenSwarm and
+# adapter through scripts/with-jiuwenswarm.sh, which pnpm ci:ut wraps around the shared runner:
 scripts/with-jiuwenswarm.sh pnpm --filter @sciencediscovery/api test
 ```

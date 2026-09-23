@@ -23,6 +23,8 @@ from sciencediscovery_adapter.app import create_app
 from sciencediscovery_adapter.config import Settings
 from sciencediscovery_adapter.llm_proxy import rewrite_response
 
+pytestmark = pytest.mark.science_tags(category='ut', os='linux', arch=('amd64', 'arm64'))
+
 FIXTURES = Path(__file__).parent / "fixtures"
 SETTINGS = Settings(host="127.0.0.1", port=4310, legacy_url="http://legacy.test",
                     gateway_url="ws://gw/tui", mgmt_url="ws://gw/ws", public_url="http://adapter.test")

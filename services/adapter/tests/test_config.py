@@ -1,4 +1,7 @@
 from sciencediscovery_adapter.config import Settings
+import pytest
+
+pytestmark = pytest.mark.science_tags(category='ut', os='linux', arch=('amd64', 'arm64'))
 
 
 def test_defaults_are_the_native_backend_on_the_documented_ports():

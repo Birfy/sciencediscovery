@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import { createTest } from "../../../test/support/tagged/compat.mjs";
+const { test } = createTest(import.meta.url, { tags: ["category:ut", "os:linux", "arch:amd64", "arch:arm64"] });
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import { execFile, spawn } from "node:child_process";
@@ -19,7 +21,8 @@ import { access, chmod, mkdir, readFile, rm, stat, writeFile } from "node:fs/pro
 import { createServer as createHttpServer, type ServerResponse } from "node:http";
 import { connect, type AddressInfo } from "node:net";
 import { resolve } from "node:path";
-import { test, type TestContext } from "node:test";
+import type { TestContext } from "node:test";
+
 import { DatabaseSync } from "node:sqlite";
 import { promisify } from "node:util";
 
@@ -122,7 +125,7 @@ const execFileAsync = promisify(execFile);
 
 /**
  * Agent turns run on JiuwenSwarm (behind a real adapter) when this suite is invoked under
- * scripts/with-jiuwenswarm.sh (the default UT host workload). Some assertions are true only
+ * scripts/with-jiuwenswarm.sh (which `pnpm ci:ut` wraps around the shared runner). Some assertions are true only
  * of one backend and are branched on this: JiuwenSwarm has one set of skills for every session
  * (Settings > Skills, not per-Project/Session selection — see docs/en/how-to/run-with-jiuwenswarm.md),
  * and it runs behind extra process hops (Node API -> Python adapter -> JiuwenSwarm gateway), which
@@ -156,13 +159,13 @@ const onJiuwenSwarm = process.env.SCIENCE_AGENT_EXECUTOR?.trim() === "jiuwenswar
  * check — ScienceDiscovery's own permission/sandbox/provenance handling of a subagent's actions — is
  * code that a deployment running JiuwenSwarm's own default subagent_spawn never reaches in the first
  * place (see gap 1a), and the opt-in bridge that would reach it cannot be relied on end to end under
- * this JiuwenSwarm version. The coverage itself is intact on the built-in loop, where these tests run
- * and pass normally. Skipped rather than deleted so it comes back automatically if a future JiuwenSwarm
- * version fixes the gateway limitation and this file's default is revisited.
+ * this JiuwenSwarm version. They pass on the built-in loop, which no gated run uses on this branch.
+ *
+ * So these tests carry `status:unreviewed` and are outside the shared plan, rather than skipping at
+ * run time: selection cannot read the backend, and a selected test that skips fails the run. They
+ * come back through the `executor` tag dimension (issue #126), which can plan them on the built-in
+ * loop, or when a JiuwenSwarm version fixes the gateway limitation. Kept, not deleted, for both.
  */
-const JIUWENSWARM_NESTED_TASK_STALL_SKIP = "ScienceDiscovery's task-delegation bridge for subagents is "
-  + "an opt-in this test harness does not turn on (matching every real deployment's own default); "
-  + "see jiuwenswarm-migration-status.md gaps 1a and 10";
 
 // General API fixtures do not own live Python MCP servers. MCP integration
 // cases pass their explicit transport; an unexpected invocation fails closed.
@@ -3999,7 +4002,7 @@ test("API runs a configured OpenAI-compatible model through the gateway and Pyth
   assert.doesNotMatch(await readFile(resolve(tempRoot, "catalog.sqlite"), "utf8"), /ephemeral-test-token/);
 });
 
-test("API runs one observable subagent through task and keeps nested task denied", { skip: onJiuwenSwarm && JIUWENSWARM_NESTED_TASK_STALL_SKIP }, async (context) => {
+test("API runs one observable subagent through task and keeps nested task denied", { tags: ["status:unreviewed"] }, async (context) => {
   const tempRoot = resolve(process.cwd(), ".tmp", `api-subagent-${Date.now()}-${process.pid}`);
   await mkdir(tempRoot, { recursive: true });
   context.after(() => removeTestRoot(tempRoot));
@@ -4251,7 +4254,7 @@ test("API runs one observable subagent through task and keeps nested task denied
   assert.doesNotMatch(taskResultContent, /"steps"|"prompt"/);
 });
 
-test("API does not auto-select a specialist by description for a subagent type", { skip: onJiuwenSwarm && JIUWENSWARM_NESTED_TASK_STALL_SKIP }, async (context) => {
+test("API does not auto-select a specialist by description for a subagent type", { tags: ["status:unreviewed"] }, async (context) => {
   const tempRoot = resolve(process.cwd(), ".tmp", `api-subagent-specialist-no-match-${Date.now()}-${process.pid}`);
   await mkdir(tempRoot, { recursive: true });
   context.after(() => removeTestRoot(tempRoot));
@@ -4308,7 +4311,7 @@ test("API does not auto-select a specialist by description for a subagent type",
   assert.equal(specialist.response.status, 201);
 });
 
-test("API validates subagent Brief v1 structured output before summarizing task result", { skip: onJiuwenSwarm && JIUWENSWARM_NESTED_TASK_STALL_SKIP }, async (context) => {
+test("API validates subagent Brief v1 structured output before summarizing task result", { tags: ["status:unreviewed"] }, async (context) => {
   const tempRoot = resolve(process.cwd(), ".tmp", `api-subagent-brief-${Date.now()}-${process.pid}`);
   await mkdir(tempRoot, { recursive: true });
   context.after(() => removeTestRoot(tempRoot));
@@ -4526,7 +4529,7 @@ test("subagent handoff preserves copied input snapshots for audit", async (conte
   assert.ok(JSON.parse(await readFile(resolve(childRoot, "handoff.json"), "utf8")));
 });
 
-test("API fails subagents when structured output fails schema validation", { skip: onJiuwenSwarm && JIUWENSWARM_NESTED_TASK_STALL_SKIP }, async (context) => {
+test("API fails subagents when structured output fails schema validation", { tags: ["status:unreviewed"] }, async (context) => {
   const tempRoot = resolve(process.cwd(), ".tmp", `api-subagent-brief-invalid-schema-${Date.now()}-${process.pid}`);
   await mkdir(tempRoot, { recursive: true });
   context.after(() => removeTestRoot(tempRoot));
@@ -4585,7 +4588,7 @@ test("API fails subagents when structured output fails schema validation", { ski
   }
 });
 
-test("API preserves raw subagent structured output when final JSON parsing fails", { skip: onJiuwenSwarm && JIUWENSWARM_NESTED_TASK_STALL_SKIP }, async (context) => {
+test("API preserves raw subagent structured output when final JSON parsing fails", { tags: ["status:unreviewed"] }, async (context) => {
   const tempRoot = resolve(process.cwd(), ".tmp", `api-subagent-brief-raw-output-${Date.now()}-${process.pid}`);
   await mkdir(tempRoot, { recursive: true });
   context.after(() => removeTestRoot(tempRoot));
@@ -4640,7 +4643,7 @@ test("API preserves raw subagent structured output when final JSON parsing fails
   }
 });
 
-test("API PATCH endpoint updates a non-running subagent brief and rejects running updates", { skip: onJiuwenSwarm && JIUWENSWARM_NESTED_TASK_STALL_SKIP }, async (context) => {
+test("API PATCH endpoint updates a non-running subagent brief and rejects running updates", { tags: ["status:unreviewed"] }, async (context) => {
   const tempRoot = resolve(process.cwd(), ".tmp", `api-subagent-brief-patch-${Date.now()}-${process.pid}`);
   await mkdir(tempRoot, { recursive: true });
   context.after(() => removeTestRoot(tempRoot));
@@ -4797,7 +4800,7 @@ test("API PATCH endpoint updates a non-running subagent brief and rejects runnin
   assert.equal(invalid.status, 400);
 });
 
-test("manual subagent permission requests use the outer SSE sink and refresh the shared epoch", { skip: onJiuwenSwarm && JIUWENSWARM_NESTED_TASK_STALL_SKIP }, async (context) => {
+test("manual subagent permission requests use the outer SSE sink and refresh the shared epoch", { tags: ["status:unreviewed"] }, async (context) => {
   const tempRoot = resolve(process.cwd(), ".tmp", `api-subagent-permission-${Date.now()}-${process.pid}`);
   await mkdir(tempRoot, { recursive: true });
   context.after(() => removeTestRoot(tempRoot));
@@ -4875,7 +4878,7 @@ test("manual subagent permission requests use the outer SSE sink and refresh the
   assert.equal(executions.body[0]?.permissionEpochId, decision.body.permissionEpoch.id);
 });
 
-test("switching an active run to always-allow resolves its pending subagent action", { skip: onJiuwenSwarm && JIUWENSWARM_NESTED_TASK_STALL_SKIP }, async (context) => {
+test("switching an active run to always-allow resolves its pending subagent action", { tags: ["status:unreviewed"] }, async (context) => {
   const tempRoot = resolve(process.cwd(), ".tmp", `api-active-always-allow-${Date.now()}-${process.pid}`);
   await mkdir(tempRoot, { recursive: true });
   context.after(() => removeTestRoot(tempRoot));
@@ -5298,7 +5301,7 @@ test("switching to ask during a run stops the tool calls that follow for approva
   assert.equal(prompted?.approvalMode, "ask_for_dangerous");
 });
 
-test("manual concurrent actions keep independent live waiters and resume independently", { skip: onJiuwenSwarm && JIUWENSWARM_NESTED_TASK_STALL_SKIP }, async (context) => {
+test("manual concurrent actions keep independent live waiters and resume independently", { tags: ["status:unreviewed"] }, async (context) => {
   const tempRoot = resolve(process.cwd(), ".tmp", `api-independent-permissions-${Date.now()}-${process.pid}`);
   await mkdir(tempRoot, { recursive: true });
   context.after(() => removeTestRoot(tempRoot));
@@ -5417,7 +5420,7 @@ test("manual concurrent actions keep independent live waiters and resume indepen
   assert.ok(executions.every((execution) => execution.status === "succeeded"));
 });
 
-test("allow-matching resolves every currently pending action covered by the Session grant", { skip: onJiuwenSwarm && JIUWENSWARM_NESTED_TASK_STALL_SKIP }, async (context) => {
+test("allow-matching resolves every currently pending action covered by the Session grant", { tags: ["status:unreviewed"] }, async (context) => {
   const tempRoot = resolve(process.cwd(), ".tmp", `api-matching-permissions-${Date.now()}-${process.pid}`);
   await mkdir(tempRoot, { recursive: true });
   context.after(() => removeTestRoot(tempRoot));
@@ -5504,7 +5507,7 @@ test("allow-matching resolves every currently pending action covered by the Sess
   assert.ok(executions.body.every((execution) => execution.status === "succeeded"));
 });
 
-test("always-allow executes subagent code without permission requests or grants", { skip: onJiuwenSwarm && JIUWENSWARM_NESTED_TASK_STALL_SKIP }, async (context) => {
+test("always-allow executes subagent code without permission requests or grants", { tags: ["status:unreviewed"] }, async (context) => {
   const tempRoot = resolve(process.cwd(), ".tmp", `api-subagent-auto-permission-${Date.now()}-${process.pid}`);
   await mkdir(tempRoot, { recursive: true });
   context.after(() => removeTestRoot(tempRoot));
@@ -5581,7 +5584,7 @@ test("always-allow executes subagent code without permission requests or grants"
   assert.match(toolStep?.content ?? "", /x{650}/);
 });
 
-test("failed subagent tool steps retain raw input and the full error result", { skip: onJiuwenSwarm && JIUWENSWARM_NESTED_TASK_STALL_SKIP }, async (context) => {
+test("failed subagent tool steps retain raw input and the full error result", { tags: ["status:unreviewed"] }, async (context) => {
   const tempRoot = resolve(process.cwd(), ".tmp", `api-subagent-failed-tool-${Date.now()}-${process.pid}`);
   await mkdir(tempRoot, { recursive: true });
   context.after(() => removeTestRoot(tempRoot));
@@ -5626,7 +5629,7 @@ test("failed subagent tool steps retain raw input and the full error result", { 
   assert.match(toolStep?.content ?? "", /y{650}/);
 });
 
-test("API flushes in-flight subagent progress before the run completes", { skip: onJiuwenSwarm && JIUWENSWARM_NESTED_TASK_STALL_SKIP }, async (context) => {
+test("API flushes in-flight subagent progress before the run completes", { tags: ["status:unreviewed"] }, async (context) => {
   const tempRoot = resolve(process.cwd(), ".tmp", `api-subagent-progress-${Date.now()}-${process.pid}`);
   await mkdir(tempRoot, { recursive: true });
   context.after(() => removeTestRoot(tempRoot));
@@ -5676,7 +5679,7 @@ test("API flushes in-flight subagent progress before the run completes", { skip:
   assert.equal(flushed.turnCount, 1);
 });
 
-test("API runs two task calls concurrently with independent persisted records", { skip: onJiuwenSwarm && JIUWENSWARM_NESTED_TASK_STALL_SKIP }, async (context) => {
+test("API runs two task calls concurrently with independent persisted records", { tags: ["status:unreviewed"] }, async (context) => {
   const tempRoot = resolve(process.cwd(), ".tmp", `api-subagent-concurrency-${Date.now()}-${process.pid}`);
   await mkdir(tempRoot, { recursive: true });
   context.after(() => removeTestRoot(tempRoot));
@@ -5761,7 +5764,7 @@ test("API runs two task calls concurrently with independent persisted records", 
   assert.equal(new Set(updatedIds).size, 2);
 });
 
-test("API rolls surplus task calls through the bounded per-run concurrency pool", { skip: onJiuwenSwarm && JIUWENSWARM_NESTED_TASK_STALL_SKIP }, async (context) => {
+test("API rolls surplus task calls through the bounded per-run concurrency pool", { tags: ["status:unreviewed"] }, async (context) => {
   const tempRoot = resolve(process.cwd(), ".tmp", `api-subagent-limit-${Date.now()}-${process.pid}`);
   await mkdir(tempRoot, { recursive: true });
   context.after(() => removeTestRoot(tempRoot));
@@ -6974,7 +6977,7 @@ test("recovery cancels and replays undecided approvals for run and subagent scop
   assert.ok(last?.event.type === "run.status" && last.event.status === "interrupted");
 });
 
-test("cancelling a run while a subagent approval is pending persists its terminal state once", { skip: onJiuwenSwarm && JIUWENSWARM_NESTED_TASK_STALL_SKIP }, async (context) => {
+test("cancelling a run while a subagent approval is pending persists its terminal state once", { tags: ["status:unreviewed"] }, async (context) => {
   const tempRoot = resolve(process.cwd(), ".tmp", `subagent-cancel-approval-${Date.now()}-${process.pid}`);
   await mkdir(tempRoot, { recursive: true });
   context.after(() => removeTestRoot(tempRoot));
@@ -7038,7 +7041,7 @@ test("cancelling a run while a subagent approval is pending persists its termina
   assert.ok(record.event.type === "permission.resolved" && record.event.request.decidedAt);
 });
 
-test("stopping a child Agent closes only its wake gate and joins its active model call", { skip: onJiuwenSwarm && JIUWENSWARM_NESTED_TASK_STALL_SKIP }, async (context) => {
+test("stopping a child Agent closes only its wake gate and joins its active model call", { tags: ["status:unreviewed"] }, async (context) => {
   const tempRoot = resolve(process.cwd(), ".tmp", `subagent-stop-${Date.now()}-${process.pid}`);
   await mkdir(tempRoot, { recursive: true });
   context.after(() => rm(tempRoot, { recursive: true, force: true }));
