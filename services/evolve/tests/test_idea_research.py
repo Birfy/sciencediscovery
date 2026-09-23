@@ -327,3 +327,29 @@ class ResearchTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(saved['status'], 'interrupted')
         self.assertEqual(saved['activities'][0]['status'], 'failed')
         self.assertEqual(saved['activities'][0]['error'], 'provider unavailable')
+
+
+def test_transport_leaves_temperature_to_the_provider(monkeypatch):
+    # Kimi answers 400 "invalid temperature: only 1 is allowed" to any other value.
+    sent = []
+
+    class Reply:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return False
+
+        def read(self, *_):
+            return json.dumps(dict(choices=[dict(message=dict(content='{}'))], usage=dict(total_tokens=7))).encode()
+
+    def urlopen(request, timeout):
+        sent.append(json.loads(request.data))
+        return Reply()
+
+    monkeypatch.setattr('urllib.request.urlopen', urlopen)
+    with tempfile.TemporaryDirectory() as root:
+        engine = IdeaTreeEngine(dict(id='r'), ResearchStore(Path(root)), dict(url='http://model.test/v1/chat/completions', token='t'))
+        assert engine.transport('system', dict(a=1), 100) == ('{}', 7)
+    assert 'temperature' not in sent[0]
+    assert sent[0]['max_tokens'] == 100

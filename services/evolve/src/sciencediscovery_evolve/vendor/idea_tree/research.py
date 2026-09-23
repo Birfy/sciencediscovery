@@ -159,7 +159,8 @@ class IdeaTreeEngine:
         return self.state.setdefault('template', snapshot('scientific-hypothesis-general/v1'))['assessors']
 
     def transport(self, system, payload, ceiling):
-        body = json.dumps(dict(messages=[dict(role='system', content=system), dict(role='user', content=json.dumps(payload, ensure_ascii=False))], max_tokens=ceiling, temperature=0.5)).encode()
+        # No temperature: some gateways accept only their own value (Kimi: "only 1 is allowed"). See completion.py.
+        body = json.dumps(dict(messages=[dict(role='system', content=system), dict(role='user', content=json.dumps(payload, ensure_ascii=False))], max_tokens=ceiling)).encode()
         request = urllib.request.Request(self.endpoint['url'], data=body, headers={'Content-Type': 'application/json', 'Authorization': 'Bearer ' + self.endpoint['token']})
         for attempt in range(2):
             try:
