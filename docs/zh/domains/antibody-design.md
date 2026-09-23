@@ -217,7 +217,6 @@ ipTM 0.275、pTM 0.375、hotspot contact 1/3：这表示所有模型和筛选步
   环境，再按完整 `requirements.txt` 复检。
 - **NPU 不可用**：回到系统设置确认卡已被 Runner 探测为 sandbox-usable 并已为当前 Session 选择。
 - **hotspot 校验失败**：使用错误信息列出的可用链与 CA 残基修正编号，不要让 Agent 自动猜测。
-- **状态为 `unknown`**：先列出现有 Execution 并按原 ID 查日志；`unknown` 不等于可以重放。
 - **筛选结果为 FAIL**：只要五个阶段和两份报告完整，这通常是候选未过科学阈值，不是系统故障。
 
 ## 你学会了看什么

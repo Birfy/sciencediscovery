@@ -263,8 +263,6 @@ or a non-zero Execution exit code indicates a run failure.
   device as sandbox-usable and that it is selected for the current Session.
 - **Hotspot validation fails:** Use the available chains and CA residues listed in the error to fix
   the numbering. Do not ask the Agent to guess.
-- **Status is `unknown`:** List existing Executions and inspect logs using the original ID.
-  `unknown` does not authorize replaying the run.
 - **Screening result is FAIL:** If all five stages and both reports are complete, the candidate
   usually failed a scientific threshold; this is not a system failure.
 
