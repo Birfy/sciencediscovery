@@ -33,7 +33,7 @@ import {
   type WorkspaceFileProvenance,
 } from "@sciencediscovery/schema";
 
-import { createSubagentTools, createWorkspaceTools, filterTools, normalizeWorkspaceRelativePath, workspaceRelativeCwd } from "./workspace.js";
+import { createSubagentTools, createWorkspaceTools, filterTools, normalizeWorkspaceRelativePath, sandboxWorkspacePaths, workspaceRelativeCwd } from "./workspace.js";
 import { ENVIRONMENT_TOOL_NAMES } from "./environment-tool-names.js";
 import {
   DEFAULT_SUBAGENT_MAX_TURNS,
@@ -130,6 +130,19 @@ test("run_shell selects the latest environment by ID and preserves its execution
   assert.equal(executedCode, "python -m sample");
   assert.equal(executedToolCallId, "tool-call");
   assert.match(result.content[0]?.type === "text" ? result.content[0].text : "", /stdout:\nok/);
+});
+
+test("a command written with the workspace's host path uses the sandbox's /workspace instead", () => {
+  const root = "/data/projects/p/sessions/s/workspace";
+  assert.equal(
+    sandboxWorkspacePaths(root, `cat > ${root}/ols_fit.py << 'EOF'\nprint(1)\nEOF\npython ${root}/ols_fit.py`),
+    "cat > /workspace/ols_fit.py << 'EOF'\nprint(1)\nEOF\npython /workspace/ols_fit.py",
+  );
+  assert.equal(sandboxWorkspacePaths(root, `cd ${root} && ls "${root}"`), `cd /workspace && ls "/workspace"`);
+  assert.equal(sandboxWorkspacePaths(`${root}/`, `ls ${root}`), "ls /workspace");
+  // Another directory that merely starts with the same characters is not the workspace.
+  assert.equal(sandboxWorkspacePaths(root, `ls ${root}2/a`), `ls ${root}2/a`);
+  assert.equal(sandboxWorkspacePaths(root, "ls /workspace/a"), "ls /workspace/a");
 });
 
 test("workspaceRelativeCwd makes a cwd that names the workspace relative and leaves any other one alone", () => {

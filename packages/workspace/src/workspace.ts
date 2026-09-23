@@ -444,6 +444,17 @@ export function workspaceRelativeCwd(workspaceRoot: string, cwd: string | undefi
   return descendantPath(root, candidate) ?? cwd;
 }
 
+/**
+ * A command written with the Agent Workspace's host path, as the sandbox sees it: mounted at `/workspace`.
+ * JiuwenSwarm tells the model its project directory by that host path, which the sandbox does not have.
+ */
+export function sandboxWorkspacePaths(workspaceRoot: string, command: string): string {
+  const root = resolve(workspaceRoot);
+  if (root === "/" || !command.includes(root)) return command;
+  const escaped = root.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return command.replace(new RegExp(`${escaped}(?=$|[/\\s'"\`;:|&()<>])`, "g"), "/workspace");
+}
+
 function descendantPath(parent: string, child: string): string | undefined {
   const path = relative(parent, child);
   if (!path || path === ".." || path.startsWith(`..${sep}`) || isAbsolute(path)) return undefined;
@@ -1316,7 +1327,8 @@ export function createWorkspaceTools(workspaceRoot: string, options: WorkspaceTo
         if (Boolean(params.command) === Boolean(params.scriptPath)) {
           throw new Error("Provide exactly one of command or scriptPath");
         }
-        let code = [params.command?.trim() ?? "", ...(params.command ? params.arguments ?? [] : []).map(shellQuote)].join(" ").trim();
+        let code = sandboxWorkspacePaths(workspaceRoot,
+          [params.command?.trim() ?? "", ...(params.command ? params.arguments ?? [] : []).map(shellQuote)].join(" ").trim());
         if (params.scriptPath) {
           const script = await resolveSandboxScriptPath(
             workspaceRoot,
