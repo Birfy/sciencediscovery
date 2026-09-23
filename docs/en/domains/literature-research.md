@@ -33,7 +33,7 @@ Go to **System configuration → Model registry** and add a model:
 | Model ID | `gpt-5` |
 | API token | The model's key. Encrypted at rest; the UI hides the plaintext |
 
-![Model registry](../../images/model.png)
+![Model registry](../../images/model-en.png)
 
 ---
 
@@ -50,7 +50,7 @@ For this case, enable the following two under **System configuration → Connect
 
 Other connectors (arXiv, UniProt, Reactome, etc.) can stay off.
 
-![Connector settings](../../images/connector.png)
+![Connector settings](../../images/connector-en.png)
 
 ### 3.2 Timeouts (optional)
 
@@ -66,7 +66,7 @@ Under **System configuration → Timeouts** you can configure these five items:
 | Permission wait | Maximum time the Agent waits for the user to approve a permission card |
 | Kernel idle | Survival time of a persistent Python/R kernel with no activity |
 
-![Timeout settings](../../images/timeout.png)
+![Timeout settings](../../images/timeout-en.png)
 
 ### 3.3 Quotas (optional)
 
@@ -81,14 +81,14 @@ Under **System configuration → Quotas** or the corresponding environment varia
 | Workspace total | Total file capacity accumulated in the Runner workspace |
 | Execution output | Retention limit for stdout + stderr of a single execution; truncated automatically when exceeded |
 
-![Quota settings](../../images/quotas.png)
+![Quota settings](../../images/quotas-en.png)
 
 ### 3.4 Prepare the Python/R environment
 
 This module hosts the Python and R runtimes the Agent uses through `run_shell` inside the sandbox (`python -m`, Python files, or `Rscript`). After the Runner starts, it pulls the managed micromamba in the background and prepares a read-only base; users can create named environments from the base and install packages as needed. Later updates happen in place without cloning; each change records a Revision for traceability. The Agent selects an environment ID, and execution uses its latest state.
 
 Go to **System configuration → Environments**. On first start the Runner downloads and verifies micromamba in the background, with status changing from `provisioning` to `ready`; this takes a few minutes. On failure the page shows the reason and offers a retry.
-![Environment settings](../../images/python.png)
+![Environment settings](../../images/python-en.png)
 
 ### 3.5 Skills (optional)
 
@@ -105,7 +105,7 @@ To create a skill, use any of the following under **System configuration → Ski
 | Local import | Import a local skill folder, `SKILL.md` file, or ZIP package; folder selection preserves relative paths and packages them before import, while ZIPs are checked for path traversal, symlinks, encryption, duplicates, and size/file-count limits |
 | Git repository import | Import from an HTTPS or SSH repository URL (a ref or subdirectory may be specified); credentials are read only from the local credential helper or SSH config and never appear in the repository URL or model context |
 
-![Skill settings](../../images/skill.png)
+![Skill settings](../../images/skill-en.png)
 
 ### 3.6 Specialists (optional)
 
@@ -117,7 +117,7 @@ To create a specialist under **System configuration → Specialists**:
 2. Fill in the basic information: a display name and a task description that describes the Agent's role and applicable scenarios.
 3. Bind the resources the run needs: a task model, an optional skill whitelist, an optional connector whitelist, an optional environment, and a review model.
 4. After saving, the specialist appears in the "Specialist" dropdown on the Session creation page and can be selected by name when creating or running a session.
-![Specialist settings](../../images/specialist.png)
+![Specialist settings](../../images/specialist-en.png)
 
 This case does not need a custom specialist; the system built-in default is sufficient.
 
@@ -142,7 +142,7 @@ Enable and use it as follows:
 For Neo4j setup, storage choices, and connection status, see
 [Set up ScienceMemory](../advanced-setup/science-memory-setup.md).
 
-![ScienceMemory settings](../../images/memory.png)
+![ScienceMemory settings](../../images/memory-en.png)
 
 ---
 
@@ -155,7 +155,7 @@ On the left, **New Project**:
 
 New Session: open the Project → **Add session**.
 
-![New Project](../../images/project.png)
+![New Project](../../images/project-en.png)
 
 ---
 
@@ -172,7 +172,7 @@ contradictory findings across studies.
 ```
 
 Click **Run analysis**.
-![Dispatch task](../../images/task.png)
+![Dispatch task](../../images/task-en.png)
 
 ---
 
@@ -192,7 +192,7 @@ While a task runs, the Agent pauses before high-risk operations and pops a permi
 Authorization applies to the current Session by default. To persist it at the Project or Global scope, go to **System configuration → Permissions** to adjust or revoke it.
 
 If you do not want to confirm manually each time a card appears, click **Always allow** on that card to grant long-term authorization for that operation category.
-![Permission approval card](../../images/permission.png)
+![Permission approval card](../../images/permission-en.png)
 
 ---
 
