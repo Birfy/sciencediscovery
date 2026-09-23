@@ -11,12 +11,6 @@ Protenix 置信度结果，以及一份说明候选是否通过筛选的 Markdow
 机器、至少一张 Ascend NPU，以及登录这台机器的 SSH 地址与凭据。Runner 会在下面的教程步骤中添加和连接，
 不要求事先配置好。
 
-> **当前分支依赖**：本教程使用 [PR #115](https://github.com/openJiuwen-ai/sciencediscovery/pull/115)
-> 引入的 `antibody-design` Skill。`feat/jiuwenswarm` 分支当前仍带有旧的
-> `antibody-protenix-pipeline`；运行前需要先同步 PR #115 的实现。仓库中存在
-> `skills/antibody-design/SKILL.md` 和
-> `skills/antibody-design/scripts/run_sandbox_pipeline.sh`，才算满足此前提。
-
 ## 1. 准备三个科学输入
 
 这条流水线没有默认抗原、默认抗体骨架，也不会替你猜结合位点。请先准备：

@@ -13,13 +13,6 @@ model, and run ScienceDiscovery with sandbox execution available (not with
 runtime, at least one Ascend NPU, and the SSH address and credentials for that machine. You will add
 and connect the Runner in this tutorial; it does not need to be configured in advance.
 
-> **Dependency for the current branch:** This tutorial uses the `antibody-design` Skill introduced
-> by [PR #115](https://github.com/openJiuwen-ai/sciencediscovery/pull/115). The
-> `feat/jiuwenswarm` branch currently still contains the older `antibody-protenix-pipeline` Skill,
-> so synchronize the implementation from PR #115 before running this tutorial. The prerequisite is
-> satisfied only when the repository contains both `skills/antibody-design/SKILL.md` and
-> `skills/antibody-design/scripts/run_sandbox_pipeline.sh`.
-
 ## 1. Prepare the three scientific inputs
 
 The pipeline does not provide a default antigen or antibody framework, and it will not guess a
