@@ -680,6 +680,27 @@ test("read_file pages a large file instead of returning it whole", async (contex
   assert.equal(secondText.endsWith("line-2001\nline-2002\nline-2003\nline-2004\nline-2005\n"), true);
 });
 
+test("file tools take a path written with the workspace's host path or /workspace", async (context) => {
+  // JiuwenSwarm tells the model its project directory by the host path; observed: read_file(<host workspace>/notes.md).
+  const root = resolve(process.cwd(), ".tmp", `workspace-read-absolute-${process.pid}-${Date.now()}`);
+  await mkdir(root, { recursive: true });
+  context.after(() => rm(root, { force: true, recursive: true }));
+  await writeFile(resolve(root, "notes.md"), "hello from the workspace\n");
+  const tools = createWorkspaceTools(root, {
+    enabledConnectorIds: [],
+    executePython: async () => { throw new Error("not used"); },
+  });
+  const read = tools.find((candidate) => candidate.name === "read_file")!;
+  const text = async (path: string) => {
+    const result = await read.execute("read", { path });
+    return result.content[0]?.type === "text" ? result.content[0].text : "";
+  };
+  assert.match(await text(resolve(root, "notes.md")), /hello from the workspace/);
+  assert.match(await text("/workspace/notes.md"), /hello from the workspace/);
+  await assert.rejects(read.execute("outside", { path: "/etc/hostname" }), /non-empty and relative/);
+  await assert.rejects(read.execute("root", { path: root }), /non-empty and relative/);
+});
+
 test("read_file returns metadata for a binary file and never its bytes", async (context) => {
   const root = resolve(process.cwd(), ".tmp", `workspace-read-binary-${process.pid}-${Date.now()}`);
   await mkdir(root, { recursive: true });

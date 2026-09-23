@@ -414,7 +414,10 @@ export interface WorkspaceToolOptions {
   toolPolicy?: ToolFilterPolicy;
 }
 
-function assertWorkspacePath(workspaceRoot: string, requestedPath: string): string {
+function assertWorkspacePath(workspaceRoot: string, path: string): string {
+  // An absolute path naming this workspace (JiuwenSwarm tells the model its host path) is taken as relative.
+  const named = isAbsolute(path) ? workspaceRelativeCwd(workspaceRoot, path) : path;
+  const requestedPath = named === "." ? path : named ?? path;
   if (!requestedPath.trim() || isAbsolute(requestedPath)) {
     throw new Error("Workspace paths must be non-empty and relative");
   }
