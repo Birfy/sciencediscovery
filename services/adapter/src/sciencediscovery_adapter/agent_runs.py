@@ -196,7 +196,15 @@ class AgentRunner:
         self.skills = SkillSync(lambda *a, **k: self.rpc(*a, **k), settings.mgmt_url)
         self._shared_lock = asyncio.Lock()
         self._shared_registered = False
-        self._shared_timeout_s = 0
+        # Starts at the configured ceiling, not 0: a run that omits toolTimeoutSeconds already falls back to
+        # this same value (see ensure_shared_tools's caller), so starting low only matters for a run that
+        # asks for less than it (a short-lived test, for one). Concurrent runs' start order is a race, and
+        # whichever reaches ensure_shared_tools first sets this value for everyone; starting it low let an
+        # early short-timeout run set a low bar that every normal-timeout run after it then had to bump back
+        # up, each bump re-running the whole disconnect/register/connect dance under _shared_lock while every
+        # other concurrent run waits on it. Starting at the ceiling means only a run that genuinely asks for
+        # more than the configured default ever triggers that dance for this reason.
+        self._shared_timeout_s = settings.tool_timeout_s
         self._permissions_on = False
         # Runs paused on one of JiuwenSwarm's approval questions, by the question's id.
         self.pending_approvals: dict[str, tuple[Any, RunEventMapper]] = {}
