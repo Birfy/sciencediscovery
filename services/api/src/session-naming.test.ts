@@ -214,6 +214,31 @@ test("Session title refinement retries without thinking for a strict compatible 
   assert.equal(refined.title, "Gateway fallback");
 });
 
+test("Session title refinement leaves the temperature to a model that takes only its own", async () => {
+  for (const modelId of ["kimi-for-coding", "deepseek-v4-flash"]) {
+    const requestBodies: Array<Record<string, unknown>> = [];
+    const refined = await generateRefinedSessionTitle({
+      apiToken: "secret",
+      fetchImpl: async (_input, init) => {
+        const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        requestBodies.push(body);
+        if ("temperature" in body) {
+          return new Response(JSON.stringify({ error: { message: "invalid temperature: only 1 is allowed for this model" } }), { status: 400 });
+        }
+        return new Response(JSON.stringify({
+          choices: [{ finish_reason: "stop", message: { content: "平方和计算" } }],
+          usage: { completion_tokens: 3, prompt_tokens: 20, total_tokens: 23 },
+        }), { status: 200 });
+      },
+      firstMessage: "用 Python 计算 1 到 100 的平方和",
+      model: { ...model, baseUrl: "https://api.kimi.com/coding/v1", model: modelId },
+    });
+    assert.equal(refined.title, "平方和计算", modelId);
+    assert.equal("temperature" in requestBodies.at(-1)!, false);
+    assert.equal(requestBodies.at(-1)?.thinking, undefined);
+  }
+});
+
 test("Session title refinement retries without a token limit when a gateway ignores thinking control", async () => {
   const requestBodies: Array<Record<string, unknown>> = [];
   const visibleAnswer = "A comprehensive analysis of TP53 expression across all treatment cohorts";

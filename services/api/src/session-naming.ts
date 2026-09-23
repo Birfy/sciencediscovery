@@ -152,7 +152,7 @@ export async function generateRefinedSessionTitle(options: {
 }): Promise<RefinedSessionTitle> {
   const startedAt = new Date().toISOString();
   const fetchImpl = options.fetchImpl ?? fetch;
-  const requestCompletion = (disableThinking: boolean) => fetchImpl(
+  const requestCompletion = (disableThinking: boolean, fixedTemperature = true) => fetchImpl(
     `${options.model.baseUrl.replace(/\/$/, "")}/chat/completions`,
     {
       body: JSON.stringify({
@@ -161,7 +161,7 @@ export async function generateRefinedSessionTitle(options: {
           { content: options.firstMessage, role: "user" },
         ],
         model: options.model.model,
-        temperature: 0,
+        ...(fixedTemperature ? { temperature: 0 } : {}),
         ...(disableThinking
           ? { max_tokens: 64, thinking: { type: "disabled" } }
           : {}),
@@ -183,6 +183,12 @@ export async function generateRefinedSessionTitle(options: {
   // reasoning model can reach its visible answer before we truncate locally.
   if (disableThinking && (response.status === 400 || response.status === 422)) {
     response = await requestCompletion(false);
+    usedUnboundedFallback = true;
+  }
+  // Some models take only their own temperature (Kimi's coding models answer 400 "only 1 is allowed"):
+  // the last try leaves it to the provider.
+  if (response.status === 400 || response.status === 422) {
+    response = await requestCompletion(false, false);
     usedUnboundedFallback = true;
   }
   if (!response.ok) throw new Error(`Session naming model failed with HTTP ${response.status}`);
