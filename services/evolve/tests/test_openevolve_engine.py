@@ -35,6 +35,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
+pytestmark = pytest.mark.science_tags(category='ut', os='linux', arch=('amd64', 'arm64'))
+
 from sciencediscovery_evolve import events
 from sciencediscovery_evolve.engine import RunSpec
 from sciencediscovery_evolve.openevolve_engine import (
