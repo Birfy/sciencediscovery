@@ -115,72 +115,37 @@ async def test_tools_go_to_the_one_shared_mcp_server_which_is_only_given_again_w
     await post(app, {"sessionId": "s2", "prompt": "go", "tools": tools, "bridge": bridge})
     wider = [*tools, {"name": "declare_artifact", "description": "d", "inputSchema": {"type": "object"}}]
     await post(app, {"sessionId": "s3", "prompt": "go", "tools": wider, "bridge": bridge})
-    mcp = [(m, p) for _, m, p in rpcs if m.startswith("mcp.")]
+    mcp = [(m, p["name"]) for _, m, p in rpcs if m.startswith("mcp.")]
     # First run: any earlier registration is replaced, then connected. Second: nothing (same tools). Third: a new
-    # tool arrived, so it gets the same full cycle as the first (a bare reconnect does not make JiuwenSwarm
-    # re-read the tool list).
-    assert [m for m, _ in mcp] == [
-        "mcp.disconnect", "mcp.delete_custom", "mcp.register_custom", "mcp.connect",
-        "mcp.disconnect", "mcp.delete_custom", "mcp.register_custom", "mcp.connect",
+    # tool arrived, and a bare reconnect does not make JiuwenSwarm re-read the tool list, so the list goes to the
+    # next generation's name; the first, which no run is on any more, is then disconnected.
+    second = "sci0000000001"
+    assert mcp == [
+        ("mcp.disconnect", "sci"), ("mcp.delete_custom", "sci"), ("mcp.register_custom", "sci"), ("mcp.connect", "sci"),
+        ("mcp.disconnect", second), ("mcp.delete_custom", second), ("mcp.register_custom", second), ("mcp.connect", second),
+        ("mcp.disconnect", "sci"), ("mcp.delete_custom", "sci"),
     ]
-    assert all(p["name"] == "sci" for _, p in mcp)
-    register = next(p for m, p in mcp if m == "mcp.register_custom")
+    register = next(p for _, m, p in rpcs if m == "mcp.register_custom")
     assert register["url"].startswith("http://adapter.test/mcp/") and register["transport"] == "streamable-http"
-    assert all(run.params["mcp"] == ["sci"] for run in FakeRun.instances)
+    assert [run.params["mcp"] for run in FakeRun.instances] == [["sci"], ["sci"], [second]]
 
 
-async def test_first_shared_mcp_registration_tolerates_cleanup_with_no_live_adapter(harness):
-    app, runner, rpcs = harness
-    FakeRun.fixture = "jw_chat_mcp_direct.raw"
-    bridge = {"url": "http://legacy.test/bridge", "token": "t"}
-    tools = [{"name": "run_shell", "description": "d", "inputSchema": {"type": "object"}}]
-    original_rpc = runner.rpc
-
-    async def no_live_adapter(url, method, params=None, **kwargs):
-        result = await original_rpc(url, method, params, **kwargs)
-        if method in ("mcp.disconnect", "mcp.delete_custom"):
-            return {"applied": False, "error": "no live adapter"}
-        return result
-
-    runner.rpc = no_live_adapter
-    _, lines = await post(app, {"sessionId": "s1", "prompt": "go", "tools": tools, "bridge": bridge})
-    assert not [line for line in lines if line.get("event", {}).get("type") == "run.failed"]
-    assert len(FakeRun.instances) == 1
-    assert [method for _, method, _ in rpcs if method.startswith("mcp.")] == [
-        "mcp.disconnect", "mcp.delete_custom", "mcp.register_custom", "mcp.connect",
-    ]
-
-
-async def test_incomplete_shared_mcp_disconnect_fails_and_retries_on_the_next_run(harness):
-    app, runner, rpcs = harness
-    FakeRun.fixture = "jw_chat_mcp_direct.raw"
-    bridge = {"url": "http://legacy.test/bridge", "token": "t"}
-    first = [{"name": "run_shell", "description": "d", "inputSchema": {"type": "object"}}]
-    wider = [*first, {"name": "declare_artifact", "description": "d", "inputSchema": {"type": "object"}}]
-    original_rpc = runner.rpc
-    disconnects = 0
-
-    async def incomplete_disconnect(url, method, params=None, **kwargs):
-        nonlocal disconnects
-        result = await original_rpc(url, method, params, **kwargs)
-        if method == "mcp.disconnect":
-            disconnects += 1
-            if disconnects == 2:
-                return {"applied": False, "error": "unregister timed out"}
-        return result
-
-    runner.rpc = incomplete_disconnect
-    await post(app, {"sessionId": "s1", "prompt": "go", "tools": first, "bridge": bridge})
-    _, lines = await post(app, {"sessionId": "s2", "prompt": "go", "tools": wider, "bridge": bridge})
-    failed = [line["event"] for line in lines if line.get("event", {}).get("type") == "run.failed"]
-    assert failed and "mcp.disconnect" in failed[0]["error"]
-    assert len(FakeRun.instances) == 1
-
-    _, retried = await post(app, {"sessionId": "s3", "prompt": "go", "tools": wider, "bridge": bridge})
-    assert not [line for line in retried if line.get("event", {}).get("type") == "run.failed"]
-    assert len(FakeRun.instances) == 2
-    assert disconnects == 3
-    assert sum(method == "mcp.register_custom" for _, method, _ in rpcs) == 2
+async def test_new_tools_never_disconnect_the_server_a_running_run_is_calling_through(harness):
+    """A `task` sub-agent's run is started while its parent's run waits on that very `task` call: the sub-agent's
+    new tools must not cut the parent's call (a disconnect is global in JiuwenSwarm), or the parent hangs."""
+    _, runner, rpcs = harness
+    parent_tools = [{"name": "task", "description": "d", "inputSchema": {"type": "object"}}]
+    child_tools = [{"name": "run_shell", "description": "d", "inputSchema": {"type": "object"}}]
+    parent = await runner.ensure_shared_tools(parent_tools, 60)
+    rpcs.clear()
+    child = await runner.ensure_shared_tools(child_tools, 60)
+    assert (parent, child) == ("sci", "sci0000000001")
+    assert ("mcp.disconnect", "sci") not in [(m, p["name"]) for _, m, p in rpcs if m.startswith("mcp.")], "the parent's server stays connected"
+    await runner.release_shared_tools(child)
+    assert ("mcp.disconnect", "sci") not in [(m, p["name"]) for _, m, p in rpcs if m.startswith("mcp.")]
+    await runner.release_shared_tools(parent)
+    assert [(m, p["name"]) for _, m, p in rpcs if m.startswith("mcp.")][-2:] == [("mcp.disconnect", "sci"), ("mcp.delete_custom", "sci")]
+    assert runner.registry.shared.keys() == {"task", "run_shell"}, "the newest generation serves every tool"
 
 
 async def test_tools_without_a_bridge_fail_the_run_cleanly(harness):
@@ -446,11 +411,15 @@ async def test_jiuwenswarms_permission_engine_is_switched_on_and_each_new_tool_g
     await post(app, {"sessionId": "s1", "prompt": "go", "tools": tools, "bridge": bridge})
     await post(app, {"sessionId": "s2", "prompt": "go", "tools": [*tools, {"name": "declare_claim", "description": "d"}], "bridge": bridge})
     calls = [(m, p) for _, m, p in rpcs if m in ("config.set", "permissions.tools.update")]
+    # The new tool moves the tool list to the next generation of the server, whose names need every level again,
+    # each still the one it was first given.
     assert calls == [
         ("config.set", {"permissions_enabled": True}),
         ("permissions.tools.update", {"tool": "mcp_sci_run_shell", "level": "ask"}),
         ("permissions.tools.update", {"tool": "mcp_sci_read_file", "level": "allow"}),
-        ("permissions.tools.update", {"tool": "mcp_sci_declare_claim", "level": "allow"}),
+        ("permissions.tools.update", {"tool": "mcp_sci0000000001_run_shell", "level": "ask"}),
+        ("permissions.tools.update", {"tool": "mcp_sci0000000001_read_file", "level": "allow"}),
+        ("permissions.tools.update", {"tool": "mcp_sci0000000001_declare_claim", "level": "allow"}),
     ]
 
 
