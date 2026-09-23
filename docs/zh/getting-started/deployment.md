@@ -14,7 +14,7 @@
 
 **这三条路径互相独立，请选定一条，不要混用。** 二进制部署从构建到运行全程不涉及 Docker：可执行文件自带 Node、CPython、gateway 依赖、Web 静态资源与 micromamba。需要容器化部署时走镜像路径，不要把二进制包塞进镜像。
 
-三者都不打包 Neo4j。ScienceMemory 需要外部 Neo4j 服务器，未配置时该功能保持关闭，Web 与对话主路径不受影响。
+三者都不打包 Neo4j。ScienceMemory 默认以本地文件保存图谱，本地模式与二进制部署的新安装默认开启；Neo4j 是可选后端。Web 与对话主路径不受影响。
 
 ## 单文件二进制部署
 
@@ -510,7 +510,7 @@ services:
 - 单用户，信任模型与宿主机安装一致：一个静态 bearer token、无 TLS、无多用户账号。默认只发布到 `127.0.0.1`，因为 Docker 发布的端口会绕过宿主上大多数防火墙规则；只有在可信网络中才设置 `SCIENCE_AGENT_PUBLISH_HOST=0.0.0.0`，并请先更换 token。
 - 镜像中不含任何 API token、模型凭证或宿主 `.sciencediscovery-data/` 内容——`.dockerignore` 排除了 `.sciencediscovery-data/`、`.env`、`node_modules/`、构建产物与本地缓存。凭证只通过 Compose 环境变量和 bind mount 的数据目录进入容器。
 - 镜像已包含固定版本 micromamba，运行时不再为该二进制访问 GitHub；但本迭代**没有**打包 starter Python/R 科学环境或 conda package cache。首次创建 starter Python 仍需访问允许的软件包渠道；只有另行填充并设置 `SCIENCE_AGENT_PACKAGE_CACHE_DIR` 后，软件包解析才可离线进行。
-- 镜像不含 memory-graph 与 evolve 两个 Python 边车的环境，`start-stack.sh --mode docker` 也不会启动它们：ScienceMemory 图谱在 Docker 中保持关闭（`/health` 的 `memoryGraph` 为 `disabled`，开启后只会变成 `degraded`），进化搜索无法启动。需要这两项功能时使用本地模式或二进制部署。
+- 镜像不含 memory-graph 与 evolve 两个 Python 边车的环境，`start-stack.sh --mode docker` 也不会启动它们：ScienceMemory 图谱在新的 Docker 数据目录中默认关闭（`start-stack.sh --mode docker` 设置了 `SCIENCE_AGENT_MEMORY_GRAPH_AVAILABLE=0`；`/health` 的 `memoryGraph` 为 `disabled`，开启后只会变成 `degraded`），进化搜索无法启动。需要这两项功能时使用本地模式或二进制部署。
 - 该镜像是便捷封装，不是经过加固的多租户部署；单静态 bearer token、无 TLS、runner 无 CPU/内存配额等安全边界不因容器化而改变。
 
 ### 生成 micromamba 双架构发布包

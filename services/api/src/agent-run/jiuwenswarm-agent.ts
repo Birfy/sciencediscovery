@@ -379,9 +379,10 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
   private answerApproval(question: ApprovalQuestion): void {
     const ask = this.options.requestApproval;
     // A stable resource for a tool whose native equivalent always checks one fixed resource (run_shell and
-    // the rest of JIUWENSWARM_APPROVAL_RESOURCE), so a standing grant applies here too; the call's own text
-    // otherwise, as before.
-    const resource = (question.toolName && JIUWENSWARM_APPROVAL_RESOURCE.get(question.toolName))
+    // the rest of JIUWENSWARM_APPROVAL_RESOURCE), so a standing grant applies here too. Any other tool the
+    // adapter matched to its call is named by the tool itself: JiuwenSwarm's own question text ("mcp_sci_…
+    // （当前模式默认需确认） > 选择「会话内记住」…") is internal wording that the card would show verbatim.
+    const resource = (question.toolName && (JIUWENSWARM_APPROVAL_RESOURCE.get(question.toolName) ?? question.toolName))
       ?? question.resource ?? question.summary ?? "tool call";
     // A human can take arbitrarily long to answer; that wait must not itself look "stalled".
     const release = this.beginExternalWait();
@@ -540,6 +541,12 @@ class ToolAnnouncements {
     this.all.push({ args: (call.args ?? {}) as Record<string, unknown>, batch: this.batch, id: call.id, name: call.name, seq: this.all.length });
     this.pending.push(call);
     for (const wake of [...this.waiters]) wake();
+  }
+
+  /** Take back an announced call the bridge never claimed (it ended in JiuwenSwarm, e.g. denied there). */
+  withdraw(id: string): { args: unknown; id: string; input: string; name: string } | undefined {
+    const index = this.pending.findIndex((call) => call.id === id);
+    return index >= 0 ? this.pending.splice(index, 1)[0] : undefined;
   }
 
   /**
@@ -743,7 +750,20 @@ class EventTranslator {
       }
       case "tool.completed": {
         const trace = event.trace as { id: string; name: string; output?: string; status?: string };
-        if (!this.nativeCalls.has(trace.id)) break;
+        if (!this.nativeCalls.has(trace.id)) {
+          // One of ours that ended without reaching the bridge (JiuwenSwarm's permission engine turned it
+          // away): nothing else will report it, so the timeline would show no trace of the call.
+          const call = this.announcements.withdraw(trace.id);
+          if (!call) break;
+          const text = trace.output ?? "";
+          this.emit({ type: "tool_execution_start", toolCallId: call.id, toolName: call.name, args: (call.args ?? {}) as Record<string, unknown> });
+          this.emit({
+            type: "tool_execution_end", toolCallId: call.id, toolName: call.name, isError: trace.status === "failed",
+            result: { content: [{ type: "text", text }] },
+          });
+          this.transcript.toolResult(call.id, call.name, text);
+          break;
+        }
         const text = trace.output ?? "";
         this.emit({
           type: "tool_execution_end", toolCallId: trace.id, toolName: trace.name, isError: trace.status === "failed",
