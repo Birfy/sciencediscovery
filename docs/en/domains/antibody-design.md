@@ -1,0 +1,287 @@
+# Design an antibody on Ascend NPU
+
+**Allow about 15 minutes to configure and submit the task. First-time resource preparation and model runtime are additional.**
+
+This tutorial shows you how to use the `antibody-design` Skill to run an
+RFdiffusion → ProteinMPNN → Protenix → screening antibody-design workflow on a local or remote
+Ascend NPU Runner. At the end, you will have candidate structures, Protenix confidence results,
+and Markdown/CSV reports that explain whether each candidate passed screening.
+
+Before you begin, complete the [Quick start](../getting-started/quick-start.md), configure a task
+model, and run ScienceDiscovery with sandbox execution available (not with
+`--skip-sandbox-check`). You also need a Linux machine with compatible Ascend drivers and the CANN
+runtime, at least one Ascend NPU, and the SSH address and credentials for that machine. You will add
+and connect the Runner in this tutorial; it does not need to be configured in advance.
+
+> **Dependency for the current branch:** This tutorial uses the `antibody-design` Skill introduced
+> by [PR #115](https://github.com/openJiuwen-ai/sciencediscovery/pull/115). The
+> `feat/jiuwenswarm` branch currently still contains the older `antibody-protenix-pipeline` Skill,
+> so synchronize the implementation from PR #115 before running this tutorial. The prerequisite is
+> satisfied only when the repository contains both `skills/antibody-design/SKILL.md` and
+> `skills/antibody-design/scripts/run_sandbox_pipeline.sh`.
+
+## 1. Prepare the three scientific inputs
+
+The pipeline does not provide a default antigen or antibody framework, and it will not guess a
+binding site for you. Prepare these inputs first:
+
+| Input | Requirement |
+|---|---|
+| Target-antigen PDB | Preserve the original chain names and residue numbering |
+| Antibody-framework PDB | Used as the framework input for RFdiffusion |
+| Hotspot list | Use residue numbers with chain names, for example `[B45,B46,B49]` |
+
+Every hotspot must map to a CA atom in the target-antigen PDB. Do not enter only `45,46,49`, and do
+not use numbering from the antibody framework as antigen hotspots. The Agent validates chain names
+and residues before starting the models. If any input is missing, it should stop and ask you instead
+of inferring an epitope.
+
+## 2. Add and connect a Runner
+
+If the NPU is installed in the same Linux machine as ScienceDiscovery, use the **local Runner** and
+skip to “Select NPUs.” If the NPU is on another machine, add a remote Runner:
+
+1. Open **System configuration → Runners**, then click **Add Runner**.
+2. Select **Add SSH machine**. Enter the SSH alias or IP/host name, port, user name, and either a
+   password or private key. You can also import an existing Host entry from your local `ssh_config`.
+3. Enter a name and description that help the Agent identify the Runner, such as “Ascend 910B3
+   antibody design.”
+4. Click **Probe and add**. If the first connection reports an unknown host key, verify the
+   fingerprint with the machine administrator before clicking **Trust and continue**.
+5. On the Runner card, click **Connect Runner** and wait until its status becomes **Connected**. If
+   the remote machine does not yet have a Runner, ScienceDiscovery automatically deploys the
+   single-file SEA Runner matching the current version. The remote machine does not need Node.js,
+   and Runner traffic always travels through the SSH tunnel.
+
+![Add an SSH Runner in system configuration](../../images/antibody-design/runner-add-en.jpg)
+
+*The Add Runner screen on a real installation. Enter credentials only on the settings page; never
+put passwords or private keys in a task prompt.*
+
+The remote machine still needs Linux, a working Bubblewrap sandbox, and Ascend drivers/CANN that can
+access the NPU. These are machine-level dependencies and are not installed by the Skill. If the
+connection fails, open **Connection process** to inspect each step. After the connection succeeds,
+use **Check connection** and **Refresh resources** to verify that the Runner version, disk, CPU,
+memory, and NPU inventory are available.
+
+### 2.1 Select NPUs
+
+In the Runner's **NPU cards** section, review the detected devices. Select only devices marked as
+usable inside the sandbox, then click **Save selection**. If no NPU is reported, check the remote
+driver and `npu-smi`. If a device exists but cannot be opened inside the sandbox, release the busy
+device or fix its device-node/sandbox configuration before starting a model.
+
+The host device number is not the same as the device number inside the sandbox. For example, after
+host NPU 5 in the screenshot is selected by itself, it appears as NPU 0 inside the sandbox. The
+Skill uses zero-based sandbox logical numbers. Let the Agent use the system selection; do not
+hard-code the host device number in the pipeline configuration.
+
+![Inspect and select sandbox-usable Ascend NPUs](../../images/antibody-design/runner-npu-en.jpg)
+
+*This machine has eight detected devices, two of which can currently be opened inside the sandbox.
+Only NPU 5 is selected in the screenshot, so it is renumbered from device 0 inside the sandbox.*
+
+### 2.2 Allow the current Session to use the Runner
+
+The machine catalog in system configuration only records that the Runner exists. You must also set
+it as the default Runner for new Sessions in the Project's **Runner** settings, or select
+**Override** in the current Session's settings and enable that Runner. The selection is saved
+immediately. Preparation, validation, execution, and file transfer should all continue to use the
+same Runner ID.
+
+## 3. Allow network access for first-time resource preparation
+
+On the first run, the Skill prepares pinned model code and weights in the current Session's Runner
+Workspace. Set the sandbox network mode to **Domain allowlist** and allow:
+
+- `gitcode.com`
+- `gitee.com`
+- `tools.mindspore.cn`
+- `af3-dev.tos-cn-beijing.volces.com`
+
+The last domain provides the Protenix CCD cache. Do not switch to unrestricted networking for
+convenience. Preparation verifies pinned source revisions, file sizes, and SHA-256 hashes, and uses
+temporary `.part` files for atomic downloads. Later runs in the same Session reuse the verified
+resources. A new Session has an independent Workspace, so it must prepare the resources again; the
+current flow does not share the model cache across Sessions.
+
+## 4. Create a Project and Session
+
+Create a Project such as `antibody-design-demo`, then create a Session in it. Upload the target-
+antigen PDB and antibody-framework PDB to the current Session. In the Session settings, enable the
+`antibody-design` Skill and the Runner you added in step 2.
+
+When using a remote Runner, files uploaded to the local Session must also be synchronized to that
+Runner's Workspace. Model code and weights can remain in the remote Workspace and do not need to be
+copied back and forth.
+
+## 5. Submit the task
+
+In the input box, state the input files, hotspots, design count, and Runner clearly. For example:
+
+```text
+Use the antibody-design Skill to run one antibody design on the Ascend NPU Runner authorized for
+the current Session.
+
+Target antigen: target_antigen.pdb
+Antibody framework: antibody_framework.pdb
+Hotspots: [B45,B46,B49]
+Number of designs: 1
+Run name: antibody-demo-01
+
+Use the verified full-run parameters diffuser_t=200 and final_step=160. First check the Runner,
+NPU, and all three inputs. Find a suitable managed environment; if none exists, create one and
+install the Skill's requirements.txt. Then check the sandbox network allowlist, prepare resources
+on first use, and run preflight validation. Submit the background pipeline exactly once, retain the
+same Execution ID while monitoring it, and return the screening report, summary CSV, and candidate
+structure when it finishes.
+```
+
+Start with one candidate. This validates the complete flow while limiting runtime and storage. Do
+not shorten a run by changing only `diffuser_t` to 15: `final_step` must also satisfy
+`1 <= final_step <= diffuser_t`. For a real design run, prefer the verified `200/160` combination
+shown above.
+
+## 6. Checkpoint 1 — verify that the inputs match
+
+The Agent should first report the chains available in the target PDB and the hotspot validation
+result. Confirm three things:
+
+- The target-antigen PDB and antibody-framework PDB are not reversed.
+- Every hotspot includes a chain name and exists in the target PDB.
+- The design count, run name, and overwrite behavior match your intent.
+
+Reusing a run name with overwrite enabled deletes the existing stage outputs for that run. Do not
+approve overwriting unless you explicitly intend to rerun it.
+
+## 7. Checkpoint 2 — verify the environment and first-time preparation
+
+After the task starts, the Agent searches for and validates a managed Python environment on the
+selected Runner. If no environment satisfies `requirements.txt`, it creates or updates one and
+continues after dependency installation. You do not need to configure this environment in settings
+in advance; approve the scientific-environment change if a permission card appears. Preparation,
+validation, and the model run continue to use the same environment ID, while the actual environment
+revision is recorded for traceability.
+
+![Managed Python environment created by the Skill](../../images/antibody-design/managed-environment-en.jpg)
+
+*During a real run, the managed-environment card created by the Agent shows the environment name,
+revision, task ID, and installed dependencies. This is a checkpoint, not a request for manual
+preconfiguration.*
+
+If environment preparation fails, use the Agent's error to check whether managed scientific
+environments are enabled for the Runner, whether the package source is reachable, or whether an
+administrator must provide an offline package cache. Do not manually run `pip install` or activate
+a host virtual environment through `run_shell`.
+
+First-time resource preparation is itself a managed background Shell Execution. It clones pinned
+MindScience and RFdiffusion dependencies, applies the RFdiffusion MindSpore Tensor-to-PDB
+compatibility patch, and downloads the official RFdiffusion, ProteinMPNN, and Protenix weights.
+
+Keep the Execution ID for this preparation. A slow network or an expired wait does not mean the
+task failed. Continue reading the status and incremental logs for the same ID instead of submitting
+the preparation command again. Proceed only after the Execution reaches a completed terminal state
+with exit code 0.
+
+## 8. Checkpoint 3 — validate, then launch exactly once
+
+Before the real run, the Agent should perform a foreground validation with the same Runner, managed
+environment, and configuration. After validation passes, it submits the full pipeline exactly once
+as a background Shell Execution.
+
+Keep this new Execution ID. A normal run proceeds through these stages:
+
+1. RFdiffusion generates backbone candidates.
+2. ProteinMPNN designs candidate sequences.
+3. The candidates are converted to Protenix input.
+4. Protenix predicts structures and confidence values.
+5. Screening summarizes interface confidence and hotspot contacts.
+
+Do not launch models through the old Host NPU Broker, `nohup`, or a persistent kernel. Do not submit
+a second run because a wait ended, the network briefly failed, or status temporarily became
+`unknown`. The management channel can continue to read status and logs without taking the Workspace
+write lock.
+
+## 9. Watch it run
+
+A background task normally moves through `queued` and `running`, then reaches `completed`, `failed`,
+or `cancelled`. While it runs, check that:
+
+- The Execution ID never changes.
+- The five stages advance in order in the logs.
+- The NPU uses its sandbox logical number, not the host physical number.
+- The terminal state is `completed`, the exit code is 0, and provenance is committed.
+
+One real single-candidate run with `diffuser_t=200` and `final_step=160` finished in about 17 minutes
+20 seconds. Its four model-stage counts were **1/1/1/1**, and it produced both screening files. Your
+runtime will vary with the Runner, network, and model-cache state. Judge whether the same Execution
+completed the entire pipeline, not whether an individual wait call returned promptly.
+
+![Screening summary and artifact entry points after a real run](../../images/antibody-design/execution-session-en.jpg)
+
+*The screenshot shows a smoke validation on the same remote Ascend Runner, including the Execution
+terminal state, screening summary, and two artifact entry points. Scientific values from the smoke
+parameters are not directly comparable with the full-parameter run below.*
+
+## 10. Read the results
+
+A successful run should contain at least:
+
+```text
+antibody_pipeline/runs/<run_name>/
+  01_rfdiffusion/                 # RFdiffusion PDB
+  02_proteinmpnn/                 # ProteinMPNN PDB
+  03_protenix_input_json/         # Protenix input JSON
+  04_protenix_output/             # Protenix CIF and confidence results
+  05_screening/
+    protenix_screening_report.md
+    protenix_screening_summary.csv
+```
+
+For one design, the counts for RFdiffusion, ProteinMPNN, Protenix input, and Protenix confidence
+results should each be 1. When using a remote Runner, the Agent must pull the outputs you want to
+inspect into the local Session before declaring them as artifacts. Files in the remote Workspace do
+not automatically appear in the artifact panel on the right.
+
+In **Artifacts**, open the `.cif` file under `04_protenix_output`. On the **Preview** tab, click
+**Open the interactive Mol* viewer**. You can rotate and zoom the Protenix prediction and inspect it
+by chain directly inside ScienceDiscovery.
+
+![Inspect a Protenix-predicted structure in ScienceDiscovery](../../images/antibody-design/protenix-structure.png)
+
+*The Protenix CIF from the full-parameter run is open in ScienceDiscovery's built-in Mol* viewer.
+Chains use different colors, and you can select residues, switch representations, or measure the
+structure.*
+
+Finally, distinguish **pipeline success** from **a candidate passing screening**. For example, one
+full run returned `FAIL_low_interface_confidence`, ipTM 0.275, pTM 0.375, and hotspot contact 1/3.
+All model and screening stages succeeded, but this candidate had insufficient interface confidence:
+it is a valid negative scientific result. By contrast, an unmappable hotspot, missing stage files,
+or a non-zero Execution exit code indicates a run failure.
+
+## Troubleshooting
+
+- **Download fails:** Confirm that all four domains are in the sandbox allowlist and inspect the
+  original Execution logs. Do not switch to unofficial mirrors.
+- **No usable environment:** Confirm that managed scientific environments are enabled for the
+  Runner and approve the environment change. The Skill creates or updates an environment on the
+  same Runner, then rechecks the full `requirements.txt`.
+- **NPU unavailable:** Return to system configuration and confirm that the Runner detected the
+  device as sandbox-usable and that it is selected for the current Session.
+- **Hotspot validation fails:** Use the available chains and CA residues listed in the error to fix
+  the numbering. Do not ask the Agent to guess.
+- **Status is `unknown`:** List existing Executions and inspect logs using the original ID.
+  `unknown` does not authorize replaying the run.
+- **Screening result is FAIL:** If all five stages and both reports are complete, the candidate
+  usually failed a scientific threshold; this is not a system failure.
+
+## What you learned to check
+
+- The user must explicitly supply all three scientific inputs, especially chain-qualified hotspots.
+- The Runner, managed environment, NPU selection, and Workspace must stay consistent throughout the
+  workflow.
+- First-time preparation and the model run both use managed background Executions that are monitored
+  by their original IDs.
+- Host NPUs are renumbered from 0 inside the sandbox.
+- Pipeline completion and passing scientific screening are different outcomes; a trustworthy
+  negative result is still a result.
