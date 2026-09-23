@@ -126,7 +126,7 @@ acting.
 | `bwrap: No permissions to create new namespace` | The host forbids user namespaces. On Ubuntu 24.04 that is the AppArmor restriction the jobs clear with `sysctl kernel.apparmor_restrict_unprivileged_userns=0`; do not weaken Runner tests instead. |
 | Playwright is green with fewer tests than expected | A skip is not a pass, and the plan already says so. Read `<CI_RESULTS_DIR>/e2e/tagged/summary.json`: it names every planned journey that did not report one. |
 | `EMPTY_SELECTION`, `EMPTY_MODULE` or `COLLECTION_DRIFT` | A collection problem, not a product failure. The plan is frozen from source, so a selector that matches nothing, a module that registers no test, and a source that changed between freezing and running are all failures of the run. |
-| `PREPARATION_FAILED` | The shared runner's own setup — install, build, the four service virtualenvs, the pinned Chromium — did not complete. The message names the log to read; nothing was collected yet, so this is never a product assertion. |
+| `PREPARATION_FAILED` | The shared runner's own setup — install, build, the five service virtualenvs, the pinned Chromium — did not complete. The message names the log to read; nothing was collected yet, so this is never a product assertion. |
 | API test expects `runner_exec`, gets `undefined` | An execution never ran; check sandbox availability first. |
 | `BLOCKED: isolated E2E stack did not become healthy` | The Runner refused to serve; inspect the sandbox probe before application logs. |
 | `ERR_PNPM_OUTDATED_LOCKFILE` | `pnpm-lock.yaml` is behind a `package.json`; regenerate it with `pnpm install --lockfile-only`. |

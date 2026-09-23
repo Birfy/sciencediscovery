@@ -71,6 +71,8 @@ deleted, and each still has a way to run.
 | `services/runner/src/macos-seatbelt.test.ts` | 5 | `os:macos` | Assert the macOS Seatbelt sandbox. They are planned on a macOS/arm64 target, never on this one. |
 | `services/api/src/environment.test.ts` (macOS package spec case) | 1 | `os:macos` | Same: the case asserts macOS executable paths. |
 | `test/literature-review.spec.ts` (connector failure journey) | 1 | `status:unreviewed` | A permanent `test.fixme`: the manual paper-search form it drives was removed from the product. It needs a redesign around the MCP flow, not a skip inside a green run. |
+| `services/adapter/tests/test_gateway_live.py` | 6 | `status:external` | Talks to a live JiuwenSwarm gateway whose model is the scripted stub, one scenario per stub start. Previously `skipif(not JIUWENSWARM_GATEWAY_URL)` and a `skipif` per scenario; a selected case now fails with what to set, and scenarios are chosen with `-k`. |
+| `services/adapter/tests/test_real_llm.py` | 2 | `model:real`, `status:external` | A real model behind `/agent/runs` and a real gateway. Previously `skipif` on `REAL_LLM_*` and `JIUWENSWARM_*`. |
 
 Deselection happens before execution, not at run time. A pytest item the
 selector did not take is deselected by the plugin; a Playwright journey in the
@@ -82,6 +84,31 @@ selected ones, and the difference is exactly this list.
 
 Everything else that `ci:ut` + `ci:st` + `ci:e2e` reached is in the shared
 plan. No assertion was weakened and no test was deleted to get there.
+
+## On `feat/jiuwenswarm`
+
+This branch runs agent turns on JiuwenSwarm, behind the adapter, and the plan
+came to it with that as a fixed part of the layers rather than a choice of the
+machine: `pnpm ci:ut` wraps the shared runner in `scripts/with-jiuwenswarm.sh`,
+and the E2E slice drives `run-e2e.sh`, whose backend is JiuwenSwarm unless
+`CI_E2E_BACKEND=legacy` asks for the built-in loop. The adapter's own suite,
+which no CI step ran before, is collected as a fifth Python project.
+
+Two things here still do what the plan exists to stop, and are left for the
+change that adds the `executor` dimension from issue #126:
+
+- `services/api/src/server.test.ts`, `run-cancel.test.ts`,
+  `agent-run/jiuwenswarm-agent.test.ts` and `services/launcher`'s
+  `cli-options.test.ts` and `serve.test.ts` branch their assertions on
+  `SCIENCE_AGENT_EXECUTOR`. Selection does not read it, and the layer sets it
+  the same way everywhere, so a gated run always takes the JiuwenSwarm branch;
+  the built-in-loop branch of those assertions is exercised by nobody. With
+  `executor:native|jiuwenswarm` as a planned dimension each would be an
+  instance of its own, told its backend by the plan.
+- `run-e2e.sh` runs the JiuwenSwarm checks (`test/contract/jw-only/live.mjs`)
+  after the journeys. Their outcome is part of the layer's exit code, but they
+  are a list in a script, not planned identities, and `CI_E2E_JIUWENSWARM_CHECKS`
+  can change which of them run.
 
 ## Conditional declarations that became deterministic
 
@@ -100,7 +127,7 @@ table above).
 - **Interpreter and toolchain probes** — `pytest.importorskip`, "no host
   Python 3 interpreter", "bash unavailable", "no system CA trust store" and the
   `uv sync --extra candidates` branch are gone. The shared runner installs the
-  four service virtualenvs and the workspace build as its own preparation, so
+  five service virtualenvs and the workspace build as its own preparation, so
   their absence is a preparation failure with a log, not a quiet skip.
 - **Running as root** — `services/launcher/src/preflight.test.ts` skipped its
   "rejects a data directory it cannot write" case under uid 0, because mode

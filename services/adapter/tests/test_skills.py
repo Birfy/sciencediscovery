@@ -18,6 +18,9 @@ import shutil
 from pathlib import Path
 
 from sciencediscovery_adapter.skills import MARKER, SkillSync
+import pytest
+
+pytestmark = pytest.mark.science_tags(category='ut', os='linux', arch=('amd64', 'arm64'))
 
 URL = "ws://gw/ws"
 

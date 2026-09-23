@@ -19,6 +19,8 @@ const host = ['category:ut', 'os:linux', 'arch:amd64'];
 export const checks = [
   { id: 'check:architecture', command: ['node', 'scripts/check-architecture.mjs'], tags: host },
   { id: 'check:typecheck', command: ['pnpm', 'typecheck'], tags: host },
+  // Markdown lint and every relative link in the documentation.
+  { id: 'check:docs', command: ['pnpm', 'docs:check'], tags: host },
   // The harness decides what every other case is, so its own regression suite
   // is planned with them rather than trusted.
   { id: 'check:tagged-selftest', command: ['node', 'test/support/tagged/selftest.mjs'], tags: host },

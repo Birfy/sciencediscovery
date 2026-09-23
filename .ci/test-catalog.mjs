@@ -98,6 +98,20 @@ const sharedSlice = (slice) => ["node", "test/support/tagged/shared.mjs", "run",
 export const jiuwenSwarmWrapper = ["bash", "scripts/with-jiuwenswarm.sh"];
 
 const step = (command) => [command[0], command.slice(1)];
+
+/**
+ * The arguments a layer step runs with, given what the entry point was asked
+ * for (`pnpm ci:ut -- --profile daily --coverage`). They belong to the shared
+ * runner, which may sit behind a wrapper that only provides its environment;
+ * its own arguments always end the step, so that is where these go. A step
+ * that does not run the shared runner — the opt-in layers' install and build —
+ * gets none, since a planner flag would break it.
+ */
+export function stepArguments([command, args], forwarded) {
+  const full = [command, ...args];
+  const plans = full.some((part, index) => part === "test/support/tagged/shared.mjs" && full[index - 1] === "node");
+  return plans ? [...args, ...forwarded] : args;
+}
 const installStep = ["pnpm", ["install", "--frozen-lockfile"]];
 const buildStep = ["pnpm", ["build"]];
 

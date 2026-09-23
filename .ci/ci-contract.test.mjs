@@ -150,3 +150,14 @@ test("an entry point that drifts off the shared runner is rejected", async (t) =
   const problems = await utContractProblems(catalog, root);
   assert.match(problems.join("\n"), /script ci:e2e must run node test\/support\/tagged\/shared\.mjs run --slice e2e/);
 });
+
+test("an entry point's arguments reach the shared runner, also behind the JiuwenSwarm wrapper", () => {
+  const forwarded = ["--", "--profile", "daily", "--coverage"];
+  const [ut] = catalog.layers.ut;
+  // The wrapper starts the backend; the planner's flags still have to arrive,
+  // or a nightly would quietly run the merge-gate profile without coverage.
+  assert.deepEqual(catalog.stepArguments(ut, forwarded).slice(-4), forwarded);
+  assert.deepEqual(catalog.stepArguments(["node", ["test/support/tagged/shared.mjs", "run", "--slice", "st"]], forwarded).slice(-4), forwarded);
+  // A step that is not the planner gets none of them.
+  assert.deepEqual(catalog.stepArguments(["pnpm", ["install", "--frozen-lockfile"]], forwarded), ["install", "--frozen-lockfile"]);
+});

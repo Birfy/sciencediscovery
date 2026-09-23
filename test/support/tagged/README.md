@@ -188,7 +188,7 @@ pnpm test:list                # freeze and print the plan only; runs no test bod
 CI job schedules; their union is `pnpm test:shared` exactly. `--output DIR`
 chooses where the plan and evidence land (`.test-runs/<slice>/` by default,
 `<CI_RESULTS_DIR>/<layer>/tagged/` under CI). `pnpm test:shared` prepares what
-its slice needs first — the workspace build, the four service virtualenvs and
+its slice needs first — the workspace build, the five service virtualenvs and
 the pinned Chromium — so no separate setup step can disagree with it.
 [MIGRATION.md](MIGRATION.md) records which existing cases the plan covers and
 why each of the rest is outside it.
@@ -350,7 +350,7 @@ objective values and structural invariants checked with ordinary assertions.
 ## Integration boundary
 
 Node, pytest and Playwright are collected and executed. The Node suites, the
-four Python service suites, the mocked browser journeys and the two static
+five Python service suites, the mocked browser journeys and the two static
 command checks are all in the one plan, and
 [MIGRATION.md](MIGRATION.md) is the ledger of what that covers.
 

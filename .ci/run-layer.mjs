@@ -18,7 +18,7 @@ import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { isAbsolute, join, resolve } from "node:path";
 
-import { layers } from "./test-catalog.mjs";
+import { layers, stepArguments } from "./test-catalog.mjs";
 
 const layer = process.argv[2];
 // Anything after the layer name is forwarded to the shared runner — `--profile`
@@ -117,8 +117,7 @@ try {
   runtimeRoot = await mkdtemp(join(configuredRuntimeRoot, `${layer}-`));
   await stat(join(repositoryRoot, "package.json"));
   for (const [command, args] of layers[layer]) {
-    const plans = command === "node" && args[0] === "test/support/tagged/shared.mjs";
-    const result = await run(command, plans ? [...args, ...forwarded] : args);
+    const result = await run(command, stepArguments([command, args], forwarded));
     exitCode = result.exitCode;
     if (layer === "st-npu" && exitCode === 0 && !validNpuSmoke(result.stdout)) {
       exitCode = 1;

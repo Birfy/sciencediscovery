@@ -19,6 +19,8 @@ import pytest
 
 from sciencediscovery_adapter.events import RunEventMapper, classify_failure, parse_tool_result
 
+pytestmark = pytest.mark.science_tags(category='ut', os='linux', arch=('amd64', 'arm64'))
+
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
