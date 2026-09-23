@@ -150,6 +150,11 @@ def model_alias_base(model: str) -> str:
     return re.sub(r"[^A-Za-z0-9._-]+", "-", model).strip("-")[:48] or "model"
 
 
+# The start of a JiuwenSwarm question about one of our tools: "mcp_sci_<tool>…" or, on a later generation of the
+# shared server, "mcp_sci<ten digits>_<tool>…" (see llm_proxy._ANY_RUN_PREFIX).
+_OUR_TOOL_QUESTION = re.compile(r"\s*mcp_sci(?:[0-9a-z]{10})?_([A-Za-z0-9_.\-]+)")
+
+
 def describe_approval(request: dict[str, Any], route: LlmRoute | None) -> None:
     """Say what a JiuwenSwarm approval question is about: the tool and the arguments of the call it stopped.
 
@@ -160,8 +165,15 @@ def describe_approval(request: dict[str, Any], route: LlmRoute | None) -> None:
     descriptive, per-call text for the approval card; unlike before, it is not reused as the resource. Its own
     text stays as the summary when no call matches.
     """
-    call = route.take_call(str(request.get("summary") or "")) if route else None
+    question = str(request.get("summary") or "")
+    call = route.take_call(question) if route else None
     if call is None:
+        # No call left to match: JiuwenSwarm asked again about a call already described (measured: with parallel
+        # calls it re-asks one after the others ran). One of ours is still named by its tool, not by JiuwenSwarm's
+        # wording, so the card reads the same and a grant the user already gave for that tool still applies.
+        ours = _OUR_TOOL_QUESTION.match(question)
+        if ours:
+            request["summary"] = request["toolName"] = ours.group(1)
         return
     name, arguments = call
     shown = name.removeprefix(route.tool_prefix) if route and name.startswith(route.tool_prefix) else name
