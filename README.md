@@ -23,17 +23,24 @@ ScienceDiscovery is a locally run research workspace: an agent reads the literat
 
 ## Installation
 
-Download the build for your architecture from [release 0.2.0](https://github.com/openJiuwen-ai/sciencediscovery/releases/tag/0.2.0):
+The prepackaged binary is the shortest path to a first run. On the
+[Releases page](https://github.com/openJiuwen-ai/sciencediscovery/releases), download
+the `ScienceDiscovery-<version>-linux-x86_64` asset for x86_64 or the
+`ScienceDiscovery-<version>-linux-aarch64` asset for arm64, then run:
 
 ```bash
-curl -LO https://github.com/openJiuwen-ai/sciencediscovery/releases/download/0.2.0/ScienceDiscovery-0.2.0-linux-x86_64
-chmod +x ScienceDiscovery-0.2.0-linux-x86_64
-./ScienceDiscovery-0.2.0-linux-x86_64 serve
+chmod +x ScienceDiscovery-<version>-linux-<architecture>
+./ScienceDiscovery-<version>-linux-<architecture> serve
 ```
 
 Open the **`Open to sign in`** URL that `serve` prints. The browser stores the local service access token automatically, so there is nothing to copy. That token is distinct from a model API key, and the URL grants access to this machine's workspace — keep it private. The web interface is served at <http://127.0.0.1:4310>; the terminal window only runs the service.
 
-For arm64, use [`ScienceDiscovery-0.2.0-linux-aarch64`](https://github.com/openJiuwen-ai/sciencediscovery/releases/download/0.2.0/ScienceDiscovery-0.2.0-linux-aarch64). Bubblewrap is the only host dependency. Source mode (Linux and macOS) and Docker are covered in the [deployment guide](docs/en/getting-started/deployment.md); source mode is also how you run the agent loop on [JiuwenSwarm](docs/en/how-to/run-with-jiuwenswarm.md), this project's agent backend.
+Bubblewrap is the only host dependency. The
+[deployment guide](docs/en/getting-started/deployment.md) covers building a portable binary
+from source, local source mode for development, and Docker for advanced container
+operations. It also has [first-run help](docs/en/getting-started/deployment.md#first-run-troubleshooting-for-binary-and-local-mode)
+for the binary and local modes. Source mode is also how you run the agent loop on
+[JiuwenSwarm](docs/en/how-to/run-with-jiuwenswarm.md), this project's agent backend.
 
 ## Configure a model
 
