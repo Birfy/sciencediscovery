@@ -18,6 +18,7 @@
 ## 领域指南
 
 - [演进出一个更优解](domains/evolve-a-solution.md) — 完整跑一次程序演进搜索，并判断改进是不是真的。
+- [运行一次演进搜索](domains/run-an-evolution-search.md) — 定搜索规模、选择打分模式、看过程，并读留出结果。
 - [文献调研](domains/literature-research.md) — 以跨数据库文献调研为例，演示从启动服务、配置系统到审批与查看结果的全流程。
 
 ## 进阶设置
@@ -27,8 +28,6 @@
 - [安装 Neo4j 与配置科学记忆](advanced-setup/science-memory-setup.md) — 安装外部 Neo4j、在系统设置里开启科学记忆，并在前端图谱里查看链路。
 
 ## 运行与运维
-
-- [运行一次演进搜索](how-to/run-an-evolution-search.md) — 提出 `/evolve-design` 搜索、定分片规模、看过程，并读留出结果。
 - [在 JiuwenSwarm 上运行 agent](how-to/run-with-jiuwenswarm.md) — 可选的实验性执行器：安装固定版本的 JiuwenSwarm、带 adapter 启动服务，并了解预期行为。
 
 ## Reference（参考）
