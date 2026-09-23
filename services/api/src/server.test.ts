@@ -2700,10 +2700,17 @@ test("native MCP literature flow produces an audited cited summary", async (cont
   assert.match(stream, /PMID:12524540/);
   assert.doesNotMatch(stream, /"type":"run.failed"/);
 
-  const invocations = await jsonRequest<McpInvocation[]>(
-    `${origin}/api/sessions/${session.body.id}/mcp/invocations`,
-    { headers: authorization },
-  );
+  // Same lag as execution-runs elsewhere in this file: under JiuwenSwarm the invocation record can
+  // land a beat after the stream's own run.completed, especially under CI's concurrent workspace-packages
+  // load (gap 9, finding 13) — poll instead of assuming it is already there the instant the stream closes.
+  let invocations: { body: McpInvocation[] } = { body: [] };
+  for (let attempt = 0; attempt < 200 && invocations.body.length < 1; attempt += 1) {
+    if (attempt > 0) await new Promise((resolvePromise) => setTimeout(resolvePromise, 50));
+    invocations = await jsonRequest<McpInvocation[]>(
+      `${origin}/api/sessions/${session.body.id}/mcp/invocations`,
+      { headers: authorization },
+    );
+  }
   assert.equal(invocations.body.length, 1);
   assert.equal(invocations.body[0]?.status, "succeeded");
   assert.ok(invocations.body[0]?.normalizedResult);
