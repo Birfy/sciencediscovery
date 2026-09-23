@@ -250,7 +250,7 @@ class AgentRunner:
                     except Exception:
                         pass  # there may be no earlier registration to remove
                     else:
-                        if result.get("applied") is False:
+                        if was_registered and result.get("applied") is False:
                             raise gateway.GatewayError(
                                 f"{method} did not apply: {result.get('error') or 'MCP unregister incomplete'}"
                             )

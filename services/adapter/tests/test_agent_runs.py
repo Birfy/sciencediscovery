@@ -127,6 +127,28 @@ async def test_tools_go_to_the_one_shared_mcp_server_which_is_only_given_again_w
     assert all(run.params["mcp"] == ["sci"] for run in FakeRun.instances)
 
 
+async def test_first_shared_mcp_registration_tolerates_cleanup_with_no_live_adapter(harness):
+    app, runner, rpcs = harness
+    FakeRun.fixture = "jw_chat_mcp_direct.raw"
+    bridge = {"url": "http://legacy.test/bridge", "token": "t"}
+    tools = [{"name": "run_shell", "description": "d", "inputSchema": {"type": "object"}}]
+    original_rpc = runner.rpc
+
+    async def no_live_adapter(url, method, params=None, **kwargs):
+        result = await original_rpc(url, method, params, **kwargs)
+        if method in ("mcp.disconnect", "mcp.delete_custom"):
+            return {"applied": False, "error": "no live adapter"}
+        return result
+
+    runner.rpc = no_live_adapter
+    _, lines = await post(app, {"sessionId": "s1", "prompt": "go", "tools": tools, "bridge": bridge})
+    assert not [line for line in lines if line.get("event", {}).get("type") == "run.failed"]
+    assert len(FakeRun.instances) == 1
+    assert [method for _, method, _ in rpcs if method.startswith("mcp.")] == [
+        "mcp.disconnect", "mcp.delete_custom", "mcp.register_custom", "mcp.connect",
+    ]
+
+
 async def test_incomplete_shared_mcp_disconnect_fails_and_retries_on_the_next_run(harness):
     app, runner, rpcs = harness
     FakeRun.fixture = "jw_chat_mcp_direct.raw"
