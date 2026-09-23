@@ -86,6 +86,8 @@ test("Session title refinement uses an OpenAI-compatible model and records provi
   assert.equal(messages[0]?.role, "system");
   assert.doesNotMatch(messages[0]?.content ?? "", /no more than|characters/i);
   assert.equal((requestBody?.messages as Array<{ role: string }>)[1]?.role, "user");
+  // The message is framed as data to name, not handed over as a request to act on.
+  assert.match(messages[1]?.content ?? "", /<first_message>\n分析单细胞数据中的 TP53 表达\n<\/first_message>/);
   assert.equal(refined.title, "TP53 单细胞表达分析");
   assert.deepEqual(refined.usage, {
     cacheReadTokens: null,
