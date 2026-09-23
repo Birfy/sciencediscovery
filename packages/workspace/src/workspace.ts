@@ -425,6 +425,23 @@ function assertWorkspacePath(workspaceRoot: string, requestedPath: string): stri
   return candidate;
 }
 
+/**
+ * A Shell cwd as the Runner takes it: relative to the workspace. An absolute path that names the
+ * workspace itself (its host path, or the sandbox's `/workspace`) is made relative; the JiuwenSwarm
+ * backend tells the model the host path of its working directory, so the model passes it on. Any
+ * other absolute path is left as it is and refused by the Runner.
+ */
+export function workspaceRelativeCwd(workspaceRoot: string, cwd: string | undefined): string | undefined {
+  if (cwd === undefined || !isAbsolute(cwd)) return cwd;
+  const trimmed = cwd.replace(/\/+$/, "") || "/";
+  if (trimmed === "/workspace") return ".";
+  if (trimmed.startsWith("/workspace/")) return trimmed.slice("/workspace/".length);
+  const root = resolve(workspaceRoot);
+  const candidate = resolve(trimmed);
+  if (candidate === root) return ".";
+  return descendantPath(root, candidate) ?? cwd;
+}
+
 function descendantPath(parent: string, child: string): string | undefined {
   const path = relative(parent, child);
   if (!path || path === ".." || path.startsWith(`..${sep}`) || isAbsolute(path)) return undefined;
@@ -1310,9 +1327,10 @@ export function createWorkspaceTools(workspaceRoot: string, options: WorkspaceTo
             : shellQuote(script.path);
           code = ["/usr/bin/bash", scriptWord, ...(params.arguments ?? []).map(shellQuote)].join(" ");
         }
+        const cwd = workspaceRelativeCwd(workspaceRoot, params.cwd);
         if (options.shellExecutions) {
           let execution = await options.shellExecutions.start(code, {
-            environmentId: params.environment_id, cwd: params.cwd,
+            environmentId: params.environment_id, cwd,
           }, signal, toolCallId, params.runner_id);
           if (!params.background) execution = await options.shellExecutions.wait(execution.id, params.wait_ms ?? 10_000, signal);
           const pending = execution.state === "queued" || execution.state === "running";
@@ -1327,7 +1345,7 @@ export function createWorkspaceTools(workspaceRoot: string, options: WorkspaceTo
         }
         if (params.background || params.wait_ms !== undefined) throw new Error("Managed Shell Execution is unavailable on this runtime");
         const result = await options.executeShell!(code, "ephemeral", signal, toolCallId, params.runner_id, {
-          environmentId: params.environment_id, cwd: params.cwd,
+          environmentId: params.environment_id, cwd,
         });
         return {
           isError: result.exitCode !== 0,

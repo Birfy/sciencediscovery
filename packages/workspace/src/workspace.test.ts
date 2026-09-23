@@ -31,7 +31,7 @@ import {
   type WorkspaceFileProvenance,
 } from "@sciencediscovery/schema";
 
-import { createSubagentTools, createWorkspaceTools, filterTools, normalizeWorkspaceRelativePath } from "./workspace.js";
+import { createSubagentTools, createWorkspaceTools, filterTools, normalizeWorkspaceRelativePath, workspaceRelativeCwd } from "./workspace.js";
 import { ENVIRONMENT_TOOL_NAMES } from "./environment-tool-names.js";
 import {
   DEFAULT_SUBAGENT_MAX_TURNS,
@@ -128,6 +128,44 @@ test("run_shell selects the latest environment by ID and preserves its execution
   assert.equal(executedCode, "python -m sample");
   assert.equal(executedToolCallId, "tool-call");
   assert.match(result.content[0]?.type === "text" ? result.content[0].text : "", /stdout:\nok/);
+});
+
+test("workspaceRelativeCwd makes a cwd that names the workspace relative and leaves any other one alone", () => {
+  const root = resolve("/data/projects/p/sessions/s/workspace");
+  assert.equal(workspaceRelativeCwd(root, undefined), undefined);
+  assert.equal(workspaceRelativeCwd(root, "analysis"), "analysis");
+  assert.equal(workspaceRelativeCwd(root, root), ".");
+  assert.equal(workspaceRelativeCwd(root, `${root}/`), ".");
+  assert.equal(workspaceRelativeCwd(root, `${root}/analysis/run1`), "analysis/run1");
+  assert.equal(workspaceRelativeCwd(root, "/workspace"), ".");
+  assert.equal(workspaceRelativeCwd(root, "/workspace/analysis"), "analysis");
+  assert.equal(workspaceRelativeCwd(root, "/etc"), "/etc");
+  assert.equal(workspaceRelativeCwd(root, `${root}-other`), `${root}-other`);
+});
+
+test("run_shell runs in the workspace when the model passes the workspace's host path as cwd", async (context) => {
+  const root = resolve(process.cwd(), ".tmp", `workspace-cwd-${process.pid}-${Date.now()}`);
+  await mkdir(root, { recursive: true });
+  context.after(() => rm(root, { force: true, recursive: true }));
+  const seen: Array<string | undefined> = [];
+  const tools = createWorkspaceTools(root, {
+    enabledConnectorIds: [],
+    executePython: async () => { throw new Error("legacy tool must not run"); },
+    executeShell: async (_code, _mode, _signal, _toolCallId, _runnerId, environment): Promise<ShellExecutionResult> => {
+      seen.push(environment?.cwd);
+      return {
+        cgroupMode: "none", createdFiles: [], environmentRevisionId: "test-python", environmentVariables: {},
+        executionId: "execution", exitCode: 0, finishedAt: new Date().toISOString(), kernelId: "ephemeral:execution",
+        kernelMode: "ephemeral", language: "shell", modifiedFiles: [], networkPolicy: "none", runnerVersion: "test",
+        sandbox: "bubblewrap", startedAt: new Date().toISOString(), stderr: "", stdout: "ok", workingDirectory: "/workspace",
+      };
+    },
+  });
+  const tool = tools.find((candidate) => candidate.name === "run_shell");
+  assert.ok(tool);
+  await tool.execute("tool-call-1", { command: "true", cwd: root });
+  await tool.execute("tool-call-2", { command: "true", cwd: `${root}/analysis` });
+  assert.deepEqual(seen, [".", "analysis"]);
 });
 
 for (const selection of [
