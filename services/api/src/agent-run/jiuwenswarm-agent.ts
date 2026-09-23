@@ -268,8 +268,9 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
       scope: this.options.sessionId,
       signal: this.controller.signal,
     });
-    // With JiuwenSwarm's own todo tools the model does not also get ours.
-    const jiuwenSwarmPlans = (this.config.planning ?? "todo") === "todo" && Boolean(this.options.planStore);
+    // With JiuwenSwarm's own todo tools the model does not also get ours. Only in place of ours: a run whose Plan
+    // plugin is switched off has no update_plan, and then no planning tool of either kind.
+    const jiuwenSwarmPlans = (this.config.planning ?? "todo") === "todo" && Boolean(this.options.planStore) && tools.has("update_plan");
     if (jiuwenSwarmPlans) tools.delete("update_plan");
     // Web search and page fetching are JiuwenSwarm's own when its tools are in use.
     const allJiuwenSwarmTools = (this.config.tools ?? "jiuwenswarm") === "jiuwenswarm";
@@ -472,7 +473,14 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
         model: { model: model.model, baseUrl: modelGateway.url, apiKey: modelGateway.token, provider: "OpenAI" },
         ...(nativeToolNames.length ? { nativeTools: nativeToolNames } : {}),
         jiuwenSwarmTools: allJiuwenSwarmTools ? "all" : "listed",
-        ...(allJiuwenSwarmTools ? { hiddenJiuwenSwarmTools: [...JIUWENSWARM_HOST_TOOLS] } : {}),
+        // Offering all of JiuwenSwarm's tools still leaves out its planning and delegation when they are not this
+        // run's: a Plan plugin switched off, planning or sub-agents kept on ours. Otherwise the model plans and
+        // delegates around what the project's composition and the run's settings say.
+        ...(allJiuwenSwarmTools ? { hiddenJiuwenSwarmTools: [
+          ...JIUWENSWARM_HOST_TOOLS,
+          ...(jiuwenSwarmPlans ? [] : JIUWENSWARM_TODO_TOOLS),
+          ...(jiuwenSwarmSubagents ? [] : JIUWENSWARM_SUBAGENT_TOOLS),
+        ] } : {}),
         // JiuwenSwarm gives a tool call 30 s unless told otherwise; the run's own timeout is the limit here.
         ...(this.options.runTimeoutMs ? { toolTimeoutSeconds: Math.ceil(this.options.runTimeoutMs / 1000) } : {}),
         tools: [...tools.values()].map((tool) => ({
