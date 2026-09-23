@@ -1,17 +1,24 @@
 # ScienceDiscovery User Guide: Literature Research Case
 
-This guide follows a cross-database literature research task to demonstrate the full workflow: starting the service, configuring the system, dispatching a task, granting approvals, and reviewing results.
+This guide follows a cross-database literature research task to demonstrate the full workflow:
+starting the service, configuring the system, dispatching a task, granting approvals, and
+reviewing results.
 
 ## 1. Case overview
 
 This case is a typical cross-database literature research task: the agent must search PubMed and bioRxiv for papers published 2023–2025 that compare gene expression in adult versus pediatric liver parenchymal cells, focus on immune-related pathways, and generate a bar chart of gene-count comparison for the top 14 enriched pathways, while flagging contradictory findings across studies.
 
-A task like this normally takes researchers days of manual reading and data extraction, with low efficiency and a high risk of omissions. ScienceDiscovery orchestrates multiple tools to automate it end to end:
+A task like this normally takes researchers days of manual reading and data extraction, with low
+efficiency and a high risk of omissions. ScienceDiscovery orchestrates multiple intelligent tools
+to automate the workflow end to end:
 
 - **Retrieval**: the literature-search MCP tool builds a search strategy and queries both databases in parallel.
 - **Understanding and analysis**: a large model understands the literature, and a code tool performs pathway enrichment analysis and plotting.
-- **Traceability**: the whole execution is structured into a memory graph, forming a traceable task chain.
-- **Report writing**: the agent actively queries the real execution chain in the graph so that every statement is backed by evidence and nothing is fabricated.
+- **Traceability**: the full execution is structured in ScienceMemory as a graph, forming a
+  traceable task chain.
+- **Report writing**: when writing the final report, the Agent queries the graph's recorded
+  execution chain so that each statement is associated with supporting evidence, avoiding
+  unsupported results.
 
 ---
 
@@ -116,16 +123,24 @@ This case does not need a custom specialist; the system built-in default is suff
 
 ### 3.7 ScienceMemory (optional)
 
-The ScienceMemory module stores the session's execution and argumentation as a graph: the research goal, each task step, the code that runs, the output files, down to each cited claim in the final report and its evidence source, all persisted as nodes and edges so that "how this conclusion came to be" is click-traceable.
+ScienceMemory is optional. It stores a session's execution and argumentation as a graph: research
+goals, task steps, code, output files, and every cited claim in the final report with its evidence
+source are persisted as nodes and edges. This makes the path from a conclusion to its recorded
+evidence clickable and traceable.
 
 Enable and use it as follows:
 
-1. **Prepare Neo4j**: the memory graph requires an external Neo4j service (not packaged in the image). Under **System configuration → Memory graph**, fill in the HTTP address (default `http://127.0.0.1:7474`), username, and password.
-2. **Enable the service**: turn on the memory-graph feature in system settings. Once enabled, the Python sidecar `services/memory-graph` (loopback `:17674` only) is started and self-checks its health with the Runner on startup.
-3. **Agent-side auto-mirroring**: once enabled, execution events (MCP search, `run_shell`) are mirrored automatically into the graph to form a "task chain"; the Agent builds a "citation chain" through `declare_evidence` and `declare_claim` (plus the Node-internal `declare_artifact`) when writing the final report.
-4. **Query and view**: the Agent can call the `query_graph` tool for a case-insensitive substring search; the frontend renders `[alias]` in the report as a clickable chip that jumps to the corresponding evidence or artifact.
+1. Open **System configuration → Memory** and turn on **Enable ScienceMemory**.
+2. The default **Local files** backend needs no extra service. Choose **Neo4j server** only when a
+   Neo4j-backed graph is required, then enter its HTTP address, username, and password.
+3. Once enabled, execution events such as literature retrieval and code runs are automatically
+   mirrored into the graph as a task chain. The Agent records the citation chain that connects
+   report claims to their evidence and source literature.
+4. In the report, click a citation tag to open the corresponding evidence or artifact and follow
+   its graph relationships.
 
-When Neo4j is unreachable, this module degrades silently and does not affect the web or conversation main path.
+For Neo4j setup, storage choices, and connection status, see
+[Set up ScienceMemory](../advanced-setup/science-memory-setup.md).
 
 ![ScienceMemory settings](../../images/memory.png)
 
@@ -183,7 +198,11 @@ If you do not want to confirm manually each time a card appears, click **Always 
 
 ## 7. Review the results
 
-The agent finally outputs a report with clickable citation tags. Each tag corresponds to specific cited content, its source literature, and the execution chain, so it can be verified by clicking. Every statement in the report is linked to execution evidence in the memory graph, making conclusions traceable and re-checkable and compressing a literature survey that would normally take days into minutes.
+The Agent outputs a report with clickable citation tags. Each tag leads to its cited content,
+source literature, and execution chain, so the report's statements can be checked through their
+recorded evidence. The graph makes the result traceable and reviewable, shortening literature
+research that would normally take days to minutes while avoiding an opaque, unconstrained
+report-generation path.
 
 ### 7.1 View artifacts
 
