@@ -71,7 +71,7 @@ test("each execution captures its own provenance and inbox, including cancellati
       cgroupMode: "none", createdFiles: [], modifiedFiles: [], environmentRevisionId: null, exitCode: 0,
       startedAt: new Date().toISOString(), finishedAt: new Date().toISOString(), kernelId: "test",
       kernelMode: null, language: null, networkPolicy: "none", permissionEpochId: "test", runnerVersion: "test",
-      sandbox: "none", status: "succeeded", tool: "run_shell", toolVersion: "test", workingDirectory: "/workspace",
+      sandbox: "bubblewrap", status: "succeeded", tool: "run_shell", toolVersion: "test", workingDirectory: "/workspace",
     } satisfies ExecutionRun);
   }
   f.store.notifications.stopAgent({ sessionId: f.session.id, agentId: `subagent:${f.a.id}` });
