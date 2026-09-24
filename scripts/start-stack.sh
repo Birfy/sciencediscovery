@@ -613,6 +613,14 @@ EOF
 
 start_stack() {
   configure_endpoints
+  # Explicit local composition seam for integration fixtures; the normal entry
+  # point is unchanged. Never load this override in distributed Docker mode.
+  if [[ -n "${SCIENCE_AGENT_API_ENTRYPOINT:-}" ]]; then
+    [[ "$mode" == "local" && -f "$SCIENCE_AGENT_API_ENTRYPOINT" ]] || {
+      echo "SCIENCE_AGENT_API_ENTRYPOINT requires a local existing module" >&2; exit 2;
+    }
+    api_command=(node "$SCIENCE_AGENT_API_ENTRYPOINT")
+  fi
   trap cleanup EXIT INT TERM
 
   echo "Starting the sandbox runner daemon..." >&2
@@ -620,16 +628,17 @@ start_stack() {
   pids+=("$!")
   wait_healthy "runner" "$runner_url/health"
 
-  # Start the memory-graph sidecar unconditionally. The System Settings
-  # toggle gates whether the API actually mirrors reads/writes; the sidecar
-  # idles cheaply when the toggle is off and never blocks chat. The Neo4j HTTP
+  # Start the memory-graph sidecar when the feature is available. An explicit
+  # SCIENCE_AGENT_MEMORY_GRAPH_AVAILABLE=0 keeps isolated test stacks from
+  # starting the service. The System Settings toggle controls application
+  # reads and writes when the service is available. The Neo4j HTTP
   # URI below is the sidecar's pre-push default only — the API pushes the real
   # Neo4j HTTP URI/user/password (from System Settings → Memory graph) over the
   # loopback, Bearer-protected endpoint, so the plaintext credentials never
   # live in this process's env. Business events use the service's size-rotated
   # operational logger; uvicorn startup/shutdown output remains on the process
   # console.
-  if [[ -x "$memory_graph_python" ]]; then
+  if [[ "${SCIENCE_AGENT_MEMORY_GRAPH_AVAILABLE:-1}" != "0" && -x "$memory_graph_python" ]]; then
     echo "Starting the memory-graph service..." >&2
     SCIENCE_AGENT_DATA_DIR="$data_dir" \
     SCIENCE_AGENT_MEMORY_GRAPH_NEO4J_HTTP="${SCIENCE_AGENT_MEMORY_GRAPH_NEO4J_HTTP:-http://127.0.0.1:7474}" \
