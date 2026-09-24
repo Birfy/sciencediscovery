@@ -110,6 +110,12 @@ ScienceDiscovery 基于 [JiuwenSwarm](https://gitcode.com/openJiuwen/jiuwenswarm
 
 完整中英文导航参见 [docs/README.md](docs/README.md)；开发环境与测试命令参见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
+## 加入社区
+
+欢迎加入 ScienceDiscovery 微信交流群，与社区交流使用体验。
+
+<img src="docs/images/wechat.jpg" alt="ScienceDiscovery 微信交流群二维码" width="320">
+
 ## 许可证
 
 [Apache License 2.0](LICENSE)。
