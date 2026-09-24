@@ -160,7 +160,11 @@ test(`${fault === "disconnect" ? "LR-07 " : ""}Swarm ${fault} child failure is v
       expect(Date.parse(faultStep.createdAt)).toBeLessThan(Date.parse(healthyExecution!.finishedAt));
       expect(siblingModel.calls.some(c => c.route === "main"
         && c.toolResults?.some(r => r.includes("Healthy sibling completed")))).toBe(true);
-      await expect(siblingPage.locator(".message.assistant").last()).toContainText("Healthy parent received child");
+      // A background execution completion can append another run's identity
+      // header after this parent's response. Assert the actual visible reply,
+      // rather than treating the last assistant-styled element as message text.
+      await expect(siblingPage.locator("article.message.assistant")
+        .filter({ hasText: "Healthy parent received child" })).toBeVisible();
     }
   }
 });
