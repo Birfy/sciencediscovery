@@ -7,11 +7,12 @@ RFdiffusion → ProteinMPNN → Protenix → screening antibody-design workflow 
 Ascend NPU Runner. At the end, you will have candidate structures, Protenix confidence results,
 and Markdown/CSV reports that explain whether each candidate passed screening.
 
-Before you begin, complete the [Quick start](../getting-started/quick-start.md), configure a task
-model, and confirm that sandbox execution is available (ScienceDiscovery must not be started with
-`--skip-sandbox-check`). You also need a Linux machine with compatible Ascend drivers and the CANN
-runtime, at least one Ascend NPU, and the SSH address and credentials for that machine. You will add
-and connect the Runner in this tutorial; it does not need to be configured in advance.
+Before you begin, complete the [Quick start](../getting-started/quick-start.md) and configure a task
+model. Also confirm that ScienceDiscovery passed its sandbox checks and started with sandbox
+execution enabled; do not use `--skip-sandbox-check` when starting the service. You also need a
+Linux machine with compatible Ascend drivers and the CANN runtime, at least one Ascend NPU, and the
+SSH address and credentials for that machine. You will add and connect the Runner in this tutorial;
+it does not need to be configured in advance.
 
 ## 1. Create a Project and Session
 
@@ -19,9 +20,10 @@ Create a Project such as `antibody-design-demo`, then create a Session in it. Th
 input upload, and task submission in the rest of this tutorial all use this Session, so keep it
 open.
 
-When using a remote Runner, files uploaded to the local Session must also be synchronized to that
-Runner's Workspace. Model code and weights can remain in the remote Workspace and do not need to be
-copied back and forth.
+When using a remote Runner, the Agent automatically synchronizes missing input PDBs to its
+Workspace. On the first run, the Skill also prepares the pinned model code and downloads and
+verifies the required checkpoints in that same Workspace. You do not need to download or copy model
+files manually.
 
 ## 2. Prepare the three scientific inputs
 
@@ -211,12 +213,13 @@ or `cancelled`. While it runs, check that:
 - The NPU uses its sandbox logical number, not the host physical number.
 - The terminal state is `completed`, the exit code is 0, and provenance is committed.
 
-One real single-candidate run with `diffuser_t=200` and `final_step=160` finished in about 17 minutes
-20 seconds. Its four model-stage counts were **1/1/1/1**, and it produced both screening files. Your
-runtime will vary with the Runner, network, and model-cache state. Judge whether the same Execution
-completed the entire pipeline, not whether an individual wait call returned promptly. Treat this as
-a single-candidate timing reference only. The 2 candidates used by this tutorial finish sequentially
-or in parallel within the same Execution, depending on the number of available NPUs.
+The screenshot below comes from a smoke test that explicitly set `num_designs=1` to verify the full
+workflow. With `diffuser_t=200` and `final_step=160`, it finished in about 17 minutes 20 seconds, its
+four model-stage counts were **1/1/1/1**, and it produced both screening files. This is not the
+default design count in the tutorial prompt. The tutorial generates 2 candidates by default, for
+which the expected counts are **2/2/2/2**. Runtime varies with candidate count, available NPUs,
+network, and model-cache state. Judge whether the same Execution completed the entire pipeline, not
+whether an individual wait call returned promptly.
 
 ![Screening summary and artifact entry points after a real run](../../images/antibody-design/execution-session-en.jpg)
 

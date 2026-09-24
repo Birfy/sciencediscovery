@@ -6,18 +6,18 @@
 RFdiffusion → ProteinMPNN → Protenix → screening 抗体设计。结束时你会得到候选结构、
 Protenix 置信度结果，以及一份说明候选是否通过筛选的 Markdown/CSV 报告。
 
-开始之前：先完成[快速开始](../getting-started/quick-start.md)，配置任务模型，并确认沙箱执行可用的服务
-（不是以 `--skip-sandbox-check` 启动的服务）。你还需要一台装有兼容 Ascend 驱动和 CANN 运行时的 Linux
-机器、至少一张 Ascend NPU，以及登录这台机器的 SSH 地址与凭据。Runner 会在下面的教程步骤中添加和连接，
-不要求事先配置好。
+开始之前：先完成[快速开始](../getting-started/quick-start.md)并配置任务模型；同时确认 ScienceDiscovery
+已经通过沙箱检查并启用了沙箱执行，启动服务时不要使用 `--skip-sandbox-check`。你还需要一台装有兼容
+Ascend 驱动和 CANN 运行时的 Linux 机器、至少一张 Ascend NPU，以及登录这台机器的 SSH 地址与凭据。
+Runner 会在下面的教程步骤中添加和连接，不要求事先配置好。
 
 ## 1. 创建 Project 与 Session
 
 新建一个 Project，例如 `antibody-design-demo`，再在其中创建一个 Session。本教程后续的 Runner 配置、
 输入文件上传和任务下发都以这个 Session 为准，之后保持当前 Session 打开。
 
-如果使用远程 Runner，上传到本地 Session 的文件还需要同步到该 Runner 的 Workspace。模型代码和权重
-留在远程 Workspace 中即可，不需要来回复制。
+使用远程 Runner 时，Agent 会把缺失的输入 PDB 自动同步到远程 Workspace。首次运行时，Skill 还会在同一
+Workspace 中自动准备固定版本的模型代码，下载并校验所需权重；用户不需要手动下载或复制模型文件。
 
 ## 2. 准备三个科学输入
 
@@ -175,10 +175,11 @@ Protenix 的官方权重。
 - NPU 是否使用沙箱逻辑编号，而不是宿主机物理编号。
 - 终态是否为 `completed`，退出码是否为 0，provenance 是否已经提交。
 
-一条真实的单候选运行使用 `diffuser_t=200`、`final_step=160`，约 17 分 20 秒完成，四类模型阶段计数为
-**1/1/1/1**，并生成了两份 screening 文件。你的耗时会随 Runner、网络和模型缓存状态变化；需要判断的是
-同一条 Execution 是否完整走完，而不是某一次等待有没有及时返回。这组数据只用于提供单候选耗时参考；
-本教程默认的 2 个候选会在同一条 Execution 中依次或并行完成，具体总耗时取决于可用 NPU 数量。
+下面截图对应一次用于验证完整链路的 smoke test，因此明确设置了 `num_designs=1`。它使用
+`diffuser_t=200`、`final_step=160`，约 17 分 20 秒完成，四类模型阶段计数为 **1/1/1/1**，并生成了两份
+screening 文件；这不是本教程提示词中的默认设计数量。本教程默认生成 2 个候选，正常应看到
+**2/2/2/2**。你的耗时会随候选数量、可用 NPU、网络和模型缓存状态变化；需要判断的是同一条 Execution
+是否完整走完，而不是某一次等待有没有及时返回。
 
 ![实机运行结束后的筛选摘要与产物入口](../../images/antibody-design/execution-session.png)
 
