@@ -1939,7 +1939,11 @@ export function createSubagentTools(options: Pick<WorkspaceToolOptions, "runSuba
     const taskParameters = Type.Object({
       brief: Type.Optional(briefParameters),
       description: Type.String({ maxLength: 80, minLength: 1 }),
-      inputPaths: Type.Optional(Type.Array(Type.String({ maxLength: 2_000, minLength: 1 }), { maxItems: 50 })),
+      inputPaths: Type.Optional(Type.Array(Type.String({
+        description: "Parent workspace file to deliver to the subagent. Include every file the prompt asks the subagent to read; relative paths and /workspace/... paths are accepted.",
+        maxLength: 2_000,
+        minLength: 1,
+      }), { maxItems: 50 })),
       max_turns: Type.Optional(Type.Integer({
         default: DEFAULT_SUBAGENT_MAX_TURNS,
         description: "Optional model-turn budget for this subagent. Increase it for unusually deep delegated work.",
@@ -1962,7 +1966,7 @@ export function createSubagentTools(options: Pick<WorkspaceToolOptions, "runSuba
     });
     const task: AgentTool<typeof taskParameters> = {
       description: [
-        "Run one focused task in a subagent. Call this tool multiple times in the same turn when independent tasks should run concurrently. For unusually deep tasks, pass max_turns and timeout_seconds explicitly. Prefer passing brief for Brief v1: goal, constraints, outputRequirements, collaborationRules, optional outputJsonSchema, and version. When outputJsonSchema is present, instruct the subagent to finish with JSON matching that schema.",
+        "Run one focused task in a subagent. The subagent has an independent workspace: set inputPaths to every parent workspace file it must read, including files named in prompt. Call this tool multiple times in the same turn when independent tasks should run concurrently. For unusually deep tasks, pass max_turns and timeout_seconds explicitly. Prefer passing brief for Brief v1: goal, constraints, outputRequirements, collaborationRules, optional outputJsonSchema, and version. When outputJsonSchema is present, instruct the subagent to finish with JSON matching that schema.",
         specialistSummary ? `Choose specialistId by semantic match against specialist descriptions. Set specialistId so the specialist's instructions, skills, and connectors are applied. Available specialists: ${specialistSummary}` : "",
       ].filter(Boolean).join(" "),
       execute: async (toolCallId, params, signal) => {
