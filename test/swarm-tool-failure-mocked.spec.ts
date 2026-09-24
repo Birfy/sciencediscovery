@@ -84,6 +84,16 @@ test(`${fault === "disconnect" ? "LR-07 " : ""}Swarm ${fault} child failure is v
         return children.some((child: { steps: Array<{ toolName?: string; status?: string }> }) =>
           child.steps.some(step => step.toolName === "run_shell" && step.status === "running"));
       }, { timeout: 90_000 }).toBe(true);
+      // A child's running tool step is emitted before the runner accepts the
+      // execution. Wait for the actual shell to start before injecting a fault
+      // that must overlap it (the timestamps below verify that overlap).
+      await expect.poll(async () => {
+        const response = await page.request.get(`${apiBaseUrl()}/api/sessions/${sibling!.session.id}/execution-runs`, { headers: authorizationHeader() });
+        expect(response.ok()).toBe(true);
+        const executions = await response.json() as Array<{ tool: string; status: string; startedAt?: string }>;
+        return executions.some(execution => execution.tool === "run_shell"
+          && execution.status === "running" && Boolean(execution.startedAt));
+      }, { message: "Healthy sibling shell must start before injecting the transport fault", timeout: 90_000 }).toBe(true);
       releaseFaultTool();
       return await verifyRun(faultRun);
     }
