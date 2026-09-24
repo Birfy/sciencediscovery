@@ -34,6 +34,10 @@ ARG UV_IMAGE=ghcr.io/astral-sh/uv:0.9.26
 ARG PNPM_VERSION=11.1.2
 # Matches services/gateway/.python-version; the PDF worker (>=3.11) reuses it.
 ARG PYTHON_VERSION=3.12
+# Large Python wheels in the JiuwenSwarm dependency graph can exceed uv's
+# 30-second default on slower links. This affects builds only and remains
+# overridable (`--build-arg UV_HTTP_TIMEOUT=...`).
+ARG UV_HTTP_TIMEOUT=300
 # Keep in step with scripts/jiuwenswarm.sh and scripts/binary-release/build-payload.sh,
 # which install the same pinned tag for source mode and the release binary.
 ARG JIUWENSWARM_TAG=workswarm0.2.6
@@ -88,6 +92,8 @@ FROM ${NODE_BUILD_IMAGE} AS builder
 ARG PNPM_VERSION
 ARG PYTHON_VERSION
 ARG JIUWENSWARM_TAG
+ARG UV_HTTP_TIMEOUT
+ENV UV_HTTP_TIMEOUT=${UV_HTTP_TIMEOUT}
 
 COPY --from=uv /uv /usr/local/bin/uv
 
