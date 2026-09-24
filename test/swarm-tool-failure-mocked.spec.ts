@@ -1,6 +1,8 @@
 // Copyright (C) 2026-2026 Huawei Technologies Co., Ltd
 // SPDX-License-Identifier: Apache-2.0
 import { expect } from "@playwright/test";
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import { blockNonLocalRequests, test } from "./helpers/e2e.ts";
 import { apiBaseUrl, authorizationHeader, browserStorageState } from "./e2e-auth.js";
 import { cleanupJourney, createProjectAndSession, openProjectSession, scriptedModel,
@@ -61,12 +63,14 @@ test(`${fault === "disconnect" ? "LR-07 " : ""}Swarm ${fault} child failure is v
         { message: "Fault child must reach its gated tool call", timeout: 120_000 }).toBe(true);
       // Keep another real child in a long-running platform request while the
       // first child's HTTP request fails on their shared MCP connection.
+      const dataRoot = process.env.SCIENCE_DISCOVERY_DATA_DIR;
+      expect(dataRoot, "Transport injection requires this isolated stack's data directory").toBeTruthy();
       siblingModel = await scriptedModel([
         { tool: "task", arguments: { description: "Unrelated long-running child", subagent_type: "general-purpose",
           prompt: "Complete the healthy local probe.", max_turns: 4, timeout_seconds: 180 } },
         { text: "Healthy parent received child." },
       ], [
-        { tool: "run_shell", arguments: { command: "sleep 60; printf 'HEALTHY-SIBLING-COMPLETED\\n'", wait_ms: 30_000 } },
+        { tool: "run_shell", arguments: { command: "printf 'started' > healthy-sibling-started.txt; sleep 60; printf 'HEALTHY-SIBLING-COMPLETED\\n'", wait_ms: 30_000 } },
         { text: "Healthy sibling completed.", delayMs: 45_000 },
       ], { captureContext: true });
       sibling = await createProjectAndSession(page, { approvalMode: "always_allow",
@@ -84,19 +88,23 @@ test(`${fault === "disconnect" ? "LR-07 " : ""}Swarm ${fault} child failure is v
         return children.some((child: { steps: Array<{ toolName?: string; status?: string }> }) =>
           child.steps.some(step => step.toolName === "run_shell" && step.status === "running"));
       }, { timeout: 90_000 }).toBe(true);
-      // A child's running tool step is emitted before the runner accepts the
-      // execution. Wait for the actual shell to start before injecting a fault
-      // that must overlap it (the timestamps below verify that overlap).
+      // A running tool step precedes shell startup. Use a marker written by
+      // the actual sandbox process, before its sleep, as the fixture barrier.
+      // Invocation history is terminal-only and runtime-status does not list
+      // managed background shells. The timestamps below still prove overlap.
       await expect.poll(async () => {
-        const response = await page.request.get(`${apiBaseUrl()}/api/runtime-status`, { headers: authorizationHeader() });
+        const response = await page.request.get(`${apiBaseUrl()}/api/sessions/${sibling!.session.id}/subagents`, { headers: authorizationHeader() });
         expect(response.ok()).toBe(true);
-        // execution-runs contains completed invocation records; runtime-status
-        // reads the runner's live queue, including the shell still in flight.
-        const runtime = await response.json() as { runner: { activeExecutions: Array<{
-          sessionId: string; language: string; status: string; startedAt?: string;
-        }> } };
-        return runtime.runner.activeExecutions.some(execution => execution.sessionId === sibling!.session.id
-          && execution.language === "shell" && execution.status === "running" && Boolean(execution.startedAt));
+        const children = await response.json();
+        const workspaceId = children[0]?.handoff?.workspaceId;
+        if (!workspaceId) return false;
+        const marker = resolve(dataRoot!, "projects", sibling!.project.id, "sessions", sibling!.session.id,
+          "agent-workspaces", workspaceId, "healthy-sibling-started.txt");
+        try { return await readFile(marker, "utf8") === "started"; }
+        catch (error) {
+          if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+          throw error;
+        }
       }, { message: "Healthy sibling shell must start before injecting the transport fault", timeout: 90_000 }).toBe(true);
       releaseFaultTool();
       return await verifyRun(faultRun);
