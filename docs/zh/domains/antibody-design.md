@@ -240,4 +240,4 @@ Mol* viewer**，就能直接在 ScienceDiscovery 中旋转、缩放并按链查�
 ## 贡献者与反馈
 
 - 贡献者：[Yuheng Wang（@wyhohyw）](https://github.com/wyhohyw)
-- 邮箱：[wangyuheng16@huawei.com](mailto:wangyuheng16@huawei.com)
+- 邮箱：[wyhohyw@gmail.com](mailto:wyhohyw@gmail.com)

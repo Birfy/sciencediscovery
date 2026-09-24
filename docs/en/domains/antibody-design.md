@@ -295,4 +295,4 @@ Execution exit code indicates a run failure.
 ## Contributor and feedback
 
 - Contributor: [Yuheng Wang (@wyhohyw)](https://github.com/wyhohyw)
-- Email: [wangyuheng16@huawei.com](mailto:wangyuheng16@huawei.com)
+- Email: [wyhohyw@gmail.com](mailto:wyhohyw@gmail.com)
