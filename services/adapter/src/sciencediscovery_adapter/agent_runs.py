@@ -333,14 +333,25 @@ class AgentRunner:
 
     async def _retire(self, server: str) -> None:
         self._server_runs.pop(server, None)
-        for key in [key for key in self._tool_approvals if key[0] == server]:
-            self._tool_approvals.pop(key, None)
+        retired_approvals = [key for key in self._tool_approvals if key[0] == server]
         self._server_tools.pop(server, None)
         for method in ("mcp.disconnect", "mcp.delete_custom"):
             try:
                 await self.rpc(self.settings.mgmt_url, method, {"name": server})
             except Exception:
                 pass
+        # Swarm persists these per-generation names in its permissions config.
+        # Dropping only our cache leaves an ever-growing config that every new
+        # tool registration has to parse and rewrite. Retire only this inactive
+        # generation's rules; live generations and unrelated policies stay put.
+        for key in retired_approvals:
+            try:
+                await self.rpc(self.settings.mgmt_url, "permissions.tools.delete", {
+                    "tool": f"mcp_{server}_{key[1]}",
+                })
+            except Exception:
+                logger.warning("Could not retire an inactive MCP tool permission")
+            self._tool_approvals.pop(key, None)
 
     def register_approval(self, event: dict[str, Any], run: Any, mapper: RunEventMapper) -> None:
         gateway_id = event["request"]["id"]
@@ -388,6 +399,7 @@ class AgentRunner:
     async def _apply_approvals(self, tools: list[dict[str, Any]], server: str) -> None:
         """JiuwenSwarm's permission engine decides every call (ScienceDiscovery's approval layer allows what it
         lets through). Switched on once; a tool it has not seen yet gets the level the API asked for."""
+        started = asyncio.get_running_loop().time()
         if not self._permissions_on:
             await self.rpc(self.settings.mgmt_url, "config.set", {"permissions_enabled": True})
             self._permissions_on = True
@@ -399,6 +411,8 @@ class AgentRunner:
                 "tool": f"mcp_{server}_{tool['name']}", "level": tool.get("approval") or "allow",
             })
             self._tool_approvals[key] = tool.get("approval") or "allow"
+        trace_boundary("mcp.permissions.ready", tool_count=len(tools),
+                       elapsed_ms=round((asyncio.get_running_loop().time() - started) * 1000))
 
     async def stream(self, request: AgentRunRequest) -> AsyncGenerator[str, None]:
         name = SERVER_NAME
@@ -434,6 +448,7 @@ class AgentRunner:
                 # Before the model route: the server's name is in every tool name the model and JiuwenSwarm use.
                 tools = [{**t.model_dump(), "inputSchema": relax_schema(t.inputSchema)} for t in request.tools]
                 name = await self.ensure_shared_tools(tools, request.toolTimeoutSeconds or self.settings.tool_timeout_s)
+                trace_boundary("run.tools.registered", **trace_context)
                 server_held = True
                 mapper.mcp_prefixes = (f"mcp_{name}_",)
                 params["mcp"] = [name]
@@ -461,6 +476,7 @@ class AgentRunner:
                     "api_key": llm_token, "client_provider": "OpenAI",
                 }
             async with self.chat_run(self.settings.gateway_url, params) as run:
+                trace_boundary("run.gateway.opened", **trace_context)
                 try:
                     async for frame in run:
                         for event in mapper.feed(frame):

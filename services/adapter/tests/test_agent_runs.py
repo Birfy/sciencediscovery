@@ -288,6 +288,54 @@ async def test_new_generations_discard_tools_from_finished_runs(harness):
     assert len(approvals) == 20
 
 
+async def test_child_skill_subset_reuses_parent_mcp_generation_and_permissions(harness):
+    _, runner, rpcs = harness
+
+    def skill_tool(ids):
+        choices = [{"const": value, "type": "string"} for value in ids]
+        return {"name": "read_skill", "inputSchema": {"type": "object", "properties": {
+            "skillId": choices[0] if len(choices) == 1 else {"anyOf": choices},
+        }}}
+
+    parent_tool = skill_tool(["literature", "planning", "coding"])
+    parent = await runner.ensure_shared_tools([parent_tool], 60)
+    calls_before_child = len(rpcs)
+    for ids in (["literature", "coding"], ["literature"]):
+        child = await runner.ensure_shared_tools([skill_tool(ids)], 10)
+        assert child == parent
+        assert len(rpcs) == calls_before_child, "Equivalent skill schemas must not re-register tools or permissions"
+        await runner.release_shared_tools(child)
+    assert parent_tool["inputSchema"]["properties"]["skillId"]["anyOf"][0]["const"] == "literature"
+    await runner.release_shared_tools(parent)
+
+
+async def test_retired_generations_remove_persisted_permissions_without_touching_live_rules(harness):
+    _, runner, _ = harness
+    persisted = {"unrelated_user_tool": "ask"}
+    original_rpc = runner.rpc
+
+    async def track_permissions(url, method, params=None, **kwargs):
+        result = await original_rpc(url, method, params, **kwargs)
+        if method == "permissions.tools.update":
+            persisted[params["tool"]] = params["level"]
+        elif method == "permissions.tools.delete":
+            del persisted[params["tool"]]
+        return result
+
+    runner.rpc = track_permissions
+    first = await runner.ensure_shared_tools([{"name": "parent", "approval": "ask"}], 60)
+    second = await runner.ensure_shared_tools([{"name": "child"}], 60)
+    assert persisted[f"mcp_{first}_parent"] == "ask"
+    await runner.release_shared_tools(first)
+    assert f"mcp_{first}_parent" not in persisted
+    assert persisted[f"mcp_{second}_child"] == "allow"
+    await runner.release_shared_tools(second)
+    for index in range(20):
+        server = await runner.ensure_shared_tools([{"name": f"next_{index}"}], 60)
+        await runner.release_shared_tools(server)
+        assert persisted == {"unrelated_user_tool": "ask", f"mcp_{server}_next_{index}": "allow"}
+
+
 async def test_tools_without_a_bridge_fail_the_run_cleanly(harness):
     app, _, rpcs = harness
     _, lines = await post(app, {"sessionId": "s1", "prompt": "go", "tools": [{"name": "x"}]})
