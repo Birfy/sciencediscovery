@@ -1,7 +1,7 @@
 // Copyright (C) 2026-2026 Huawei Technologies Co., Ltd
 // SPDX-License-Identifier: Apache-2.0
 import { expect } from "@playwright/test";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { blockNonLocalRequests, test } from "./helpers/e2e.ts";
 import { apiBaseUrl, authorizationHeader, browserStorageState } from "./e2e-auth.js";
@@ -52,6 +52,7 @@ test(`${fault === "disconnect" ? "LR-07 " : ""}Swarm ${fault} child failure is v
   let siblingContext: Awaited<ReturnType<typeof browser.newContext>> | undefined;
   let siblingPage: typeof page | undefined;
   let siblingRun: { id: string } | undefined;
+  let siblingWorkspace: string | undefined;
   try {
     fixture = await createProjectAndSession(page, { approvalMode: "always_allow",
       model: { apiToken: stub.apiToken, baseUrl: stub.baseUrl, model: stub.model, name: `Swarm error fixture ${Date.now()}` },
@@ -70,7 +71,7 @@ test(`${fault === "disconnect" ? "LR-07 " : ""}Swarm ${fault} child failure is v
           prompt: "Complete the healthy local probe.", max_turns: 4, timeout_seconds: 180 } },
         { text: "Healthy parent received child." },
       ], [
-        { tool: "run_shell", arguments: { command: "printf 'started' > healthy-sibling-started.txt; sleep 60; printf 'HEALTHY-SIBLING-COMPLETED\\n'", wait_ms: 30_000 } },
+        { tool: "run_shell", arguments: { command: "printf 'started' > healthy-sibling-started.txt; for i in $(seq 1 1200); do if test -f healthy-sibling-release.txt; then printf 'finished' > healthy-sibling-finished.txt; printf 'HEALTHY-SIBLING-COMPLETED\\n'; exit 0; fi; sleep 0.1; done; exit 1", wait_ms: 30_000 } },
         { text: "Healthy sibling completed.", delayMs: 45_000 },
       ], { captureContext: true });
       sibling = await createProjectAndSession(page, { approvalMode: "always_allow",
@@ -90,16 +91,18 @@ test(`${fault === "disconnect" ? "LR-07 " : ""}Swarm ${fault} child failure is v
       }, { timeout: 90_000 }).toBe(true);
       // A running tool step precedes shell startup. Use a marker written by
       // the actual sandbox process, before its sleep, as the fixture barrier.
-      // Invocation history is terminal-only and runtime-status does not list
-      // managed background shells. The timestamps below still prove overlap.
+      // Hold the actual shell until the fault is persisted. Runner timestamps
+      // are clock-adjusted using second-resolution HTTP Date headers, so they
+      // cannot prove millisecond ordering against API tool-step timestamps.
       await expect.poll(async () => {
         const response = await page.request.get(`${apiBaseUrl()}/api/sessions/${sibling!.session.id}/subagents`, { headers: authorizationHeader() });
         expect(response.ok()).toBe(true);
         const children = await response.json();
         const workspaceId = children[0]?.handoff?.workspaceId;
         if (!workspaceId) return false;
-        const marker = resolve(dataRoot!, "projects", sibling!.project.id, "sessions", sibling!.session.id,
-          "agent-workspaces", workspaceId, "healthy-sibling-started.txt");
+        siblingWorkspace = resolve(dataRoot!, "projects", sibling!.project.id, "sessions", sibling!.session.id,
+          "agent-workspaces", workspaceId);
+        const marker = resolve(siblingWorkspace, "healthy-sibling-started.txt");
         try { return await readFile(marker, "utf8") === "started"; }
         catch (error) {
           if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
@@ -107,6 +110,16 @@ test(`${fault === "disconnect" ? "LR-07 " : ""}Swarm ${fault} child failure is v
         }
       }, { message: "Healthy sibling shell must start before injecting the transport fault", timeout: 90_000 }).toBe(true);
       releaseFaultTool();
+      await expect.poll(async () => {
+        const response = await page.request.get(`${apiBaseUrl()}/api/sessions/${fixture!.session.id}/subagents`, { headers: authorizationHeader() });
+        expect(response.ok()).toBe(true);
+        const children = await response.json();
+        return children[0]?.steps.some((step: { toolName?: string; status?: string; content?: string }) =>
+          step.toolName === "run_shell" && step.status === "failed" && expectedError.test(step.content ?? ""));
+      }, { message: "Fault must be persisted while the healthy shell is held", timeout: 60_000 }).toBe(true);
+      await expect(readFile(resolve(siblingWorkspace!, "healthy-sibling-finished.txt"), "utf8"))
+        .rejects.toMatchObject({ code: "ENOENT" });
+      await writeFile(resolve(siblingWorkspace!, "healthy-sibling-release.txt"), "release");
       return await verifyRun(faultRun);
     }
     const run = await sendUserMessage(page, fixture.session.id, "Delegate the local validation/recovery probe.");
@@ -178,8 +191,9 @@ test(`${fault === "disconnect" ? "LR-07 " : ""}Swarm ${fault} child failure is v
       const faultStep = children[0].steps.find((step: { toolName?: string; status?: string }) =>
         step.toolName === "run_shell" && step.status === "failed");
       expect(faultStep, "The injected fault must be persisted in the child trace").toBeDefined();
-      expect(Date.parse(healthyExecution!.startedAt)).toBeLessThan(Date.parse(faultStep.createdAt));
-      expect(Date.parse(faultStep.createdAt)).toBeLessThan(Date.parse(healthyExecution!.finishedAt));
+      // The release file was written only after the persisted fault above.
+      // Success and the completion marker prove the same held shell survived.
+      expect(await readFile(resolve(siblingWorkspace!, "healthy-sibling-finished.txt"), "utf8")).toBe("finished");
       expect(siblingModel.calls.some(c => c.route === "main"
         && c.toolResults?.some(r => r.includes("Healthy sibling completed")))).toBe(true);
       // A background execution completion can append another run's identity
