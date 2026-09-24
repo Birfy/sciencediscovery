@@ -48,7 +48,7 @@ export interface ModelGateway {
    */
   restore<T extends Record<string, unknown>>(message: T): T;
   /** The last model turn served, for what the run's end has to say about it. */
-  lastTurn(): { text: string; toolCalls: number; truncated: boolean } | undefined;
+  lastTurn(): { text: string; toolCalls: number; truncated: boolean; recoveryAttempts?: number } | undefined;
   close(): Promise<void>;
 }
 
@@ -113,6 +113,7 @@ const warnTrajectory = (error: unknown) => {
   console.warn(`[jiuwenswarm] could not record the model call in the trajectory: ${error instanceof Error ? error.message : String(error)}`);
 };
 
+const WITHHELD_TOOLS = "[output_limit:tool_calls_withheld] No tools from this response were executed.";
 const finishReason = (turn: ModelTurn) => turn.truncated ? "length" : turn.toolCalls.length ? "tool_calls" : "stop";
 const toolCallsOf = (turn: ModelTurn) => turn.toolCalls.map((call, index) => ({
   index, id: call.id, type: "function", function: { name: call.name, arguments: JSON.stringify(call.args) },
@@ -158,9 +159,17 @@ export async function startModelGateway(
   const token = randomUUID();
   const produced = new Map<string, Record<string, unknown>>();
   let last: ReturnType<ModelGateway["lastTurn"]>;
-  const remember = (turn: ModelTurn) => {
+  const remember = (turn: ModelTurn, body: ChatRequest) => {
     produced.set(turnKey(turn.assistantMessage), turn.assistantMessage);
-    last = { text: textOf(turn.assistantMessage.content), toolCalls: turn.toolCalls.length, truncated: turn.truncated === true };
+    const latest = body.messages?.at(-1);
+    const recovery = latest?.role === "user" && typeof latest.content === "string"
+      ? latest.content.match(/^\[Output limit recovery ([12])\/2;/) : null;
+    last = { text: textOf(turn.assistantMessage.content), toolCalls: turn.toolCalls.length,
+      truncated: turn.truncated === true, ...(recovery ? { recoveryAttempts: Number(recovery[1]) } : {}) };
+    if (turn.truncated) console.warn(`[output-recovery] ${JSON.stringify({ event: "model.output_limit",
+      kind: turn.toolCalls.length ? "tool_arguments" : last.text.trim() ? "partial_answer" : "reasoning_only",
+      maxTokens: policy.maxTokens, recoveryAttempts: last.recoveryAttempts ?? 0,
+      withheldToolCount: turn.toolCalls.length, usage: turn.usage })}`);
   };
   const restore: ModelGateway["restore"] = (message) => {
     const own = message.role === "assistant" ? produced.get(turnKey(message)) : undefined;
@@ -215,7 +224,7 @@ export async function startModelGateway(
       `data: ${JSON.stringify({ id, object: "chat.completion.chunk", created: Math.floor(Date.now() / 1000), model: endpoint.model, choices: [{ index: 0, delta, finish_reason: finish }], ...extra })}\n\n`;
     try {
       signal.throwIfAborted();
-      if (!auxiliary) lifecycle?.beforeTurn?.();
+      if (!auxiliary) { last = undefined; lifecycle?.beforeTurn?.(); }
       // Admission listeners can abort the run when its turn budget is spent.
       signal.throwIfAborted();
       if (body.stream) {
@@ -227,8 +236,6 @@ export async function startModelGateway(
           response.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
           response.write(chunk({ role: "assistant" }));
         };
-        const streamedIds = new Set<string>();
-        const toolIndexes = new Set<number>();
         const writeDelta = (delta: Record<string, unknown>) => {
           controller.signal.throwIfAborted();
           progress();
@@ -245,25 +252,26 @@ export async function startModelGateway(
           onTextDelta: (delta) => writeDelta({ content: delta }),
           onThinkingDelta: (delta) => writeDelta({ reasoning_content: delta }),
           onToolCallDelta: (delta) => {
-            if (delta.id) streamedIds.add(delta.id);
-            toolIndexes.add(delta.index);
+            // Keep tool arguments behind the finish boundary: even valid JSON
+            // can be semantically incomplete when the response hits its cap.
+            controller.signal.throwIfAborted();
             toolArgumentChars += delta.arguments.length;
-            writeDelta({ tool_calls: [{ index: delta.index, ...(delta.id ? { id: delta.id, type: "function" } : {}),
-              function: { ...(delta.name ? { name: delta.name } : {}), arguments: delta.arguments } }] });
+            progress();
+            start();
+            response.write(": model-progress\n\n");
           },
         });
         controller.signal.throwIfAborted();
-        if (turn.toolCalls.some((call) => call.argsParseError)) {
-          await recordInvalidArguments(turn, id);
+        await recordInvalidArguments(turn, id);
+        if (!turn.truncated && turn.toolCalls.some((call) => call.argsParseError)) {
           throw new Error("Model returned invalid tool arguments");
         }
         start();
-        if (!auxiliary) remember(turn);
-        // Compatibility with streamers/providers that return only completed calls.
-        // Never append the full arguments again after incremental delivery.
-        let fallbackIndex = toolIndexes.size ? Math.max(...toolIndexes) + 1 : 0;
-        for (const call of toolCallsOf(turn)) {
-          if (!streamedIds.has(call.id)) writeDelta({ tool_calls: [{ ...call, index: fallbackIndex++ }] });
+        if (!auxiliary) remember(turn, body);
+        if (turn.truncated) {
+          if (turn.toolCalls.length) writeDelta({ content: WITHHELD_TOOLS });
+        } else {
+          for (const call of toolCallsOf(turn)) writeDelta({ tool_calls: [call] });
         }
         await record(turn);
         const usage = usageOf(turn);
@@ -280,14 +288,17 @@ export async function startModelGateway(
         onToolCallDelta: progress,
       });
       await recordInvalidArguments(turn, id);
-      if (!auxiliary) remember(turn);
+      if (!turn.truncated && turn.toolCalls.some((call) => call.argsParseError)) {
+        throw new Error("Model returned invalid tool arguments");
+      }
+      if (!auxiliary) remember(turn, body);
       await record(turn);
       const content = typeof turn.assistantMessage.content === "string" ? turn.assistantMessage.content : textOf(turn.assistantMessage.content);
       const usage = usageOf(turn);
       response.writeHead(200, { "content-type": "application/json" });
       response.end(JSON.stringify({
         id, object: "chat.completion", created: Math.floor(Date.now() / 1000), model: endpoint.model,
-        choices: [{ index: 0, finish_reason: finishReason(turn), message: { role: "assistant", content, ...(turn.toolCalls.length ? { tool_calls: toolCallsOf(turn).map(({ index: _index, ...call }) => call) } : {}) } }],
+        choices: [{ index: 0, finish_reason: finishReason(turn), message: { role: "assistant", content: content + (turn.truncated && turn.toolCalls.length ? WITHHELD_TOOLS : ""), ...(!turn.truncated && turn.toolCalls.length ? { tool_calls: toolCallsOf(turn).map(({ index: _index, ...call }) => call) } : {}) } }],
         ...(usage ? { usage } : {}),
       }));
     } catch (error) {
