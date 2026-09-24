@@ -5,7 +5,7 @@ import { test } from "./helpers/e2e.ts";
 import { apiBaseUrl, authorizationHeader } from "./e2e-auth.js";
 import { cleanupJourney, createProjectAndSession, openProjectSession, sendUserMessage,
   waitForRunTerminal, type JourneyFixture } from "./helpers/journeys.ts";
-import { researchModel, type ResearchStep } from "./helpers/research-model.ts";
+import { researchModel, type ResearchScriptStep } from "./helpers/research-model.ts";
 
 const cases = ["LR-01", "LR-02", "LR-03", "LR-04", "LR-05", "LR-06"] as const;
 const names = { "LR-01": "invalid arguments are visible and never executed", "LR-02": "broken model stream does not execute a partial call",
@@ -75,7 +75,10 @@ const delegate = (name: string, extra = {}) => ({ name: "task", arguments: { des
   prompt: `LR_CHILD_${name}: Return the synthetic source result. No external requests.`, subagent_type: "general-purpose",
   timeout_seconds: 60, max_turns: 6, ...extra } });
 
-for (const id of cases) {
+// Exercise both model tool-array orders for the two single-permit scenarios.
+// Neither order is a promise about which parallel MCP call reaches the pool first.
+for (const { id, reverseDispatch } of cases.flatMap(id =>
+  (id === "LR-05" || id === "LR-06" ? [false, true] : [false]).map(reverseDispatch => ({ id, reverseDispatch })))) {
 /**
  * E2E-META
  * Purpose: Verify Swarm research lifecycle under malformed model output, queueing, partial failure, deadline and cancellation.
@@ -92,21 +95,32 @@ for (const id of cases) {
  * Credentials: E2E_API_TOKEN; fixture model token only.
  * CostSideEffects: Temporary project and model; global concurrency quota restored in finally. No paid requests.
  */
-test(`${id} ${names[id]}`, { tag: ["@mocked","@category:e2e","@os:linux","@arch:amd64","@model:mock","@sandbox:bubblewrap","@fixture:research"] }, async ({ page, journey }, info) => {
+test(`${id} ${reverseDispatch ? "reversed dispatch: " : ""}${names[id]}`, { tag: ["@mocked","@category:e2e","@os:linux","@arch:amd64","@model:mock","@sandbox:bubblewrap","@fixture:research"] }, async ({ page, journey }, info) => {
   expect(process.env.E2E_SWARM_TASK !== "1" || process.env.E2E_SWARM_EXCLUSIVE !== "1",
     "BLOCKED: needs an exclusive Swarm test stack; this case temporarily changes global quota settings").toBe(false);
   test.setTimeout(180_000);
   journey.scenario({ goal: names[id], preconditions: ["exclusive Swarm stack", "local scripted model", "no external sources"] });
-  const scripts: Record<string, ResearchStep[]> = {};
+  const scripts: Record<string, ResearchScriptStep[]> = {};
+  let timeoutRoute: string | undefined;
   if (id === "LR-01" || id === "LR-02") {
     scripts.main = [{ tools: [{ name: "run_shell", arguments: {}, rawArguments: '{"command":"printf LR_SHOULD_NOT_EXECUTE' }],
       ...(id === "LR-02" ? { disconnect: true } : {}) }];
   } else {
     const children = id === "LR-03" || id === "LR-06" ? ["a", "b", "c", "d", "e"] : ["a", "b"];
+    if (reverseDispatch) children.reverse();
     scripts.main = [{ tools: children.map(name => delegate(name,
-      name === "a" && id === "LR-04" ? { max_turns: 1 } : name === "a" && id === "LR-05" ? { timeout_seconds: 3 } : {})) },
+      name === "a" && id === "LR-04" ? { max_turns: 1 } : id === "LR-05" ? { timeout_seconds: 15 } : {})) },
     { text: "Fixture synthesis complete. Successful and failed source collection results were received." }];
-    for (const child of children) scripts[child] = [{ text: `SOURCE_RESULT_${child}`, ...(id === "LR-03" || id === "LR-06" || (id === "LR-05" && child === "a") ? { gate: child } : {}) }];
+    for (const child of children) scripts[child] = [{ text: `SOURCE_RESULT_${child}`, ...(id === "LR-03" || id === "LR-06" ? { gate: child } : {}) }];
+    if (id === "LR-05") {
+      // Parallel MCP task calls need not acquire the pool in model array order.
+      // Hold whichever child actually reaches the model first. Both have the
+      // same deadline; 15s leaves room for Swarm setup before the gated response.
+      for (const child of children) scripts[child] = [({ route }) => {
+        timeoutRoute ??= route;
+        return { text: `SOURCE_RESULT_${route}`, ...(route === timeoutRoute ? { gate: "timeout" } : {}) };
+      }];
+    }
     if (id === "LR-04") scripts.a = [{ tools: [{ name: "run_shell", arguments: { command: "printf SOURCE_A_PARTIAL" } }] },
       { text: "UNEXPECTED_BEYOND_CHILD_TURN_LIMIT" }];
   }
@@ -136,17 +150,24 @@ test(`${id} ${names[id]}`, { tag: ["@mocked","@category:e2e","@os:linux","@arch:
       for (const name of ["a", "b", "c", "d", "e"]) stub.release(name);
     }
     if (id === "LR-06") {
-      await expect.poll(() => stub.calls.some(c => c.route === "a"), { timeout: 45_000 }).toBe(true);
+      await expect.poll(() => stub.calls.filter(c => !["main", "title"].includes(c.route)).length,
+        { timeout: 45_000 }).toBe(1);
+      const started = stub.calls.find(c => !["main", "title"].includes(c.route))!.route;
+      const admitted = await children();
+      expect(admitted).toHaveLength(1);
+      expect(admitted[0]!.status).toBe("running");
+      expect(admitted[0]!.input.prompt).toContain(`LR_CHILD_${started}:`);
       await api(page, `/api/sessions/${fixture.session.id}/runs/${runId}/cancel`, "POST");
       expect((await waitForRunTerminal(page, fixture.session.id, runId, 30_000)).status).toBe("cancelled");
       await expect.poll(async () => (await children()).filter(c => c.status === "running").length, { timeout: 15_000 }).toBe(0);
-      expect(stub.calls.filter(c => !["main", "title"].includes(c.route)).map(c => c.route)).toEqual(["a"]);
+      expect(stub.calls.filter(c => !["main", "title"].includes(c.route)).map(c => c.route)).toEqual([started]);
       // Refreshing must not start orphaned queued work.
       const count = stub.calls.length;
       await page.reload();
       await openProjectSession(page, fixture);
+      expect((await children()).map(c => c.id)).toEqual(admitted.map(c => c.id));
       expect((await children()).every(c => c.status !== "running")).toBe(true);
-      expect(stub.calls.slice(count).some(c => ["b", "c", "d", "e"].includes(c.route))).toBe(false);
+      expect(stub.calls.slice(count).some(c => !["main", "title"].includes(c.route))).toBe(false);
     } else {
       const terminal = await waitForRunTerminal(page, fixture.session.id, runId, 90_000);
       if (id === "LR-01" || id === "LR-02") {
@@ -173,18 +194,24 @@ test(`${id} ${names[id]}`, { tag: ["@mocked","@category:e2e","@os:linux","@arch:
           let active = 0;
           for (const event of events) { active += event.delta; expect(active).toBeLessThanOrEqual(2); }
         } else {
-          const failed = records.find(c => c.input.prompt.includes("LR_CHILD_a"))!;
+          if (id === "LR-05") expect(timeoutRoute, "a child must reach the gated model request before timing out").toBeTruthy();
+          const failedRoute = id === "LR-05" ? timeoutRoute! : "a";
+          const healthyRoute = failedRoute === "a" ? "b" : "a";
+          const failed = records.find(c => c.input.prompt.includes(`LR_CHILD_${failedRoute}:`))!;
           // Existing lifecycle contract classifies both time and turn budget
           // exhaustion as timed_out; distinguish them by the exact cause.
           expect(failed.status).toBe("timed_out");
-          expect(results).toContain("SOURCE_RESULT_b");
+          expect(results).toContain(`SOURCE_RESULT_${healthyRoute}`);
           expect(results).toMatch(id === "LR-05" ? /timed_out|timeout|timed out/i : /maxTurns=1/);
           if (id === "LR-04") {
             expect(stub.calls.filter(c => c.route === "a")).toHaveLength(1);
             expect(results).not.toContain("UNEXPECTED_BEYOND_CHILD_TURN_LIMIT");
           }
           if (id === "LR-05") {
-            const healthy = records.find(c => c.input.prompt.includes("LR_CHILD_b"))!;
+            const healthy = records.find(c => c.input.prompt.includes(`LR_CHILD_${healthyRoute}:`))!;
+            expect(healthy.status).toBe("completed");
+            expect(stub.calls.filter(c => !["main", "title"].includes(c.route)).map(c => c.route))
+              .toEqual([failedRoute, healthyRoute]);
             expect(Date.parse(healthy.createdAt)).toBeGreaterThanOrEqual(Date.parse(failed.finishedAt!));
           }
         }

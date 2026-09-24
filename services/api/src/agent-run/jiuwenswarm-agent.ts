@@ -28,6 +28,7 @@ import { RunDeadlines } from "./run-deadlines.js";
 import { jiuwenSwarmWebResult } from "./jiuwenswarm-web-settings.js";
 
 import { resolveModelClientPolicy, type streamModelTurn } from "@sciencediscovery/model";
+import { subagentCapableParentRunTimeoutMs } from "@sciencediscovery/specialist";
 
 import {
   composeSystemPrompt,
@@ -128,7 +129,7 @@ export const JIUWENSWARM_WEB_TOOLS: Record<string, string> = { web_search: "free
 export const JIUWENSWARM_HOST_TOOLS = ["bash", "read_file", "write_file", "edit_file", "glob", "list_files", "grep", "read_pdf"] as const;
 
 /** What the model is told instead: JiuwenSwarm's own prompt still names those tools. */
-export const HOST_TOOLS_SECTION = "Commands, scripts and file writes run in the sandbox through run_shell; read workspace files with read_file and list_files. Use workspace-relative paths in run_shell (for example, report.md): the host working directory shown by JiuwenSwarm is not accessible at the same absolute path inside the sandbox. JiuwenSwarm's bash, write_file, edit_file, glob, grep and read_pdf are not available here. skill_index may show absolute host paths for Skills, but those paths are not workspace paths: never pass them to read_file. Load an indexed Skill with skill_tool(skill_name=<name>, relative_file_path=\"SKILL.md\"), and use skill_tool for its referenced package files. If skill_tool fails, load that Skill with read_skill(skillId=<ScienceDiscovery skill id>) instead; use read_skill_resource for its referenced package files.";
+export const HOST_TOOLS_SECTION = "Commands, scripts and file writes run in the sandbox through run_shell; read workspace files with read_file and list_files. Use workspace-relative paths in run_shell (for example, report.md): the host working directory shown by JiuwenSwarm is not accessible at the same absolute path inside the sandbox. JiuwenSwarm's bash, write_file, edit_file, glob, grep and read_pdf are not available here. skill_index may show absolute host paths for Skills, but those paths are not workspace paths: never pass them to read_file or run_shell. Load an indexed Skill with skill_tool(skill_name=<name>, relative_file_path=\"SKILL.md\"), and use skill_tool for its referenced package files. If skill_tool fails, including a filesystem lock error, immediately load that Skill with read_skill(skillId=<ScienceDiscovery skill id>) instead; use read_skill_resource for its referenced package files. Do not try to recover a failed skill_tool call by reading its host path with run_shell.";
 
 /**
  * ScienceDiscovery's tools JiuwenSwarm's permission engine asks the user about: those that needed approval before
@@ -520,8 +521,13 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
           ...(!jiuwenSwarmPlans ? JIUWENSWARM_TODO_TOOLS : []),
           ...(!jiuwenSwarmSubagents ? JIUWENSWARM_SUBAGENT_LIFECYCLE_TOOLS : []),
         ],
-        // JiuwenSwarm gives a tool call 30 s unless told otherwise; the run's own timeout is the limit here.
-        ...(this.options.runTimeoutMs ? { toolTimeoutSeconds: Math.ceil(this.options.runTimeoutMs / 1000) } : {}),
+        // A parent `task` call remains open while its child executes. The
+        // parent's active-run deadline pauses for that wait, but JiuwenSwarm's
+        // MCP deadline does not; it must outlast the largest allowed child.
+        ...((this.options.runTimeoutMs || tools.has("task")) ? { toolTimeoutSeconds: Math.ceil(Math.max(
+          this.options.runTimeoutMs ?? 0,
+          tools.has("task") ? subagentCapableParentRunTimeoutMs() : 0,
+        ) / 1000) } : {}),
         tools: [...tools.values()].map((tool) => ({
           name: tool.name, description: this.describe(tool), inputSchema: tool.parameters, approval: approvalFor(tool.name),
         })),

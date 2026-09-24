@@ -24,6 +24,7 @@ import type { AgentEvent } from "@sciencediscovery/orchestration";
 import { Type } from "typebox";
 
 import { DurableContextStore } from "@sciencediscovery/context";
+import { subagentCapableParentRunTimeoutMs } from "@sciencediscovery/specialist";
 
 import { createToolRegistry, startPluginScope, type NativeAgentOptions } from "../native-agent/index.js";
 import {
@@ -1173,6 +1174,7 @@ test("subagents can be switched back to our task, and then JiuwenSwarm's sub-age
   try {
     await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url, subagents: "task" })(withRunSubagent()).execute("go");
     assert.ok(sent.tools.some((tool: { name: string }) => tool.name === "task"));
+    assert.equal(sent.toolTimeoutSeconds, subagentCapableParentRunTimeoutMs() / 1000);
     assert.equal("nativeTools" in sent, false);
     assert.equal(sent.jiuwenSwarmTools, "all");
     for (const name of ["subagent_spawn", "subagent_wait", "task_tool", "subagent_list", "subagent_send_input", "subagent_close", "subagent_resume"]) {
@@ -1536,7 +1538,8 @@ test("by default the model gets JiuwenSwarm's own tools but not those acting on 
     assert.match(sent.systemPrompt, /run in the sandbox through run_shell/);
     assert.match(sent.systemPrompt, /skill_index may show absolute host paths[\s\S]*never pass them to read_file/);
     assert.match(sent.systemPrompt, /skill_tool\(skill_name=<name>, relative_file_path="SKILL\.md"\)/);
-    assert.match(sent.systemPrompt, /If skill_tool fails, load that Skill with read_skill\(skillId=<ScienceDiscovery skill id>\)/);
+    assert.match(sent.systemPrompt, /If skill_tool fails, including a filesystem lock error, immediately load that Skill with read_skill\(skillId=<ScienceDiscovery skill id>\)/);
+    assert.match(sent.systemPrompt, /Do not try to recover a failed skill_tool call by reading its host path with run_shell/);
     const start = events.find((event) => event.type === "tool_execution_start") as any;
     const end = events.find((event) => event.type === "tool_execution_end") as any;
     assert.equal(start.toolName, "memory_search");
@@ -1645,7 +1648,7 @@ test("the run's skills are installed in JiuwenSwarm with our read_skill retained
     const names = run.tools.map((tool: { name: string }) => tool.name);
     assert.ok(names.includes("read_skill") && names.includes("read_skill_resource"));
     assert.equal(/<available_skills>/.test(run.systemPrompt), false, "JiuwenSwarm's prompt lists the skills, ours does not duplicate them");
-    assert.match(run.systemPrompt, /If skill_tool fails, load that Skill with read_skill/);
+    assert.match(run.systemPrompt, /If skill_tool fails, including a filesystem lock error, immediately load that Skill with read_skill/);
     const createSkill = run.tools.find((tool: { name: string }) => tool.name === "create_skill");
     assert.match(createSkill.description, /load the sciencediscovery-skill-creator skill with skill_tool/);
   } finally {
