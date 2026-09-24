@@ -4531,6 +4531,32 @@ test("subagent handoff accepts /workspace paths in explicit inputPaths", async (
   assert.equal(await readFile(resolve(store.agentWorkspacePath(session.id, "absolute-child"), "input.txt"), "utf8"), "delivered");
 });
 
+test("subagent handoff resolves a unique nested file named in the prompt", async (context) => {
+  const tempRoot = resolve(process.cwd(), ".tmp", `api-subagent-handoff-basename-${Date.now()}-${process.pid}`);
+  await mkdir(tempRoot, { recursive: true });
+  context.after(() => removeTestRoot(tempRoot));
+  const store = new SessionStore(tempRoot);
+  await store.load();
+  const project = await store.createProject("Nested handoff path");
+  const session = await store.createSession(project.id, "Session", {}, {}, { allowUnconfiguredModel: true });
+  const parent = store.workspacePath(session.id);
+  await mkdir(resolve(parent, "analysis"), { recursive: true });
+  await mkdir(resolve(parent, "archive"), { recursive: true });
+  await writeFile(resolve(parent, "analysis", "results.csv"), "x,y\n1,2\n");
+  await writeFile(resolve(parent, "archive", "ambiguous.csv"), "old");
+  await mkdir(resolve(parent, "analysis", "older"), { recursive: true });
+  await writeFile(resolve(parent, "analysis", "older", "ambiguous.csv"), "new");
+
+  const handoff = await prepareSubagentHandoff(store, session.id, "basename-child", {
+    description: "Evaluate results.csv and ambiguous.csv",
+    prompt: "Independently inspect results.csv and ambiguous.csv.",
+  });
+
+  assert.deepEqual(handoff.inputPaths, ["inputs/analysis/results.csv"]);
+  assert.equal(await readFile(resolve(store.agentWorkspacePath(session.id, "basename-child"), "analysis", "results.csv"), "utf8"), "x,y\n1,2\n");
+  await assert.rejects(readFile(resolve(store.agentWorkspacePath(session.id, "basename-child"), "archive", "ambiguous.csv")));
+});
+
 test("subagent handoff keeps both aliases on one committed source despite parent changes", async (context) => {
   const tempRoot = resolve(process.cwd(), ".tmp", `api-handoff-source-${Date.now()}-${process.pid}`);
   await mkdir(tempRoot, { recursive: true });

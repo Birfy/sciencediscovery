@@ -430,6 +430,13 @@ export function emptyTrace(reason: "memory_graph_disabled" | "memory_graph_unrea
   return { startNode: null, chain: [], broken: true, truncated: false, reason };
 }
 
+/** Preserve the original research objective when ScienceMemory is enabled
+ * after a session has already begun. Runtime wake notices are not user goals. */
+export function firstUserAuthoredMessage(previousMessages: ChatMessage[], currentMessage: ChatMessage): ChatMessage | undefined {
+  return [...previousMessages, currentMessage].find((message) =>
+    message.role === "user" && (message.kind === undefined || message.kind === "message"));
+}
+
 function writeSse(response: ServerResponse, event: RunStreamEvent, sequence?: number): void {
   if (!response.destroyed && !response.writableEnded) {
     if (sequence !== undefined) response.write(`id: ${sequence}\n`);
@@ -830,17 +837,18 @@ async function executeAgentRun(
     composerReferences, body.annotationIds, deliveredNotice && !visibleContent ? "wake_notice" : "message",
     undefined, deliveredNotice);
   if (await store.getSessionRun(sessionId, runId)) await store.updateSessionRun(sessionId, runId, { userMessageId: userMessage.id });
-  // On a session's first user message, mirror a one-goal-per-session
-  // ResearchGoal (domain inferred from message keywords). Never blocks the
-  // caller; a disabled/unreachable graph is a no-op.
-  if (previousMessages.length === 0) {
+  // Re-send the session's first user-authored message on every run. The goal
+  // id is deterministic, so this also backfills sessions whose first turn
+  // occurred while ScienceMemory was disabled, without duplicating goals.
+  const goalMessage = firstUserAuthoredMessage(previousMessages, userMessage);
+  if (goalMessage) {
     memoryGraphSink.observeSessionFirstMessage({
       sessionId,
       goalId: `goal:session:${sessionId}`,
-      coreObjective: visibleContent,
-      domain: inferDomain(visibleContent),
+      coreObjective: goalMessage.content,
+      domain: inferDomain(goalMessage.content),
       topicScope: [],
-      createdAt: userMessage.createdAt,
+      createdAt: goalMessage.createdAt,
     });
   }
   const promptHistory: AgentHistoryMessage[] = previousMessages.flatMap((message) => {
