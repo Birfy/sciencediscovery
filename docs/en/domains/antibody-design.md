@@ -281,7 +281,7 @@ Execution exit code indicates a run failure.
 - **Screening result is FAIL:** If all five stages and both reports are complete, the candidate
   usually failed a scientific threshold; this is not a system failure.
 
-## What you learned to check
+## Key considerations
 
 - The user must explicitly supply all three scientific inputs, especially chain-qualified hotspots.
 - The Runner, managed environment, NPU selection, and Workspace must stay consistent throughout the
@@ -291,3 +291,8 @@ Execution exit code indicates a run failure.
 - Host NPUs are renumbered from 0 inside the sandbox.
 - Pipeline completion and passing scientific screening are different outcomes; a trustworthy
   negative result is still a result.
+
+## Contributor and feedback
+
+- Contributor: [Yuheng Wang (@wyhohyw)](https://github.com/wyhohyw)
+- Email: [wangyuheng16@huawei.com](mailto:wangyuheng16@huawei.com)

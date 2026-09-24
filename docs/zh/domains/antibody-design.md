@@ -229,10 +229,15 @@ Mol* viewer**，就能直接在 ScienceDiscovery 中旋转、缩放并按链查�
 - **hotspot 校验失败**：使用错误信息列出的可用链与 CA 残基修正编号，不要让 Agent 自动猜测。
 - **筛选结果为 FAIL**：只要五个阶段和两份报告完整，这通常是候选未过科学阈值，不是系统故障。
 
-## 你学会了看什么
+## 使用注意事项
 
 - 三个科学输入必须由用户明确提供，尤其是带链名的 hotspot。
 - Runner、托管环境、NPU 选择和 Workspace 必须在整条流程中保持一致。
 - 首次准备、正式运行都通过受管理的后台 Execution 完成，并始终按原 ID 监控。
 - 宿主机 NPU 会在沙箱内重新从 0 编号。
 - 模型流水线完成与候选通过科学筛选是两件不同的事；可信的负结果仍然是结果。
+
+## 贡献者与反馈
+
+- 贡献者：[Yuheng Wang（@wyhohyw）](https://github.com/wyhohyw)
+- 邮箱：[wangyuheng16@huawei.com](mailto:wangyuheng16@huawei.com)
