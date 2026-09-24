@@ -149,6 +149,24 @@ function contractStopReason(stopReason: SubagentStopReason): SubagentContractSto
     : undefined;
 }
 
+/**
+ * Return the complete final assistant message from a subagent. Streaming
+ * runtimes may persist one logical answer as several adjacent assistant
+ * steps; taking only the last step silently drops the beginning of the answer.
+ */
+export function subagentFinalText(subagent: Pick<Subagent, "steps">): string | undefined {
+  const last = subagent.steps.findLastIndex((step) => step.kind === "assistant" && step.content.trim());
+  if (last < 0) return undefined;
+  let first = last;
+  while (first > 0 && subagent.steps[first - 1]?.kind === "assistant") first -= 1;
+  const text = subagent.steps.slice(first, last + 1)
+    .filter((step) => step.kind === "assistant")
+    .map((step) => step.content)
+    .join("")
+    .trim();
+  return text || undefined;
+}
+
 function summarizeSubagentResult(subagent: Subagent): {
   brief?: string;
   error?: string;
@@ -173,9 +191,7 @@ function summarizeSubagentResult(subagent: Subagent): {
   turnCount: number;
   usage?: Subagent["usage"];
 } {
-  const fullFinalText = subagent.steps
-    .findLast((step) => step.kind === "assistant" && step.content.trim())
-    ?.content.trim();
+  const fullFinalText = subagentFinalText(subagent);
   const finalText = fullFinalText?.slice(0, SUBAGENT_RESULT_TEXT_LIMIT);
   const stopReason = subagentStopReason(subagent);
   const subagentContractStopReason = contractStopReason(stopReason);
