@@ -321,15 +321,10 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
     try {
       const finalText = await this.stream(text, tools, bridge.url, bridgeToken, announcements, transcript, modelGateway, jiuwenSwarmPlans, jiuwenSwarmSubagents);
       this.controller.signal.throwIfAborted();
-      // The model was cut at max_tokens and JiuwenSwarm ended the run there. Say so as the native loop does;
-      // a turn that produced no visible text (a reasoning model spending its whole budget on thought) would
-      // otherwise end the run in the middle of a thought with nothing to show for it.
-      const last = modelGateway.lastTurn();
-      if (last?.truncated && last.toolCalls === 0) {
+      // An unrecovered partial answer must never be reported as completed.
+      if (modelGateway.lastTurn()?.truncated) {
         this.emit({ type: "turn_truncated" } as never);
-        if (!last.text.trim()) {
-          throw new Error(`The model was cut off at its output limit (max_tokens ${policy.maxTokens}) while thinking and gave no answer. Raise SCIENCE_AGENT_LLM_MAX_TOKENS and try again.`);
-        }
+        throw new Error("Swarm ended with an unrecovered output limit");
       }
       return {
         finalMessages: [{ role: "user", content: text }, ...transcript.finish(finalText).map((message) => modelGateway.restore(message))] as never,
@@ -339,6 +334,15 @@ class JiuwenSwarmAgent implements NativeAgentHandle {
       if (deadlines.expired) throw deadlines.error();
       if (this.approvalDeliveryError) throw this.approvalDeliveryError;
       if (this.controller.signal.aborted) throw new Error("Agent run cancelled");
+      const last = modelGateway.lastTurn();
+      if (last?.truncated) {
+        const detail = { code: "output_recovery_exhausted", kind: last.toolCalls ? "tool_arguments"
+          : last.text.trim() ? "partial_answer" : "reasoning_only", maxTokens: policy.maxTokens,
+          recoveryAttempts: last.recoveryAttempts ?? 0, currentTurnToolsExecuted: false,
+          priorArtifactsPreserved: true };
+        throw new Error(`Output limit recovery stopped: ${JSON.stringify(detail)}. Inspect existing artifacts before delegating again.`, { cause: error });
+      }
+
       console.warn(`[jiuwenswarm-agent] run of ${this.options.sessionId} failed: ${error instanceof Error ? error.message : String(error)}`);
       if (error instanceof Error) {
         const cause = error.cause as { name?: string; code?: string; message?: string } | undefined;

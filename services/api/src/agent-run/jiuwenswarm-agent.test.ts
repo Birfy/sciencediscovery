@@ -1439,26 +1439,26 @@ test("one child run's model progress cannot keep a silent sibling alive", { time
   } finally { healthy.abort(); silent.abort(); await adapter.close(); }
 });
 
-test("a model cut off at max_tokens while thinking, with no answer, fails the run and says what to raise", async () => {
+test("an unrecovered reasoning-only output limit fails with actionable diagnostics", async () => {
   const { adapter: pending, streamer } = askTheModel({ assistantMessage: { role: "assistant", content: "" }, toolCalls: [], truncated: true });
   const adapter = await pending;
   try {
     const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url, modelStreamer: streamer })(options());
     const events = collect(agent);
-    await assert.rejects(agent.execute("go"), /max_tokens .*SCIENCE_AGENT_LLM_MAX_TOKENS/);
+    await assert.rejects(agent.execute("go"), /output_recovery_exhausted.*reasoning_only/);
     assert.equal(events.some((event) => event.type === "turn_truncated"), true);
   } finally {
     await adapter.close();
   }
 });
 
-test("a turn cut off after it had said something still reports the cut, and does not fail", async () => {
+test("an unrecovered partial answer must not complete the run", async () => {
   const { adapter: pending, streamer } = askTheModel({ assistantMessage: { role: "assistant", content: "Here is the start" }, toolCalls: [], truncated: true });
   const adapter = await pending;
   try {
     const agent = createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url, modelStreamer: streamer })(options());
     const events = collect(agent);
-    await agent.execute("go");
+    await assert.rejects(agent.execute("go"), /output_recovery_exhausted.*partial_answer/);
     assert.equal(events.some((event) => event.type === "turn_truncated"), true);
   } finally {
     await adapter.close();
