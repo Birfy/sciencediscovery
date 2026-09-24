@@ -1027,6 +1027,67 @@ def test_goal_id_deterministic_dedup(live_client: TestClient) -> None:
 
 
 @needs_neo4j
+def test_goal_added_after_execution_reconnects_provenance(live_client: TestClient) -> None:
+    """Enabling ScienceMemory mid-session repairs an already-landed artifact chain."""
+    headers = {"authorization": "Bearer test-token"}
+    sid = "sess-late-goal"
+    _wipe_session(sid)
+    execution = live_client.post("/observe/execution", json={
+        "execution_id": "exec-late-goal",
+        "session_id": sid,
+        "turn_id": "turn-late-goal",
+        "tool": "run_shell",
+        "language": "shell",
+        "code_hash": "hash-late-goal",
+        "exit_code": 0,
+        "status": "succeeded",
+        "started_at": "2026-07-27T00:00:00Z",
+        "finished_at": "2026-07-27T00:00:01Z",
+        "produced_artifacts": [{
+            "artifact_id": "art-late-goal",
+            "path": "report.md",
+            "logical_name": "report.md",
+            "version": 1,
+            "media_type": "text/markdown",
+        }],
+    }, headers=headers)
+    assert execution.status_code == 200
+    before = live_client.post("/trace/provenance", json={
+        "node_id": "art-late-goal", "session_id": sid,
+    }, headers=headers)
+    assert before.status_code == 200
+    assert before.json()["broken"] is True
+
+    goal = live_client.post("/observe/session-first-message", json={
+        "session_id": sid,
+        "goal_id": f"goal:session:{sid}",
+        "core_objective": "Research the original question",
+        "domain": "General",
+        "topic_scope": [],
+        "created_at": "2026-07-27T00:00:00Z",
+    }, headers=headers)
+    assert goal.status_code == 200
+    after = live_client.post("/trace/provenance", json={
+        "node_id": "art-late-goal", "session_id": sid,
+    }, headers=headers)
+    assert after.status_code == 200
+    assert after.json()["broken"] is False
+    assert any(step["node"]["label"] == "ResearchGoal" for step in after.json()["chain"])
+    assert live_client.post("/observe/session-first-message", json={
+        "session_id": sid,
+        "goal_id": f"goal:session:{sid}",
+        "core_objective": "Research the original question",
+        "domain": "General",
+        "topic_scope": [],
+        "created_at": "2026-07-27T00:00:00Z",
+    }, headers=headers).status_code == 200
+    subgraph = live_client.get("/subgraph", params={"session_id": sid}, headers=headers).json()
+    assert len([node for node in subgraph["nodes"] if node["label"] == "ResearchGoal"]) == 1
+    assert len([edge for edge in subgraph["edges"] if edge["type"] == "next"]) == 1
+    _wipe_session(sid)
+
+
+@needs_neo4j
 def test_temporal_chain_only_links_orphans(live_client: TestClient) -> None:
     """A plan-linked ToolCall is not re-linked by the temporal chain."""
     headers = {"authorization": "Bearer test-token"}
