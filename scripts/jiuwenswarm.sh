@@ -47,6 +47,15 @@ jw_src="${JIUWENSWARM_SRC:-$jw_root/src}"
 jw_bin="$jw_src/.venv/bin"
 jw_data_dir="$jw_root/data"
 jw_log="$jw_root/jiuwenswarm.log"
+apply_compatibility_patches() {
+  python3 "$script_dir/swarm-patches.py" apply "$jw_src" "$jw_tag"
+}
+
+verify_compatibility_patches() {
+  local package_root
+  package_root="$("$jw_bin/python" -c 'import importlib.util,pathlib; print(pathlib.Path(importlib.util.find_spec("jiuwenswarm").origin).parent.parent)')"
+  "$jw_bin/python" "$script_dir/swarm-patches.py" verify "$package_root" "$jw_tag"
+}
 
 usage() {
   sed -n '15,24p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
@@ -126,9 +135,10 @@ PY
 cmd_setup() {
   if [[ -x "$jw_bin/jiuwenswarm-start" && ! -d "$jw_src/.git" ]]; then
     # Pre-baked, not git-managed (the Docker image installs it this way at
-    # build time, straight from PyPI — see Dockerfile). Nothing to clone or
+    # build time, from a patched wheel — see Dockerfile). Nothing to clone or
     # sync; only the instance below is this container's own state to create.
     echo "Using the pre-installed JiuwenSwarm at $jw_src." >&2
+    verify_compatibility_patches
   else
     require git "install git"
     require uv "https://docs.astral.sh/uv/"
@@ -144,6 +154,8 @@ cmd_setup() {
         exit 1
       }
     fi
+    # Apply source compatibility fixes before syncing the editable installation.
+    apply_compatibility_patches
     echo "Installing JiuwenSwarm (Python 3.12, its own virtualenv)..." >&2
     (
       cd "$jw_src"
@@ -171,6 +183,7 @@ cmd_start() {
   [[ -x "$jw_bin/jiuwenswarm-start" ]] || { echo "Not installed; run: scripts/jiuwenswarm.sh setup" >&2; exit 1; }
   apply_config >/dev/null
   if is_up; then echo "JiuwenSwarm instance $jw_instance is already up." >&2; return; fi
+  verify_compatibility_patches
   # Detach completely (stdin, stdout, stderr): a background job that keeps the caller's stdout open
   # makes `scripts/jiuwenswarm.sh start | tee ...`, or any script capturing its output, wait forever.
   cd "$jw_root"
