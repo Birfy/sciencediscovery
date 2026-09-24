@@ -1239,7 +1239,13 @@ test("the run's skills are installed in JiuwenSwarm with our read_skill retained
   });
   try {
     const created: unknown[] = [];
-    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(skillOptions({ createSkill: async (draft: unknown) => { created.push(draft); return { id: "d1" }; } })).execute("go");
+    await createJiuwenSwarmAgentFactory({ adapterUrl: adapter.url })(skillOptions({
+      createSkill: async (draft: unknown) => { created.push(draft); return { id: "d1" }; },
+      skills: [
+        { ...skill("evolve-design"), resources: [{ hash: "hash-reference", kind: "reference", path: "references/custom-script.md", size: 24 }] },
+        skill("skill-creator"),
+      ],
+    })).execute("go");
     const [install, run] = adapter.requests.map((request) => request.body);
     assert.deepEqual(install.skills, [
       { hash: "hash-evolve-design", id: "evolve-design", path: "/data/skill-snapshots/abc/evolve-design" },

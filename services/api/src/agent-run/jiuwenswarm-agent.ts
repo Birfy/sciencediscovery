@@ -82,7 +82,8 @@ export interface JiuwenSwarmAgentConfig {
   /**
    * Whose skill mechanism the model uses. `jiuwenswarm` (default, with the `prepend` prompt and JiuwenSwarm's
    * tools): the run's skills are installed in JiuwenSwarm, listed by its prompt and loaded with its `skill_tool`;
-   * ScienceDiscovery's skill catalog and `read_skill` are left out. `ours`: ScienceDiscovery's catalog and tools.
+   * ScienceDiscovery's skill catalog is left out; `read_skill` and, when resources exist,
+   * `read_skill_resource` remain as fallbacks. `ours`: ScienceDiscovery's catalog and tools.
    */
   skills?: "jiuwenswarm" | "ours";
   /**
