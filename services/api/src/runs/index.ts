@@ -1927,7 +1927,9 @@ async function executeAgentRun(
             observer: observeSubagentEvent,
             recordEvent: async (event) => { finalizeMessageStep(); activeMessageStep = undefined; await emit(event); },
             planStore: createRunPlanStore(`subagent:${subagent.id}`, () => subagent.turnCount),
-            readVersioningAuthorities: versioningAuthorities(store, sessionId, runId),
+            readVersioningAuthorities: versioningAuthorities(store, {
+              sessionId, executionId: childExecution.identity.executionId, subagentId: subagent.id,
+            }),
             runIdleTimeoutMs: timeoutSettings.gatewayIdleTimeoutMs,
             workspace: subagentWorkspace,
           },
@@ -2149,7 +2151,9 @@ async function executeAgentRun(
       observer: observeMainEvent,
       recordEvent: async (event) => { await emit(event); },
       planStore: createRunPlanStore("main"),
-      readVersioningAuthorities: versioningAuthorities(store, sessionId, runId),
+      readVersioningAuthorities: versioningAuthorities(store, {
+        sessionId, executionId: requestExecution.identity.executionId,
+      }),
       runIdleTimeoutMs: timeoutSettings.gatewayIdleTimeoutMs,
       workspace: agentOptions,
     },
