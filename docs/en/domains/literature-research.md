@@ -6,10 +6,11 @@ reviewing results.
 
 ## 1. Case overview
 
-This case compares research on gene expression in adult versus pediatric liver parenchymal cells,
-with a focus on immune-related pathways. It searches PubMed for papers published in 2023–2025 and
-bioRxiv for recent preprints available in its rolling search window, then generates a bar chart of
-gene counts for the top 14 enriched pathways and flags contradictory findings across studies.
+This cross-database literature research case compares gene expression in adult versus pediatric
+liver parenchymal cells, with a focus on immune-related pathways. It searches PubMed for papers
+published in 2023–2025 and bioRxiv for recent preprints available in its rolling search window, then
+generates a bar chart of gene counts for the top 14 enriched pathways and flags contradictory
+findings across studies.
 
 A task like this normally takes researchers days of manual reading and data extraction, with low
 efficiency and a high risk of omissions. ScienceDiscovery orchestrates multiple intelligent tools
@@ -194,8 +195,9 @@ While a task runs, the Agent pauses before high-risk operations and pops a permi
 | scientific-environments | The Agent calls `environment_install` and other managed-environment change tools |
 | web | The Agent calls `web_search` or `web_fetch` to make a public-network request |
 
-The card offers **Allow once**, **Allow same type**, and **Deny**. **Allow same type** allows future
-requests for the same action and resource category in the current Session without asking again.
+The card offers **Allow once**, **Allow same type**, and **Deny**. **Allow same type** creates a
+revocable grant for matching requests with the same action and normalized resource category in the
+current Session. Review or revoke it under **System configuration → Permissions**.
 
 ![Permission approval card illustration](../../images/permission-en.png)
 
