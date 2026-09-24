@@ -91,11 +91,10 @@ working.
 
 ## 7. Read the result
 
-![Example diff view for an evolution search](../../images/evolve/result-diff-en.png)
+![Example comparison of the starting point and best candidate](../../images/evolve/result-diff-en.png)
 
-When it finishes, the starting point and the winner are two versions of the same artifact. Open
-the diff and read what actually changed — this is the part worth your time, because it tells you
-*how* the score was won.
+When it finishes, open the comparison of the starting point and best candidate to see what
+actually changed. This is the part worth your time, because it tells you *how* the score was won.
 
 Then find the **held-out test score**. In that real run it was **0.9682**, against a best gate
 score of 0.9674 — close together, which is what you want. A test score far below the best gate

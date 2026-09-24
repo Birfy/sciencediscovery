@@ -13,7 +13,8 @@
 - Linux x86_64 或 aarch64；
 - bubblewrap；
 - 与你的 Linux 架构匹配的 ScienceDiscovery 可执行文件，可在
-  [Releases 页面](https://github.com/openJiuwen-ai/sciencediscovery/releases)下载；
+  [Releases 页面](https://github.com/openJiuwen-ai/sciencediscovery/releases)下载。下载后将文件重命名为
+  `ScienceDiscovery`；
 - 至少一个外部模型 API Key。
 
 bubblewrap 需已安装在本机：
@@ -30,7 +31,7 @@ sudo apt-get install -y bubblewrap   # Debian / Ubuntu
 
 ## 2. 启动 ScienceDiscovery
 
-请将下载的发行文件重命名为 `ScienceDiscovery`，并放在当前目录：
+在终端中切换到 `ScienceDiscovery` 所在目录，再执行：
 
 ```bash
 chmod +x ./ScienceDiscovery

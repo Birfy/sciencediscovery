@@ -28,8 +28,8 @@ ScienceDiscovery 是一个基于 [JiuwenSwarm](https://gitcode.com/openJiuwen/ji
 预打包二进制是完成首次运行的最短路径。请在
 [Releases 页面](https://github.com/openJiuwen-ai/sciencediscovery/releases)下载与架构匹配的
 `ScienceDiscovery-<version>-linux-x86_64`（x86_64）或
-`ScienceDiscovery-<version>-linux-aarch64`（arm64）。请将下载的文件重命名为
-`ScienceDiscovery`，再执行：
+`ScienceDiscovery-<version>-linux-aarch64`（arm64）。
+将下载的文件重命名为 `ScienceDiscovery` 后，执行：
 
 ```bash
 chmod +x ./ScienceDiscovery
