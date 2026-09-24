@@ -86,7 +86,7 @@ test("stop invalidates a prepared delivery and cancels timers but retains comple
   assert.equal(inbox.acknowledge(resumed), true);
 });
 
-test("stopping a child does not stop its parent or sibling; Session resume does not undo child stop", (context) => {
+test("stopping a child does not stop its parent or sibling; resuming the child reopens a stopped Session", (context) => {
   const { inbox } = fixture(context);
   inbox.createTimer(child, { dueAt: 2_000, message: "Child reminder" });
   inbox.createTimer(main, { dueAt: 2_000, message: "Parent reminder" });
@@ -96,9 +96,8 @@ test("stopping a child does not stop its parent or sibling; Session resume does 
   assert.equal(inbox.canWakeAgent(main), true);
   assert.equal(inbox.timers(main)[0]!.state, "pending");
   inbox.stop(main.sessionId);
-  inbox.resume(main.sessionId);
-  assert.equal(inbox.canWakeAgent(child), false);
   inbox.resumeAgent(child);
+  assert.equal(inbox.canWakeAgent(main), true);
   assert.equal(inbox.prepareDelivery(child)!.notifications.length, 1);
 });
 

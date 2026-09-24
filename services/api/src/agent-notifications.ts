@@ -89,11 +89,21 @@ export class AgentNotifications {
     });
   }
 
+  /** A user resuming one child is also explicitly resuming this Session's
+   * automatic wakeups.  A global Stop closes both gates, so reopening only the
+   * child would leave its retained completion notice permanently undeliverable.
+   * Keep both updates in one transaction: a partial resume must never expose a
+   * child as runnable while its Session remains stopped. */
   resumeAgent(owner: ExecutionOwner): void {
-    if (!this.canWake(owner.sessionId)) throw new Error("Resume the Session before resuming this Agent");
-    this.agentGate(owner);
-    this.db.prepare("UPDATE agent_instance_wake_gates SET stopped = 0, epoch = epoch + 1 WHERE session = ? AND agent = ?")
-      .run(owner.sessionId, owner.agentId);
+    if (this.archived(owner.sessionId)) throw new Error("Archived Session cannot resume automatic wakeups");
+    this.transaction(() => {
+      this.gate(owner.sessionId);
+      this.db.prepare("UPDATE agent_wake_gates SET stopped = 0, epoch = epoch + 1 WHERE session = ?")
+        .run(owner.sessionId);
+      this.agentGate(owner);
+      this.db.prepare("UPDATE agent_instance_wake_gates SET stopped = 0, epoch = epoch + 1 WHERE session = ? AND agent = ?")
+        .run(owner.sessionId, owner.agentId);
+    });
   }
 
   /** Stop dominates outstanding delivery batches, including a batch already read by a scheduler. */
