@@ -134,7 +134,10 @@ const execFileAsync = promisify(execFile);
 const onJiuwenSwarm = process.env.SCIENCE_AGENT_EXECUTOR?.trim() === "jiuwenswarm";
 
 /**
- * scripts/with-jiuwenswarm.sh deliberately leaves subagent delegation at its real-deployment default:
+ * Historical background for the unreviewed cases below (not the current wrapper policy).
+ * The wrapper now defaults to SUBAGENTS=task, with an explicit jiuwenswarm override;
+ * this does not automatically reclassify previously unreviewed cases.
+ * Previously, scripts/with-jiuwenswarm.sh left subagent delegation at its real-deployment default:
  * JiuwenSwarm's own native subagent_spawn/subagent_wait, not ScienceDiscovery's task-delegation bridge
  * (SCIENCE_AGENT_JIUWENSWARM_SUBAGENTS=task, an opt-in a caller reaches for on purpose, trading native
  * subagent_spawn for full sandbox/approval/provenance parity — see gap 1a in
@@ -1113,6 +1116,7 @@ async function startSubagentModel(
     structuredSubagentOutput?: string;
     structuredSubagentResult?: boolean;
     subagentPythonCode?: string;
+    taskTimeoutSeconds?: number;
     subagentUsesPython?: boolean;
     subagentType?: string;
     taskCount?: number;
@@ -1250,6 +1254,7 @@ async function startSubagentModel(
                       prompt: `Inspect workspace partition ${index + 1} and summarize what is available.`,
                       ...(specialistId ? { specialistId } : {}),
                       subagent_type: options.subagentType ?? "general-purpose",
+                      ...(options.taskTimeoutSeconds === undefined ? {} : { timeout_seconds: options.taskTimeoutSeconds }),
                     }),
                     name: "task",
                   },
@@ -2890,8 +2895,16 @@ test("running sessions accept queued runs and start them after the active run co
   assert.equal(second.body.status, "queued");
   assert.ok(first.body.queueOrder < second.body.queueOrder);
 
-  const duringFirst = await jsonRequest<SessionDetail>(`${origin}/api/sessions/${session.body.id}`, { headers: authorization });
-  assert.deepEqual(duringFirst.body.messages.map((message) => message.content), ["Hold the first response."]);
+  let duringFirst: SessionDetail | undefined;
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const current = await jsonRequest<SessionDetail>(`${origin}/api/sessions/${session.body.id}`, { headers: authorization });
+    if (current.body.messages.some((message) => message.content === "Hold the first response.")) {
+      duringFirst = current.body;
+      break;
+    }
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 50));
+  }
+  assert.deepEqual(duringFirst?.messages.map((message) => message.content), ["Hold the first response."]);
 
   modelServer.release();
   await waitForRunStatus(origin, session.body.id, first.body.id, "completed");
@@ -4252,6 +4265,59 @@ test("API runs one observable subagent through task and keeps nested task denied
   });
   assert.doesNotMatch(taskResultContent, /Inspect workspace partition/);
   assert.doesNotMatch(taskResultContent, /"steps"|"prompt"/);
+});
+
+test("task timeout_seconds is a hard wall-clock budget while a subagent waits on its model", async (context) => {
+  const tempRoot = resolve(process.cwd(), ".tmp", `api-subagent-wall-clock-${Date.now()}-${process.pid}`);
+  await mkdir(tempRoot, { recursive: true });
+  context.after(() => removeTestRoot(tempRoot));
+  const { origin } = await startTestApi(context, tempRoot);
+  const fixture = await startSubagentModel(context, { pauseSubagent: true, taskTimeoutSeconds: 10 });
+  context.after(() => fixture.releaseSubagent());
+  const model = await createTestModel(origin, {
+    baseUrl: fixture.baseUrl,
+    model: "subagent-wall-clock-model",
+    name: "Subagent wall-clock model",
+  });
+  const project = await jsonRequest<Project>(`${origin}/api/projects`, {
+    body: JSON.stringify({ name: "Subagent wall-clock project" }),
+    headers: { ...authorization, "content-type": "application/json" },
+    method: "POST",
+  });
+  const session = await jsonRequest<Session>(`${origin}/api/projects/${project.body.id}/sessions`, {
+    body: JSON.stringify({ approvalMode: "always_allow", modelId: model.id, title: "Subagent wall-clock session" }),
+    headers: { ...authorization, "content-type": "application/json" },
+    method: "POST",
+  });
+
+  const startedAt = Date.now();
+  const run = await fetch(`${origin}/api/sessions/${session.body.id}/messages`, {
+    body: JSON.stringify({ content: "Delegate a bounded workspace inspection." }),
+    headers: { ...authorization, "content-type": "application/json" },
+    method: "POST",
+  });
+  assert.equal(run.status, 200);
+  const stream = await run.text();
+  // The outer request includes gateway startup and the parent's final model turn.
+  // Measure the child's own persisted interval below for the hard deadline.
+  assert.ok(Date.now() - startedAt < 45_000, "the task should not remain blocked on the paused model");
+  assert.match(stream, /"type":"run.completed"/);
+  const subagents = await jsonRequest<Subagent[]>(
+    `${origin}/api/sessions/${session.body.id}/subagents`,
+    { headers: authorization },
+  );
+  assert.equal(subagents.body[0]?.status, "timed_out");
+  assert.equal(subagents.body[0]?.timeoutSeconds, 10);
+  assert.match(subagents.body[0]?.error ?? "", /wall-clock timeout after 10 seconds/);
+  assert.ok(fixture.requests.some((request) => request.messages?.some((message) =>
+    message.role === "system" && message.content?.includes("Applied subagent preset general-purpose"))),
+  "the subagent must have reached the paused model");
+  const childStartedAt = Date.parse(subagents.body[0]?.createdAt ?? "");
+  const childFinishedAt = Date.parse(subagents.body[0]?.finishedAt ?? "");
+  assert.ok(Number.isFinite(childStartedAt) && Number.isFinite(childFinishedAt));
+  assert.ok(childFinishedAt - childStartedAt < 15_000,
+    "the ten-second task deadline should end the paused child promptly");
+  fixture.releaseSubagent();
 });
 
 test("API does not auto-select a specialist by description for a subagent type", { tags: ["status:unreviewed"] }, async (context) => {
@@ -5789,9 +5855,15 @@ test("API rolls surplus task calls through the bounded per-run concurrency pool"
   await mkdir(tempRoot, { recursive: true });
   context.after(() => removeTestRoot(tempRoot));
   const { origin } = await startTestApi(context, tempRoot);
-  const taskCount = DEFAULT_MAX_CONCURRENT_SUBAGENTS + 1;
+  const quotaResponse = await jsonRequest<Record<string, unknown>>(`${origin}/api/quota-settings`, { headers: authorization });
+  const savedQuota = await jsonRequest<Record<string, unknown>>(`${origin}/api/quota-settings`, {
+    method: "PUT", headers: { ...authorization, "content-type": "application/json" },
+    body: JSON.stringify({ ...quotaResponse.body, maxConcurrentSubagents: 2 }),
+  });
+  assert.equal(savedQuota.body.maxConcurrentSubagents, 2);
+  const taskCount = 3;
   const fixture = await startSubagentModel(context, {
-    concurrentSubagentTarget: DEFAULT_MAX_CONCURRENT_SUBAGENTS,
+    concurrentSubagentTarget: 2,
     requireConcurrentSubagents: true,
     taskCount,
   });
@@ -5821,7 +5893,7 @@ test("API rolls surplus task calls through the bounded per-run concurrency pool"
   assert.match(stream, /"type":"run.completed"/);
   assert.equal(fixture.concurrencyBarrierTimedOut(), false,
     `Subagent startup did not reach the concurrency barrier within ${CONCURRENCY_BARRIER_TIMEOUT_MS}ms`);
-  assert.equal(fixture.getMaxConcurrentSubagents(), DEFAULT_MAX_CONCURRENT_SUBAGENTS);
+  assert.equal(fixture.getMaxConcurrentSubagents(), 2);
 
   const subagents = await jsonRequest<Subagent[]>(
     `${origin}/api/sessions/${session.body.id}/subagents`,
