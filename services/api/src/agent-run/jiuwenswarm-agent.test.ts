@@ -1143,6 +1143,8 @@ test("by default the model gets JiuwenSwarm's own tools but not those acting on 
     assert.deepEqual(sent.hiddenJiuwenSwarmTools, [...["bash", "read_file", "write_file", "edit_file", "glob", "list_files", "grep", "read_pdf"],
       "todo_create", "todo_modify", "todo_list", "todo_get", "subagent_spawn", "subagent_wait", "task_tool"]);
     assert.match(sent.systemPrompt, /run in the sandbox through run_shell/);
+    assert.match(sent.systemPrompt, /skill_index may show absolute host paths[\s\S]*never pass them to read_file/);
+    assert.match(sent.systemPrompt, /skill_tool\(skill_name=<name>, relative_file_path="SKILL\.md"\)/);
     const start = events.find((event) => event.type === "tool_execution_start") as any;
     const end = events.find((event) => event.type === "tool_execution_end") as any;
     assert.equal(start.toolName, "memory_search");

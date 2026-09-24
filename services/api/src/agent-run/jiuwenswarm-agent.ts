@@ -127,7 +127,7 @@ export const JIUWENSWARM_WEB_TOOLS: Record<string, string> = { web_search: "free
 export const JIUWENSWARM_HOST_TOOLS = ["bash", "read_file", "write_file", "edit_file", "glob", "list_files", "grep", "read_pdf"] as const;
 
 /** What the model is told instead: JiuwenSwarm's own prompt still names those tools. */
-export const HOST_TOOLS_SECTION = "Commands, scripts and file writes run in the sandbox through run_shell; read workspace files with read_file and list_files. JiuwenSwarm's bash, write_file, edit_file, glob, grep and read_pdf are not available here.";
+export const HOST_TOOLS_SECTION = "Commands, scripts and file writes run in the sandbox through run_shell; read workspace files with read_file and list_files. JiuwenSwarm's bash, write_file, edit_file, glob, grep and read_pdf are not available here. skill_index may show absolute host paths for Skills, but those paths are not workspace paths: never pass them to read_file. Load an indexed Skill with skill_tool(skill_name=<name>, relative_file_path=\"SKILL.md\"), and use skill_tool for its referenced package files.";
 
 /**
  * ScienceDiscovery's tools JiuwenSwarm's permission engine asks the user about: those that needed approval before
