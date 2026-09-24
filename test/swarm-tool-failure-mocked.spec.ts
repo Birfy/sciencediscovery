@@ -88,11 +88,15 @@ test(`${fault === "disconnect" ? "LR-07 " : ""}Swarm ${fault} child failure is v
       // execution. Wait for the actual shell to start before injecting a fault
       // that must overlap it (the timestamps below verify that overlap).
       await expect.poll(async () => {
-        const response = await page.request.get(`${apiBaseUrl()}/api/sessions/${sibling!.session.id}/execution-runs`, { headers: authorizationHeader() });
+        const response = await page.request.get(`${apiBaseUrl()}/api/runtime-status`, { headers: authorizationHeader() });
         expect(response.ok()).toBe(true);
-        const executions = await response.json() as Array<{ tool: string; status: string; startedAt?: string }>;
-        return executions.some(execution => execution.tool === "run_shell"
-          && execution.status === "running" && Boolean(execution.startedAt));
+        // execution-runs contains completed invocation records; runtime-status
+        // reads the runner's live queue, including the shell still in flight.
+        const runtime = await response.json() as { runner: { activeExecutions: Array<{
+          sessionId: string; language: string; status: string; startedAt?: string;
+        }> } };
+        return runtime.runner.activeExecutions.some(execution => execution.sessionId === sibling!.session.id
+          && execution.language === "shell" && execution.status === "running" && Boolean(execution.startedAt));
       }, { message: "Healthy sibling shell must start before injecting the transport fault", timeout: 90_000 }).toBe(true);
       releaseFaultTool();
       return await verifyRun(faultRun);
