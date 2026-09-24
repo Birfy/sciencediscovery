@@ -2,8 +2,8 @@
 
 **Allow about 30 minutes to configure and run the task. First-time resource preparation and model runtime are additional.**
 
-This tutorial shows you how to use the `antibody-design` Skill to run an
-RFdiffusion → ProteinMPNN → Protenix → screening antibody-design workflow on a local or remote
+This tutorial shows you how to use the built-in `antibody-design` Skill to run an
+RFdiffusion → ProteinMPNN → Protenix → screening antibody-design workflow on a remote
 Ascend NPU Runner. At the end, you will have candidate structures, Protenix confidence results,
 and Markdown/CSV reports that explain whether each candidate passed screening.
 
@@ -17,7 +17,7 @@ and connect the Runner in this tutorial; it does not need to be configured in ad
 
 Create a Project such as `antibody-design-demo`, then create a Session in it. The Runner setup,
 input upload, and task submission in the rest of this tutorial all use this Session, so keep it
-open. Enable the `antibody-design` Skill in the Session settings before continuing.
+open.
 
 When using a remote Runner, files uploaded to the local Session must also be synchronized to that
 Runner's Workspace. Model code and weights can remain in the remote Workspace and do not need to be
@@ -42,8 +42,8 @@ and residues before starting the models. If any input is missing, it should stop
 
 ## 3. Add and connect a Runner
 
-If the NPU is installed in the same Linux machine as ScienceDiscovery, use the **local Runner** and
-skip to “Select NPUs.” If the NPU is on another machine, add a remote Runner:
+This tutorial connects to a separate Ascend Linux machine over SSH. Add the remote Runner as
+follows:
 
 1. Open **System configuration → Runners**, then click **Add Runner**.
 2. Select **Add SSH machine**. Enter the SSH alias or IP/host name, port, user name, and either a
@@ -68,7 +68,7 @@ connection fails, open **Connection process** to inspect each step. After the co
 use **Check connection** and **Refresh resources** to verify that the Runner version, disk, CPU,
 memory, and NPU inventory are available.
 
-### 3.1 Select NPUs
+### 3.1 Select NPUs for the remote Runner
 
 In the Runner's **NPU cards** section, review the detected devices. Select only devices marked as
 usable inside the sandbox, then click **Save selection**. If no NPU is reported, check the remote
@@ -139,7 +139,7 @@ NPU, and all three inputs. Find a suitable managed environment; if none exists, 
 install the Skill's requirements.txt. Then check the sandbox network allowlist, prepare resources
 on first use, and run preflight validation. Submit the background pipeline exactly once, retain the
 same Execution ID while monitoring it, and return the screening report, summary CSV, and candidate
-structure when it finishes.
+structures when it finishes.
 ```
 
 ## 6. Checkpoint 1 — verify that the inputs match
@@ -198,9 +198,8 @@ Keep this new Execution ID. A normal run proceeds through these stages:
 5. Screening summarizes interface confidence and hotspot contacts.
 
 Do not launch models through the old Host NPU Broker, `nohup`, or a persistent kernel. Do not submit
-a second run because a wait ended, the network briefly failed, or status temporarily became
-`unknown`. The management channel can continue to read status and logs without taking the Workspace
-write lock.
+a second run because a wait ended or the network briefly failed. The management channel can continue
+to read status and logs without taking the Workspace write lock.
 
 ## 9. Watch it run
 
@@ -215,7 +214,9 @@ or `cancelled`. While it runs, check that:
 One real single-candidate run with `diffuser_t=200` and `final_step=160` finished in about 17 minutes
 20 seconds. Its four model-stage counts were **1/1/1/1**, and it produced both screening files. Your
 runtime will vary with the Runner, network, and model-cache state. Judge whether the same Execution
-completed the entire pipeline, not whether an individual wait call returned promptly.
+completed the entire pipeline, not whether an individual wait call returned promptly. Treat this as
+a single-candidate timing reference only. The 2 candidates used by this tutorial finish sequentially
+or in parallel within the same Execution, depending on the number of available NPUs.
 
 ![Screening summary and artifact entry points after a real run](../../images/antibody-design/execution-session-en.jpg)
 
@@ -238,10 +239,12 @@ antibody_pipeline/runs/<run_name>/
     protenix_screening_summary.csv
 ```
 
-For one design, the counts for RFdiffusion, ProteinMPNN, Protenix input, and Protenix confidence
-results should each be 1. When using a remote Runner, the Agent must pull the outputs you want to
-inspect into the local Session before declaring them as artifacts. Files in the remote Workspace do
-not automatically appear in the artifact panel on the right.
+This tutorial generates 2 candidates by default, so the RFdiffusion PDB, ProteinMPNN PDB, Protenix
+input, and Protenix confidence-result counts should be **2/2/2/2**. If you change the number of
+designs in the prompt to 4, those counts should become **4/4/4/4**. More designs generally require
+more model runtime and storage. When using a remote Runner, the Agent must pull the outputs you want
+to inspect into the local Session before declaring them as artifacts. Files in the remote Workspace
+do not automatically appear in the artifact panel on the right.
 
 In **Artifacts**, open the `.cif` file under `04_protenix_output`. On the **Preview** tab, click
 **Open the interactive Mol* viewer**. You can rotate and zoom the Protenix prediction and inspect it
@@ -253,11 +256,13 @@ by chain directly inside ScienceDiscovery.
 Chains use different colors, and you can select residues, switch representations, or measure the
 structure.*
 
-Finally, distinguish **pipeline success** from **a candidate passing screening**. For example, one
-full run returned `FAIL_low_interface_confidence`, ipTM 0.275, pTM 0.375, and hotspot contact 1/3.
-All model and screening stages succeeded, but this candidate had insufficient interface confidence:
-it is a valid negative scientific result. By contrast, an unmappable hotspot, missing stage files,
-or a non-zero Execution exit code indicates a run failure.
+Open `protenix_screening_summary.csv` to compare each candidate's screening status, ipTM, pTM, and
+hotspot contact row by row, then open its corresponding `.cif` file to inspect the structure. A
+multi-candidate run can contain both PASS and FAIL results; one candidate missing a threshold does
+not mean that the pipeline failed. For example, a candidate with `FAIL_low_interface_confidence`,
+ipTM 0.275, pTM 0.375, and hotspot contact 1/3 has insufficient interface confidence but remains a
+valid scientific negative result. An unmappable hotspot, missing stage files, or a non-zero
+Execution exit code indicates a run failure.
 
 ## Troubleshooting
 
@@ -267,7 +272,7 @@ or a non-zero Execution exit code indicates a run failure.
   Runner and approve the environment change. The Skill creates or updates an environment on the
   same Runner, then rechecks the full `requirements.txt`.
 - **NPU unavailable:** Return to system configuration and confirm that the Runner detected the
-  device as sandbox-usable and that it is selected for the current Session.
+  device as sandbox-usable and that the selection was saved on the Runner card.
 - **Hotspot validation fails:** Use the available chains and CA residues listed in the error to fix
   the numbering. Do not ask the Agent to guess.
 - **Screening result is FAIL:** If all five stages and both reports are complete, the candidate

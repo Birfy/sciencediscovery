@@ -2,7 +2,7 @@
 
 **大约需要你 30 分钟完成配置与执行，首次资源准备和模型运行时间另计。**
 
-本教程带你使用 `antibody-design` Skill，在本地或远程 Ascend NPU Runner 上完成一次
+本教程带你使用内置的 `antibody-design` Skill，在远程 Ascend NPU Runner 上完成一次
 RFdiffusion → ProteinMPNN → Protenix → screening 抗体设计。结束时你会得到候选结构、
 Protenix 置信度结果，以及一份说明候选是否通过筛选的 Markdown/CSV 报告。
 
@@ -14,8 +14,7 @@ Protenix 置信度结果，以及一份说明候选是否通过筛选的 Markdow
 ## 1. 创建 Project 与 Session
 
 新建一个 Project，例如 `antibody-design-demo`，再在其中创建一个 Session。本教程后续的 Runner 配置、
-输入文件上传和任务下发都以这个 Session 为准。先在 Session 设置中启用 `antibody-design` Skill，之后保持
-当前 Session 打开。
+输入文件上传和任务下发都以这个 Session 为准，之后保持当前 Session 打开。
 
 如果使用远程 Runner，上传到本地 Session 的文件还需要同步到该 Runner 的 Workspace。模型代码和权重
 留在远程 Workspace 中即可，不需要来回复制。
@@ -37,8 +36,7 @@ hotspot 必须能在目标抗原 PDB 中找到对应的 CA 原子。不要只写
 
 ## 3. 添加并连接 Runner
 
-如果 NPU 就在 ScienceDiscovery 所在的 Linux 机器上，可以直接使用**本地 Runner**，跳到“选择 NPU”。
-如果 NPU 在另一台机器上，按下面的步骤添加远程 Runner：
+本教程以通过 SSH 连接另一台 Ascend Linux 机器为例。按下面的步骤添加远程 Runner：
 
 1. 打开 **系统设置 → Runner**，点击 **添加 Runner**。
 2. 选择 **添加 SSH 机器**。填写 SSH 别名或 IP/主机名、端口、用户名，以及密码或私钥；也可以从本机
@@ -58,7 +56,7 @@ hotspot 必须能在目标抗原 PDB 中找到对应的 CA 原子。不要只写
 机器级依赖，不会由 Skill 安装。连接失败时打开**连接过程**查看具体步骤；连接成功后可点击**检查连接**和
 **刷新资源**确认 Runner 版本、磁盘、CPU、内存和 NPU 清单均已返回。
 
-### 3.1 选择 NPU
+### 3.1 为远程 Runner 选择 NPU
 
 在这个 Runner 的 **NPU 卡**区域查看探测结果，只勾选标为“沙箱内可用”的卡，然后点击**保存勾选**。
 如果没有报告 NPU，先检查远端驱动和 `npu-smi`；如果卡存在但显示无法在沙箱中打开，先释放被占用的卡或
@@ -165,8 +163,8 @@ Protenix 的官方权重。
 4. Protenix 预测结构并给出置信度。
 5. screening 汇总界面置信度和 hotspot 接触情况。
 
-不要使用旧的 Host NPU Broker、`nohup` 或持久 kernel 启动模型，也不要因为等待结束、网络抖动或状态暂时
-显示 `unknown` 就提交第二次。管理通道可以在不占用 Workspace 写锁的情况下继续读取状态和日志。
+不要使用旧的 Host NPU Broker、`nohup` 或持久 kernel 启动模型，也不要因为等待结束或网络抖动就提交
+第二次。管理通道可以在不占用 Workspace 写锁的情况下继续读取状态和日志。
 
 ## 9. 看着它跑
 
@@ -179,7 +177,8 @@ Protenix 的官方权重。
 
 一条真实的单候选运行使用 `diffuser_t=200`、`final_step=160`，约 17 分 20 秒完成，四类模型阶段计数为
 **1/1/1/1**，并生成了两份 screening 文件。你的耗时会随 Runner、网络和模型缓存状态变化；需要判断的是
-同一条 Execution 是否完整走完，而不是某一次等待有没有及时返回。
+同一条 Execution 是否完整走完，而不是某一次等待有没有及时返回。这组数据只用于提供单候选耗时参考；
+本教程默认的 2 个候选会在同一条 Execution 中依次或并行完成，具体总耗时取决于可用 NPU 数量。
 
 ![实机运行结束后的筛选摘要与产物入口](../../images/antibody-design/execution-session.png)
 
@@ -201,9 +200,10 @@ antibody_pipeline/runs/<run_name>/
     protenix_screening_summary.csv
 ```
 
-对于一个设计，RFdiffusion、ProteinMPNN、Protenix 输入和 Protenix 置信度结果的计数应当都是 1。使用远程
-Runner 时，Agent 需要先把你要查看的输出拉回本地 Session，再声明为产物；远程 Workspace 中的文件不会
-自动出现在右侧产物栏。
+本教程默认生成 2 个候选，因此 RFdiffusion PDB、ProteinMPNN PDB、Protenix 输入和 Protenix 置信度结果
+应分别得到 **2/2/2/2**；把提示词中的设计数量改为 4 时，四类计数应相应变成 **4/4/4/4**。设计数量越多，
+模型运行时间和存储占用通常也越大。使用远程 Runner 时，Agent 需要先把你要查看的输出拉回本地 Session，
+再声明为产物；远程 Workspace 中的文件不会自动出现在右侧产物栏。
 
 在右侧**产物**中打开 `04_protenix_output` 下的 `.cif` 文件，进入**预览**后点击 **Open the interactive
 Mol* viewer**，就能直接在 ScienceDiscovery 中旋转、缩放并按链查看 Protenix 预测结构。
@@ -213,16 +213,18 @@ Mol* viewer**，就能直接在 ScienceDiscovery 中旋转、缩放并按链查�
 *完整参数实机运行生成的 Protenix CIF 已在 ScienceDiscovery 内置 Mol* 查看器中打开；图中以不同颜色显示
 复合物中的链，可以继续选择残基、切换表示方式或测量结构。*
 
-最后认真区分**流水线成功**和**候选通过筛选**。例如一次完整运行得到 `FAIL_low_interface_confidence`、
-ipTM 0.275、pTM 0.375、hotspot contact 1/3：这表示所有模型和筛选步骤都成功，但这个候选的界面置信度
-不够，是有效的科学负结果。相反，hotspot 无法映射、阶段文件缺失或 Execution 非零退出才是运行失败。
+打开 `protenix_screening_summary.csv` 可以按候选逐行比较筛选状态、ipTM、pTM 和 hotspot contact，再打开
+对应的 `.cif` 查看结构。多个候选可以同时出现 PASS 和 FAIL；单个候选没有通过阈值，不代表整条流水线失败。
+例如某个候选得到 `FAIL_low_interface_confidence`、ipTM 0.275、pTM 0.375、hotspot contact 1/3，表示它的
+界面置信度不足，是有效的科学负结果。相反，hotspot 无法映射、阶段文件缺失或 Execution 非零退出才是
+运行失败。
 
 ## 常见问题
 
 - **下载失败**：检查四个域名是否都在沙箱白名单中，并查看原 Execution 日志；不要换非官方镜像。
 - **没有可用环境**：确认 Runner 的托管科学环境已开启并批准环境变更；Skill 会在同一 Runner 上创建或更新
   环境，再按完整 `requirements.txt` 复检。
-- **NPU 不可用**：回到系统设置确认卡已被 Runner 探测为 sandbox-usable 并已为当前 Session 选择。
+- **NPU 不可用**：回到系统设置确认卡已被 Runner 探测为 sandbox-usable，并已在 Runner 卡片中保存勾选。
 - **hotspot 校验失败**：使用错误信息列出的可用链与 CA 残基修正编号，不要让 Agent 自动猜测。
 - **筛选结果为 FAIL**：只要五个阶段和两份报告完整，这通常是候选未过科学阈值，不是系统故障。
 
