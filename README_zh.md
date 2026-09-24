@@ -28,11 +28,12 @@ ScienceDiscovery 是一个基于 [JiuwenSwarm](https://gitcode.com/openJiuwen/ji
 预打包二进制是完成首次运行的最短路径。请在
 [Releases 页面](https://github.com/openJiuwen-ai/sciencediscovery/releases)下载与架构匹配的
 `ScienceDiscovery-<version>-linux-x86_64`（x86_64）或
-`ScienceDiscovery-<version>-linux-aarch64`（arm64），再执行：
+`ScienceDiscovery-<version>-linux-aarch64`（arm64）。请将下载的文件重命名为
+`ScienceDiscovery`，再执行：
 
 ```bash
-chmod +x ScienceDiscovery-<version>-linux-<architecture>
-./ScienceDiscovery-<version>-linux-<architecture> serve
+chmod +x ./ScienceDiscovery
+./ScienceDiscovery serve
 ```
 
 打开 `serve` 输出的 **`Open to sign in`** 链接，浏览器将自动保存本地服务访问令牌，无需手动复制。该令牌不同于模型 API Key；此链接可访问本机工作区，请勿外传。Web 界面位于 <http://127.0.0.1:4310>，终端窗口仅运行服务进程。

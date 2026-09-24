@@ -32,7 +32,7 @@ After its service is running, continue with [Configure a task model](#3-configur
 
 ## 2. Start ScienceDiscovery
 
-The following commands assume the `ScienceDiscovery` executable is in the current directory:
+Rename the downloaded release asset to `ScienceDiscovery` and place it in the current directory:
 
 ```bash
 chmod +x ./ScienceDiscovery

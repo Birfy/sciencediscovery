@@ -91,7 +91,7 @@ working.
 
 ## 7. Read the result
 
-![Starting point and winner as two versions of one artifact](../../images/evolve/result-diff-en.png)
+![Example diff view for an evolution search](../../images/evolve/result-diff-en.png)
 
 When it finishes, the starting point and the winner are two versions of the same artifact. Open
 the diff and read what actually changed — this is the part worth your time, because it tells you

@@ -29,11 +29,12 @@ executes on your own machine, against your own files, with your own model keys.
 The prepackaged binary is the shortest path to a first run. On the
 [Releases page](https://github.com/openJiuwen-ai/sciencediscovery/releases), download
 the `ScienceDiscovery-<version>-linux-x86_64` asset for x86_64 or the
-`ScienceDiscovery-<version>-linux-aarch64` asset for arm64, then run:
+`ScienceDiscovery-<version>-linux-aarch64` asset for arm64. Rename the downloaded
+file to `ScienceDiscovery`, then run:
 
 ```bash
-chmod +x ScienceDiscovery-<version>-linux-<architecture>
-./ScienceDiscovery-<version>-linux-<architecture> serve
+chmod +x ./ScienceDiscovery
+./ScienceDiscovery serve
 ```
 
 Open the **`Open to sign in`** URL that `serve` prints. The browser stores the local service access token automatically, so there is nothing to copy. That token is distinct from a model API key, and the URL grants access to this machine's workspace — keep it private. The web interface is served at <http://127.0.0.1:4310>; the terminal window only runs the service.

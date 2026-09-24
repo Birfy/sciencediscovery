@@ -8,6 +8,11 @@ reviewing results.
 
 This case is a typical cross-database literature research task: the agent must search PubMed and bioRxiv for papers published 2023–2025 that compare gene expression in adult versus pediatric liver parenchymal cells, focus on immune-related pathways, and generate a bar chart of gene-count comparison for the top 14 enriched pathways, while flagging contradictory findings across studies.
 
+**bioRxiv search coverage:** The built-in search checks a rolling day window (`days`, default 30),
+then filters those records by text. It returns up to five matches by default (`limit`) and does not
+accept fixed calendar start and end dates. The 2023–2025 period in this case may not be covered.
+Check the returned dates before comparing the two sources.
+
 A task like this normally takes researchers days of manual reading and data extraction, with low
 efficiency and a high risk of omissions. ScienceDiscovery orchestrates multiple intelligent tools
 to automate the workflow end to end:
@@ -168,7 +173,9 @@ Search PubMed and bioRxiv for papers published 2023-2025 comparing gene
 expression in adult vs pediatric liver parenchymal cells. Focus on immune-related
 pathways. Generate a pathway enrichment bar chart showing gene count comparison
 between the two populations for the top 14 enriched pathways. Flag any
-contradictory findings across studies.
+contradictory findings across studies. In the report, state the date range and number of records
+returned by each source. For bioRxiv, state which parts of 2023-2025 are not represented because they
+fall outside the dates returned. An uncovered year does not mean there are no papers.
 ```
 
 Click **Run analysis**.
@@ -189,10 +196,13 @@ While a task runs, the Agent pauses before high-risk operations and pops a permi
 | scientific-environments | The Agent calls `environment_install` and other managed-environment change tools |
 | web | The Agent calls `web_search` or `web_fetch` to make a public-network request |
 
-Authorization applies to the current Session by default. To persist it at the Project or Global scope, go to **System configuration → Permissions** to adjust or revoke it.
+The card offers **Allow once**, **Allow same type**, and **Deny**. **Allow same type** creates a
+revocable grant for the same action and normalized resource class in the current Session. You can
+review or revoke that grant under **System configuration → Permissions**. The separate **Always
+allow** control in the composer changes the Session's approval mode and automatically approves every
+tool call while that mode is active; it is not a button on an individual permission card.
 
-If you do not want to confirm manually each time a card appears, click **Always allow** on that card to grant long-term authorization for that operation category.
-![Permission approval card](../../images/permission-en.png)
+![Permission approval card illustration](../../images/permission-en.png)
 
 ---
 
@@ -203,6 +213,11 @@ source literature, and execution chain, so the report's statements can be checke
 recorded evidence. The graph makes the result traceable and reviewable, shortening literature
 research that would normally take days to minutes while avoiding an opaque, unconstrained
 report-generation path.
+
+Before relying on the cross-database comparison, check the date range and number of records returned
+by each source. If the bioRxiv results do not cover all of 2023–2025, treat that part of the
+comparison as incomplete; the absence of returned papers from an uncovered year does not show that
+no such papers exist.
 
 ### 7.1 View artifacts
 

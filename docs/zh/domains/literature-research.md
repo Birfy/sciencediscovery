@@ -6,6 +6,9 @@
 
 本案例是一项典型的跨数据库文献调研任务：智能体需同时检索 PubMed 和 bioRxiv 中 2023–2025 年间发表的论文，比较成人与儿童肝实质细胞的基因表达差异，重点关注免疫相关通路，并生成前 14 条富集通路的基因计数对比柱状图，同时标记不同文献间的矛盾结论。
 
+**bioRxiv 检索范围：**内置搜索按滚动天数窗口检索（`days` 默认值为 30），再对窗口内返回的记录进行文本筛选；默认最多返回 5 条匹配记录（`limit`）。
+它不支持指定固定的日历起止日期。本案例要求检索 2023–2025 年的论文，但默认窗口未必覆盖这些年份。比较两个来源前，请核对实际返回的论文日期。
+
 此类任务通常需要研究人员花费数天时间人工阅读与数据提取，效率低且容易遗漏。ScienceDiscovery 通过编排多种智能工具，可实现端到端自动化：
 
 - **检索阶段**：调用文献搜索 MCP 工具，自动构建检索策略，并行查询两个数据库。
@@ -152,7 +155,9 @@ Search PubMed and bioRxiv for papers published 2023-2025 comparing gene
 expression in adult vs pediatric liver parenchymal cells. Focus on immune-related
 pathways. Generate a pathway enrichment bar chart showing gene count comparison
 between the two populations for the top 14 enriched pathways. Flag any
-contradictory findings across studies.
+contradictory findings across studies. In the report, state the date range and number of records
+returned by each source. For bioRxiv, state which parts of 2023-2025 are not represented because they
+fall outside the dates returned. An uncovered year does not mean there are no papers.
 ```
 
 点击 **运行分析**。
@@ -172,14 +177,18 @@ contradictory findings across studies.
 | scientific-environments | Agent 调用 `environment_install` 等托管环境变更工具 |
 | web | Agent 调用 `web_search` 或 `web_fetch` 发起公网请求 |
 
-授权默认仅作用于当前 Session。如需在 Project 或 Global 范围内持久化，可前往 **系统配置 → Permissions** 进行调整或撤销。
+权限卡片提供 **仅允许一次（Allow once）**、**允许同类操作（Allow same type）**和 **拒绝（Deny）**。
+选择“允许同类操作”会在当前 Session 中，按相同动作和标准化资源类别创建可撤销授权，可在**系统配置 → Permissions**中查看或撤销。
+撰写框中的 **始终允许（Always allow）**是另一个独立控件，它会切换当前 Session 的审批模式；启用期间，所有工具调用都会自动批准，并非权限卡片上的按钮。
 
-如果不希望在每次出现审批卡时手动确认，可在对应卡片中点击 **始终允许（Always allow）**，授予该操作类别的长期授权。
 ![权限审批卡片](../../images/permission.png)
 
 ---
 
 ## 7. 查看结果
+
+依据跨数据库比较结论前，先核对各来源实际返回的日期范围和记录数。如果 bioRxiv 结果未覆盖完整的
+2023–2025 年，相关比较应视为不完整。未被检索覆盖的年份没有返回论文，并不能说明该年没有相关论文。
 
 智能体输出一份带有可点击引用标签的报告。每个标签对应其引用内容、来源文献与执行链路，因此可沿已记录证据检查报告中的论述。图谱让结果可追溯、可复核，将原本需要数天的文献调研缩短到分钟级，避免报告生成过程成为不可查看依据的黑箱。
 

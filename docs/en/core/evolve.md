@@ -121,7 +121,7 @@ candidates marked ↔, and each cell's complexity/diversity coordinates:
 The starting point and the winner are saved as two versions of the same artifact, so the result
 is a diff rather than a loose file, and a further search can be started from either version.
 
-![Diffing the starting point against the winning candidate](../../images/evolve/result-diff-en.png)
+![Example diff view for an evolution search](../../images/evolve/result-diff-en.png)
 
 The run is also mirrored into [ScienceMemory](../developer-docs/science-memory.md) when that is enabled: the search
 node links to its starting point through an `input` edge and to its result through `produces`, and

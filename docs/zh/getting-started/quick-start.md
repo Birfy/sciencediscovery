@@ -30,7 +30,7 @@ sudo apt-get install -y bubblewrap   # Debian / Ubuntu
 
 ## 2. 启动 ScienceDiscovery
 
-以下命令假设 `ScienceDiscovery` 可执行文件位于当前目录：
+请将下载的发行文件重命名为 `ScienceDiscovery`，并放在当前目录：
 
 ```bash
 chmod +x ./ScienceDiscovery
