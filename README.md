@@ -117,6 +117,14 @@ extraction, permissions, provenance, and review checks stay enforced by the Node
 
 The complete English and Chinese indexes are in [docs/README.md](docs/README.md); development setup and test commands are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
+## Join the community
+
+Join the ScienceDiscovery community on [Slack][slack-invite] or scan this QR code:
+
+[slack-invite]: https://join.slack.com/t/sciencediscovery-hq/shared_invite/zt-4avv6fbom-uLrBalsUBR45N9sC2mGO~A
+
+<img src="docs/images/slack.png" alt="ScienceDiscovery Slack community invite QR code" width="200">
+
 ## License
 
 [Apache License 2.0](LICENSE).
