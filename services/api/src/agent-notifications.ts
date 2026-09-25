@@ -90,18 +90,19 @@ export class AgentNotifications {
   }
 
   /** A user resuming one child is also explicitly resuming this Session's
-   * automatic wakeups.  A global Stop closes both gates, so reopening only the
-   * child would leave its retained completion notice permanently undeliverable.
+   * automatic wakeups. A Session Stop closes the global gate, so reopening only
+   * the child would leave its retained completion notice undeliverable.
    * Keep both updates in one transaction: a partial resume must never expose a
    * child as runnable while its Session remains stopped. */
   resumeAgent(owner: ExecutionOwner): void {
     if (this.archived(owner.sessionId)) throw new Error("Archived Session cannot resume automatic wakeups");
     this.transaction(() => {
       this.gate(owner.sessionId);
-      this.db.prepare("UPDATE agent_wake_gates SET stopped = 0, epoch = epoch + 1 WHERE session = ?")
+      // Do not invalidate another agent's prepared delivery when the Session is already open.
+      this.db.prepare("UPDATE agent_wake_gates SET stopped = 0, epoch = epoch + 1 WHERE session = ? AND stopped = 1")
         .run(owner.sessionId);
       this.agentGate(owner);
-      this.db.prepare("UPDATE agent_instance_wake_gates SET stopped = 0, epoch = epoch + 1 WHERE session = ? AND agent = ?")
+      this.db.prepare("UPDATE agent_instance_wake_gates SET stopped = 0, epoch = epoch + 1 WHERE session = ? AND agent = ? AND stopped = 1")
         .run(owner.sessionId, owner.agentId);
     });
   }
