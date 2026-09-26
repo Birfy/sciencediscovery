@@ -20,7 +20,7 @@ import assert from "node:assert/strict";
 import { spawn, execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const sha = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
@@ -75,6 +75,7 @@ try {
     SCIENCE_AGENT_RUNNER_PORT: String(runnerPort), SCIENCE_AGENT_RUNNER_HOST: "127.0.0.1",
     SCIENCE_AGENT_RUNNER_URL: `http://127.0.0.1:${runnerPort}`,
     SCIENCE_AGENT_MEMORY_GRAPH_PORT: String(graphPort), SCIENCE_AGENT_MEMORY_GRAPH_URL: graph,
+    SCIENCE_AGENT_MEMORY_GRAPH_DATA_DIR: resolve(data, "memory-graph"),
     SCIENCE_AGENT_EVOLVE_PORT: String(evolvePort), SCIENCE_AGENT_EVOLVE_URL: `http://127.0.0.1:${evolvePort}`,
     SCIENCE_AGENT_AUTH_TOKEN: token, SCIENCE_AGENT_RUNNER_TOKEN: token,
     SCIENCE_AGENT_MEMORY_GRAPH_INTERNAL_TOKEN: graphToken,
@@ -96,6 +97,7 @@ try {
     });
     const settings = await call(api, "/api/memory/settings", token, "PUT", { enabled: true, backend: "local" });
     assert.equal(settings.memoryGraphStatus, "healthy");
+    await access(resolve(data, "memory-graph"));
     return "API and graph health 200; local memory enabled";
   });
 
@@ -104,7 +106,7 @@ try {
     const newProject = await call(api, "/api/projects", token, "POST", { name: "Fresh scope journey" }, 201);
     sessionId = oldProject.firstSession.id;
     freshSessionId = newProject.firstSession.id;
-    const subagent = "folded-journey";
+    const subagent = `folded-journey-${randomUUID()}`;
     scopeId = `subtask:subagent:${subagent}`;
     const observed = await call(graph, "/observe/subagent", graphToken, "POST", {
       subagent_id: subagent, session_id: sessionId, turn_id: "turn-1", objective: "Collect two papers",
@@ -138,7 +140,7 @@ try {
     });
     assert.deepEqual(new Set(expansion.nodes.map(node => node.id)), new Set(["paper:first", "paper:second"]));
     assert.deepEqual(new Set(expansion.edges.map(edge => edge.extra.via_child)), new Set([
-      `subtask:subagent:folded-journey:exec:first`, `subtask:subagent:folded-journey:exec:second`,
+      `${scopeId}:exec:first`, `${scopeId}:exec:second`,
     ]));
     return "Aggregate count 2; expansion has two Papers and their distinct child identities";
   });
