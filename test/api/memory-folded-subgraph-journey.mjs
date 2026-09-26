@@ -128,7 +128,10 @@ try {
     assert.equal(folded.reason, undefined);
     const aggregateId = `_group:${scopeId}:Paper`;
     const aggregate = folded.nodes.find(node => node.id === aggregateId);
-    assert.equal(aggregate?.extra?.count, 2);
+    assert.equal(aggregate?.extra?.count, 2, JSON.stringify({
+      nodes: folded.nodes.map(node => ({ id: node.id, label: node.label })),
+      edges: folded.edges.map(edge => ({ source: edge.source, target: edge.target, type: edge.type })),
+    }));
     assert.deepEqual(new Set(aggregate.extra.members), new Set(["paper:first", "paper:second"]));
     const expansion = await call(api, "/api/memory/query/group-expansion", token, "POST", {
       group_id: aggregateId, session_id: sessionId,
