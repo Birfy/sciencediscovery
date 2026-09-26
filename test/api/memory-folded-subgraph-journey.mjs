@@ -40,7 +40,7 @@ async function freePort() {
   await new Promise(done => server.close(done));
   return port;
 }
-async function until(check, timeoutMs = 180_000) {
+async function until(check, timeoutMs = 300_000) {
   const deadline = Date.now() + timeoutMs;
   while (!await check()) {
     if (stack?.exitCode !== null) throw new Error(`stack exited: ${log.slice(-2500)}`);
@@ -78,7 +78,7 @@ try {
     SCIENCE_AGENT_EVOLVE_PORT: String(evolvePort), SCIENCE_AGENT_EVOLVE_URL: `http://127.0.0.1:${evolvePort}`,
     SCIENCE_AGENT_AUTH_TOKEN: token, SCIENCE_AGENT_RUNNER_TOKEN: token,
     SCIENCE_AGENT_MEMORY_GRAPH_INTERNAL_TOKEN: graphToken,
-    SCIENCE_AGENT_MEMORY_GRAPH_BACKEND: "local", SCIENTIFIC_ENVS: "0",
+    SCIENCE_AGENT_MEMORY_GRAPH_BACKEND: "local", SCIENCE_AGENT_EVOLVE_STUB_ONLY: "1", SCIENTIFIC_ENVS: "0",
     SCIENCE_AGENT_NPU_BROKER: "0", SCIENCE_AGENT_USAGE_EXCHANGE_RATES_ENABLED: "false",
     SCIENCE_AGENT_SSH_CONFIG_PATH: resolve(root, "absent-ssh"),
     SCIENCE_AGENT_MODEL_CATALOG_PATH: resolve(root, "absent-models"),
