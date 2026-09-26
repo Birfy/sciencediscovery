@@ -83,7 +83,9 @@ try {
     SCIENCE_AGENT_SSH_CONFIG_PATH: resolve(root, "absent-ssh"),
     SCIENCE_AGENT_MODEL_CATALOG_PATH: resolve(root, "absent-models"),
   };
-  stack = spawn("bash", ["scripts/start-stack.sh", "--mode", "local"], { env, stdio: ["ignore", "pipe", "pipe"] });
+  stack = spawn("bash", ["scripts/start-stack.sh", "--mode", "local"], {
+    env, detached: true, stdio: ["ignore", "pipe", "pipe"],
+  });
   for (const stream of [stack.stdout, stack.stderr]) stream.on("data", chunk => { log += redact(chunk); });
 
   await step("1. Start isolated product", "API, Runner, and local memory graph are healthy", async () => {
@@ -152,11 +154,16 @@ try {
   console.error(redact(error.stack));
   process.exitCode = 1;
 } finally {
-  if (stack && stack.exitCode === null) {
-    const stopped = new Promise(done => stack.once("exit", done));
-    stack.kill("SIGTERM");
-    const timer = setTimeout(() => stack.kill("SIGKILL"), 15_000);
-    await stopped; clearTimeout(timer);
+  if (stack) {
+    const stopped = stack.exitCode === null && stack.signalCode === null
+      ? new Promise(done => stack.once("exit", done)) : Promise.resolve();
+    try { process.kill(-stack.pid, "SIGTERM"); } catch (error) { if (error.code !== "ESRCH") throw error; }
+    let timer;
+    await Promise.race([stopped, new Promise(done => { timer = setTimeout(done, 10_000); })]);
+    clearTimeout(timer);
+    // start-stack launches children in the same process group. The shell may
+    // exit before all of them, so finish the group before removing its data.
+    try { process.kill(-stack.pid, "SIGKILL"); } catch (error) { if (error.code !== "ESRCH") throw error; }
   }
   const report = ["# Folded memory subgraph API journey", "",
     `Outcome: ${outcome}; SHA: ${sha}; time: ${new Date().toISOString()}`, "",
