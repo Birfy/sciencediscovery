@@ -207,6 +207,40 @@ def test_unwind_refuses_large_collection_before_rows_materialize(
     assert stats.intermediate_peak == 0
 
 
+def test_repeated_small_collections_stop_before_cumulative_payload_grows(
+    tmp_path: Path,
+) -> None:
+    from sciencediscovery_memory_graph import _cypher
+
+    h = _handle(tmp_path)
+    stats = _cypher.QueryStats()
+    with pytest.raises(_cypher.CypherBudgetExceeded, match="cumulative collection"):
+        _cypher.execute(h.graph, "UNWIND range(1, 4000) AS i "
+                        "RETURN range(1, 4000) AS xs", {}, stats)
+    assert stats.collection_elements <= _cypher._MAX_COLLECTION_ELEMENTS
+    assert stats.work < _cypher._MAX_QUERY_WORK
+
+    # A failed statement with a preceding write must not leave that write behind.
+    with pytest.raises(_cypher.CypherBudgetExceeded, match="cumulative collection"):
+        h.session().run("CREATE (:Doomed {k: 1}) WITH 1 AS i "
+                        "UNWIND range(1, 4000) AS n RETURN range(1, 4000) AS xs")
+    assert h.session().run("MATCH (n:Doomed) RETURN count(n) AS n").single()["n"] == 0
+
+
+def test_list_concatenation_charges_output_before_allocation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from sciencediscovery_memory_graph import _cypher
+    from sciencediscovery_memory_graph.local_graph import Graph
+
+    monkeypatch.setattr(_cypher, "_MAX_COLLECTION_ELEMENTS", 7_000)
+    stats = _cypher.QueryStats()
+    with pytest.raises(_cypher.CypherBudgetExceeded, match="cumulative collection"):
+        _cypher.execute(Graph(), "RETURN $left + $right AS xs",
+                        {"left": list(range(4000)), "right": list(range(4000))}, stats)
+    assert stats.collection_elements == 0
+
+
 def test_empty_session_uses_index_despite_historical_nodes(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
 ) -> None:

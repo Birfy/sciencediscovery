@@ -57,6 +57,7 @@ class CypherBudgetExceeded(CypherError):
 _MAX_QUERY_WORK = 250_000
 _MAX_INTERMEDIATE_ROWS = 50_000
 _MAX_PATH_ELEMENTS = 500_000
+_MAX_COLLECTION_ELEMENTS = 500_000
 _MAX_QUERY_SECONDS = 10.0
 
 
@@ -66,6 +67,7 @@ class QueryStats:
     intermediate_peak: int = 0
     traversals: int = 0
     path_elements: int = 0
+    collection_elements: int = 0
 
 
 # --- Lexer -------------------------------------------------------------------
@@ -796,17 +798,6 @@ def _sort_key(v: Any) -> tuple:
     return (5, repr(v))
 
 
-def _export(v: Any) -> Any:
-    """Convert internal values to what the HTTP API returns for a row cell."""
-    if isinstance(v, (Node, Rel)):
-        return dict(v.props)
-    if isinstance(v, list):
-        return [_export(x) for x in v]
-    if isinstance(v, dict):
-        return {k: _export(x) for k, x in v.items()}
-    return v
-
-
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
@@ -878,6 +869,26 @@ class Executor:
         if size > _MAX_INTERMEDIATE_ROWS:
             raise CypherBudgetExceeded("local query intermediate row or collection budget exceeded")
 
+    def _collection(self, size: int) -> None:
+        """Charge a new list/map before allocation, across the whole statement."""
+        self._capacity(size)
+        if size > _MAX_COLLECTION_ELEMENTS - self.stats.collection_elements:
+            raise CypherBudgetExceeded("local query cumulative collection payload budget exceeded")
+        self.stats.collection_elements += size
+
+    def _export(self, value: Any) -> Any:
+        """Copy values for the HTTP result under the same allocation budget."""
+        if isinstance(value, (Node, Rel)):
+            self._collection(len(value.props))
+            return dict(value.props)
+        if isinstance(value, list):
+            self._collection(len(value))
+            return [self._export(item) for item in value]
+        if isinstance(value, dict):
+            self._collection(len(value))
+            return {key: self._export(item) for key, item in value.items()}
+        return value
+
     def _path_copy(self, size: int) -> None:
         self.stats.path_elements += size
         if self.stats.path_elements > _MAX_PATH_ELEMENTS:
@@ -903,7 +914,7 @@ class Executor:
                     seen.add(k)
                     deduped.append(r)
             rows = deduped
-        return columns, [[_export(c) for c in r] for r in rows]
+        return columns, [[self._export(c) for c in r] for r in rows]
 
     def _run_clauses(self, clauses: list[Any], rows: list[Row]) -> tuple[list[str], list[list[Any]]]:
         columns: list[str] = []
@@ -960,6 +971,7 @@ class Executor:
                 raise CypherError(f"variable `{e[1]}` not defined") from None
             if isinstance(value, _PathRef):
                 self._path_copy(value.length)
+                self._collection(value.length)
                 return value.relations()
             return value
         if tag == "lit":
@@ -1051,10 +1063,10 @@ class Executor:
         if tag == "case":
             return self._case(e, row, group)
         if tag == "list":
-            self._capacity(len(e[1]))
+            self._collection(len(e[1]))
             return [self.ev(x, row, group) for x in e[1]]
         if tag == "map":
-            self._capacity(len(e[1]))
+            self._collection(len(e[1]))
             return {k: self.ev(x, row, group) for k, x in e[1]}
         if tag == "idx":
             base, idx = self.ev(e[1], row, group), self.ev(e[2], row, group)
@@ -1072,6 +1084,8 @@ class Executor:
                 return None
             lo = self.ev(e[2], row, group) if e[2] is not None else None
             hi = self.ev(e[3], row, group) if e[3] is not None else None
+            if isinstance(base, list):
+                self._collection(len(range(*slice(lo, hi).indices(len(base)))))
             return base[lo:hi]
         if tag == "reduce":
             acc = self.ev(e[2], row, group)
@@ -1081,12 +1095,13 @@ class Executor:
             return acc
         raise CypherError(f"unsupported expression {tag}")
 
-    @staticmethod
-    def _arith(op: str, a: Any, b: Any) -> Any:
+    def _arith(self, op: str, a: Any, b: Any) -> Any:
         if a is None or b is None:
             return None
         if op == "+":
             if isinstance(a, list) or isinstance(b, list):
+                size = (len(a) if isinstance(a, list) else 1) + (len(b) if isinstance(b, list) else 1)
+                self._collection(size)
                 return (a if isinstance(a, list) else [a]) + (b if isinstance(b, list) else [b])
             if isinstance(a, str) or isinstance(b, str):
                 return f"{_to_string(a)}{_to_string(b)}"
@@ -1132,13 +1147,21 @@ class Executor:
         if name == "elementid" or name == "id":
             return vals[0].id if vals[0] is not None else None
         if name == "labels":
-            return list(vals[0].labels) if vals[0] is not None else None
+            if vals[0] is None:
+                return None
+            self._collection(len(vals[0].labels))
+            return list(vals[0].labels)
         if name == "type":
             return vals[0].type if vals[0] is not None else None
         if name == "properties":
-            return dict(vals[0].props) if isinstance(vals[0], (Node, Rel)) else vals[0]
+            if isinstance(vals[0], (Node, Rel)):
+                self._collection(len(vals[0].props))
+                return dict(vals[0].props)
+            return vals[0]
         if name == "keys":
-            return list(vals[0].props) if isinstance(vals[0], (Node, Rel)) else list(vals[0] or {})
+            source = vals[0].props if isinstance(vals[0], (Node, Rel)) else vals[0] or {}
+            self._collection(len(source))
+            return list(source)
         if name == "size":
             return None if vals[0] is None else len(vals[0])
         if name == "range":
@@ -1146,7 +1169,7 @@ class Executor:
             step = vals[2] if len(vals) > 2 else 1
             values = range(lo, hi + (1 if step > 0 else -1), step)
             try:
-                self._capacity(len(values))
+                self._collection(len(values))
             except OverflowError as exc:
                 raise CypherBudgetExceeded("local query collection budget exceeded") from exc
             return list(values)
@@ -1186,6 +1209,7 @@ class Executor:
             value = self.ev(args[0], row)
             if value is not None:
                 self._capacity(len(values) + 1)
+                self._collection(1)
                 values.append(value)
         if distinct:
             seen: set[Any] = set()
@@ -1195,6 +1219,7 @@ class Executor:
                 k = _key(v)
                 if k not in seen:
                     seen.add(k)
+                    self._collection(1)
                     uniq.append(v)
             values = uniq
         if name == "count":
@@ -1453,6 +1478,7 @@ class Executor:
             if lst is None:
                 continue
             if not isinstance(lst, list):
+                self._collection(1)
                 lst = [lst]
             for item in lst:
                 self._charge()

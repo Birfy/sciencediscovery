@@ -105,10 +105,11 @@ class LocalSession:
         finally:
             elapsed = time.monotonic() - started
             if elapsed >= 0.25 or reason != "ok":
-                log.info("local query id=%s duration_ms=%d nodes=%d edges=%d work=%d traversals=%d intermediate_peak=%d path_elements=%d reason=%s",
+                log.info("local query id=%s duration_ms=%d nodes=%d edges=%d work=%d traversals=%d intermediate_peak=%d path_elements=%d collection_elements=%d reason=%s",
                          query_id, int(elapsed * 1000), len(self._g.nodes),
                          len(self._g.rels), stats.work, stats.traversals,
-                         stats.intermediate_peak, stats.path_elements, reason)
+                         stats.intermediate_peak, stats.path_elements,
+                         stats.collection_elements, reason)
         return _HttpResult(columns, rows)
 
     def folded_products(self, session_id: str, scope_id: str | None = None,
