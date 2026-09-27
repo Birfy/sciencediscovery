@@ -718,7 +718,7 @@ def _row_independent(e: Any) -> bool:
             return False
         if e and e[0] == "func" and (e[1] in _AGGREGATES or e[1] == "datetime"):
             return False
-        return all(_row_independent(part) for part in e[1:])
+        return all(_row_independent(part) for part in e)
     if isinstance(e, list):
         return all(_row_independent(part) for part in e)
     return True

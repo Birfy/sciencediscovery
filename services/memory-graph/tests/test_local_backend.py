@@ -228,6 +228,14 @@ def test_repeated_constant_collection_is_shared_across_result_rows(
     assert records[-1]["xs"][-1] == 4000
 
 
+def test_projection_cache_keeps_case_branches_row_dependent(tmp_path: Path) -> None:
+    h = _handle(tmp_path)
+    rows = h.session().run(
+        "UNWIND range(1, 2) AS i "
+        "RETURN CASE WHEN i = 1 THEN [1, 2] ELSE [2, 3] END AS xs")
+    assert [row["xs"] for row in rows] == [[1, 2], [2, 3]]
+
+
 def test_row_dependent_collections_stop_before_cumulative_payload_grows(
     tmp_path: Path,
 ) -> None:
