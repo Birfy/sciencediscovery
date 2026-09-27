@@ -828,6 +828,34 @@ def _to_string(v: Any) -> Any:
 Row = dict[str, Any]
 
 
+@dataclass(frozen=True, slots=True)
+class _PathRef:
+    """One relationship and a shared prefix; materialize only when observed."""
+
+    parent: _PathRef | None
+    rel: Rel | None
+    length: int
+
+    def relations(self) -> list[Rel]:
+        result: list[Rel] = []
+        path: _PathRef = self
+        while path.rel is not None:
+            result.append(path.rel)
+            assert path.parent is not None
+            path = path.parent
+        result.reverse()
+        return result
+
+    def relation_ids(self) -> set[str]:
+        result: set[str] = set()
+        path: _PathRef = self
+        while path.rel is not None:
+            result.add(path.rel.id)
+            assert path.parent is not None
+            path = path.parent
+        return result
+
+
 class Executor:
     def __init__(self, graph: Graph, params: dict[str, Any], stats: QueryStats | None = None) -> None:
         self.g = graph
@@ -927,9 +955,13 @@ class Executor:
         tag = e[0]
         if tag == "var":
             try:
-                return row[e[1]]
+                value = row[e[1]]
             except KeyError:
                 raise CypherError(f"variable `{e[1]}` not defined") from None
+            if isinstance(value, _PathRef):
+                self._path_copy(value.length)
+                return value.relations()
+            return value
         if tag == "lit":
             return e[1]
         if tag == "param":
@@ -1206,7 +1238,8 @@ class Executor:
                 self._capacity(len(pairs) + 1)
                 proj_row = {}
                 if proj.star:
-                    proj_row.update({k: v for k, v in row.items() if not k.startswith(" ")})
+                    proj_row.update({k: self.ev(("var", k), row)
+                                     for k in row if not k.startswith(" ")})
                 proj_row.update({i.name: self.ev(i.expr, row) for i in items})
                 pairs.append((row, proj_row))
         if proj.star:
@@ -1265,12 +1298,14 @@ class Executor:
         if i == len(parts):
             yield row
             return
-        for r2, used2 in self._match_part(parts[i], row, used):
+        for r2, used2 in self._match_part(parts[i], row, used,
+                                         preserve_used=i + 1 < len(parts)):
             yield from self._match_parts(parts, i + 1, r2, used2)
 
-    def _match_part(self, part: Part, row: Row, used: frozenset[str]) -> Iterator[tuple[Row, frozenset[str]]]:
+    def _match_part(self, part: Part, row: Row, used: frozenset[str],
+                    preserve_used: bool = True) -> Iterator[tuple[Row, frozenset[str]]]:
         for r1 in self._bind_start(part.nodes[0], row):
-            yield from self._extend(part, 0, r1, used)
+            yield from self._extend(part, 0, r1, used, preserve_used)
 
     def _bind_start(self, np: NodePat, row: Row) -> Iterator[Row]:
         if np.var in row:
@@ -1331,7 +1366,8 @@ class Executor:
                 rel = self.g.rels[rid]
                 yield rel, rel.src
 
-    def _extend(self, part: Part, i: int, row: Row, used: frozenset[str]) -> Iterator[tuple[Row, frozenset[str]]]:
+    def _extend(self, part: Part, i: int, row: Row, used: frozenset[str],
+                preserve_used: bool) -> Iterator[tuple[Row, frozenset[str]]]:
         if i == len(part.rels):
             yield row, used
             return
@@ -1349,14 +1385,19 @@ class Executor:
                 other = self.g.nodes[other_id]
                 nr = self._bind_end(nxt, other, {**row, rp.var: rel})
                 if nr is not None:
-                    yield from self._extend(part, i + 1, nr, used | {rel.id})
+                    next_used = (used | {rel.id}) if i + 1 < len(part.rels) or preserve_used else used
+                    yield from self._extend(part, i + 1, nr, next_used, preserve_used)
             return
         for end_id, path in self._walk(rp, cur.id, row, used):
             other = self.g.nodes[end_id]
-            self._path_copy(len(path))
-            nr = self._bind_end(nxt, other, {**row, rp.var: list(path)})
+            nr = self._bind_end(nxt, other, {**row, rp.var: path})
             if nr is not None:
-                yield from self._extend(part, i + 1, nr, used | {r.id for r in path})
+                if i + 1 < len(part.rels) or preserve_used:
+                    self._path_copy(path.length)
+                    next_used = used | path.relation_ids()
+                else:
+                    next_used = used
+                yield from self._extend(part, i + 1, nr, next_used, preserve_used)
 
     def _bind_end(self, np: NodePat, node: Node, row: Row) -> Row | None:
         if np.var in row:
@@ -1368,28 +1409,39 @@ class Executor:
             return None
         return {**row, np.var: node}
 
-    def _walk(self, rp: RelPat, start: str, row: Row, used: frozenset[str]) -> Iterator[tuple[str, tuple[Rel, ...]]]:
-        stack: list[tuple[str, tuple[Rel, ...]]] = [(start, ())]
+    def _walk(self, rp: RelPat, start: str, row: Row,
+              used: frozenset[str]) -> Iterator[tuple[str, _PathRef]]:
+        # The active set enforces relationship-simple paths without rebuilding
+        # every prefix. Each yielded path shares its prefix with its parent.
+        active: set[str] = set()
+        stack: list[tuple[str, _PathRef, Iterator[tuple[Rel, str]] | None]] = [
+            (start, _PathRef(None, None, 0), None)]
         while stack:
-            self._charge()
-            self.stats.traversals += 1
-            nid, path = stack.pop()
-            if len(path) >= rp.lo:
-                yield nid, path
-            if rp.hi is not None and len(path) >= rp.hi:
-                continue
-            self._path_copy(len(path))
-            taken = used | {r.id for r in path}
-            nexts = []
-            for rel, other_id in self._adjacent(rp, nid):
+            nid, path, neighbors = stack[-1]
+            if neighbors is None:
                 self._charge()
-                if rel.id in taken or not self._rel_ok(rp, rel, row):
-                    continue
-                self._path_copy(len(path) + 1)
-                nexts.append((other_id, path + (rel,)))
-                if len(stack) + len(nexts) > _MAX_INTERMEDIATE_ROWS:
-                    raise CypherBudgetExceeded("local query traversal frontier budget exceeded")
-            stack.extend(reversed(nexts))
+                self.stats.traversals += 1
+                if rp.hi is not None and path.length >= rp.hi:
+                    neighbors = iter(())
+                else:
+                    neighbors = self._adjacent(rp, nid)
+                stack[-1] = (nid, path, neighbors)
+                if path.length >= rp.lo:
+                    yield nid, path
+                continue
+            try:
+                rel, other_id = next(neighbors)
+            except StopIteration:
+                stack.pop()
+                if path.rel is not None:
+                    active.remove(path.rel.id)
+                continue
+            self._charge()
+            if rel.id in used or rel.id in active or not self._rel_ok(rp, rel, row):
+                continue
+            self._capacity(len(stack) + 1)
+            active.add(rel.id)
+            stack.append((other_id, _PathRef(path, rel, path.length + 1), None))
 
     # -- UNWIND / CALL / FOREACH ---------------------------------------------
 

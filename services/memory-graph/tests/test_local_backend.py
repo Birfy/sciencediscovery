@@ -55,6 +55,22 @@ def test_variable_length_and_aggregation(tmp_path: Path) -> None:
         assert s.run("MATCH (x:Nope) RETURN count(x) AS c").single()["c"] == 0
 
 
+def test_variable_length_path_value_and_cycle_semantics(tmp_path: Path) -> None:
+    h = _handle(tmp_path)
+    with h.session() as s:
+        s.run("UNWIND range(0, 2) AS i CREATE (:Cycle {i: i})")
+        s.run("MATCH (a:Cycle), (b:Cycle) WHERE b.i = a.i + 1 "
+              "CREATE (a)-[:next {step: b.i}]->(b)")
+        s.run("MATCH (a:Cycle {i: 2}), (b:Cycle {i: 0}) "
+              "CREATE (a)-[:next {step: 3}]->(b)")
+        path = s.run("MATCH (:Cycle {i: 0})-[r:next*3..3]->(b) "
+                     "RETURN r, b.i AS end").single()
+        assert path["end"] == 0
+        assert [rel["step"] for rel in path["r"]] == [1, 2, 3]
+        assert s.run("MATCH (:Cycle {i: 0})-[:next*0..]->(b) "
+                     "RETURN count(b) AS n").single()["n"] == 4
+
+
 def test_folded_products_visit_rejoined_children_once(monkeypatch: pytest.MonkeyPatch,
                                                      tmp_path: Path) -> None:
     """A diamond DAG has exponentially many paths but linearly many children."""
@@ -129,7 +145,7 @@ def test_variable_length_budget_stops_path_explosion_and_rolls_back(
         assert s.run("MATCH (n:Doomed) RETURN count(n) AS n").single()["n"] == 0
 
 
-def test_long_linear_path_charges_payload_before_memory_grows(
+def test_long_linear_path_shares_prefix_until_path_is_requested(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
 ) -> None:
     from sciencediscovery_memory_graph import _cypher
@@ -143,8 +159,10 @@ def test_long_linear_path_charges_payload_before_memory_grows(
         h.graph.create_rel("next", previous, current, {})
         previous = current
     monkeypatch.setattr(_cypher, "_MAX_PATH_ELEMENTS", 5_000)
+    assert h.session().run("MATCH (:Chain {i: 0})-[r:next*0..]->(b) "
+                           "RETURN count(b) AS n").single()["n"] == 2001
     with pytest.raises(_cypher.CypherBudgetExceeded, match="path payload"):
-        h.session().run("MATCH (:Chain {i: 0})-[r:next*0..]->(b) RETURN count(b) AS n")
+        h.session().run("MATCH (:Chain {i: 0})-[r:next*0..]->(b) RETURN r")
     # The relationship-variable path semantics remain available below budget.
     assert h.session().run("MATCH (:Chain {i: 0})-[r:next*0..3]->(b) "
                            "RETURN count(b) AS n").single()["n"] == 4
