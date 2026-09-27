@@ -56,6 +56,7 @@ class CypherBudgetExceeded(CypherError):
 
 _MAX_QUERY_WORK = 250_000
 _MAX_INTERMEDIATE_ROWS = 50_000
+_MAX_PATH_ELEMENTS = 500_000
 _MAX_QUERY_SECONDS = 10.0
 
 
@@ -64,6 +65,7 @@ class QueryStats:
     work: int = 0
     intermediate_peak: int = 0
     traversals: int = 0
+    path_elements: int = 0
 
 
 # --- Lexer -------------------------------------------------------------------
@@ -844,16 +846,25 @@ class Executor:
             raise CypherBudgetExceeded("local query intermediate row budget exceeded")
         return rows
 
+    def _capacity(self, size: int) -> None:
+        if size > _MAX_INTERMEDIATE_ROWS:
+            raise CypherBudgetExceeded("local query intermediate row or collection budget exceeded")
+
+    def _path_copy(self, size: int) -> None:
+        self.stats.path_elements += size
+        if self.stats.path_elements > _MAX_PATH_ELEMENTS:
+            raise CypherBudgetExceeded("local query path payload budget exceeded")
+
     # -- entry --------------------------------------------------------------
 
     def run(self, branches: list[list[Any]], union_all: bool) -> tuple[list[str], list[list[Any]]]:
-        results = [self._run_clauses(b, [{}]) for b in branches]
         columns: list[str] = []
         rows: list[list[Any]] = []
-        for res in results:
-            cols, part = res
+        for branch in branches:
+            cols, part = self._run_clauses(branch, [{}])
             if not columns:
                 columns = cols
+            self._capacity(len(rows) + len(part))
             rows.extend(part)
         if len(branches) > 1 and not union_all:
             seen: set[Any] = set()
@@ -884,6 +895,7 @@ class Executor:
         return columns, out
 
     def _clause(self, c: Any, rows: list[Row]) -> list[Row]:
+        self._charge()
         kind = c[0]
         if kind == "match":
             return self._match(c, rows)
@@ -897,6 +909,7 @@ class Executor:
             return self._create(c, rows)
         if kind == "set":
             for row in rows:
+                self._charge()
                 self._apply_sets(c[1], row)
             return rows
         if kind == "delete":
@@ -910,6 +923,7 @@ class Executor:
     # -- expression evaluation ---------------------------------------------
 
     def ev(self, e: Any, row: Row, group: list[Row] | None = None) -> Any:
+        self._charge()
         tag = e[0]
         if tag == "var":
             try:
@@ -976,6 +990,7 @@ class Executor:
                 raise CypherError("IN expects a list")
             saw_null = False
             for item in lst:
+                self._charge()
                 r = _eq(x, item)
                 if r is True:
                     return True
@@ -1004,8 +1019,10 @@ class Executor:
         if tag == "case":
             return self._case(e, row, group)
         if tag == "list":
+            self._capacity(len(e[1]))
             return [self.ev(x, row, group) for x in e[1]]
         if tag == "map":
+            self._capacity(len(e[1]))
             return {k: self.ev(x, row, group) for k, x in e[1]}
         if tag == "idx":
             base, idx = self.ev(e[1], row, group), self.ev(e[2], row, group)
@@ -1027,6 +1044,7 @@ class Executor:
         if tag == "reduce":
             acc = self.ev(e[2], row, group)
             for item in self.ev(e[4], row, group) or []:
+                self._charge()
                 acc = self.ev(e[5], {**row, e[1]: acc, e[3]: item}, group)
             return acc
         raise CypherError(f"unsupported expression {tag}")
@@ -1094,7 +1112,12 @@ class Executor:
         if name == "range":
             lo, hi = vals[0], vals[1]
             step = vals[2] if len(vals) > 2 else 1
-            return list(range(lo, hi + (1 if step > 0 else -1), step))
+            values = range(lo, hi + (1 if step > 0 else -1), step)
+            try:
+                self._capacity(len(values))
+            except OverflowError as exc:
+                raise CypherBudgetExceeded("local query collection budget exceeded") from exc
+            return list(values)
         if name == "tolower":
             return None if vals[0] is None else str(vals[0]).lower()
         if name == "toupper":
@@ -1125,12 +1148,18 @@ class Executor:
                    group: list[Row]) -> Any:
         if star:
             return len(group)
-        values = [self.ev(args[0], r) for r in group]
-        values = [v for v in values if v is not None]
+        values = []
+        for row in group:
+            self._charge()
+            value = self.ev(args[0], row)
+            if value is not None:
+                self._capacity(len(values) + 1)
+                values.append(value)
         if distinct:
             seen: set[Any] = set()
             uniq = []
             for v in values:
+                self._charge()
                 k = _key(v)
                 if k not in seen:
                     seen.add(k)
@@ -1160,15 +1189,21 @@ class Executor:
             keyed = [i for i in items if not i.agg]
             groups: dict[Any, list[Row]] = {}
             for row in rows:
+                self._charge()
                 k = tuple(_key(self.ev(i.expr, row)) for i in keyed)
                 groups.setdefault(k, []).append(row)
+                self._capacity(len(groups))
             if not groups and not keyed:
                 groups[()] = []
             for grp in groups.values():
+                self._charge()
+                self._capacity(len(pairs) + 1)
                 base = grp[0] if grp else {}
                 pairs.append((base, {i.name: self.ev(i.expr, base, grp) for i in items}))
         else:
             for row in rows:
+                self._charge()
+                self._capacity(len(pairs) + 1)
                 proj_row = {}
                 if proj.star:
                     proj_row.update({k: v for k, v in row.items() if not k.startswith(" ")})
@@ -1180,12 +1215,14 @@ class Executor:
             seen: set[Any] = set()
             uniq = []
             for src, pr in pairs:
+                self._charge()
                 k = tuple(_key(pr[c]) for c in columns)
                 if k not in seen:
                     seen.add(k)
                     uniq.append((src, pr))
             pairs = uniq
         if proj.order:
+            self._charge(len(pairs))
             for expr, desc in reversed(proj.order):
                 pairs.sort(key=lambda p, expr=expr: _sort_key(self.ev(expr, {**p[0], **p[1]})),
                            reverse=desc)
@@ -1204,18 +1241,21 @@ class Executor:
         out: list[Row] = []
         new_vars = _pattern_vars(parts)
         for row in rows:
+            self._charge()
             matched = False
             for m in self._match_parts(parts, 0, row, frozenset()):
                 self._charge()
                 if where is not None and _truth(self.ev(where, m)) is not True:
                     continue
                 matched = True
+                self._capacity(len(out) + 1)
                 out.append(m)
                 self._rows(out)
             if optional and not matched:
                 nulls = dict(row)
                 for v in new_vars:
                     nulls.setdefault(v, None)
+                self._capacity(len(out) + 1)
                 out.append(nulls)
                 self._rows(out)
         return out
@@ -1243,23 +1283,27 @@ class Executor:
             if self._node_ok(np, node, row):
                 yield {**row, np.var: node}
 
-    def _candidates(self, np: NodePat, row: Row) -> list[Node]:
-        ids: list[str] | None = None
+    def _candidates(self, np: NodePat, row: Row) -> Iterator[Node]:
+        indexed: list[dict[str, None]] = []
         for k, expr in np.props:
             v = self.ev(expr, row)
             if v is None:
-                return []
+                return
             ik = index_key(v)
             if ik is None:
                 continue
             found = self.g.pidx.get(k, {}).get(ik, {})
-            ids = list(found) if ids is None else [i for i in ids if i in found]
-        if ids is None:
-            if np.labels:
-                ids = list(self.g.by_label.get(np.labels[0], {}))
-            else:
-                ids = list(self.g.nodes)
-        return [self.g.nodes[i] for i in ids]
+            indexed.append(found)
+        if indexed:
+            indexed.sort(key=len)
+            ids = indexed[0]
+        elif np.labels:
+            ids = self.g.by_label.get(np.labels[0], {})
+        else:
+            ids = self.g.nodes
+        for nid in ids:
+            if all(nid in found for found in indexed[1:]):
+                yield self.g.nodes[nid]
 
     def _node_ok(self, np: NodePat, node: Node, row: Row) -> bool:
         if any(lb not in node.labels for lb in np.labels):
@@ -1279,11 +1323,11 @@ class Executor:
 
     def _adjacent(self, rp: RelPat, nid: str) -> Iterator[tuple[Rel, str]]:
         if rp.direction in ("out", "both"):
-            for rid in list(self.g.out.get(nid, ())):
+            for rid in self.g.out.get(nid, ()):
                 rel = self.g.rels[rid]
                 yield rel, rel.dst
         if rp.direction in ("in", "both"):
-            for rid in list(self.g.inn.get(nid, ())):
+            for rid in self.g.inn.get(nid, ()):
                 rel = self.g.rels[rid]
                 yield rel, rel.src
 
@@ -1297,6 +1341,7 @@ class Executor:
             return
         if not rp.varlen:
             for rel, other_id in self._adjacent(rp, cur.id):
+                self._charge()
                 if rel.id in used or not self._rel_ok(rp, rel, row):
                     continue
                 if rp.var in row and row[rp.var] is not rel:
@@ -1308,6 +1353,7 @@ class Executor:
             return
         for end_id, path in self._walk(rp, cur.id, row, used):
             other = self.g.nodes[end_id]
+            self._path_copy(len(path))
             nr = self._bind_end(nxt, other, {**row, rp.var: list(path)})
             if nr is not None:
                 yield from self._extend(part, i + 1, nr, used | {r.id for r in path})
@@ -1332,12 +1378,14 @@ class Executor:
                 yield nid, path
             if rp.hi is not None and len(path) >= rp.hi:
                 continue
+            self._path_copy(len(path))
             taken = used | {r.id for r in path}
             nexts = []
             for rel, other_id in self._adjacent(rp, nid):
                 self._charge()
                 if rel.id in taken or not self._rel_ok(rp, rel, row):
                     continue
+                self._path_copy(len(path) + 1)
                 nexts.append((other_id, path + (rel,)))
                 if len(stack) + len(nexts) > _MAX_INTERMEDIATE_ROWS:
                     raise CypherBudgetExceeded("local query traversal frontier budget exceeded")
@@ -1348,12 +1396,15 @@ class Executor:
     def _unwind(self, c: Any, rows: list[Row]) -> list[Row]:
         out: list[Row] = []
         for row in rows:
+            self._charge()
             lst = self.ev(c[1], row)
             if lst is None:
                 continue
             if not isinstance(lst, list):
                 lst = [lst]
             for item in lst:
+                self._charge()
+                self._capacity(len(out) + 1)
                 out.append({**row, c[2]: item})
         return out
 
@@ -1361,6 +1412,7 @@ class Executor:
         imports, branches, union_all = c[1], c[2], c[3]
         out: list[Row] = []
         for row in rows:
+            self._charge()
             start = {k: row[k] for k in imports if k in row} if imports is not None else {}
             sub_rows: list[Row] = [dict(start)]
             first_branch_returns = any(cl[0] == "return" for cl in branches[0])
@@ -1368,10 +1420,13 @@ class Executor:
                 # Unit subquery: side effects only, the outer row passes through.
                 for branch in branches:
                     self._run_clauses_rows(branch, [dict(start)])
+                self._capacity(len(out) + 1)
                 out.append(row)
                 continue
             cols, res = self.run_branches(branches, union_all, sub_rows)
             for rec in res:
+                self._charge()
+                self._capacity(len(out) + 1)
                 out.append({**row, **dict(zip(cols, rec))})
         return out
 
@@ -1382,6 +1437,7 @@ class Executor:
         for b in branches:
             c, r = self._run_clauses(b, [dict(x) for x in rows])
             cols = cols or c
+            self._capacity(len(acc) + len(r))
             acc.extend(r)
         if len(branches) > 1 and not union_all:
             seen: set[Any] = set()
@@ -1390,13 +1446,15 @@ class Executor:
 
     def _run_clauses_rows(self, clauses: list[Any], rows: list[Row]) -> list[Row]:
         for c in clauses:
-            rows = self._clause(c, rows)
+            rows = self._rows(self._clause(c, rows))
         return rows
 
     def _foreach(self, c: Any, rows: list[Row]) -> list[Row]:
         var, lst_expr, body = c[1], c[2], c[3]
         for row in rows:
+            self._charge()
             for item in self.ev(lst_expr, row) or []:
+                self._charge()
                 self._run_clauses_rows(body, [{**row, var: item}])
         return rows
 
@@ -1412,6 +1470,7 @@ class Executor:
         row = dict(row)
         nodes: list[Node] = []
         for np in part.nodes:
+            self._charge()
             existing = row.get(np.var)
             if isinstance(existing, Node):
                 nodes.append(existing)
@@ -1420,6 +1479,7 @@ class Executor:
                 row[np.var] = node
                 nodes.append(node)
         for i, rp in enumerate(part.rels):
+            self._charge()
             if len(rp.types) != 1:
                 raise CypherError("exactly one relationship type must be specified for CREATE/MERGE")
             src, dst = (nodes[i + 1], nodes[i]) if rp.direction == "in" else (nodes[i], nodes[i + 1])
@@ -1429,8 +1489,10 @@ class Executor:
     def _create(self, c: Any, rows: list[Row]) -> list[Row]:
         out = []
         for row in rows:
+            self._charge()
             for part in c[1]:
                 row = self._create_part(part, row)
+            self._capacity(len(out) + 1)
             out.append(row)
         return out
 
@@ -1438,25 +1500,34 @@ class Executor:
         part, on_create, on_match = c[1], c[2], c[3]
         out: list[Row] = []
         for row in rows:
+            self._charge()
             for np in part.nodes:
                 if np.var not in row:
                     for k, e in np.props:
                         if self.ev(e, row) is None:
                             raise CypherError(
                                 f"Cannot merge the following node because of null property value for '{k}'")
-            matches = [m for m, _ in self._match_part(part, row, frozenset())]
+            matches = []
+            for match, _ in self._match_part(part, row, frozenset()):
+                self._charge()
+                self._capacity(len(matches) + 1)
+                matches.append(match)
             if matches:
                 for m in matches:
+                    self._charge()
                     self._apply_sets(on_match, m)
+                self._capacity(len(out) + len(matches))
                 out.extend(matches)
             else:
                 created = self._create_part(part, row)
                 self._apply_sets(on_create, created)
+                self._capacity(len(out) + 1)
                 out.append(created)
         return out
 
     def _apply_sets(self, items: list[Any], row: Row) -> None:
         for item in items:
+            self._charge()
             kind, var = item[0], item[1]
             target = row.get(var)
             if target is None:
@@ -1471,9 +1542,11 @@ class Executor:
                     continue
                 if kind == "replace_map":
                     for k in list(target.props):
+                        self._charge()
                         if k not in value:
                             self._set_prop(target, k, None)
                 for k, v in value.items():
+                    self._charge()
                     self._set_prop(target, k, v)
             elif kind == "labels" and isinstance(target, Node):
                 for lb in item[2]:
@@ -1490,6 +1563,7 @@ class Executor:
         rels: dict[str, Rel] = {}
         nodes: dict[str, Node] = {}
         for row in rows:
+            self._charge()
             for e in exprs:
                 v = self.ev(e, row)
                 if isinstance(v, Rel):
@@ -1497,8 +1571,10 @@ class Executor:
                 elif isinstance(v, Node):
                     nodes[v.id] = v
         for rel in rels.values():
+            self._charge()
             self.g.delete_rel(rel)
         for node in nodes.values():
+            self._charge()
             if detach:
                 self.g.detach_delete_node(node)
             else:

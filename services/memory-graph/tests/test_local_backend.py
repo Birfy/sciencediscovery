@@ -129,6 +129,83 @@ def test_variable_length_budget_stops_path_explosion_and_rolls_back(
         assert s.run("MATCH (n:Doomed) RETURN count(n) AS n").single()["n"] == 0
 
 
+def test_long_linear_path_charges_payload_before_memory_grows(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    from sciencediscovery_memory_graph import _cypher
+    from sciencediscovery_memory_graph.local_graph import Graph
+
+    h = _handle(tmp_path)
+    h._graph = Graph()
+    previous = h.graph.create_node(["Chain"], {"i": 0})
+    for i in range(1, 2001):
+        current = h.graph.create_node(["Chain"], {"i": i})
+        h.graph.create_rel("next", previous, current, {})
+        previous = current
+    monkeypatch.setattr(_cypher, "_MAX_PATH_ELEMENTS", 5_000)
+    with pytest.raises(_cypher.CypherBudgetExceeded, match="path payload"):
+        h.session().run("MATCH (:Chain {i: 0})-[r:next*0..]->(b) RETURN count(b) AS n")
+    # The relationship-variable path semantics remain available below budget.
+    assert h.session().run("MATCH (:Chain {i: 0})-[r:next*0..3]->(b) "
+                           "RETURN count(b) AS n").single()["n"] == 4
+
+
+def test_nested_writes_and_no_match_expansion_obey_budget(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    from sciencediscovery_memory_graph import _cypher
+
+    h = _handle(tmp_path)
+    with h.session() as session:
+        monkeypatch.setattr(_cypher, "_MAX_QUERY_WORK", 30)
+        for statement in (
+            "CALL { UNWIND range(0, 100) AS i CREATE (:ReviewNode {i: i}) } RETURN 1 AS n",
+            "FOREACH (i IN range(0, 100) | CREATE (:ReviewNode {i: i}))",
+        ):
+            with pytest.raises(_cypher.CypherBudgetExceeded):
+                session.run(statement)
+        monkeypatch.setattr(_cypher, "_MAX_QUERY_WORK", 250_000)
+        assert session.run("MATCH (n:ReviewNode) RETURN count(n) AS n").single()["n"] == 0
+
+        root = h.graph.create_node(["Fan"], {"i": 0})
+        for i in range(1, 101):
+            leaf = h.graph.create_node(["Fan"], {"i": i})
+            h.graph.create_rel("next", root, leaf, {})
+        monkeypatch.setattr(_cypher, "_MAX_QUERY_WORK", 30)
+        with pytest.raises(_cypher.CypherBudgetExceeded):
+            session.run("MATCH (:Fan {i: 0})-[:next]->(:Fan {i: 999}) RETURN count(*) AS n")
+
+
+def test_unwind_refuses_large_collection_before_rows_materialize(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from sciencediscovery_memory_graph import _cypher
+    from sciencediscovery_memory_graph.local_graph import Graph
+
+    monkeypatch.setattr(_cypher, "_MAX_INTERMEDIATE_ROWS", 10)
+    stats = _cypher.QueryStats()
+    with pytest.raises(_cypher.CypherBudgetExceeded, match="collection"):
+        _cypher.execute(Graph(), "UNWIND range(0, 10000) AS i RETURN i", {}, stats)
+    assert stats.intermediate_peak == 0
+
+
+def test_empty_session_uses_index_despite_historical_nodes(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    from sciencediscovery_memory_graph import _cypher, query
+    from sciencediscovery_memory_graph.local_graph import Graph
+
+    h = _handle(tmp_path)
+    h._graph = Graph()
+    for i in range(2000):
+        h.graph.create_node(["SearchNode"], {"session_id": "historical", "id": i})
+    monkeypatch.setattr(query, "handle", lambda: h)
+    monkeypatch.setattr(_cypher, "_MAX_QUERY_WORK", 100)
+    assert query.get_subgraph("fresh")["nodes"] == []
+    assert query.get_scope_expansion("missing", "fresh")["reason"] == "node_not_found"
+    assert query.get_group_expansion("_group:missing:Paper", "fresh")["reason"] == "node_not_found"
+
+
 def test_query_budget_has_a_user_visible_error(monkeypatch: pytest.MonkeyPatch,
                                                tmp_path: Path) -> None:
     from sciencediscovery_memory_graph import _cypher, server
@@ -146,6 +223,35 @@ def test_query_budget_has_a_user_visible_error(monkeypatch: pytest.MonkeyPatch,
     )
     assert response.status_code == 503
     assert response.json()["detail"]["code"] == "memory_graph_query_limit"
+
+
+def test_write_routes_preserve_query_budget_error(monkeypatch: pytest.MonkeyPatch,
+                                                  tmp_path: Path) -> None:
+    from sciencediscovery_memory_graph import _cypher, server
+
+    h = _handle(tmp_path)
+    router = backend.BackendRouter(local=h)
+    router.set_backend("local")
+    monkeypatch.setattr(backend, "_router", router)
+    monkeypatch.setenv("SCIENCE_AGENT_MEMORY_GRAPH_INTERNAL_TOKEN", "test-token")
+
+    def exhausted(**_kwargs):
+        raise _cypher.CypherBudgetExceeded("test limit")
+
+    monkeypatch.setattr(server, "upsert_tool_call", exhausted)
+    monkeypatch.setattr(server, "upsert_subagent", exhausted)
+    client = TestClient(server.app)
+    headers = {"authorization": "Bearer test-token"}
+    for path, payload in (
+        ("/observe/tool-call", {"task_id": "t", "session_id": "s", "turn_id": "u",
+                                "tool_name": "search", "tool_type": "search"}),
+        ("/observe/subagent", {"subagent_id": "t", "session_id": "s", "turn_id": "u",
+                               "objective": "search", "created_at": "2026-09-27T00:00:00Z",
+                               "status": "running"}),
+    ):
+        response = client.post(path, json=payload, headers=headers)
+        assert response.status_code == 503
+        assert response.json()["detail"]["code"] == "memory_graph_query_limit"
 
 
 def test_scope_rebuild_keeps_other_next_method(tmp_path: Path) -> None:
