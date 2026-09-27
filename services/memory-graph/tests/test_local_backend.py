@@ -207,7 +207,28 @@ def test_unwind_refuses_large_collection_before_rows_materialize(
     assert stats.intermediate_peak == 0
 
 
-def test_repeated_small_collections_stop_before_cumulative_payload_grows(
+def test_repeated_constant_collection_is_shared_across_result_rows(
+    tmp_path: Path,
+) -> None:
+    from sciencediscovery_memory_graph import _cypher
+
+    h = _handle(tmp_path)
+    stats = _cypher.QueryStats()
+    columns, rows = _cypher.execute(
+        h.graph, "UNWIND range(1, 4000) AS i RETURN range(1, 4000) AS xs", {}, stats)
+    assert columns == ["xs"]
+    assert len(rows) == 4000
+    assert rows[0][0] == list(range(1, 4001))
+    assert rows[-1][0] is rows[0][0]
+    assert stats.collection_elements < 20_000
+    records = list(h.session().run(
+        "UNWIND range(1, 4000) AS i RETURN range(1, 4000) AS xs"))
+    assert len(records) == 4000
+    assert records[0]["xs"][0] == 1
+    assert records[-1]["xs"][-1] == 4000
+
+
+def test_row_dependent_collections_stop_before_cumulative_payload_grows(
     tmp_path: Path,
 ) -> None:
     from sciencediscovery_memory_graph import _cypher
@@ -216,14 +237,14 @@ def test_repeated_small_collections_stop_before_cumulative_payload_grows(
     stats = _cypher.QueryStats()
     with pytest.raises(_cypher.CypherBudgetExceeded, match="cumulative collection"):
         _cypher.execute(h.graph, "UNWIND range(1, 4000) AS i "
-                        "RETURN range(1, 4000) AS xs", {}, stats)
+                        "RETURN range(i, i + 3999) AS xs", {}, stats)
     assert stats.collection_elements <= _cypher._MAX_COLLECTION_ELEMENTS
     assert stats.work < _cypher._MAX_QUERY_WORK
 
     # A failed statement with a preceding write must not leave that write behind.
     with pytest.raises(_cypher.CypherBudgetExceeded, match="cumulative collection"):
         h.session().run("CREATE (:Doomed {k: 1}) WITH 1 AS i "
-                        "UNWIND range(1, 4000) AS n RETURN range(1, 4000) AS xs")
+                        "UNWIND range(1, 4000) AS n RETURN range(n, n + 3999) AS xs")
     assert h.session().run("MATCH (n:Doomed) RETURN count(n) AS n").single()["n"] == 0
 
 

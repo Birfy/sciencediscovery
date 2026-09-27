@@ -711,6 +711,19 @@ def _has_agg(e: Any) -> bool:
     return False
 
 
+def _row_independent(e: Any) -> bool:
+    """Whether a projection expression can be evaluated once for all input rows."""
+    if isinstance(e, tuple):
+        if e and e[0] in ("var", "reduce"):
+            return False
+        if e and e[0] == "func" and (e[1] in _AGGREGATES or e[1] == "datetime"):
+            return False
+        return all(_row_independent(part) for part in e[1:])
+    if isinstance(e, list):
+        return all(_row_independent(part) for part in e)
+    return True
+
+
 # --- Values ------------------------------------------------------------------
 
 def _key(v: Any) -> Any:
@@ -853,6 +866,7 @@ class Executor:
         self.params = params
         self.stats = stats if stats is not None else QueryStats()
         self.deadline = time.monotonic() + _MAX_QUERY_SECONDS
+        self._export_cache: dict[int, tuple[Any, Any]] = {}
 
     def _charge(self, amount: int = 1) -> None:
         self.stats.work += amount
@@ -878,16 +892,27 @@ class Executor:
 
     def _export(self, value: Any) -> Any:
         """Copy values for the HTTP result under the same allocation budget."""
+        if not isinstance(value, (Node, Rel, list, dict)):
+            return value
+        cached = self._export_cache.get(id(value))
+        if cached is not None and cached[0] is value:
+            return cached[1]
         if isinstance(value, (Node, Rel)):
             self._collection(len(value.props))
-            return dict(value.props)
+            result = dict(value.props)
+            self._export_cache[id(value)] = (value, result)
+            return result
         if isinstance(value, list):
             self._collection(len(value))
-            return [self._export(item) for item in value]
-        if isinstance(value, dict):
-            self._collection(len(value))
-            return {key: self._export(item) for key, item in value.items()}
-        return value
+            result = []
+            self._export_cache[id(value)] = (value, result)
+            result.extend(self._export(item) for item in value)
+            return result
+        self._collection(len(value))
+        result = {}
+        self._export_cache[id(value)] = (value, result)
+        result.update((key, self._export(item)) for key, item in value.items())
+        return result
 
     def _path_copy(self, size: int) -> None:
         self.stats.path_elements += size
@@ -1258,6 +1283,8 @@ class Executor:
                 base = grp[0] if grp else {}
                 pairs.append((base, {i.name: self.ev(i.expr, base, grp) for i in items}))
         else:
+            static_items = [_row_independent(item.expr) for item in items]
+            static_values: dict[int, Any] = {}
             for row in rows:
                 self._charge()
                 self._capacity(len(pairs) + 1)
@@ -1265,7 +1292,14 @@ class Executor:
                 if proj.star:
                     proj_row.update({k: self.ev(("var", k), row)
                                      for k in row if not k.startswith(" ")})
-                proj_row.update({i.name: self.ev(i.expr, row) for i in items})
+                for index, item in enumerate(items):
+                    if static_items[index]:
+                        if index not in static_values:
+                            static_values[index] = self.ev(item.expr, row)
+                        value = static_values[index]
+                    else:
+                        value = self.ev(item.expr, row)
+                    proj_row[item.name] = value
                 pairs.append((row, proj_row))
         if proj.star:
             columns = [k for k in (pairs[0][1] if pairs else {}) if k not in columns] + columns
